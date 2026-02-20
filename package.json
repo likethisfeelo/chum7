@@ -1,0 +1,32 @@
+{
+  "name": "chum7",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "jest",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy --all",
+    "deploy:hotswap": "cdk deploy --hotswap",
+    "destroy": "cdk destroy --all",
+    "bootstrap": "cdk bootstrap"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.0.0",
+    "aws-cdk": "2.176.0",
+    "esbuild": "^0.24.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.7.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.176.0",
+    "constructs": "^10.4.2"
+  }
+}
