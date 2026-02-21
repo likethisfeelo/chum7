@@ -1,0 +1,125 @@
+// frontend/src/main.tsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './app/App';
+import './styles/index.css';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+// frontend/src/styles/index.css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply font-sans antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  input,
+  textarea {
+    @apply outline-none;
+  }
+}
+
+@layer utilities {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/* 애니메이션 */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+// frontend/package.json
+{
+  "name": "chme-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "build:dev": "tsc && vite build --mode development",
+    "build:prod": "tsc && vite build --mode production",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.22.0",
+    "@tanstack/react-query": "^5.17.19",
+    "axios": "^1.6.5",
+    "zustand": "^4.5.0",
+    "framer-motion": "^11.0.3",
+    "react-icons": "^5.0.1",
+    "date-fns": "^3.3.1",
+    "clsx": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.17",
+    "postcss": "^8.4.33",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.11",
+    "vite-plugin-pwa": "^0.17.5"
+  }
+}
+
+// frontend/index.html
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#FF9B71" />
+    <meta name="description" content="7일간의 짧고 강렬한 챌린지 - CHME" />
+    <title>CHME - Challenge Earth with ME</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
+// frontend/.env.dev (환경 변수)
+VITE_API_URL=https://dev.chum7.com
+VITE_CLOUDFRONT_URL=https://test.chum7.com
+VITE_UPLOADS_URL=https://test.chum7.com/uploads
+
+// frontend/.env.prod
+VITE_API_URL=https://api.chum7.com
+VITE_CLOUDFRONT_URL=https://www.chum7.com
+VITE_UPLOADS_URL=https://www.chum7.com/uploads

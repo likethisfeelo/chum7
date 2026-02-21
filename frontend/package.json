@@ -1,0 +1,26 @@
+{
+  "name": "chme-backend-shared",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.504.0",
+    "@aws-sdk/lib-dynamodb": "^3.504.0",
+    "@aws-sdk/client-s3": "^3.504.0",
+    "@aws-sdk/s3-request-presigner": "^3.504.0",
+    "@aws-sdk/client-sns": "^3.504.0",
+    "@aws-sdk/client-eventbridge": "^3.504.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.504.0",
+    "zod": "^3.22.4",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "@types/uuid": "^9.0.7",
+    "@types/aws-lambda": "^8.10.133",
+    "typescript": "^5.3.3"
+  }
+}

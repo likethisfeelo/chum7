@@ -1,0 +1,22 @@
+# frontend/.env.prod
+# 사용자 앱 - PROD 환경
+
+# API 엔드포인트
+VITE_API_URL=https://api.chum7.com
+
+# AWS 리전
+VITE_AWS_REGION=ap-northeast-2
+
+# Cognito 설정
+VITE_COGNITO_USER_POOL_ID=ap-northeast-2_n8ZjUpupj
+VITE_COGNITO_CLIENT_ID=5d62qaq228fap818m8gi8jt759
+
+# S3 버킷
+VITE_S3_UPLOADS_BUCKET=chum7-prod-uploads
+
+# CloudFront URL
+VITE_CLOUDFRONT_URL=https://www.chum7.com
+
+# 기타
+VITE_APP_STAGE=prod
+VITE_ENABLE_DEV_TOOLS=false

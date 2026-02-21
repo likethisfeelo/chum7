@@ -1,0 +1,30 @@
+{
+  "name": "chme-infra",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "deploy:dev": "cdk deploy --all --context stage=dev --require-approval never",
+    "deploy:prod": "cdk deploy --all --context stage=prod --require-approval never",
+    "diff:dev": "cdk diff --all --context stage=dev",
+    "diff:prod": "cdk diff --all --context stage=prod",
+    "synth:dev": "cdk synth --context stage=dev",
+    "synth:prod": "cdk synth --context stage=prod"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "aws-cdk": "latest",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "latest",
+    "@aws-cdk/aws-apigatewayv2-alpha": "latest",
+    "@aws-cdk/aws-apigatewayv2-authorizers-alpha": "latest",
+    "@aws-cdk/aws-apigatewayv2-integrations-alpha": "latest",
+    "constructs": "^10.3.0",
+    "source-map-support": "^0.5.21"
+  }
+}
