@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import 'source-map-support/register';
 import { App } from 'aws-cdk-lib';
 
@@ -9,19 +10,16 @@ import { CheerStack } from '../stacks/cheer-stack';
 import { AdminStack } from '../stacks/admin-stack';
 
 import { devConfig } from '../config/dev';
+import { prodConfig } from '../config/prod';
 
 const app = new App();
 
-const stage = 'dev';
-const config = devConfig;
+const stage = app.node.tryGetContext('stage') || 'dev';
+const config = stage === 'prod' ? prodConfig : devConfig;
 const env = {
   account: config.account,
   region: config.region,
 };
-
-// ====================
-// ⭐ 1️⃣ CoreStack 먼저 생성
-// ====================
 
 const coreStack = new CoreStack(app, `chme-${stage}-core`, {
   env,
@@ -29,19 +27,16 @@ const coreStack = new CoreStack(app, `chme-${stage}-core`, {
   config,
 });
 
-// ====================
-// ⭐ 2️⃣ Feature Stacks 생성 (Core 리소스 주입)
-// ====================
-
-new AuthStack(app, `chme-${stage}-auth`, {
+const authStack = new AuthStack(app, `chme-${stage}-auth`, {
   env,
   stage,
   apiGateway: coreStack.apiGateway,
   userPool: coreStack.userPool,
+  userPoolClient: coreStack.userPoolClient,
   usersTable: coreStack.usersTable,
 });
 
-new ChallengeStack(app, `chme-${stage}-challenge`, {
+const challengeStack = new ChallengeStack(app, `chme-${stage}-challenge`, {
   env,
   stage,
   apiGateway: coreStack.apiGateway,
@@ -49,7 +44,7 @@ new ChallengeStack(app, `chme-${stage}-challenge`, {
   userChallengesTable: coreStack.userChallengesTable,
 });
 
-new VerificationStack(app, `chme-${stage}-verification`, {
+const verificationStack = new VerificationStack(app, `chme-${stage}-verification`, {
   env,
   stage,
   apiGateway: coreStack.apiGateway,
@@ -58,17 +53,18 @@ new VerificationStack(app, `chme-${stage}-verification`, {
   uploadsBucket: coreStack.uploadsBucket,
 });
 
-new CheerStack(app, `chme-${stage}-cheer`, {
+const cheerStack = new CheerStack(app, `chme-${stage}-cheer`, {
   env,
   stage,
   apiGateway: coreStack.apiGateway,
   cheersTable: coreStack.cheersTable,
   userCheerTicketsTable: coreStack.userCheerTicketsTable,
+  userChallengesTable: coreStack.userChallengesTable,
   snsTopic: coreStack.snsTopic,
   eventBus: coreStack.eventBus,
 });
 
-new AdminStack(app, `chme-${stage}-admin`, {
+const adminStack = new AdminStack(app, `chme-${stage}-admin`, {
   env,
   stage,
   apiGateway: coreStack.apiGateway,
@@ -76,3 +72,11 @@ new AdminStack(app, `chme-${stage}-admin`, {
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
 });
+
+authStack.addDependency(coreStack);
+challengeStack.addDependency(coreStack);
+verificationStack.addDependency(coreStack);
+cheerStack.addDependency(coreStack);
+adminStack.addDependency(coreStack);
+
+app.synth();

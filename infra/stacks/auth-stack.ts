@@ -1,4 +1,3 @@
-// infra/stacks/auth-stack.ts
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
@@ -6,13 +5,14 @@ import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
-import { UserPool } from 'aws-cdk-lib/aws-cognito';
+import { UserPool, UserPoolClient } from 'aws-cdk-lib/aws-cognito';
 import * as path from 'path';
 
 interface AuthStackProps extends StackProps {
   stage: string;
   apiGateway: HttpApi;
   userPool: UserPool;
+  userPoolClient: UserPoolClient;
   usersTable: Table;
 }
 
@@ -20,17 +20,19 @@ export class AuthStack extends Stack {
   constructor(scope: Construct, id: string, props: AuthStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, userPool, usersTable } = props;
+    const { stage, apiGateway, userPool, userPoolClient, usersTable } = props;
 
-    const commonLambdaProps = {
+    const commonEnv = {
+      STAGE: stage,
+      USERS_TABLE: usersTable.tableName,
+      USER_POOL_ID: userPool.userPoolId,
+      USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+    };
+
+    const commonProps = {
       runtime: Runtime.NODEJS_20_X,
       timeout: Duration.seconds(30),
       memorySize: 256,
-      environment: {
-        STAGE: stage,
-        USERS_TABLE: usersTable.tableName,
-        USER_POOL_ID: userPool.userPoolId,
-      },
       bundling: {
         minify: true,
         sourceMap: stage === 'dev',
@@ -38,34 +40,78 @@ export class AuthStack extends Stack {
       },
     };
 
-    const registerFunction = new NodejsFunction(this, 'RegisterFunction', {
-      ...commonLambdaProps,
+    // 1. Register
+    const registerFn = new NodejsFunction(this, 'RegisterFn', {
+      ...commonProps,
       functionName: `chme-${stage}-auth-register`,
       entry: path.join(__dirname, '../../backend/services/auth/register/index.ts'),
       handler: 'handler',
+      environment: commonEnv,
     });
-
-    usersTable.grantWriteData(registerFunction);
-
+    usersTable.grantWriteData(registerFn);
     apiGateway.addRoutes({
       path: '/auth/register',
       methods: [HttpMethod.POST],
-      integration: new HttpLambdaIntegration('RegisterIntegration', registerFunction),
+      integration: new HttpLambdaIntegration('RegisterIntegration', registerFn),
     });
 
-    const loginFunction = new NodejsFunction(this, 'LoginFunction', {
-      ...commonLambdaProps,
+    // 2. Login
+    const loginFn = new NodejsFunction(this, 'LoginFn', {
+      ...commonProps,
       functionName: `chme-${stage}-auth-login`,
       entry: path.join(__dirname, '../../backend/services/auth/login/index.ts'),
       handler: 'handler',
+      environment: commonEnv,
     });
-
-    usersTable.grantReadData(loginFunction);
-
+    usersTable.grantReadData(loginFn);
     apiGateway.addRoutes({
       path: '/auth/login',
       methods: [HttpMethod.POST],
-      integration: new HttpLambdaIntegration('LoginIntegration', loginFunction),
+      integration: new HttpLambdaIntegration('LoginIntegration', loginFn),
+    });
+
+    // 3. Refresh Token
+    const refreshFn = new NodejsFunction(this, 'RefreshFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-auth-refresh-token`,
+      entry: path.join(__dirname, '../../backend/services/auth/refresh-token/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    apiGateway.addRoutes({
+      path: '/auth/refresh',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('RefreshIntegration', refreshFn),
+    });
+
+    // 4. Get Profile
+    const getProfileFn = new NodejsFunction(this, 'GetProfileFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-auth-get-profile`,
+      entry: path.join(__dirname, '../../backend/services/auth/get-profile/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    usersTable.grantReadData(getProfileFn);
+    apiGateway.addRoutes({
+      path: '/auth/me',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('GetProfileIntegration', getProfileFn),
+    });
+
+    // 5. Update Profile
+    const updateProfileFn = new NodejsFunction(this, 'UpdateProfileFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-auth-update-profile`,
+      entry: path.join(__dirname, '../../backend/services/auth/update-profile/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    usersTable.grantReadWriteData(updateProfileFn);
+    apiGateway.addRoutes({
+      path: '/auth/me',
+      methods: [HttpMethod.PUT],
+      integration: new HttpLambdaIntegration('UpdateProfileIntegration', updateProfileFn),
     });
   }
 }

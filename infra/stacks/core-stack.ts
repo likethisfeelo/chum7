@@ -18,6 +18,8 @@ import {
   Table,
   AttributeType,
   BillingMode,
+  StreamViewType,
+  ProjectionType,
 } from 'aws-cdk-lib/aws-dynamodb';
 
 import { Bucket, IBucket } from 'aws-cdk-lib/aws-s3';
@@ -99,34 +101,124 @@ export class CoreStack extends Stack {
     });
 
     // ==================== DynamoDB ====================
+    const isProd = stage === 'prod';
+    const removalPolicy = isProd ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
+
     this.usersTable = new Table(this, 'UsersTable', {
+      tableName: `chme-${stage}-users`,
       partitionKey: { name: 'userId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+      stream: StreamViewType.NEW_AND_OLD_IMAGES,
+    });
+    this.usersTable.addGlobalSecondaryIndex({
+      indexName: 'email-index',
+      partitionKey: { name: 'email', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
     });
 
     this.challengesTable = new Table(this, 'ChallengesTable', {
+      tableName: `chme-${stage}-challenges`,
       partitionKey: { name: 'challengeId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+    });
+    this.challengesTable.addGlobalSecondaryIndex({
+      indexName: 'category-index',
+      partitionKey: { name: 'category', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
     });
 
     this.userChallengesTable = new Table(this, 'UserChallengesTable', {
+      tableName: `chme-${stage}-user-challenges`,
       partitionKey: { name: 'userChallengeId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+      stream: StreamViewType.NEW_AND_OLD_IMAGES,
+    });
+    this.userChallengesTable.addGlobalSecondaryIndex({
+      indexName: 'userId-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'startDate', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    this.userChallengesTable.addGlobalSecondaryIndex({
+      indexName: 'challengeId-index',
+      partitionKey: { name: 'challengeId', type: AttributeType.STRING },
+      sortKey: { name: 'startDate', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    this.userChallengesTable.addGlobalSecondaryIndex({
+      indexName: 'groupId-index',
+      partitionKey: { name: 'groupId', type: AttributeType.STRING },
+      sortKey: { name: 'userId', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
     });
 
     this.verificationsTable = new Table(this, 'VerificationsTable', {
+      tableName: `chme-${stage}-verifications`,
       partitionKey: { name: 'verificationId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+      stream: StreamViewType.NEW_AND_OLD_IMAGES,
+    });
+    this.verificationsTable.addGlobalSecondaryIndex({
+      indexName: 'userChallengeId-index',
+      partitionKey: { name: 'userChallengeId', type: AttributeType.STRING },
+      sortKey: { name: 'day', type: AttributeType.NUMBER },
+      projectionType: ProjectionType.ALL,
+    });
+    this.verificationsTable.addGlobalSecondaryIndex({
+      indexName: 'userId-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
     });
 
     this.cheersTable = new Table(this, 'CheersTable', {
+      tableName: `chme-${stage}-cheers`,
       partitionKey: { name: 'cheerId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+    });
+    this.cheersTable.addGlobalSecondaryIndex({
+      indexName: 'receiverId-index',
+      partitionKey: { name: 'receiverId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    this.cheersTable.addGlobalSecondaryIndex({
+      indexName: 'senderId-index',
+      partitionKey: { name: 'senderId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    this.cheersTable.addGlobalSecondaryIndex({
+      indexName: 'scheduled-index',
+      partitionKey: { name: 'status', type: AttributeType.STRING },
+      sortKey: { name: 'scheduledTime', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
     });
 
     this.userCheerTicketsTable = new Table(this, 'UserCheerTicketsTable', {
+      tableName: `chme-${stage}-user-cheer-tickets`,
       partitionKey: { name: 'ticketId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+      timeToLiveAttribute: 'expiresAtTimestamp',
+    });
+    this.userCheerTicketsTable.addGlobalSecondaryIndex({
+      indexName: 'userId-status-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'status', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
     });
 
     // ==================== External Resources ====================

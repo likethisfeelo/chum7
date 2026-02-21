@@ -22,6 +22,7 @@ cdk.out/
 # =========================
 .env
 .env.*
+!.env.example
 frontend/.env*
 admin-frontend/.env*
 
