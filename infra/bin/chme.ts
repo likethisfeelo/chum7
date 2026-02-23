@@ -73,10 +73,4 @@ const adminStack = new AdminStack(app, `chme-${stage}-admin`, {
   userChallengesTable: coreStack.userChallengesTable,
 });
 
-authStack.addDependency(coreStack);
-challengeStack.addDependency(coreStack);
-verificationStack.addDependency(coreStack);
-cheerStack.addDependency(coreStack);
-adminStack.addDependency(coreStack);
-
 app.synth();
