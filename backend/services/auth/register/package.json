@@ -9,7 +9,8 @@
     "@aws-sdk/client-sns": "^3.478.0",
     "@aws-sdk/lib-dynamodb": "^3.478.0",
     "@aws-sdk/s3-request-presigner": "^3.478.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",
