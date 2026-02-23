@@ -1,10 +1,5 @@
-import { Stack, StackProps, RemovalPolicy, Duration, CfnOutput } from 'aws-cdk-lib';
+import { Stack, StackProps, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import {
-  HttpApi,
-  CorsHttpMethod,
-  CorsPreflightOptions,
-} from 'aws-cdk-lib/aws-apigatewayv2';
 
 import {
   UserPool,
@@ -32,9 +27,6 @@ export interface CoreStackProps extends StackProps {
 }
 
 export class CoreStack extends Stack {
-  public readonly apiGateway: HttpApi;
-  public readonly apiGatewayId: string;
-
   public readonly userPool: UserPool;
   public readonly userPoolClient: UserPoolClient;
   public readonly adminsGroup: CfnUserPoolGroup;
@@ -54,30 +46,6 @@ export class CoreStack extends Stack {
     super(scope, id, props);
 
     const { stage, config } = props;
-
-    // ==================== API Gateway ====================
-    const corsConfig: CorsPreflightOptions = {
-      allowOrigins:
-        stage === 'prod'
-          ? ['https://www.chum7.com']
-          : ['http://localhost:5173', 'http://localhost:5174'],
-      allowMethods: [
-        CorsHttpMethod.GET,
-        CorsHttpMethod.POST,
-        CorsHttpMethod.PUT,
-        CorsHttpMethod.DELETE,
-        CorsHttpMethod.OPTIONS,
-      ],
-      allowHeaders: ['Content-Type', 'Authorization'],
-      maxAge: Duration.days(1),
-    };
-
-    this.apiGateway = new HttpApi(this, 'ApiGateway', {
-      apiName: `chme-${stage}-api`,
-      corsPreflight: corsConfig,
-    });
-
-    this.apiGatewayId = this.apiGateway.httpApiId;
 
     // ==================== Cognito ====================
     this.userPool = new UserPool(this, 'UserPool', {
@@ -108,7 +76,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-users`,
       partitionKey: { name: 'userId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: isProd,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
       removalPolicy,
       stream: StreamViewType.NEW_AND_OLD_IMAGES,
     });
@@ -122,7 +90,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-challenges`,
       partitionKey: { name: 'challengeId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: isProd,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
       removalPolicy,
     });
     this.challengesTable.addGlobalSecondaryIndex({
@@ -136,7 +104,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-user-challenges`,
       partitionKey: { name: 'userChallengeId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: isProd,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
       removalPolicy,
       stream: StreamViewType.NEW_AND_OLD_IMAGES,
     });
@@ -163,7 +131,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-verifications`,
       partitionKey: { name: 'verificationId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: isProd,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
       removalPolicy,
       stream: StreamViewType.NEW_AND_OLD_IMAGES,
     });
@@ -184,7 +152,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-cheers`,
       partitionKey: { name: 'cheerId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: isProd,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
       removalPolicy,
     });
     this.cheersTable.addGlobalSecondaryIndex({
@@ -210,7 +178,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-user-cheer-tickets`,
       partitionKey: { name: 'ticketId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: isProd,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
       removalPolicy,
       timeToLiveAttribute: 'expiresAtTimestamp',
     });
@@ -226,7 +194,5 @@ export class CoreStack extends Stack {
     this.snsTopic = new Topic(this, 'Topic');
     this.eventBus = new EventBus(this, 'Bus');
 
-    // ==================== Outputs ====================
-    new CfnOutput(this, 'ApiUrl', { value: this.apiGateway.apiEndpoint });
   }
 }
