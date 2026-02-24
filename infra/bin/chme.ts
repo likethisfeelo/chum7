@@ -9,6 +9,8 @@ import { ChallengeStack } from '../stacks/challenge-stack';
 import { VerificationStack } from '../stacks/verification-stack';
 import { CheerStack } from '../stacks/cheer-stack';
 import { AdminStack } from '../stacks/admin-stack';
+import { QuestStack } from '../stacks/quest-stack';
+import { BulletinStack } from '../stacks/bulletin-stack';
 
 import { devConfig } from '../config/dev';
 import { prodConfig } from '../config/prod';
@@ -22,7 +24,6 @@ const env = {
   region: config.region,
 };
 
-// ApiStack owns the HttpApi — no dependency on CoreStack, so no cycle possible
 const apiStack = new ApiStack(app, `chme-${stage}-api`, {
   env,
   stage,
@@ -76,6 +77,26 @@ new AdminStack(app, `chme-${stage}-admin`, {
   stage,
   apiGateway: apiStack.apiGateway,
   usersTable: coreStack.usersTable,
+  challengesTable: coreStack.challengesTable,
+  userChallengesTable: coreStack.userChallengesTable,
+});
+
+new QuestStack(app, `chme-${stage}-quest`, {
+  env,
+  stage,
+  apiGateway: apiStack.apiGateway,
+  questsTable: coreStack.questsTable,
+  questSubmissionsTable: coreStack.questSubmissionsTable,
+  challengesTable: coreStack.challengesTable,
+});
+
+new BulletinStack(app, `chme-${stage}-bulletin`, {
+  env,
+  stage,
+  apiGateway: apiStack.apiGateway,
+  bulletinPostsTable: coreStack.bulletinPostsTable,
+  bulletinCommentsTable: coreStack.bulletinCommentsTable,
+  bulletinLikesTable: coreStack.bulletinLikesTable,
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
 });

@@ -38,6 +38,15 @@ export class CoreStack extends Stack {
   public readonly cheersTable: Table;
   public readonly userCheerTicketsTable: Table;
 
+  // Quest board tables
+  public readonly questsTable: Table;
+  public readonly questSubmissionsTable: Table;
+
+  // Bulletin board tables
+  public readonly bulletinPostsTable: Table;
+  public readonly bulletinCommentsTable: Table;
+  public readonly bulletinLikesTable: Table;
+
   public readonly uploadsBucket: IBucket;
   public readonly snsTopic: Topic;
   public readonly eventBus: EventBus;
@@ -93,10 +102,18 @@ export class CoreStack extends Stack {
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
       removalPolicy,
     });
+    // GSI: 카테고리별 챌린지 목록 (challengeStartAt 기준 정렬)
     this.challengesTable.addGlobalSecondaryIndex({
       indexName: 'category-index',
       partitionKey: { name: 'category', type: AttributeType.STRING },
-      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      sortKey: { name: 'challengeStartAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    // GSI: 라이프사이클 상태별 챌린지 조회 (lifecycle-manager + 어드민 용)
+    this.challengesTable.addGlobalSecondaryIndex({
+      indexName: 'lifecycle-index',
+      partitionKey: { name: 'lifecycle', type: AttributeType.STRING },
+      sortKey: { name: 'challengeStartAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
 
@@ -187,6 +204,113 @@ export class CoreStack extends Stack {
       partitionKey: { name: 'userId', type: AttributeType.STRING },
       sortKey: { name: 'status', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
+    });
+
+    // ==================== Quest Board Tables ====================
+    this.questsTable = new Table(this, 'QuestsTable', {
+      tableName: `chme-${stage}-quests`,
+      partitionKey: { name: 'questId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    // GSI: 챌린지별 퀘스트 목록
+    this.questsTable.addGlobalSecondaryIndex({
+      indexName: 'challengeId-index',
+      partitionKey: { name: 'challengeId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    // GSI: 상태별 퀘스트 (active/inactive)
+    this.questsTable.addGlobalSecondaryIndex({
+      indexName: 'status-index',
+      partitionKey: { name: 'status', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    this.questSubmissionsTable = new Table(this, 'QuestSubmissionsTable', {
+      tableName: `chme-${stage}-quest-submissions`,
+      partitionKey: { name: 'submissionId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+      stream: StreamViewType.NEW_AND_OLD_IMAGES,
+    });
+    // GSI: 퀘스트별 제출물 조회 (관리자 승인 큐)
+    this.questSubmissionsTable.addGlobalSecondaryIndex({
+      indexName: 'questId-status-index',
+      partitionKey: { name: 'questId', type: AttributeType.STRING },
+      sortKey: { name: 'status', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    // GSI: 유저별 제출물 조회
+    this.questSubmissionsTable.addGlobalSecondaryIndex({
+      indexName: 'userId-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    // GSI: 관리자 전체 pending 목록
+    this.questSubmissionsTable.addGlobalSecondaryIndex({
+      indexName: 'status-createdAt-index',
+      partitionKey: { name: 'status', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    // ==================== Bulletin Board Tables ====================
+    this.bulletinPostsTable = new Table(this, 'BulletinPostsTable', {
+      tableName: `chme-${stage}-bulletin-posts`,
+      partitionKey: { name: 'postId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    // GSI: challengePhaseKey = `${challengeId}#${phase}` 로 게시판 피드 조회
+    this.bulletinPostsTable.addGlobalSecondaryIndex({
+      indexName: 'challengePhaseKey-index',
+      partitionKey: { name: 'challengePhaseKey', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    // GSI: 유저별 포스트 조회
+    this.bulletinPostsTable.addGlobalSecondaryIndex({
+      indexName: 'userId-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    this.bulletinCommentsTable = new Table(this, 'BulletinCommentsTable', {
+      tableName: `chme-${stage}-bulletin-comments`,
+      partitionKey: { name: 'commentId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    // GSI: 포스트별 댓글 목록
+    this.bulletinCommentsTable.addGlobalSecondaryIndex({
+      indexName: 'postId-index',
+      partitionKey: { name: 'postId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    // likeId = `${postId}#${userId}` → 유니크 보장 + 중복 방지
+    this.bulletinLikesTable = new Table(this, 'BulletinLikesTable', {
+      tableName: `chme-${stage}-bulletin-likes`,
+      partitionKey: { name: 'likeId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    // GSI: 포스트별 좋아요 수 집계
+    this.bulletinLikesTable.addGlobalSecondaryIndex({
+      indexName: 'postId-index',
+      partitionKey: { name: 'postId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.KEYS_ONLY,
     });
 
     // ==================== External Resources ====================

@@ -9,11 +9,8 @@ const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const joinSchema = z.object({
-  startDate: z.string().optional(), // ISO date string
-  personalGoal: z.string().max(200).optional()
+  personalGoal: z.string().max(200).optional(),
 });
-
-type JoinInput = z.infer<typeof joinSchema>;
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
@@ -21,15 +18,10 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Credentials': true
+      'Access-Control-Allow-Credentials': true,
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   };
-}
-
-// 그룹 ID 생성 (같은 챌린지, 같은 시작일 = 같은 그룹)
-function generateGroupId(challengeId: string, startDate: string): string {
-  return `${challengeId}-${startDate}`;
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -38,65 +30,78 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const challengeId = event.pathParameters?.challengeId;
 
     if (!userId) {
-      return response(401, {
-        error: 'UNAUTHORIZED',
-        message: '인증이 필요합니다'
-      });
+      return response(401, { error: 'UNAUTHORIZED', message: '인증이 필요합니다' });
     }
-
     if (!challengeId) {
-      return response(400, {
-        error: 'MISSING_CHALLENGE_ID',
-        message: '챌린지 ID가 필요합니다'
-      });
+      return response(400, { error: 'MISSING_CHALLENGE_ID', message: '챌린지 ID가 필요합니다' });
     }
 
     const body = JSON.parse(event.body || '{}');
-    const input: JoinInput = joinSchema.parse(body);
+    const input = joinSchema.parse(body);
 
-    // 1. 챌린지 존재 확인
+    // 1. 챌린지 조회 및 라이프사이클 확인
     const challengeResult = await docClient.send(new GetCommand({
       TableName: process.env.CHALLENGES_TABLE!,
-      Key: { challengeId }
+      Key: { challengeId },
     }));
 
     if (!challengeResult.Item) {
-      return response(404, {
-        error: 'CHALLENGE_NOT_FOUND',
-        message: '챌린지를 찾을 수 없습니다'
-      });
+      return response(404, { error: 'CHALLENGE_NOT_FOUND', message: '챌린지를 찾을 수 없습니다' });
     }
 
     const challenge = challengeResult.Item;
+
+    // recruiting 단계에서만 참여 가능
+    if (challenge.lifecycle !== 'recruiting') {
+      const lifecycleMessages: Record<string, string> = {
+        draft:      '아직 공개되지 않은 챌린지입니다',
+        preparing:  '모집이 마감된 챌린지입니다',
+        active:     '이미 진행 중인 챌린지입니다',
+        completed:  '종료된 챌린지입니다',
+        archived:   '보관된 챌린지입니다',
+      };
+      return response(409, {
+        error: 'NOT_RECRUITING',
+        message: lifecycleMessages[challenge.lifecycle] || '참여할 수 없는 챌린지입니다',
+        lifecycle: challenge.lifecycle,
+      });
+    }
+
+    // maxParticipants 체크
+    if (challenge.maxParticipants !== null) {
+      if (challenge.stats.totalParticipants >= challenge.maxParticipants) {
+        return response(409, {
+          error: 'CHALLENGE_FULL',
+          message: '챌린지 정원이 마감되었습니다',
+        });
+      }
+    }
 
     // 2. 이미 참여 중인지 확인
     const existingResult = await docClient.send(new QueryCommand({
       TableName: process.env.USER_CHALLENGES_TABLE!,
       IndexName: 'userId-index',
       KeyConditionExpression: 'userId = :userId',
-      FilterExpression: 'challengeId = :challengeId AND #status = :status',
-      ExpressionAttributeNames: {
-        '#status': 'status'
-      },
+      FilterExpression: 'challengeId = :challengeId AND #status <> :failed',
+      ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: {
         ':userId': userId,
         ':challengeId': challengeId,
-        ':status': 'active'
-      }
+        ':failed': 'failed',
+      },
     }));
 
     if (existingResult.Items && existingResult.Items.length > 0) {
-      return response(409, {
-        error: 'ALREADY_JOINED',
-        message: '이미 참여 중인 챌린지입니다'
-      });
+      return response(409, { error: 'ALREADY_JOINED', message: '이미 참여 중인 챌린지입니다' });
     }
 
-    // 3. 시작일 설정 (기본: 오늘)
-    const startDate = input.startDate || new Date().toISOString().split('T')[0];
-    const groupId = generateGroupId(challengeId, startDate);
+    // 3. startDate = challenge.challengeStartAt (모든 참여자 동일)
+    const startDate = challenge.challengeStartAt.split('T')[0]; // YYYY-MM-DD
 
-    // 4. UserChallenge 생성
+    // groupId = challengeId (같은 챌린지 = 같은 코호트)
+    const groupId = challengeId;
+
+    // 4. UserChallenge 생성 (preparing phase로 시작)
     const userChallengeId = uuidv4();
     const now = new Date().toISOString();
 
@@ -105,36 +110,38 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       userId,
       challengeId,
       startDate,
+      phase: 'preparing',         // preparing → active (챌린지 시작일에 lifecycle-manager가 전환)
       status: 'active',
       currentDay: 0,
-      progress: Array.from({ length: 7 }, (_, i) => ({
+      progress: Array.from({ length: challenge.durationDays ?? 7 }, (_, i) => ({
         day: i + 1,
-        status: null
+        status: null,
       })),
       score: 0,
       deltaSum: 0,
       cheerCount: 0,
       groupId,
-      personalGoal: input.personalGoal || null,
+      personalGoal: input.personalGoal ?? null,
       consecutiveDays: 0,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
 
     await docClient.send(new PutCommand({
       TableName: process.env.USER_CHALLENGES_TABLE!,
-      Item: userChallenge
+      Item: userChallenge,
     }));
 
-    // 5. 챌린지 통계 업데이트 (참여자 수 +1)
+    // 5. 챌린지 stats 업데이트
     await docClient.send(new UpdateCommand({
       TableName: process.env.CHALLENGES_TABLE!,
       Key: { challengeId },
-      UpdateExpression: 'SET stats.totalParticipants = if_not_exists(stats.totalParticipants, :zero) + :inc, stats.activeParticipants = if_not_exists(stats.activeParticipants, :zero) + :inc',
+      UpdateExpression: 'SET stats.totalParticipants = if_not_exists(stats.totalParticipants, :zero) + :inc, stats.activeParticipants = if_not_exists(stats.activeParticipants, :zero) + :inc, updatedAt = :now',
       ExpressionAttributeValues: {
         ':zero': 0,
-        ':inc': 1
-      }
+        ':inc': 1,
+        ':now': now,
+      },
     }));
 
     return response(201, {
@@ -142,32 +149,26 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       message: '챌린지 참여가 완료되었습니다',
       data: {
         userChallengeId,
+        phase: 'preparing',
         challenge: {
           challengeId: challenge.challengeId,
           title: challenge.title,
           category: challenge.category,
           targetTime: challenge.targetTime,
-          badgeIcon: challenge.badgeIcon
+          badgeIcon: challenge.badgeIcon,
+          challengeStartAt: challenge.challengeStartAt,
+          recruitingEndAt: challenge.recruitingEndAt,
         },
         startDate,
-        groupId
-      }
+        groupId,
+      },
     });
 
   } catch (error: any) {
     console.error('Join challenge error:', error);
-
     if (error instanceof z.ZodError) {
-      return response(400, {
-        error: 'VALIDATION_ERROR',
-        message: '입력값이 올바르지 않습니다',
-        details: error.errors
-      });
+      return response(400, { error: 'VALIDATION_ERROR', message: '입력값이 올바르지 않습니다', details: error.errors });
     }
-
-    return response(500, {
-      error: 'INTERNAL_SERVER_ERROR',
-      message: '서버 오류가 발생했습니다'
-    });
+    return response(500, { error: 'INTERNAL_SERVER_ERROR', message: '서버 오류가 발생했습니다' });
   }
 };
