@@ -11,6 +11,7 @@ import { CheerStack } from '../stacks/cheer-stack';
 import { AdminStack } from '../stacks/admin-stack';
 import { QuestStack } from '../stacks/quest-stack';
 import { BulletinStack } from '../stacks/bulletin-stack';
+import { FrontendStack } from '../stacks/frontend-stack';
 
 import { devConfig } from '../config/dev';
 import { prodConfig } from '../config/prod';
@@ -100,6 +101,12 @@ new BulletinStack(app, `chme-${stage}-bulletin`, {
   bulletinLikesTable: coreStack.bulletinLikesTable,
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
+});
+
+new FrontendStack(app, `chme-${stage}-frontend`, {
+  env,
+  stage,
+  config,
 });
 
 app.synth();
