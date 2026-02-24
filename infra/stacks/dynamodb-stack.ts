@@ -57,11 +57,11 @@ export class DynamoDBStack extends Stack {
     // ==========================================
     // 2. Challenges 테이블
     // ==========================================
-    this.challengesTable = new dynamodb.Table(this, 'ChallengesTable', {
+    this.challengesTable = new dynamodb.Table(this, 'ChallengesTableV2', {
       tableName: `chme-${stage}-challenges`,
-      partitionKey: { 
-        name: 'challengeId', 
-        type: dynamodb.AttributeType.STRING 
+      partitionKey: {
+        name: 'challengeId',
+        type: dynamodb.AttributeType.STRING
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       pointInTimeRecovery: stage === 'prod',
@@ -70,15 +70,29 @@ export class DynamoDBStack extends Stack {
         : RemovalPolicy.DESTROY
     });
 
-    // GSI: category별 챌린지 조회
+    // GSI: category별 챌린지 조회 (endDate 정렬)
     this.challengesTable.addGlobalSecondaryIndex({
-      indexName: 'category-index',
-      partitionKey: { 
-        name: 'category', 
-        type: dynamodb.AttributeType.STRING 
+      indexName: 'category-index-v2',
+      partitionKey: {
+        name: 'category',
+        type: dynamodb.AttributeType.STRING
       },
       sortKey: {
-        name: 'createdAt',
+        name: 'endDate',
+        type: dynamodb.AttributeType.STRING
+      },
+      projectionType: dynamodb.ProjectionType.ALL
+    });
+
+    // GSI: lifecycle 상태별 챌린지 조회
+    this.challengesTable.addGlobalSecondaryIndex({
+      indexName: 'lifecycle-index',
+      partitionKey: {
+        name: 'lifecycle',
+        type: dynamodb.AttributeType.STRING
+      },
+      sortKey: {
+        name: 'endDate',
         type: dynamodb.AttributeType.STRING
       },
       projectionType: dynamodb.ProjectionType.ALL
