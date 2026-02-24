@@ -105,7 +105,7 @@ export class CoreStack extends Stack {
     });
     // GSI: 카테고리별 챌린지 목록 (challengeStartAt 기준 정렬)
     this.challengesTable.addGlobalSecondaryIndex({
-      indexName: 'category-index',
+      indexName: 'category-index-v2',
       partitionKey: { name: 'category', type: AttributeType.STRING },
       sortKey: { name: 'challengeStartAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
