@@ -51,17 +51,18 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
-function isAdmin(event: APIGatewayProxyEvent): boolean {
+function isAuthorized(event: APIGatewayProxyEvent): boolean {
   const groups = event.requestContext.authorizer?.jwt?.claims['cognito:groups'];
   if (!groups) return false;
-  if (typeof groups === 'string') return groups === 'admins';
-  return Array.isArray(groups) && groups.includes('admins');
+  const ALLOWED = ['admins', 'leaders'];
+  if (typeof groups === 'string') return ALLOWED.includes(groups);
+  return Array.isArray(groups) && groups.some(g => ALLOWED.includes(g));
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    if (!isAdmin(event)) {
-      return response(403, { error: 'FORBIDDEN', message: '관리자 권한이 필요합니다' });
+    if (!isAuthorized(event)) {
+      return response(403, { error: 'FORBIDDEN', message: '챌린지 생성 권한이 없습니다. admins 또는 leaders 그룹이어야 합니다' });
     }
 
     const body = JSON.parse(event.body || '{}');
