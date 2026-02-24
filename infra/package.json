@@ -12,6 +12,8 @@
     "cdk": "cdk",
     "deploy:dev": "cdk deploy --all --context stage=dev",
     "deploy:prod": "cdk deploy --all --context stage=prod",
+    "deploy:frontend:dev": "cdk deploy chme-dev-frontend --context stage=dev",
+    "deploy:frontend:prod": "cdk deploy chme-prod-frontend --context stage=prod",
     "diff:dev": "cdk diff --context stage=dev",
     "diff:prod": "cdk diff --context stage=prod",
     "synth:dev": "cdk synth --context stage=dev",
