@@ -5,6 +5,8 @@ import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
+import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
+import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 import * as path from 'path';
 
 interface ChallengeStackProps extends StackProps {
@@ -75,7 +77,7 @@ export class ChallengeStack extends Stack {
       handler: 'handler',
       environment: commonEnv,
     });
-    challengesTable.grantReadData(joinFn);
+    challengesTable.grantReadWriteData(joinFn);
     userChallengesTable.grantReadWriteData(joinFn);
     apiGateway.addRoutes({
       path: '/challenges/{challengeId}/join',
@@ -113,6 +115,25 @@ export class ChallengeStack extends Stack {
       path: '/challenges/{challengeId}/stats',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('ChallengeStatsIntegration', statsFn),
+    });
+
+    // 6. Lifecycle Manager (EventBridge - 매 1시간 자동 실행)
+    const lifecycleManagerFn = new NodejsFunction(this, 'LifecycleManagerFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-lifecycle-manager`,
+      entry: path.join(__dirname, '../../backend/services/challenge/lifecycle-manager/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+      timeout: Duration.seconds(120),
+      memorySize: 512,
+    });
+    challengesTable.grantReadWriteData(lifecycleManagerFn);
+    userChallengesTable.grantReadWriteData(lifecycleManagerFn);
+
+    new Rule(this, 'LifecycleManagerRule', {
+      // 매 1시간 실행 (운영환경에서는 더 짧게 조정 가능)
+      schedule: Schedule.rate(Duration.hours(1)),
+      targets: [new LambdaFunction(lifecycleManagerFn)],
     });
   }
 }

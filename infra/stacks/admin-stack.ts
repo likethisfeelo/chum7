@@ -85,19 +85,19 @@ export class AdminStack extends Stack {
       integration: new HttpLambdaIntegration('AdminDeleteChallengeIntegration', deleteChallengeFn),
     });
 
-    // 4. Toggle Challenge Active Status (Admin)
-    const toggleChallengeFn = new NodejsFunction(this, 'ToggleChallengeFn', {
+    // 4. Lifecycle Transition (Admin) - 수동 라이프사이클 전환
+    const lifecycleTransitionFn = new NodejsFunction(this, 'LifecycleTransitionFn', {
       ...commonProps,
-      functionName: `chme-${stage}-admin-challenge-toggle`,
-      entry: path.join(__dirname, '../../backend/services/admin/challenge/toggle/index.ts'),
+      functionName: `chme-${stage}-admin-challenge-lifecycle-transition`,
+      entry: path.join(__dirname, '../../backend/services/admin/challenge/lifecycle-transition/index.ts'),
       handler: 'handler',
       environment: commonEnv,
     });
-    challengesTable.grantReadWriteData(toggleChallengeFn);
+    challengesTable.grantReadWriteData(lifecycleTransitionFn);
     apiGateway.addRoutes({
-      path: '/admin/challenges/{challengeId}/toggle',
+      path: '/admin/challenges/{challengeId}/lifecycle',
       methods: [HttpMethod.PUT],
-      integration: new HttpLambdaIntegration('AdminToggleChallengeIntegration', toggleChallengeFn),
+      integration: new HttpLambdaIntegration('AdminLifecycleTransitionIntegration', lifecycleTransitionFn),
     });
 
     // 5. List Users (Admin)

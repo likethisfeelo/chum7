@@ -15,6 +15,8 @@ import { ProfilePage } from '@/features/profile/pages/ProfilePage';
 import { BadgeCollectionPage } from '@/features/profile/pages/BadgeCollectionPage';
 import { RemedyPage } from '@/features/verification/pages/RemedyPage';
 import { UseTicketPage } from '@/features/cheer/pages/UseTicketPage';
+import { QuestBoardPage } from '@/features/quest/pages/QuestBoardPage';
+import { MyQuestSubmissionsPage } from '@/features/quest/pages/MyQuestSubmissionsPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -148,6 +150,24 @@ export default function App() {
           element={
             <ProtectedRoute>
               <UseTicketPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 퀘스트 보드 */}
+        <Route
+          path="/quests"
+          element={
+            <ProtectedRoute>
+              <QuestBoardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/quests/my-submissions"
+          element={
+            <ProtectedRoute>
+              <MyQuestSubmissionsPage />
             </ProtectedRoute>
           }
         />
