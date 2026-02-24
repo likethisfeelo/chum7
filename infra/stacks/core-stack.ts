@@ -103,20 +103,23 @@ export class CoreStack extends Stack {
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
       removalPolicy,
     });
-    // GSI: 카테고리별 챌린지 목록 (challengeStartAt 기준 정렬)
+    // [MIGRATION STAGE 1] 기존 category-index를 일시적으로 유지 (Stage 2에서 삭제 예정)
+    // DynamoDB는 UpdateTable 당 GSI 1개만 허용하므로 단계적 마이그레이션 필요
+    this.challengesTable.addGlobalSecondaryIndex({
+      indexName: 'category-index',
+      partitionKey: { name: 'category', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    // GSI: 카테고리별 챌린지 목록 (challengeStartAt 기준 정렬) - Lambda list/index.ts 사용
     this.challengesTable.addGlobalSecondaryIndex({
       indexName: 'category-index-v2',
       partitionKey: { name: 'category', type: AttributeType.STRING },
       sortKey: { name: 'challengeStartAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
-    // GSI: 라이프사이클 상태별 챌린지 조회 (lifecycle-manager + 어드민 용)
-    this.challengesTable.addGlobalSecondaryIndex({
-      indexName: 'lifecycle-index',
-      partitionKey: { name: 'lifecycle', type: AttributeType.STRING },
-      sortKey: { name: 'challengeStartAt', type: AttributeType.STRING },
-      projectionType: ProjectionType.ALL,
-    });
+    // NOTE: lifecycle-index는 Stage 2에서 추가 예정
+    // (category-index 삭제 후 별도 deploy로 추가)
 
     this.userChallengesTable = new Table(this, 'UserChallengesTable', {
       tableName: `chme-${stage}-user-challenges`,
