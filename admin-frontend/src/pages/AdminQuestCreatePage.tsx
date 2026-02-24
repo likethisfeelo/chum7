@@ -1,0 +1,259 @@
+import { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { apiClient } from '@/lib/api-client';
+
+const VERIFICATION_TYPES = [
+  { value: 'image', label: '📸 사진' },
+  { value: 'link',  label: '🔗 URL' },
+  { value: 'text',  label: '✍️ 텍스트' },
+  { value: 'video', label: '🎥 영상' },
+];
+
+const INITIAL = {
+  title:           '',
+  description:     '',
+  icon:            '📋',
+  rewardPoints:    100,
+  verificationType: 'image' as const,
+  approvalRequired: true,
+  displayOrder:    0,
+  startAt:         '',
+  endAt:           '',
+  linkExample:     '',
+  linkPattern:     '',
+  maxChars:        2000,
+};
+
+export const AdminQuestCreatePage = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const challengeId = searchParams.get('challengeId') ?? '';
+
+  const [form, setForm] = useState(INITIAL);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+
+  const set = <K extends keyof typeof INITIAL>(key: K, val: (typeof INITIAL)[K]) =>
+    setForm(prev => ({ ...prev, [key]: val }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title.trim()) { setError('제목을 입력해주세요'); return; }
+
+    setLoading(true);
+    setError('');
+    try {
+      const payload: any = {
+        title:            form.title.trim(),
+        description:      form.description.trim(),
+        icon:             form.icon.trim() || '📋',
+        rewardPoints:     Number(form.rewardPoints),
+        verificationType: form.verificationType,
+        approvalRequired: form.approvalRequired,
+        displayOrder:     Number(form.displayOrder),
+      };
+      if (challengeId)   payload.challengeId    = challengeId;
+      if (form.startAt)  payload.startAt         = new Date(form.startAt).toISOString();
+      if (form.endAt)    payload.endAt            = new Date(form.endAt).toISOString();
+      if (form.verificationType === 'link') {
+        payload.verificationConfig = {};
+        if (form.linkExample.trim()) payload.verificationConfig.linkExample = form.linkExample.trim();
+        if (form.linkPattern.trim()) payload.verificationConfig.linkPattern = form.linkPattern.trim();
+      }
+      if (form.verificationType === 'text') {
+        payload.verificationConfig = { maxChars: Number(form.maxChars) };
+      }
+
+      await apiClient.post('/admin/quests', payload);
+      alert('퀘스트가 생성되었습니다');
+      navigate(-1);
+    } catch (err: any) {
+      setError(err.response?.data?.message || '생성에 실패했습니다');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto p-6">
+      {/* 헤더 */}
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-900 transition-colors">
+          ← 뒤로
+        </button>
+        <h1 className="text-2xl font-bold text-gray-900">퀘스트 생성</h1>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>
+        )}
+
+        {/* 기본 정보 */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+          <h2 className="font-bold text-gray-800">기본 정보</h2>
+
+          <div className="flex gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">아이콘</label>
+              <input
+                value={form.icon}
+                onChange={e => set('icon', e.target.value)}
+                className="w-16 h-12 text-2xl text-center border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">제목 *</label>
+              <input
+                value={form.title}
+                onChange={e => set('title', e.target.value)}
+                placeholder="퀘스트 제목"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
+            <textarea
+              value={form.description}
+              onChange={e => set('description', e.target.value)}
+              rows={3}
+              placeholder="퀘스트 설명"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">보상 포인트</label>
+              <input
+                type="number"
+                min={0}
+                value={form.rewardPoints}
+                onChange={e => set('rewardPoints', Number(e.target.value) as any)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">표시 순서</label>
+              <input
+                type="number"
+                min={0}
+                value={form.displayOrder}
+                onChange={e => set('displayOrder', Number(e.target.value) as any)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 인증 방식 */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+          <h2 className="font-bold text-gray-800">인증 방식</h2>
+
+          <div className="grid grid-cols-4 gap-2">
+            {VERIFICATION_TYPES.map(vt => (
+              <button
+                key={vt.value}
+                type="button"
+                onClick={() => set('verificationType', vt.value as any)}
+                className={`py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  form.verificationType === vt.value
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {vt.label}
+              </button>
+            ))}
+          </div>
+
+          {form.verificationType === 'link' && (
+            <div className="space-y-3 pt-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">URL 예시 (선택)</label>
+                <input
+                  value={form.linkExample}
+                  onChange={e => set('linkExample', e.target.value)}
+                  placeholder="https://github.com/..."
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">URL 정규식 패턴 (선택)</label>
+                <input
+                  value={form.linkPattern}
+                  onChange={e => set('linkPattern', e.target.value)}
+                  placeholder="https://github.com/.*"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          {form.verificationType === 'text' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">최대 글자수</label>
+              <input
+                type="number"
+                min={100}
+                max={5000}
+                value={form.maxChars}
+                onChange={e => set('maxChars', Number(e.target.value) as any)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 pt-1">
+            <input
+              id="approvalRequired"
+              type="checkbox"
+              checked={form.approvalRequired}
+              onChange={e => set('approvalRequired', e.target.checked as any)}
+              className="w-4 h-4 text-primary-600 rounded"
+            />
+            <label htmlFor="approvalRequired" className="text-sm text-gray-700">
+              관리자 승인 필요 (체크 해제 시 자동 승인)
+            </label>
+          </div>
+        </div>
+
+        {/* 기간 */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+          <h2 className="font-bold text-gray-800">기간 (선택)</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">시작 일시</label>
+              <input
+                type="datetime-local"
+                value={form.startAt}
+                onChange={e => set('startAt', e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">종료 일시</label>
+              <input
+                type="datetime-local"
+                value={form.endAt}
+                onChange={e => set('endAt', e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-3.5 bg-primary-600 text-white font-bold rounded-2xl hover:bg-primary-700 transition-colors disabled:opacity-50"
+        >
+          {loading ? '생성 중...' : '퀘스트 생성하기'}
+        </button>
+      </form>
+    </div>
+  );
+};
