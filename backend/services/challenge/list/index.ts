@@ -31,7 +31,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       // 카테고리별 조회
       const result = await docClient.send(new QueryCommand({
         TableName: process.env.CHALLENGES_TABLE!,
-        IndexName: 'category-index',
+        IndexName: 'category-index-v2',
         KeyConditionExpression: 'category = :category',
         ExpressionAttributeValues: {
           ':category': category
