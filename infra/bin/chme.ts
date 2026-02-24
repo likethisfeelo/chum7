@@ -87,6 +87,7 @@ new QuestStack(app, `chme-${stage}-quest`, {
   apiGateway: apiStack.apiGateway,
   questsTable: coreStack.questsTable,
   questSubmissionsTable: coreStack.questSubmissionsTable,
+  activeQuestSubmissionsTable: coreStack.activeQuestSubmissionsTable,
   challengesTable: coreStack.challengesTable,
 });
 

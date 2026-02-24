@@ -2,11 +2,16 @@
  * GET /quests?challengeId=xxx&status=active
  * GET /quests?status=active  (챌린지 독립 퀘스트 포함 전체)
  *
- * 퀘스트 목록 조회. 각 퀘스트에 현재 유저의 제출 현황도 포함.
+ * 퀘스트 목록 + 현재 유저의 제출 현황 포함.
+ *
+ * 현재 유저 상태 조회 방법:
+ *   activeQuestSubmissions BatchGetItem (PK: `${userId}#${questId}`)
+ *   → 목록 크기만큼 O(n) GetItem (유저 전체 스캔 대신)
+ *   → BatchGetCommand로 한 번에 처리
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -26,61 +31,80 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(401, { error: 'UNAUTHORIZED', message: '인증이 필요합니다' });
     }
 
-    const params = event.queryStringParameters || {};
-    const challengeId = params.challengeId;
+    const params       = event.queryStringParameters || {};
+    const challengeId  = params.challengeId;
     const statusFilter = params.status || 'active';
-    const now = new Date().toISOString();
+    const now          = new Date().toISOString();
 
+    // ── 1. 퀘스트 목록 조회 ───────────────────────────────────────────
     let quests: any[] = [];
 
     if (challengeId) {
-      // 특정 챌린지의 퀘스트 목록
       const result = await docClient.send(new QueryCommand({
-        TableName: process.env.QUESTS_TABLE!,
-        IndexName: 'challengeId-index',
-        KeyConditionExpression: 'challengeId = :cid',
-        FilterExpression: '#status = :status',
+        TableName:     process.env.QUESTS_TABLE!,
+        IndexName:     'challengeId-index',
+        KeyConditionExpression:   'challengeId = :cid',
+        FilterExpression:         '#status = :status',
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: { ':cid': challengeId, ':status': statusFilter },
       }));
       quests = result.Items ?? [];
     } else {
-      // 전체 active 퀘스트 (status-index)
       const result = await docClient.send(new QueryCommand({
-        TableName: process.env.QUESTS_TABLE!,
-        IndexName: 'status-index',
-        KeyConditionExpression: '#status = :status',
+        TableName:     process.env.QUESTS_TABLE!,
+        IndexName:     'status-index',
+        KeyConditionExpression:   '#status = :status',
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: { ':status': statusFilter },
       }));
       quests = result.Items ?? [];
     }
 
-    // 기간 만료된 퀘스트 필터링
-    quests = quests.filter(q => !q.endAt || q.endAt >= now);
-    // displayOrder 기준 정렬
-    quests.sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+    // 기간 만료 필터 + displayOrder 정렬
+    quests = quests
+      .filter(q => !q.endAt || q.endAt >= now)
+      .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
 
-    // 현재 유저의 제출 현황 조회
-    const userSubmissionsResult = await docClient.send(new QueryCommand({
-      TableName: process.env.QUEST_SUBMISSIONS_TABLE!,
-      IndexName: 'userId-index',
-      KeyConditionExpression: 'userId = :uid',
-      ExpressionAttributeValues: { ':uid': userId },
-    }));
-    const userSubmissions = userSubmissionsResult.Items ?? [];
-    const submissionMap = new Map<string, any>();
-    for (const sub of userSubmissions) {
-      // 최신 제출 상태만 유지
-      if (!submissionMap.has(sub.questId) || sub.createdAt > submissionMap.get(sub.questId).createdAt) {
-        submissionMap.set(sub.questId, sub);
-      }
+    if (quests.length === 0) {
+      return response(200, { success: true, data: { quests: [], total: 0 } });
     }
 
-    const enrichedQuests = quests.map(q => ({
-      ...q,
-      mySubmission: submissionMap.get(q.questId) ?? null,
+    // ── 2. activeQuestSubmissions BatchGet으로 현재 제출 상태 조회 ────
+    // PK = `${userId}#${questId}` 목록을 한 번에 배치 조회
+    const activeKeys = quests.map(q => ({
+      activeSubmissionId: `${userId}#${q.questId}`,
     }));
+
+    const batchResult = await docClient.send(new BatchGetCommand({
+      RequestItems: {
+        [process.env.ACTIVE_QUEST_SUBMISSIONS_TABLE!]: {
+          Keys: activeKeys,
+          // submissionId, status만 가져오면 충분
+          ProjectionExpression: 'activeSubmissionId, submissionId, #s, updatedAt',
+          ExpressionAttributeNames: { '#s': 'status' },
+        },
+      },
+    }));
+
+    const activeItems = batchResult.Responses?.[process.env.ACTIVE_QUEST_SUBMISSIONS_TABLE!] ?? [];
+    const activeMap   = new Map(activeItems.map(item => [item.activeSubmissionId, item]));
+
+    // ── 3. 퀘스트 + 제출 현황 결합 ───────────────────────────────────
+    const enrichedQuests = quests.map(q => {
+      const activeSubmissionId = `${userId}#${q.questId}`;
+      const activeSubmission   = activeMap.get(activeSubmissionId) ?? null;
+
+      return {
+        ...q,
+        mySubmission: activeSubmission
+          ? {
+              submissionId: activeSubmission.submissionId,
+              status:       activeSubmission.status,
+              updatedAt:    activeSubmission.updatedAt,
+            }
+          : null,
+      };
+    });
 
     return response(200, {
       success: true,

@@ -40,7 +40,8 @@ export class CoreStack extends Stack {
 
   // Quest board tables
   public readonly questsTable: Table;
-  public readonly questSubmissionsTable: Table;
+  public readonly questSubmissionsTable: Table;         // 전체 이력 (append-only)
+  public readonly activeQuestSubmissionsTable: Table;  // 현재 상태 + 유니크 보장
 
   // Bulletin board tables
   public readonly bulletinPostsTable: Table;
@@ -229,6 +230,9 @@ export class CoreStack extends Stack {
       projectionType: ProjectionType.ALL,
     });
 
+    // ------------------------------------------------------------------
+    // questSubmissions: 전체 제출 이력 (append-only, 절대 삭제하지 않음)
+    // ------------------------------------------------------------------
     this.questSubmissionsTable = new Table(this, 'QuestSubmissionsTable', {
       tableName: `chme-${stage}-quest-submissions`,
       partitionKey: { name: 'submissionId', type: AttributeType.STRING },
@@ -237,25 +241,47 @@ export class CoreStack extends Stack {
       removalPolicy,
       stream: StreamViewType.NEW_AND_OLD_IMAGES,
     });
-    // GSI: 퀘스트별 제출물 조회 (관리자 승인 큐)
+    // GSI 1: 유저별 전체 제출 이력 (최신순)
     this.questSubmissionsTable.addGlobalSecondaryIndex({
-      indexName: 'questId-status-index',
-      partitionKey: { name: 'questId', type: AttributeType.STRING },
-      sortKey: { name: 'status', type: AttributeType.STRING },
-      projectionType: ProjectionType.ALL,
-    });
-    // GSI: 유저별 제출물 조회
-    this.questSubmissionsTable.addGlobalSecondaryIndex({
-      indexName: 'userId-index',
+      indexName: 'userId-createdAt-index',
       partitionKey: { name: 'userId', type: AttributeType.STRING },
       sortKey: { name: 'createdAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
-    // GSI: 관리자 전체 pending 목록
+    // GSI 2: 퀘스트별 전체 이력 (관리자: 모든 시도 포함 조회)
+    this.questSubmissionsTable.addGlobalSecondaryIndex({
+      indexName: 'questId-createdAt-index',
+      partitionKey: { name: 'questId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    // GSI 3: 관리자 pending 큐 (status별 시간순 처리)
     this.questSubmissionsTable.addGlobalSecondaryIndex({
       indexName: 'status-createdAt-index',
       partitionKey: { name: 'status', type: AttributeType.STRING },
       sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    // ------------------------------------------------------------------
+    // activeQuestSubmissions: 현재 유효한 제출 상태 (유니크 보장용)
+    //   PK: activeSubmissionId = `${userId}#${questId}`
+    //   - rejected → DELETE (재제출 허용)
+    //   - approved / auto_approved → 유지 (재제출 차단)
+    //   - ConditionalWrite로 중복 제출 원자적 방지
+    // ------------------------------------------------------------------
+    this.activeQuestSubmissionsTable = new Table(this, 'ActiveQuestSubmissionsTable', {
+      tableName: `chme-${stage}-active-quest-submissions`,
+      partitionKey: { name: 'activeSubmissionId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    // GSI: 퀘스트별 현재 pending/approved 현황 (관리자 대시보드용)
+    this.activeQuestSubmissionsTable.addGlobalSecondaryIndex({
+      indexName: 'questId-index',
+      partitionKey: { name: 'questId', type: AttributeType.STRING },
+      sortKey: { name: 'updatedAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
 

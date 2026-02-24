@@ -3,13 +3,17 @@
  *
  * 퀘스트 보드 API:
  *   Admin:
- *     POST   /admin/quests                              - 퀘스트 생성
- *     PUT    /admin/quests/submissions/{submissionId}/review - 제출물 승인/거절
+ *     POST /admin/quests                                  - 퀘스트 생성
+ *     PUT  /admin/quests/submissions/{submissionId}/review - 제출물 승인/거절
  *
  *   User:
- *     GET    /quests                                    - 퀘스트 목록 (?challengeId=&status=)
- *     POST   /quests/{questId}/submit                   - 퀘스트 제출
- *     GET    /quests/my-submissions                     - 내 제출 내역
+ *     GET  /quests                         - 퀘스트 목록 (?challengeId=&status=)
+ *     POST /quests/{questId}/submit        - 퀘스트 제출
+ *     GET  /quests/my-submissions          - 내 제출 내역 (?includeHistory=true)
+ *
+ * 2-테이블 패턴:
+ *   questSubmissionsTable       → 전체 이력 (append-only)
+ *   activeQuestSubmissionsTable → 현재 상태 + 유니크 보장
  */
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -25,6 +29,7 @@ interface QuestStackProps extends StackProps {
   apiGateway: HttpApi;
   questsTable: Table;
   questSubmissionsTable: Table;
+  activeQuestSubmissionsTable: Table;
   challengesTable: Table;
 }
 
@@ -32,13 +37,17 @@ export class QuestStack extends Stack {
   constructor(scope: Construct, id: string, props: QuestStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, questsTable, questSubmissionsTable, challengesTable } = props;
+    const {
+      stage, apiGateway,
+      questsTable, questSubmissionsTable, activeQuestSubmissionsTable, challengesTable,
+    } = props;
 
     const commonEnv = {
-      STAGE: stage,
-      QUESTS_TABLE: questsTable.tableName,
-      QUEST_SUBMISSIONS_TABLE: questSubmissionsTable.tableName,
-      CHALLENGES_TABLE: challengesTable.tableName,
+      STAGE:                           stage,
+      QUESTS_TABLE:                    questsTable.tableName,
+      QUEST_SUBMISSIONS_TABLE:         questSubmissionsTable.tableName,
+      ACTIVE_QUEST_SUBMISSIONS_TABLE:  activeQuestSubmissionsTable.tableName,
+      CHALLENGES_TABLE:                challengesTable.tableName,
     };
 
     const commonProps = {
@@ -68,7 +77,7 @@ export class QuestStack extends Stack {
       integration: new HttpLambdaIntegration('AdminCreateQuestIntegration', createQuestFn),
     });
 
-    // 2. User: List Quests
+    // 2. User: List Quests (현재 제출 상태 포함)
     const listQuestsFn = new NodejsFunction(this, 'ListQuestsFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-list`,
@@ -77,7 +86,7 @@ export class QuestStack extends Stack {
       environment: commonEnv,
     });
     questsTable.grantReadData(listQuestsFn);
-    questSubmissionsTable.grantReadData(listQuestsFn);
+    activeQuestSubmissionsTable.grantReadData(listQuestsFn);
     apiGateway.addRoutes({
       path: '/quests',
       methods: [HttpMethod.GET],
@@ -94,13 +103,14 @@ export class QuestStack extends Stack {
     });
     questsTable.grantReadWriteData(submitQuestFn);
     questSubmissionsTable.grantReadWriteData(submitQuestFn);
+    activeQuestSubmissionsTable.grantReadWriteData(submitQuestFn);
     apiGateway.addRoutes({
       path: '/quests/{questId}/submit',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('SubmitQuestIntegration', submitQuestFn),
     });
 
-    // 4. Admin: Review (Approve / Reject) Quest Submission
+    // 4. Admin: Review (Approve / Reject)
     const approveQuestFn = new NodejsFunction(this, 'ApproveQuestFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-approve`,
@@ -110,13 +120,14 @@ export class QuestStack extends Stack {
     });
     questsTable.grantReadWriteData(approveQuestFn);
     questSubmissionsTable.grantReadWriteData(approveQuestFn);
+    activeQuestSubmissionsTable.grantReadWriteData(approveQuestFn);
     apiGateway.addRoutes({
       path: '/admin/quests/submissions/{submissionId}/review',
       methods: [HttpMethod.PUT],
       integration: new HttpLambdaIntegration('ApproveQuestIntegration', approveQuestFn),
     });
 
-    // 5. User: My Submissions
+    // 5. User: My Submissions (현재 상태 or 전체 이력)
     const mySubmissionsFn = new NodejsFunction(this, 'MySubmissionsFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-my-submissions`,
@@ -125,6 +136,7 @@ export class QuestStack extends Stack {
       environment: commonEnv,
     });
     questSubmissionsTable.grantReadData(mySubmissionsFn);
+    activeQuestSubmissionsTable.grantReadData(mySubmissionsFn);
     questsTable.grantReadData(mySubmissionsFn);
     apiGateway.addRoutes({
       path: '/quests/my-submissions',
