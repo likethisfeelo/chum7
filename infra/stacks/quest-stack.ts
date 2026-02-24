@@ -127,7 +127,23 @@ export class QuestStack extends Stack {
       integration: new HttpLambdaIntegration('ApproveQuestIntegration', approveQuestFn),
     });
 
-    // 5. User: My Submissions (현재 상태 or 전체 이력)
+    // 5. Admin: List Submissions (pending 큐 + 퀘스트별 필터)
+    const adminListSubmissionsFn = new NodejsFunction(this, 'AdminListSubmissionsFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-quest-admin-list-submissions`,
+      entry: path.join(__dirname, '../../backend/services/quest/admin-list/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    questSubmissionsTable.grantReadData(adminListSubmissionsFn);
+    questsTable.grantReadData(adminListSubmissionsFn);
+    apiGateway.addRoutes({
+      path: '/admin/quests/submissions',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminListSubmissionsIntegration', adminListSubmissionsFn),
+    });
+
+    // 6. User: My Submissions (현재 상태 or 전체 이력)
     const mySubmissionsFn = new NodejsFunction(this, 'MySubmissionsFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-my-submissions`,

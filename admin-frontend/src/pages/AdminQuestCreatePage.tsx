@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 
-const VERIFICATION_TYPES = [
+type VerificationType = 'image' | 'link' | 'text' | 'video';
+
+const VERIFICATION_TYPES: { value: VerificationType; label: string }[] = [
   { value: 'image', label: '📸 사진' },
   { value: 'link',  label: '🔗 URL' },
   { value: 'text',  label: '✍️ 텍스트' },
@@ -14,7 +16,7 @@ const INITIAL = {
   description:     '',
   icon:            '📋',
   rewardPoints:    100,
-  verificationType: 'image' as const,
+  verificationType: 'image' as VerificationType,
   approvalRequired: true,
   displayOrder:    0,
   startAt:         '',
