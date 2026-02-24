@@ -29,6 +29,7 @@ import {
 import { S3Origin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { BucketDeployment, Source, CacheControl } from 'aws-cdk-lib/aws-s3-deployment';
 import * as path from 'path';
+import * as fs from 'fs';
 
 interface FrontendStackProps extends StackProps {
   stage: string;
@@ -76,33 +77,38 @@ export class FrontendStack extends Stack {
       },
     );
 
-    // index.html — no-cache (항상 최신 entrypoint 받도록)
-    new BucketDeployment(this, 'UserFrontendIndexDeploy', {
-      sources: [
-        Source.asset(path.join(__dirname, '../../frontend/dist'), {
-          exclude: ['**', '!index.html'],
-        }),
-      ],
-      destinationBucket:  userBucket,
-      distribution:       userDistribution,
-      distributionPaths:  ['/index.html'],
-      cacheControl:       [CacheControl.noCache()],
-      prune:              false,
-    });
+    const userDistPath = path.join(__dirname, '../../frontend/dist');
+    if (fs.existsSync(userDistPath)) {
+      // index.html — no-cache (항상 최신 entrypoint 받도록)
+      new BucketDeployment(this, 'UserFrontendIndexDeploy', {
+        sources: [
+          Source.asset(userDistPath, {
+            exclude: ['**', '!index.html'],
+          }),
+        ],
+        destinationBucket:  userBucket,
+        distribution:       userDistribution,
+        distributionPaths:  ['/index.html'],
+        cacheControl:       [CacheControl.noCache()],
+        prune:              false,
+      });
 
-    // 나머지 정적 자산 — immutable cache (hash가 파일명에 포함됨)
-    new BucketDeployment(this, 'UserFrontendAssetsDeploy', {
-      sources: [
-        Source.asset(path.join(__dirname, '../../frontend/dist'), {
-          exclude: ['index.html'],
-        }),
-      ],
-      destinationBucket:  userBucket,
-      distribution:       userDistribution,
-      distributionPaths:  ['/*'],
-      cacheControl:       [CacheControl.fromString('public,max-age=31536000,immutable')],
-      prune:              false,
-    });
+      // 나머지 정적 자산 — immutable cache (hash가 파일명에 포함됨)
+      new BucketDeployment(this, 'UserFrontendAssetsDeploy', {
+        sources: [
+          Source.asset(userDistPath, {
+            exclude: ['index.html'],
+          }),
+        ],
+        destinationBucket:  userBucket,
+        distribution:       userDistribution,
+        distributionPaths:  ['/*'],
+        cacheControl:       [CacheControl.fromString('public,max-age=31536000,immutable')],
+        prune:              false,
+      });
+    } else {
+      console.warn('[FrontendStack] frontend/dist not found — skipping user frontend deployment. Run: cd frontend && npm run build');
+    }
 
     // ================================================================
     // 어드민 프론트엔드 — CDK가 신규 S3 + CloudFront 생성
@@ -132,33 +138,38 @@ export class FrontendStack extends Stack {
       },
     });
 
-    // index.html — no-cache
-    new BucketDeployment(this, 'AdminFrontendIndexDeploy', {
-      sources: [
-        Source.asset(path.join(__dirname, '../../admin-frontend/dist'), {
-          exclude: ['**', '!index.html'],
-        }),
-      ],
-      destinationBucket:  adminBucket,
-      distribution:       adminDistribution,
-      distributionPaths:  ['/index.html'],
-      cacheControl:       [CacheControl.noCache()],
-      prune:              false,
-    });
+    const adminDistPath = path.join(__dirname, '../../admin-frontend/dist');
+    if (fs.existsSync(adminDistPath)) {
+      // index.html — no-cache
+      new BucketDeployment(this, 'AdminFrontendIndexDeploy', {
+        sources: [
+          Source.asset(adminDistPath, {
+            exclude: ['**', '!index.html'],
+          }),
+        ],
+        destinationBucket:  adminBucket,
+        distribution:       adminDistribution,
+        distributionPaths:  ['/index.html'],
+        cacheControl:       [CacheControl.noCache()],
+        prune:              false,
+      });
 
-    // 나머지 자산 — immutable cache
-    new BucketDeployment(this, 'AdminFrontendAssetsDeploy', {
-      sources: [
-        Source.asset(path.join(__dirname, '../../admin-frontend/dist'), {
-          exclude: ['index.html'],
-        }),
-      ],
-      destinationBucket:  adminBucket,
-      distribution:       adminDistribution,
-      distributionPaths:  ['/*'],
-      cacheControl:       [CacheControl.fromString('public,max-age=31536000,immutable')],
-      prune:              false,
-    });
+      // 나머지 자산 — immutable cache
+      new BucketDeployment(this, 'AdminFrontendAssetsDeploy', {
+        sources: [
+          Source.asset(adminDistPath, {
+            exclude: ['index.html'],
+          }),
+        ],
+        destinationBucket:  adminBucket,
+        distribution:       adminDistribution,
+        distributionPaths:  ['/*'],
+        cacheControl:       [CacheControl.fromString('public,max-age=31536000,immutable')],
+        prune:              false,
+      });
+    } else {
+      console.warn('[FrontendStack] admin-frontend/dist not found — skipping admin frontend deployment. Run: cd admin-frontend && npm run build');
+    }
 
     // ================================================================
     // Outputs

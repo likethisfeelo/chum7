@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminQuestCreatePage } from '@/pages/AdminQuestCreatePage';
 import { AdminQuestSubmissionsPage } from '@/pages/AdminQuestSubmissionsPage';
+import { AdminChallengeCreatePage } from '@/pages/AdminChallengeCreatePage';
 import '@/styles/index.css';
 
 const queryClient = new QueryClient({
@@ -9,6 +10,7 @@ const queryClient = new QueryClient({
 });
 
 const NAV = [
+  { path: '/admin/challenges/create',  label: '🏆 챌린지 생성' },
   { path: '/admin/quests/submissions', label: '📋 제출물 심사' },
   { path: '/admin/quests/create',      label: '➕ 퀘스트 생성' },
 ];
@@ -64,6 +66,10 @@ export default function App() {
           <Route
             path="/admin/quests/create"
             element={<Layout><AdminQuestCreatePage /></Layout>}
+          />
+          <Route
+            path="/admin/challenges/create"
+            element={<Layout><AdminChallengeCreatePage /></Layout>}
           />
           <Route path="*" element={<Navigate to="/admin/quests/submissions" replace />} />
         </Routes>
