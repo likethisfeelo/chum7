@@ -30,7 +30,10 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // 인증 엔드포인트는 token refresh 시도하지 않음
+    const isAuthEndpoint = originalRequest?.url?.startsWith('/auth/');
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
 
       try {

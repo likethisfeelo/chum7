@@ -22,7 +22,8 @@ export const LoginPage = () => {
       navigate('/me');
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || '로그인에 실패했습니다');
+      const message = error.response?.data?.message || '이메일 또는 비밀번호를 확인해주세요';
+      toast.error(message);
     },
   });
 
