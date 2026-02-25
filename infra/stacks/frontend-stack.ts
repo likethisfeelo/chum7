@@ -93,11 +93,25 @@ export class FrontendStack extends Stack {
         prune:              false,
       });
 
+      // SW 관련 파일 — no-cache (업데이트 가능해야 함)
+      new BucketDeployment(this, 'UserFrontendSwDeploy', {
+        sources: [
+          Source.asset(userDistPath, {
+            exclude: ['**', '!sw.js', '!registerSW.js', '!workbox-*.js', '!manifest.webmanifest', '!manifest.json'],
+          }),
+        ],
+        destinationBucket:  userBucket,
+        distribution:       userDistribution,
+        distributionPaths:  ['/sw.js', '/registerSW.js', '/workbox-*.js', '/manifest.webmanifest', '/manifest.json'],
+        cacheControl:       [CacheControl.noCache()],
+        prune:              false,
+      });
+
       // 나머지 정적 자산 — immutable cache (hash가 파일명에 포함됨)
       new BucketDeployment(this, 'UserFrontendAssetsDeploy', {
         sources: [
           Source.asset(userDistPath, {
-            exclude: ['index.html'],
+            exclude: ['index.html', 'sw.js', 'registerSW.js', 'workbox-*.js', 'manifest.webmanifest', 'manifest.json'],
           }),
         ],
         destinationBucket:  userBucket,
