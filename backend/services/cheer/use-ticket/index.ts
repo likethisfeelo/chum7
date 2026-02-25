@@ -70,8 +70,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const body = JSON.parse(event.body || '{}');
     const input: UseTicketInput = useTicketSchema.parse(body);
 
-    // 2. 사용자 인증
-    const userId = body.userId; // 임시
+    // 2. 사용자 인증 (Cognito JWT Authorizer에서 주입)
+    const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
+    if (!userId) {
+      return response(401, { error: 'UNAUTHORIZED', message: '인증이 필요합니다' });
+    }
 
     // 3. 응원권 조회
     const ticketResult = await docClient.send(new GetCommand({

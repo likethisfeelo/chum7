@@ -64,9 +64,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const body = JSON.parse(event.body || '{}');
     const input: SendImmediateInput = sendImmediateSchema.parse(body);
 
-    // 2. 발신자 정보 (실제로는 Cognito Authorizer에서)
-    const senderId = body.senderId; // 임시
-    const senderIcon = body.senderIcon || '🐰'; // 임시
+    // 2. 발신자 정보 (Cognito JWT Authorizer에서 주입)
+    const senderId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
+    if (!senderId) {
+      return response(401, { error: 'UNAUTHORIZED', message: '인증이 필요합니다' });
+    }
+    const senderIcon = body.senderIcon || '🐰';
 
     // 3. 각 수신자에게 응원 저장 및 알림 발송
     const now = new Date().toISOString();

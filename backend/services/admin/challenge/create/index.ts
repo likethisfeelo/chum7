@@ -86,7 +86,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const challengeId = uuidv4();
     const now = new Date().toISOString();
-    const adminUserId = event.requestContext.authorizer?.jwt?.claims?.sub || 'admin';
+    const adminUserId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
 
     // 현재 시각 기준 초기 lifecycle 결정
     const currentLifecycle = now >= input.recruitingStartAt ? 'recruiting' : 'draft';

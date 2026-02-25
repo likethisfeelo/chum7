@@ -101,7 +101,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       approvedCount: 0,
       createdAt: now,
       updatedAt: now,
-      createdBy: event.requestContext.authorizer?.jwt?.claims?.sub || 'admin',
+      createdBy: event.requestContext.authorizer?.jwt?.claims?.sub as string,
     };
 
     await docClient.send(new PutCommand({
