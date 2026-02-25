@@ -17,8 +17,8 @@ export const LoginPage = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      const { user, accessToken, refreshToken } = data.data;
-      setAuth(user, accessToken, refreshToken);
+      const { user, tokens } = data.data;
+      setAuth(user, tokens.accessToken, tokens.refreshToken);
       navigate('/me');
     },
     onError: (error: any) => {
