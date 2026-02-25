@@ -11,6 +11,7 @@
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
@@ -20,6 +21,7 @@ import * as path from 'path';
 interface BulletinStackProps extends StackProps {
   stage: string;
   apiGateway: HttpApi;
+  authorizer: HttpJwtAuthorizer;
   bulletinPostsTable: Table;
   bulletinCommentsTable: Table;
   bulletinLikesTable: Table;
@@ -32,7 +34,7 @@ export class BulletinStack extends Stack {
     super(scope, id, props);
 
     const {
-      stage, apiGateway,
+      stage, apiGateway, authorizer,
       bulletinPostsTable, bulletinCommentsTable, bulletinLikesTable,
       challengesTable, userChallengesTable,
     } = props;
@@ -72,9 +74,10 @@ export class BulletinStack extends Stack {
       path: '/bulletin/{challengeId}/posts',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('CreatePostIntegration', createPostFn),
+      authorizer,
     });
 
-    // 2. List Posts
+    // 2. List Posts (protected)
     const listPostsFn = new NodejsFunction(this, 'ListPostsFn', {
       ...commonProps,
       functionName: `chme-${stage}-bulletin-list-posts`,
@@ -87,9 +90,10 @@ export class BulletinStack extends Stack {
       path: '/bulletin/{challengeId}/posts',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('ListPostsIntegration', listPostsFn),
+      authorizer,
     });
 
-    // 3. Like Post (toggle)
+    // 3. Like Post (toggle) (protected)
     const likePostFn = new NodejsFunction(this, 'LikePostFn', {
       ...commonProps,
       functionName: `chme-${stage}-bulletin-like-post`,
@@ -103,9 +107,10 @@ export class BulletinStack extends Stack {
       path: '/bulletin/{challengeId}/posts/{postId}/like',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('LikePostIntegration', likePostFn),
+      authorizer,
     });
 
-    // 4. Create Comment
+    // 4. Create Comment (protected)
     const createCommentFn = new NodejsFunction(this, 'CreateCommentFn', {
       ...commonProps,
       functionName: `chme-${stage}-bulletin-create-comment`,
@@ -119,9 +124,10 @@ export class BulletinStack extends Stack {
       path: '/bulletin/{challengeId}/posts/{postId}/comments',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('CreateCommentIntegration', createCommentFn),
+      authorizer,
     });
 
-    // 5. List Comments
+    // 5. List Comments (protected)
     const listCommentsFn = new NodejsFunction(this, 'ListCommentsFn', {
       ...commonProps,
       functionName: `chme-${stage}-bulletin-list-comments`,
@@ -134,6 +140,7 @@ export class BulletinStack extends Stack {
       path: '/bulletin/{challengeId}/posts/{postId}/comments',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('ListCommentsIntegration', listCommentsFn),
+      authorizer,
     });
   }
 }

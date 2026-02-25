@@ -1,6 +1,7 @@
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
@@ -13,6 +14,7 @@ import * as path from 'path';
 interface CheerStackProps extends StackProps {
   stage: string;
   apiGateway: HttpApi;
+  authorizer: HttpJwtAuthorizer;
   cheersTable: Table;
   userCheerTicketsTable: Table;
   userChallengesTable: Table;
@@ -24,7 +26,7 @@ export class CheerStack extends Stack {
   constructor(scope: Construct, id: string, props: CheerStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, cheersTable, userCheerTicketsTable, userChallengesTable, snsTopic, eventBus } = props;
+    const { stage, apiGateway, authorizer, cheersTable, userCheerTicketsTable, userChallengesTable, snsTopic, eventBus } = props;
 
     const commonEnv = {
       STAGE: stage,
@@ -61,9 +63,10 @@ export class CheerStack extends Stack {
       path: '/cheer/send-immediate',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('SendImmediateIntegration', sendImmediateFn),
+      authorizer,
     });
 
-    // 2. Use Ticket (예약 응원 생성)
+    // 2. Use Ticket (예약 응원 생성) (protected)
     const useTicketFn = new NodejsFunction(this, 'UseTicketFn', {
       ...commonProps,
       functionName: `chme-${stage}-cheer-use-ticket`,
@@ -78,6 +81,7 @@ export class CheerStack extends Stack {
       path: '/cheer/use-ticket',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('UseTicketIntegration', useTicketFn),
+      authorizer,
     });
 
     // 3. Send Scheduled (EventBridge 트리거 - API 없음)
@@ -112,9 +116,10 @@ export class CheerStack extends Stack {
       path: '/cheer/targets',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('GetTargetsIntegration', getTargetsFn),
+      authorizer,
     });
 
-    // 5. Thank (감사 반응)
+    // 5. Thank (감사 반응) (protected)
     const thankFn = new NodejsFunction(this, 'ThankFn', {
       ...commonProps,
       functionName: `chme-${stage}-cheer-thank`,
@@ -127,9 +132,10 @@ export class CheerStack extends Stack {
       path: '/cheer/thank',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('ThankIntegration', thankFn),
+      authorizer,
     });
 
-    // 6. Get My Cheers (받은 응원 조회)
+    // 6. Get My Cheers (받은 응원 조회) (protected)
     const getMyCheers = new NodejsFunction(this, 'GetMyCheers', {
       ...commonProps,
       functionName: `chme-${stage}-cheer-get-my-cheers`,
@@ -142,9 +148,10 @@ export class CheerStack extends Stack {
       path: '/cheer/my-cheers',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('GetMyCheersIntegration', getMyCheers),
+      authorizer,
     });
 
-    // 7. Get Scheduled Cheers (예약된 응원 조회)
+    // 7. Get Scheduled Cheers (예약된 응원 조회) (protected)
     const getScheduledFn = new NodejsFunction(this, 'GetScheduledFn', {
       ...commonProps,
       functionName: `chme-${stage}-cheer-get-scheduled`,
@@ -157,6 +164,7 @@ export class CheerStack extends Stack {
       path: '/cheer/scheduled',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('GetScheduledIntegration', getScheduledFn),
+      authorizer,
     });
   }
 }

@@ -1,9 +1,11 @@
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { UserPool, UserPoolClient } from 'aws-cdk-lib/aws-cognito';
 import * as path from 'path';
@@ -11,6 +13,7 @@ import * as path from 'path';
 interface AuthStackProps extends StackProps {
   stage: string;
   apiGateway: HttpApi;
+  authorizer: HttpJwtAuthorizer;
   userPool: UserPool;
   userPoolClient: UserPoolClient;
   usersTable: Table;
@@ -20,7 +23,7 @@ export class AuthStack extends Stack {
   constructor(scope: Construct, id: string, props: AuthStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, userPool, userPoolClient, usersTable } = props;
+    const { stage, apiGateway, authorizer, userPool, userPoolClient, usersTable } = props;
 
     const commonEnv = {
       STAGE: stage,
@@ -40,7 +43,7 @@ export class AuthStack extends Stack {
       },
     };
 
-    // 1. Register
+    // 1. Register (public)
     const registerFn = new NodejsFunction(this, 'RegisterFn', {
       ...commonProps,
       functionName: `chme-${stage}-auth-register`,
@@ -49,13 +52,18 @@ export class AuthStack extends Stack {
       environment: commonEnv,
     });
     usersTable.grantWriteData(registerFn);
+    // dev에서 자동 이메일 인증 확인을 위한 Cognito 권한
+    registerFn.addToRolePolicy(new PolicyStatement({
+      actions: ['cognito-idp:AdminConfirmSignUp'],
+      resources: [userPool.userPoolArn],
+    }));
     apiGateway.addRoutes({
       path: '/auth/register',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('RegisterIntegration', registerFn),
     });
 
-    // 2. Login
+    // 2. Login (public)
     const loginFn = new NodejsFunction(this, 'LoginFn', {
       ...commonProps,
       functionName: `chme-${stage}-auth-login`,
@@ -70,7 +78,7 @@ export class AuthStack extends Stack {
       integration: new HttpLambdaIntegration('LoginIntegration', loginFn),
     });
 
-    // 3. Refresh Token
+    // 3. Refresh Token (public)
     const refreshFn = new NodejsFunction(this, 'RefreshFn', {
       ...commonProps,
       functionName: `chme-${stage}-auth-refresh-token`,
@@ -84,7 +92,7 @@ export class AuthStack extends Stack {
       integration: new HttpLambdaIntegration('RefreshIntegration', refreshFn),
     });
 
-    // 4. Get Profile
+    // 4. Get Profile (protected)
     const getProfileFn = new NodejsFunction(this, 'GetProfileFn', {
       ...commonProps,
       functionName: `chme-${stage}-auth-get-profile`,
@@ -97,9 +105,10 @@ export class AuthStack extends Stack {
       path: '/auth/me',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('GetProfileIntegration', getProfileFn),
+      authorizer,
     });
 
-    // 5. Update Profile
+    // 5. Update Profile (protected)
     const updateProfileFn = new NodejsFunction(this, 'UpdateProfileFn', {
       ...commonProps,
       functionName: `chme-${stage}-auth-update-profile`,
@@ -112,6 +121,7 @@ export class AuthStack extends Stack {
       path: '/auth/me',
       methods: [HttpMethod.PUT],
       integration: new HttpLambdaIntegration('UpdateProfileIntegration', updateProfileFn),
+      authorizer,
     });
   }
 }

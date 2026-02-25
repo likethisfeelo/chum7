@@ -26,7 +26,7 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const userId = event.requestContext.authorizer?.jwt?.claims?.sub || event.queryStringParameters?.userId;
+    const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
     const challengeId = event.pathParameters?.challengeId;
 
     if (!userId) {

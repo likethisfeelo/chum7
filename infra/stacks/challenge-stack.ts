@@ -1,6 +1,7 @@
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
@@ -12,6 +13,7 @@ import * as path from 'path';
 interface ChallengeStackProps extends StackProps {
   stage: string;
   apiGateway: HttpApi;
+  authorizer: HttpJwtAuthorizer;
   challengesTable: Table;
   userChallengesTable: Table;
 }
@@ -20,7 +22,7 @@ export class ChallengeStack extends Stack {
   constructor(scope: Construct, id: string, props: ChallengeStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, challengesTable, userChallengesTable } = props;
+    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable } = props;
 
     const commonEnv = {
       STAGE: stage,
@@ -69,7 +71,7 @@ export class ChallengeStack extends Stack {
       integration: new HttpLambdaIntegration('ChallengeDetailIntegration', detailFn),
     });
 
-    // 3. Join Challenge
+    // 3. Join Challenge (protected)
     const joinFn = new NodejsFunction(this, 'JoinFn', {
       ...commonProps,
       functionName: `chme-${stage}-challenge-join`,
@@ -83,9 +85,10 @@ export class ChallengeStack extends Stack {
       path: '/challenges/{challengeId}/join',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('ChallengeJoinIntegration', joinFn),
+      authorizer,
     });
 
-    // 4. My Challenges
+    // 4. My Challenges (protected)
     const myChallengeFn = new NodejsFunction(this, 'MyChallengeFn', {
       ...commonProps,
       functionName: `chme-${stage}-challenge-my`,
@@ -99,6 +102,7 @@ export class ChallengeStack extends Stack {
       path: '/challenges/my',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('MyChallengeIntegration', myChallengeFn),
+      authorizer,
     });
 
     // 5. Challenge Stats

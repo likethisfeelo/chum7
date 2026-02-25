@@ -82,7 +82,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const now        = new Date().toISOString();
-    const reviewerId = event.requestContext.authorizer?.jwt?.claims?.sub || 'admin';
+    const reviewerId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
     const newStatus  = input.action === 'approve' ? 'approved' : 'rejected';
 
     // ── 2. questSubmissions 이력 업데이트 ─────────────────────────────
