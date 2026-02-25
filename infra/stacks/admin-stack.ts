@@ -90,24 +90,6 @@ export class AdminStack extends Stack {
       authorizer,
     });
 
-    // [MIGRATION ONLY] ToggleChallengeFn → LifecycleTransitionFn 전환 중
-    // api-stack이 ToggleChallengeFnArn import를 제거할 때까지 이 블록을 유지해야 함
-    // 제거 조건: `npx cdk deploy chme-dev-api --exclusively --context stage=dev` 성공 후
-    const toggleChallengeFn = new NodejsFunction(this, 'ToggleChallengeFn', {
-      ...commonProps,
-      functionName: `chme-${stage}-admin-challenge-toggle`,
-      entry: path.join(__dirname, '../../backend/services/admin/challenge/toggle/index.ts'),
-      handler: 'handler',
-      environment: commonEnv,
-    });
-    challengesTable.grantReadWriteData(toggleChallengeFn);
-    apiGateway.addRoutes({
-      path: '/admin/challenges/{challengeId}/toggle',
-      methods: [HttpMethod.PUT],
-      integration: new HttpLambdaIntegration('AdminToggleChallengeIntegration', toggleChallengeFn),
-      authorizer,
-    });
-
     // 4. Lifecycle Transition (Admin) - 수동 라이프사이클 전환 (protected)
     const lifecycleTransitionFn = new NodejsFunction(this, 'LifecycleTransitionFn', {
       ...commonProps,
