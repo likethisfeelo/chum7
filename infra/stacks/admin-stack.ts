@@ -1,6 +1,7 @@
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
@@ -10,6 +11,7 @@ import * as path from 'path';
 interface AdminStackProps extends StackProps {
   stage: string;
   apiGateway: HttpApi;
+  authorizer: HttpJwtAuthorizer;
   usersTable: Table;
   challengesTable: Table;
   userChallengesTable: Table;
@@ -19,7 +21,7 @@ export class AdminStack extends Stack {
   constructor(scope: Construct, id: string, props: AdminStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, usersTable, challengesTable, userChallengesTable } = props;
+    const { stage, apiGateway, authorizer, usersTable, challengesTable, userChallengesTable } = props;
 
     const commonEnv = {
       STAGE: stage,
@@ -52,9 +54,10 @@ export class AdminStack extends Stack {
       path: '/admin/challenges',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('AdminCreateChallengeIntegration', createChallengeFn),
+      authorizer,
     });
 
-    // 2. Update Challenge (Admin)
+    // 2. Update Challenge (Admin) (protected)
     const updateChallengeFn = new NodejsFunction(this, 'UpdateChallengeFn', {
       ...commonProps,
       functionName: `chme-${stage}-admin-challenge-update`,
@@ -67,9 +70,10 @@ export class AdminStack extends Stack {
       path: '/admin/challenges/{challengeId}',
       methods: [HttpMethod.PUT],
       integration: new HttpLambdaIntegration('AdminUpdateChallengeIntegration', updateChallengeFn),
+      authorizer,
     });
 
-    // 3. Delete Challenge (Admin)
+    // 3. Delete Challenge (Admin) (protected)
     const deleteChallengeFn = new NodejsFunction(this, 'DeleteChallengeFn', {
       ...commonProps,
       functionName: `chme-${stage}-admin-challenge-delete`,
@@ -83,9 +87,10 @@ export class AdminStack extends Stack {
       path: '/admin/challenges/{challengeId}',
       methods: [HttpMethod.DELETE],
       integration: new HttpLambdaIntegration('AdminDeleteChallengeIntegration', deleteChallengeFn),
+      authorizer,
     });
 
-    // 4. Lifecycle Transition (Admin) - 수동 라이프사이클 전환
+    // 4. Lifecycle Transition (Admin) - 수동 라이프사이클 전환 (protected)
     const lifecycleTransitionFn = new NodejsFunction(this, 'LifecycleTransitionFn', {
       ...commonProps,
       functionName: `chme-${stage}-admin-challenge-lifecycle-transition`,
@@ -98,9 +103,10 @@ export class AdminStack extends Stack {
       path: '/admin/challenges/{challengeId}/lifecycle',
       methods: [HttpMethod.PUT],
       integration: new HttpLambdaIntegration('AdminLifecycleTransitionIntegration', lifecycleTransitionFn),
+      authorizer,
     });
 
-    // 5. List Users (Admin)
+    // 5. List Users (Admin) (protected)
     const listUsersFn = new NodejsFunction(this, 'ListUsersFn', {
       ...commonProps,
       functionName: `chme-${stage}-admin-user-list`,
@@ -113,9 +119,10 @@ export class AdminStack extends Stack {
       path: '/admin/users',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('AdminListUsersIntegration', listUsersFn),
+      authorizer,
     });
 
-    // 6. Stats Overview (Admin)
+    // 6. Stats Overview (Admin) (protected)
     const statsFn = new NodejsFunction(this, 'StatsFn', {
       ...commonProps,
       functionName: `chme-${stage}-admin-stats`,
@@ -130,6 +137,7 @@ export class AdminStack extends Stack {
       path: '/admin/stats',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('AdminStatsIntegration', statsFn),
+      authorizer,
     });
   }
 }

@@ -1,6 +1,7 @@
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
@@ -11,6 +12,7 @@ import * as path from 'path';
 interface VerificationStackProps extends StackProps {
   stage: string;
   apiGateway: HttpApi;
+  authorizer: HttpJwtAuthorizer;
   verificationsTable: Table;
   userChallengesTable: Table;
   uploadsBucket: IBucket;
@@ -20,7 +22,7 @@ export class VerificationStack extends Stack {
   constructor(scope: Construct, id: string, props: VerificationStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, verificationsTable, userChallengesTable, uploadsBucket } = props;
+    const { stage, apiGateway, authorizer, verificationsTable, userChallengesTable, uploadsBucket } = props;
 
     const commonEnv = {
       STAGE: stage,
@@ -54,9 +56,10 @@ export class VerificationStack extends Stack {
       path: '/verifications',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('SubmitIntegration', submitFn),
+      authorizer,
     });
 
-    // 2. Get Verification
+    // 2. Get Verification (protected)
     const getFn = new NodejsFunction(this, 'GetFn', {
       ...commonProps,
       functionName: `chme-${stage}-verification-get`,
@@ -69,9 +72,10 @@ export class VerificationStack extends Stack {
       path: '/verifications/{verificationId}',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('GetVerificationIntegration', getFn),
+      authorizer,
     });
 
-    // 3. List Verifications
+    // 3. List Verifications (protected)
     const listFn = new NodejsFunction(this, 'ListFn', {
       ...commonProps,
       functionName: `chme-${stage}-verification-list`,
@@ -85,9 +89,10 @@ export class VerificationStack extends Stack {
       path: '/verifications',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('ListVerificationIntegration', listFn),
+      authorizer,
     });
 
-    // 4. Upload URL (S3 Presigned URL)
+    // 4. Upload URL (S3 Presigned URL) (protected)
     const uploadUrlFn = new NodejsFunction(this, 'UploadUrlFn', {
       ...commonProps,
       functionName: `chme-${stage}-verification-upload-url`,
@@ -100,9 +105,10 @@ export class VerificationStack extends Stack {
       path: '/verifications/upload-url',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('UploadUrlIntegration', uploadUrlFn),
+      authorizer,
     });
 
-    // 5. Remedy Verification (Day 6 보완)
+    // 5. Remedy Verification (Day 6 보완) (protected)
     const remedyFn = new NodejsFunction(this, 'RemedyFn', {
       ...commonProps,
       functionName: `chme-${stage}-verification-remedy`,
@@ -116,6 +122,7 @@ export class VerificationStack extends Stack {
       path: '/verifications/remedy',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('RemedyIntegration', remedyFn),
+      authorizer,
     });
   }
 }

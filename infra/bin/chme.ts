@@ -25,21 +25,25 @@ const env = {
   region: config.region,
 };
 
-const apiStack = new ApiStack(app, `chme-${stage}-api`, {
-  env,
-  stage,
-});
-
+// CoreStack을 먼저 생성 (ApiStack에 Cognito 정보 전달 필요)
 const coreStack = new CoreStack(app, `chme-${stage}-core`, {
   env,
   stage,
   config,
 });
 
+const apiStack = new ApiStack(app, `chme-${stage}-api`, {
+  env,
+  stage,
+  userPoolId: coreStack.userPool.userPoolId,
+  userPoolClientId: coreStack.userPoolClient.userPoolClientId,
+});
+
 new AuthStack(app, `chme-${stage}-auth`, {
   env,
   stage,
   apiGateway: apiStack.apiGateway,
+  authorizer: apiStack.cognitoAuthorizer,
   userPool: coreStack.userPool,
   userPoolClient: coreStack.userPoolClient,
   usersTable: coreStack.usersTable,
@@ -49,6 +53,7 @@ new ChallengeStack(app, `chme-${stage}-challenge`, {
   env,
   stage,
   apiGateway: apiStack.apiGateway,
+  authorizer: apiStack.cognitoAuthorizer,
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
 });
@@ -57,6 +62,7 @@ new VerificationStack(app, `chme-${stage}-verification`, {
   env,
   stage,
   apiGateway: apiStack.apiGateway,
+  authorizer: apiStack.cognitoAuthorizer,
   verificationsTable: coreStack.verificationsTable,
   userChallengesTable: coreStack.userChallengesTable,
   uploadsBucket: coreStack.uploadsBucket,
@@ -66,6 +72,7 @@ new CheerStack(app, `chme-${stage}-cheer`, {
   env,
   stage,
   apiGateway: apiStack.apiGateway,
+  authorizer: apiStack.cognitoAuthorizer,
   cheersTable: coreStack.cheersTable,
   userCheerTicketsTable: coreStack.userCheerTicketsTable,
   userChallengesTable: coreStack.userChallengesTable,
@@ -77,6 +84,7 @@ new AdminStack(app, `chme-${stage}-admin`, {
   env,
   stage,
   apiGateway: apiStack.apiGateway,
+  authorizer: apiStack.cognitoAuthorizer,
   usersTable: coreStack.usersTable,
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
@@ -86,6 +94,7 @@ new QuestStack(app, `chme-${stage}-quest`, {
   env,
   stage,
   apiGateway: apiStack.apiGateway,
+  authorizer: apiStack.cognitoAuthorizer,
   questsTable: coreStack.questsTable,
   questSubmissionsTable: coreStack.questSubmissionsTable,
   activeQuestSubmissionsTable: coreStack.activeQuestSubmissionsTable,
@@ -96,6 +105,7 @@ new BulletinStack(app, `chme-${stage}-bulletin`, {
   env,
   stage,
   apiGateway: apiStack.apiGateway,
+  authorizer: apiStack.cognitoAuthorizer,
   bulletinPostsTable: coreStack.bulletinPostsTable,
   bulletinCommentsTable: coreStack.bulletinCommentsTable,
   bulletinLikesTable: coreStack.bulletinLikesTable,
