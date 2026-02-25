@@ -1,7 +1,12 @@
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
-import { HttpJwtAuthorizer, HttpNoneAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
+import { HttpApi, HttpMethod, IHttpRouteAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
+
+// CDK 2.117에 HttpNoneAuthorizer 미존재 → IHttpRouteAuthorizer 직접 구현
+class HttpNoneAuthorizer implements IHttpRouteAuthorizer {
+  bind(_: any) { return { authorizationType: 'NONE' }; }
+}
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
