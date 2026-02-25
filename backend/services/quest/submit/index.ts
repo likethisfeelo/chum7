@@ -86,7 +86,7 @@ function validateContent(quest: any, content: any): string | null {
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const userId  = event.requestContext.authorizer?.jwt?.claims?.sub || event.queryStringParameters?.userId;
+    const userId  = event.requestContext.authorizer?.jwt?.claims?.sub as string;
     const questId = event.pathParameters?.questId;
 
     if (!userId)  return response(401, { error: 'UNAUTHORIZED',     message: '인증이 필요합니다' });

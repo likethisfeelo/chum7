@@ -114,9 +114,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const body = JSON.parse(event.body || '{}');
     const input: SubmitInput = submitSchema.parse(body);
 
-    // 2. 사용자 인증 정보 (실제로는 Cognito Authorizer에서 가져옴)
-    // const userId = event.requestContext.authorizer?.jwt.claims.sub;
-    const userId = body.userId; // 임시 (테스트용)
+    // 2. 사용자 인증 정보 (Cognito JWT Authorizer에서 주입)
+    const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
+    if (!userId) {
+      return response(401, { error: 'UNAUTHORIZED', message: '인증이 필요합니다' });
+    }
 
     // 3. UserChallenge 조회
     const userChallengeResult = await docClient.send(new GetCommand({

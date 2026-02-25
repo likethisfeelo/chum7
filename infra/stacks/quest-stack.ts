@@ -18,6 +18,7 @@
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
@@ -27,6 +28,7 @@ import * as path from 'path';
 interface QuestStackProps extends StackProps {
   stage: string;
   apiGateway: HttpApi;
+  authorizer: HttpJwtAuthorizer;
   questsTable: Table;
   questSubmissionsTable: Table;
   activeQuestSubmissionsTable: Table;
@@ -38,7 +40,7 @@ export class QuestStack extends Stack {
     super(scope, id, props);
 
     const {
-      stage, apiGateway,
+      stage, apiGateway, authorizer,
       questsTable, questSubmissionsTable, activeQuestSubmissionsTable, challengesTable,
     } = props;
 
@@ -75,9 +77,10 @@ export class QuestStack extends Stack {
       path: '/admin/quests',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('AdminCreateQuestIntegration', createQuestFn),
+      authorizer,
     });
 
-    // 2. User: List Quests (현재 제출 상태 포함)
+    // 2. User: List Quests (현재 제출 상태 포함) (protected)
     const listQuestsFn = new NodejsFunction(this, 'ListQuestsFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-list`,
@@ -91,9 +94,10 @@ export class QuestStack extends Stack {
       path: '/quests',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('ListQuestsIntegration', listQuestsFn),
+      authorizer,
     });
 
-    // 3. User: Submit Quest
+    // 3. User: Submit Quest (protected)
     const submitQuestFn = new NodejsFunction(this, 'SubmitQuestFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-submit`,
@@ -108,9 +112,10 @@ export class QuestStack extends Stack {
       path: '/quests/{questId}/submit',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('SubmitQuestIntegration', submitQuestFn),
+      authorizer,
     });
 
-    // 4. Admin: Review (Approve / Reject)
+    // 4. Admin: Review (Approve / Reject) (protected)
     const approveQuestFn = new NodejsFunction(this, 'ApproveQuestFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-approve`,
@@ -125,9 +130,10 @@ export class QuestStack extends Stack {
       path: '/admin/quests/submissions/{submissionId}/review',
       methods: [HttpMethod.PUT],
       integration: new HttpLambdaIntegration('ApproveQuestIntegration', approveQuestFn),
+      authorizer,
     });
 
-    // 5. Admin: List Submissions (pending 큐 + 퀘스트별 필터)
+    // 5. Admin: List Submissions (pending 큐 + 퀘스트별 필터) (protected)
     const adminListSubmissionsFn = new NodejsFunction(this, 'AdminListSubmissionsFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-admin-list-submissions`,
@@ -141,9 +147,10 @@ export class QuestStack extends Stack {
       path: '/admin/quests/submissions',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('AdminListSubmissionsIntegration', adminListSubmissionsFn),
+      authorizer,
     });
 
-    // 6. User: My Submissions (현재 상태 or 전체 이력)
+    // 6. User: My Submissions (현재 상태 or 전체 이력) (protected)
     const mySubmissionsFn = new NodejsFunction(this, 'MySubmissionsFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-my-submissions`,
@@ -158,6 +165,7 @@ export class QuestStack extends Stack {
       path: '/quests/my-submissions',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('MySubmissionsIntegration', mySubmissionsFn),
+      authorizer,
     });
   }
 }

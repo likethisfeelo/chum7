@@ -5,24 +5,28 @@ import {
   CorsHttpMethod,
   CorsPreflightOptions,
 } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 
 export interface ApiStackProps extends StackProps {
   stage: string;
+  userPoolId: string;
+  userPoolClientId: string;
 }
 
 export class ApiStack extends Stack {
   public readonly apiGateway: HttpApi;
+  public readonly cognitoAuthorizer: HttpJwtAuthorizer;
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
-    const { stage } = props;
+    const { stage, userPoolId, userPoolClientId } = props;
 
     const corsConfig: CorsPreflightOptions = {
       allowOrigins:
         stage === 'prod'
           ? ['https://www.chum7.com']
-          : ['http://localhost:5173', 'http://localhost:5174'],
+          : ['http://localhost:5173', 'http://localhost:5174', 'https://test.chum7.com'],
       allowMethods: [
         CorsHttpMethod.GET,
         CorsHttpMethod.POST,
@@ -38,6 +42,12 @@ export class ApiStack extends Stack {
       apiName: `chme-${stage}-api`,
       corsPreflight: corsConfig,
     });
+
+    this.cognitoAuthorizer = new HttpJwtAuthorizer(
+      'CognitoAuthorizer',
+      `https://cognito-idp.${this.region}.amazonaws.com/${userPoolId}`,
+      { jwtAudience: [userPoolClientId] },
+    );
 
     new CfnOutput(this, 'ApiUrl', { value: this.apiGateway.apiEndpoint });
   }
