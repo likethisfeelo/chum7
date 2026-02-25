@@ -90,23 +90,7 @@ export class AdminStack extends Stack {
       authorizer,
     });
 
-    // 4. Toggle Challenge (Admin) - TEMP: chme-dev-api 크로스스택 참조 마이그레이션용 임시 유지
-    const toggleChallengeFn = new NodejsFunction(this, 'ToggleChallengeFn', {
-      ...commonProps,
-      functionName: `chme-${stage}-admin-challenge-toggle`,
-      entry: path.join(__dirname, '../../backend/services/admin/challenge/toggle/index.ts'),
-      handler: 'handler',
-      environment: commonEnv,
-    });
-    challengesTable.grantReadWriteData(toggleChallengeFn);
-    apiGateway.addRoutes({
-      path: '/admin/challenges/{challengeId}/toggle',
-      methods: [HttpMethod.PUT],
-      integration: new HttpLambdaIntegration('AdminToggleChallengeIntegration', toggleChallengeFn),
-      authorizer,
-    });
-
-    // 5. Lifecycle Transition (Admin) - 수동 라이프사이클 전환 (protected)
+    // 4. Lifecycle Transition (Admin) - 수동 라이프사이클 전환 (protected)
     const lifecycleTransitionFn = new NodejsFunction(this, 'LifecycleTransitionFn', {
       ...commonProps,
       functionName: `chme-${stage}-admin-challenge-lifecycle-transition`,
