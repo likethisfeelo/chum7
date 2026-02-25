@@ -1,7 +1,7 @@
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
-import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
+import { HttpJwtAuthorizer, HttpNoneAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
@@ -61,6 +61,7 @@ export class AuthStack extends Stack {
       path: '/auth/register',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('RegisterIntegration', registerFn),
+      authorizer: new HttpNoneAuthorizer(),
     });
 
     // 2. Login (public)
@@ -76,6 +77,7 @@ export class AuthStack extends Stack {
       path: '/auth/login',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('LoginIntegration', loginFn),
+      authorizer: new HttpNoneAuthorizer(),
     });
 
     // 3. Refresh Token (public)
@@ -90,6 +92,7 @@ export class AuthStack extends Stack {
       path: '/auth/refresh',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('RefreshIntegration', refreshFn),
+      authorizer: new HttpNoneAuthorizer(),
     });
 
     // 4. Get Profile (protected)
