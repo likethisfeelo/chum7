@@ -22,7 +22,7 @@ export class ApiStack extends Stack {
       allowOrigins:
         stage === 'prod'
           ? ['https://www.chum7.com']
-          : ['http://localhost:5173', 'http://localhost:5174'],
+          : ['http://localhost:5173', 'http://localhost:5174', 'https://test.chum7.com'],
       allowMethods: [
         CorsHttpMethod.GET,
         CorsHttpMethod.POST,
