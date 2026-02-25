@@ -51,7 +51,7 @@ export class AuthStack extends Stack {
       handler: 'handler',
       environment: commonEnv,
     });
-    usersTable.grantWriteData(registerFn);
+    usersTable.grantReadWriteData(registerFn);
     // dev에서 자동 이메일 인증 확인을 위한 Cognito 권한
     registerFn.addToRolePolicy(new PolicyStatement({
       actions: ['cognito-idp:AdminConfirmSignUp'],
