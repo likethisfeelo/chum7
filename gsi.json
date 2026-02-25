@@ -1,0 +1,1 @@
+[{"IndexName":"category-index","KeySchema":[{"AttributeName":"category","KeyType":"HASH"},{"AttributeName":"createdAt","KeyType":"RANGE"}],"Projection":{"ProjectionType":"ALL"}}]
