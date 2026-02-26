@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 
@@ -35,6 +35,40 @@ export const AdminQuestCreatePage = () => {
   const [form, setForm] = useState(INITIAL);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
+  const [challengeOptions, setChallengeOptions] = useState<Array<{ challengeId: string; title: string; lifecycle?: string }>>([]);
+  const [challengeLoading, setChallengeLoading] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadChallenges = async () => {
+      setChallengeLoading(true);
+      try {
+        const res = await apiClient.get('/challenges?sortBy=latest&limit=100');
+        const challenges = res.data?.data?.challenges ?? [];
+        if (!mounted) return;
+        setChallengeOptions(
+          challenges
+            .filter((challenge: any) => challenge?.challengeId)
+            .map((challenge: any) => ({
+              challengeId: challenge.challengeId,
+              title: challenge.title ?? '제목 없음',
+              lifecycle: challenge.lifecycle,
+            }))
+        );
+      } catch {
+        if (!mounted) return;
+        setError('챌린지 목록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+      } finally {
+        if (mounted) setChallengeLoading(false);
+      }
+    };
+
+    loadChallenges();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const set = <K extends keyof typeof INITIAL>(key: K, val: (typeof INITIAL)[K]) =>
     setForm(prev => ({ ...prev, [key]: val }));
@@ -42,7 +76,7 @@ export const AdminQuestCreatePage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) { setError('제목을 입력해주세요'); return; }
-    if (!challengeId.trim()) { setError('연결할 챌린지 ID를 입력해주세요'); return; }
+    if (!challengeId.trim()) { setError('연결할 챌린지를 선택해주세요'); return; }
 
     setLoading(true);
     setError('');
@@ -96,17 +130,24 @@ export const AdminQuestCreatePage = () => {
         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
           <h2 className="font-bold text-gray-800">연결 챌린지</h2>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">챌린지 ID *</label>
-            <input
+            <label className="block text-sm font-medium text-gray-700 mb-1">챌린지 *</label>
+            <select
               value={challengeId}
               onChange={e => setChallengeId(e.target.value)}
-              placeholder="연결할 챌린지 ID (UUID)"
               className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
               required
-            />
+            >
+              <option value="">연결할 챌린지를 선택하세요</option>
+              {challengeOptions.map(challenge => (
+                <option key={challenge.challengeId} value={challenge.challengeId}>
+                  {challenge.title} ({challenge.lifecycle ?? 'unknown'})
+                </option>
+              ))}
+            </select>
             <p className="mt-1 text-xs text-gray-500">
-              챌린지별 퀘스트 운영을 위해 챌린지 ID를 필수로 입력합니다.
+              챌린지별 퀘스트 운영을 위해 챌린지 선택이 필수입니다.
             </p>
+            {challengeLoading && <p className="mt-1 text-xs text-gray-400">챌린지 목록을 불러오는 중...</p>}
           </div>
         </div>
 
