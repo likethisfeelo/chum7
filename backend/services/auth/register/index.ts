@@ -6,7 +6,8 @@ import {
   CognitoIdentityProviderClient,
   SignUpCommand,
   AdminConfirmSignUpCommand,
-  ConfirmSignUpCommand
+  ConfirmSignUpCommand,
+  ResendConfirmationCodeCommand
 } from '@aws-sdk/client-cognito-identity-provider';
 import { z } from 'zod';
 
@@ -22,6 +23,11 @@ const registerSchema = z.object({
     .regex(/[a-z]/, '비밀번호에 소문자가 포함되어야 합니다')
     .regex(/[0-9]/, '비밀번호에 숫자가 포함되어야 합니다'),
   name: z.string().min(2, '이름은 최소 2자 이상이어야 합니다').max(50)
+});
+
+const resendConfirmationSchema = z.object({
+  action: z.literal('resendConfirmation'),
+  email: z.string().email('유효한 이메일 주소를 입력해주세요')
 });
 
 const confirmSchema = z.object({
@@ -52,6 +58,20 @@ function getRandomAnimalIcon(): string {
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = JSON.parse(event.body || '{}');
+
+    if (body.action === 'resendConfirmation') {
+      const input = resendConfirmationSchema.parse(body);
+
+      await cognitoClient.send(new ResendConfirmationCodeCommand({
+        ClientId: process.env.USER_POOL_CLIENT_ID!,
+        Username: input.email
+      }));
+
+      return response(200, {
+        success: true,
+        message: '인증 코드를 재발송했습니다. 이메일을 확인해주세요.'
+      });
+    }
 
     if (body.confirmationCode) {
       const input: ConfirmInput = confirmSchema.parse(body);
@@ -150,6 +170,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(409, {
         error: 'EMAIL_ALREADY_EXISTS',
         message: '이미 사용 중인 이메일입니다'
+      });
+    }
+
+    if (error.name === 'LimitExceededException') {
+      return response(429, {
+        error: 'TOO_MANY_REQUESTS',
+        message: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요'
       });
     }
 
