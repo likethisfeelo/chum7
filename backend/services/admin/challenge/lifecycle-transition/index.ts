@@ -62,17 +62,14 @@ function parseGroups(rawGroups: unknown): string[] {
     .filter(Boolean);
 }
 
-function isAdmin(event: APIGatewayProxyEvent): boolean {
+function canTransitionByGroup(event: APIGatewayProxyEvent): boolean {
   const groupsRaw = event.requestContext.authorizer?.jwt?.claims['cognito:groups'];
-  return parseGroups(groupsRaw).includes('admins');
+  const groups = parseGroups(groupsRaw);
+  return groups.some(group => ['admins', 'productowners'].includes(group));
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    if (!isAdmin(event)) {
-      return response(403, { error: 'FORBIDDEN', message: '관리자 권한이 필요합니다' });
-    }
-
     const challengeId = event.pathParameters?.challengeId;
     if (!challengeId) {
       return response(400, { error: 'MISSING_ID', message: '챌린지 ID가 필요합니다' });
@@ -88,6 +85,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     if (!existing.Item) {
       return response(404, { error: 'NOT_FOUND', message: '챌린지를 찾을 수 없습니다' });
+    }
+
+    const requesterId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
+    const isCreator = existing.Item.createdBy && existing.Item.createdBy === requesterId;
+
+    if (!canTransitionByGroup(event) && !isCreator) {
+      return response(403, { error: 'FORBIDDEN', message: '챌린지 상태 변경 권한이 없습니다' });
     }
 
     const currentLifecycle = existing.Item.lifecycle as Lifecycle;
