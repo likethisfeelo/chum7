@@ -1,21 +1,16 @@
 // backend/services/cheer/use-ticket/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
-const eventBridgeClient = new EventBridgeClient({});
 
-// 입력 검증 스키마
 const useTicketSchema = z.object({
   ticketId: z.string().uuid(),
-  receiverId: z.string().uuid(),
   message: z.string().min(1).max(200),
-  receiverTargetTime: z.string().datetime()
 });
 
 type UseTicketInput = z.infer<typeof useTicketSchema>;
@@ -32,51 +27,21 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
-// 예약 발송 시간 계산
-function calculateScheduledTime(
-  receiverTargetTime: string,
-  senderDelta: number
-): string {
-  const targetDate = new Date(receiverTargetTime);
-  // 수신자 목표 시간에서 발신자 델타(분)를 뺌
-  targetDate.setMinutes(targetDate.getMinutes() - senderDelta);
-  return targetDate.toISOString();
-}
-
-// EventBridge 스케줄 등록
-async function scheduleCheerDelivery(
-  cheerId: string,
-  scheduledTime: string
-): Promise<void> {
-  await eventBridgeClient.send(new PutEventsCommand({
-    Entries: [
-      {
-        Source: 'chme.cheer',
-        DetailType: 'ScheduledCheerDelivery',
-        Detail: JSON.stringify({
-          cheerId,
-          scheduledTime
-        }),
-        EventBusName: process.env.EVENT_BUS_NAME!,
-        Time: new Date(scheduledTime)
-      }
-    ]
-  }));
+const ANIMAL_ALIASES = ['새벽고래', '숲토끼', '별다람쥐', '파도해달', '노을팬더', '하늘사슴'];
+function randomAlias(): string {
+  return ANIMAL_ALIASES[Math.floor(Math.random() * ANIMAL_ALIASES.length)];
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    // 1. 입력 검증
     const body = JSON.parse(event.body || '{}');
     const input: UseTicketInput = useTicketSchema.parse(body);
 
-    // 2. 사용자 인증 (Cognito JWT Authorizer에서 주입)
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
     if (!userId) {
       return response(401, { error: 'UNAUTHORIZED', message: '인증이 필요합니다' });
     }
 
-    // 3. 응원권 조회
     const ticketResult = await docClient.send(new GetCommand({
       TableName: process.env.USER_CHEER_TICKETS_TABLE!,
       Key: { ticketId: input.ticketId }
@@ -91,7 +56,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const ticket = ticketResult.Item;
 
-    // 4. 권한 확인
     if (ticket.userId !== userId) {
       return response(403, {
         error: 'FORBIDDEN',
@@ -99,7 +63,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    // 5. 상태 확인
     if (ticket.status !== 'available') {
       return response(409, {
         error: 'TICKET_ALREADY_USED',
@@ -107,8 +70,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    // 6. 만료 확인
     const now = new Date();
+    const nowISO = now.toISOString();
     const expiresAt = new Date(ticket.expiresAt);
     if (now > expiresAt) {
       return response(410, {
@@ -117,39 +80,68 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    // 7. 예약 발송 시간 계산
-    const scheduledTime = calculateScheduledTime(
-      input.receiverTargetTime,
-      ticket.delta
-    );
+    if (!ticket.challengeId) {
+      return response(400, {
+        error: 'MISSING_CHALLENGE_ID',
+        message: '응원권에 challengeId가 없습니다'
+      });
+    }
 
-    // 8. Cheer 생성 (pending 상태)
-    const cheerId = uuidv4();
-    const nowISO = now.toISOString();
-
-    const cheer = {
-      cheerId,
-      senderId: userId,
-      receiverId: input.receiverId,
-      verificationId: null,
-      cheerType: 'scheduled',
-      message: input.message,
-      senderDelta: ticket.delta,
-      scheduledTime,
-      status: 'pending',
-      isRead: false,
-      isThanked: false,
-      thankedAt: null,
-      createdAt: nowISO,
-      sentAt: null
-    };
-
-    await docClient.send(new PutCommand({
-      TableName: process.env.CHEERS_TABLE!,
-      Item: cheer
+    const participantsResult = await docClient.send(new QueryCommand({
+      TableName: process.env.USER_CHALLENGES_TABLE!,
+      IndexName: 'challengeId-index',
+      KeyConditionExpression: 'challengeId = :challengeId',
+      ExpressionAttributeValues: {
+        ':challengeId': ticket.challengeId
+      }
     }));
 
-    // 9. 응원권 상태 업데이트
+    const participants = (participantsResult.Items || []).filter((uc: any) => uc.userId !== userId && uc.status === 'active');
+
+    const targets = participants.filter((member: any) => {
+      const progress = member.progress || [];
+      const currentDay = member.currentDay || 1;
+      const todayProgress = progress.find((p: any) => p.day === currentDay);
+      return !todayProgress || todayProgress.status !== 'success';
+    });
+
+    if (targets.length === 0) {
+      return response(409, {
+        error: 'NO_TARGETS',
+        message: '응원 가능한 미완료 참여자가 없습니다'
+      });
+    }
+
+    const createdCheers: any[] = [];
+
+    for (const target of targets) {
+      const cheerId = uuidv4();
+      const cheer = {
+        cheerId,
+        senderId: userId,
+        receiverId: target.userId,
+        verificationId: null,
+        cheerType: 'immediate',
+        message: input.message,
+        senderDelta: ticket.delta,
+        senderAlias: randomAlias(),
+        scheduledTime: null,
+        status: 'sent',
+        isRead: false,
+        isThanked: false,
+        thankedAt: null,
+        createdAt: nowISO,
+        sentAt: nowISO
+      };
+
+      await docClient.send(new PutCommand({
+        TableName: process.env.CHEERS_TABLE!,
+        Item: cheer
+      }));
+
+      createdCheers.push({ cheerId, receiverId: target.userId });
+    }
+
     await docClient.send(new UpdateCommand({
       TableName: process.env.USER_CHEER_TICKETS_TABLE!,
       Key: { ticketId: input.ticketId },
@@ -160,28 +152,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       ExpressionAttributeValues: {
         ':status': 'used',
         ':usedAt': nowISO,
-        ':cheerId': cheerId
+        ':cheerId': createdCheers[0].cheerId
       }
     }));
 
-    // 10. EventBridge 스케줄 등록
-    await scheduleCheerDelivery(cheerId, scheduledTime);
-
-    // 11. 응답
-    const scheduledDate = new Date(scheduledTime);
-    const formattedTime = scheduledDate.toLocaleTimeString('ko-KR', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-
     return response(200, {
       success: true,
-      message: `${formattedTime}에 자동으로 응원이 전달돼요!`,
+      message: `${createdCheers.length}명에게 익명 응원을 보냈어요!`,
       data: {
-        cheerId,
-        scheduledTime,
         ticketUsed: true,
-        delta: ticket.delta
+        challengeId: ticket.challengeId,
+        sentCount: createdCheers.length,
+        delta: ticket.delta,
+        cheers: createdCheers
       }
     });
 

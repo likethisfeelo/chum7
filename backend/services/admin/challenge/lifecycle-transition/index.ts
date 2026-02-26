@@ -31,11 +31,40 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
+function parseGroups(rawGroups: unknown): string[] {
+  if (!rawGroups) return [];
+
+  if (Array.isArray(rawGroups)) {
+    return rawGroups.map(String).map(g => g.trim()).filter(Boolean);
+  }
+
+  if (typeof rawGroups !== 'string') {
+    return [];
+  }
+
+  const value = rawGroups.trim();
+  if (!value) return [];
+
+  if (value.startsWith('[') && value.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map(String).map(g => g.trim()).filter(Boolean);
+      }
+    } catch {
+      // fall through to delimiter parsing
+    }
+  }
+
+  return value
+    .split(/[,:]/)
+    .map(g => g.replace(/[\[\]"']/g, '').trim())
+    .filter(Boolean);
+}
+
 function isAdmin(event: APIGatewayProxyEvent): boolean {
-  const groups = event.requestContext.authorizer?.jwt?.claims['cognito:groups'];
-  if (!groups) return false;
-  if (typeof groups === 'string') return groups === 'admins';
-  return Array.isArray(groups) && groups.includes('admins');
+  const groupsRaw = event.requestContext.authorizer?.jwt?.claims['cognito:groups'];
+  return parseGroups(groupsRaw).includes('admins');
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
