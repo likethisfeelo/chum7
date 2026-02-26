@@ -8,15 +8,16 @@ import { v4 as uuidv4 } from 'uuid';
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-// 입력 검증 스키마
 const submitSchema = z.object({
   userChallengeId: z.string().uuid(),
   day: z.number().min(1).max(7),
   imageUrl: z.string().url().optional(),
   todayNote: z.string().min(1).max(500),
   tomorrowPromise: z.string().max(500).optional(),
-  completedAt: z.string().datetime(),
-  targetTime: z.string().datetime(),
+  verificationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  performedAt: z.string().datetime().optional(),
+  completedAt: z.string().datetime().optional(), // backward compatibility
+  targetTime: z.string().datetime().optional(),
   isPublic: z.boolean().default(true),
   isAnonymous: z.boolean().default(true)
 });
@@ -35,15 +36,26 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
-// 델타 계산 (분 단위)
 function calculateDelta(targetTime: string, completedAt: string): number {
   const target = new Date(targetTime).getTime();
   const completed = new Date(completedAt).getTime();
   const diffMs = target - completed;
-  return Math.floor(diffMs / 60000); // 밀리초를 분으로 변환
+  return Math.floor(diffMs / 60000);
 }
 
-// 응원권 생성
+function buildTargetDateTimeISO(verificationDate: string, time24: string, timezone: string): string {
+  const [hh, mm] = time24.split(':').map(Number);
+  const [y, m, d] = verificationDate.split('-').map(Number);
+
+  if (timezone === 'Asia/Seoul') {
+    const utcMs = Date.UTC(y, m - 1, d, hh - 9, mm, 0, 0);
+    return new Date(utcMs).toISOString();
+  }
+
+  // fallback: timezone 고도화 전까지 UTC 취급
+  return new Date(Date.UTC(y, m - 1, d, hh, mm, 0, 0)).toISOString();
+}
+
 async function createCheerTicket(
   userId: string,
   challengeId: string,
@@ -59,7 +71,7 @@ async function createCheerTicket(
   const ticket = {
     ticketId: uuidv4(),
     userId,
-    source, // 'early_completion', 'streak_3', 'remedy', 'complete'
+    source,
     challengeId,
     verificationId,
     delta,
@@ -67,7 +79,7 @@ async function createCheerTicket(
     usedAt: null,
     usedForCheerId: null,
     expiresAt: tomorrow.toISOString(),
-    expiresAtTimestamp: Math.floor(tomorrow.getTime() / 1000), // TTL용
+    expiresAtTimestamp: Math.floor(tomorrow.getTime() / 1000),
     createdAt: now.toISOString()
   };
 
@@ -77,7 +89,6 @@ async function createCheerTicket(
   }));
 }
 
-// 같은 그룹의 미완료자 확인
 async function checkIncompleteUsers(
   groupId: string,
   currentDay: number
@@ -95,7 +106,6 @@ async function checkIncompleteUsers(
     return { hasIncompletePeople: false, incompleteCount: 0 };
   }
 
-  // 현재 Day의 인증을 완료하지 않은 사용자 수 계산
   const incompleteUsers = result.Items.filter(uc => {
     const progress = uc.progress || [];
     const todayProgress = progress.find((p: any) => p.day === currentDay);
@@ -110,17 +120,14 @@ async function checkIncompleteUsers(
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    // 1. 입력 검증
     const body = JSON.parse(event.body || '{}');
     const input: SubmitInput = submitSchema.parse(body);
 
-    // 2. 사용자 인증 정보 (Cognito JWT Authorizer에서 주입)
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
     if (!userId) {
       return response(401, { error: 'UNAUTHORIZED', message: '인증이 필요합니다' });
     }
 
-    // 3. UserChallenge 조회
     const userChallengeResult = await docClient.send(new GetCommand({
       TableName: process.env.USER_CHALLENGES_TABLE!,
       Key: { userChallengeId: input.userChallengeId }
@@ -135,7 +142,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const userChallenge = userChallengeResult.Item;
 
-    // 4. 이미 인증했는지 확인
     const progress = userChallenge.progress || [];
     const dayProgress = progress.find((p: any) => p.day === input.day);
     if (dayProgress && dayProgress.status === 'success') {
@@ -145,11 +151,25 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    // 5. 델타 계산
-    const delta = calculateDelta(input.targetTime, input.completedAt);
+    const performedAt = input.performedAt || input.completedAt || new Date().toISOString();
+    const verificationDate = input.verificationDate || performedAt.slice(0, 10);
+
+    const personalTarget = userChallenge.personalTarget;
+    const derivedTargetTime = personalTarget?.time24
+      ? buildTargetDateTimeISO(verificationDate, personalTarget.time24, personalTarget.timezone || 'Asia/Seoul')
+      : undefined;
+    const effectiveTargetTime = input.targetTime || derivedTargetTime;
+
+    if (!effectiveTargetTime) {
+      return response(400, {
+        error: 'MISSING_TARGET_TIME',
+        message: '개인 목표시간 설정 또는 targetTime 입력이 필요합니다'
+      });
+    }
+
+    const delta = calculateDelta(effectiveTargetTime, performedAt);
     const isEarlyCompletion = delta > 0;
 
-    // 6. 인증 데이터 생성
     const verificationId = uuidv4();
     const now = new Date().toISOString();
 
@@ -163,33 +183,34 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       imageUrl: input.imageUrl || null,
       todayNote: input.todayNote,
       tomorrowPromise: input.tomorrowPromise || null,
-      completedAt: input.completedAt,
-      targetTime: input.targetTime,
-      delta, // 응원 시스템용
-      score: 10, // 고정 점수
+      verificationDate,
+      performedAt,
+      uploadedAt: now,
+      completedAt: performedAt,
+      targetTime: effectiveTargetTime,
+      delta,
+      score: 10,
       cheerCount: 0,
-      isPublic: input.isPublic ? 'true' : 'false', // GSI용 문자열
+      isPublic: input.isPublic ? 'true' : 'false',
       isAnonymous: input.isAnonymous,
       originalDay: null,
       reflectionNote: null,
       createdAt: now
     };
 
-    // 7. DynamoDB에 저장
     await docClient.send(new PutCommand({
       TableName: process.env.VERIFICATIONS_TABLE!,
       Item: verification
     }));
 
-    // 8. UserChallenge 업데이트
     const updatedProgress = [...progress];
     const existingIndex = updatedProgress.findIndex((p: any) => p.day === input.day);
-    
+
     const newProgress = {
       day: input.day,
       status: 'success',
       verificationId,
-      timestamp: input.completedAt,
+      timestamp: performedAt,
       delta,
       score: 10
     };
@@ -200,7 +221,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       updatedProgress.push(newProgress);
     }
 
-    // 연속 일수 계산
     let consecutiveDays = 0;
     for (let i = 1; i <= input.day; i++) {
       const p = updatedProgress.find((p: any) => p.day === i);
@@ -211,7 +231,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-    // 총 점수 계산
     const totalScore = updatedProgress
       .filter((p: any) => p.status === 'success')
       .reduce((sum: number, p: any) => sum + (p.score || 0), 0);
@@ -229,7 +248,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }));
 
-    // 9. 스마트 응원 로직 ⭐ 핵심!
     let cheerOpportunity = {
       hasIncompletePeople: false,
       incompleteCount: 0,
@@ -238,7 +256,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
     if (isEarlyCompletion) {
-      // 같은 그룹의 미완료자 확인
       const incompleteCheck = await checkIncompleteUsers(
         userChallenge.groupId,
         input.day
@@ -250,7 +267,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         cheerTicketGranted: !incompleteCheck.hasIncompletePeople
       };
 
-      // 미완료자가 없으면 응원권 생성
       if (!incompleteCheck.hasIncompletePeople) {
         await createCheerTicket(
           userId,
@@ -262,10 +278,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-    // 10. 보너스 응원권 체크
     const newBadges: string[] = [];
 
-    // 3일 연속 성공 → 응원권 1장
     if (consecutiveDays === 3) {
       await createCheerTicket(
         userId,
@@ -278,7 +292,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       newBadges.push('3-day-streak');
     }
 
-    // Day 7 완주 → 응원권 3장
     if (input.day === 7 && consecutiveDays === 7) {
       for (let i = 0; i < 3; i++) {
         await createCheerTicket(
@@ -293,7 +306,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       newBadges.push('7-day-master');
     }
 
-    // 11. 응답
     const message = isEarlyCompletion
       ? `Day ${input.day} 완료! 목표보다 ${delta}분 일찍!`
       : `Day ${input.day} 완료!`;
@@ -303,6 +315,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       message,
       data: {
         verificationId,
+        verificationDate,
+        performedAt,
+        uploadedAt: now,
         day: input.day,
         delta,
         isEarlyCompletion,

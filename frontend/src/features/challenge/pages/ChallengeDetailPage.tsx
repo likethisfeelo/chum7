@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -11,6 +12,12 @@ export const ChallengeDetailPage = () => {
   const { challengeId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const [personalGoal, setPersonalGoal] = useState('');
+  const [hour12, setHour12] = useState(7);
+  const [minute, setMinute] = useState(0);
+  const [meridiem, setMeridiem] = useState<'AM' | 'PM'>('AM');
+
 
   const { data: challenge, isLoading } = useQuery({
     queryKey: ['challenge', challengeId],
@@ -28,10 +35,27 @@ export const ChallengeDetailPage = () => {
     },
   });
 
+  useEffect(() => {
+    if (!challenge?.targetTime) return;
+    const [hh, mm] = String(challenge.targetTime).split(':').map((v: string) => Number(v));
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return;
+    const isPm = hh >= 12;
+    const nextHour = hh % 12 === 0 ? 12 : hh % 12;
+    setHour12(nextHour);
+    setMinute(mm);
+    setMeridiem(isPm ? 'PM' : 'AM');
+  }, [challenge?.targetTime]);
+
   const joinMutation = useMutation({
     mutationFn: async () => {
       const response = await apiClient.post(`/challenges/${challengeId}/join`, {
-        startDate: new Date().toISOString().split('T')[0],
+        personalGoal: personalGoal.trim() || undefined,
+        personalTarget: {
+          hour12,
+          minute,
+          meridiem,
+          timezone: 'Asia/Seoul',
+        },
       });
       return response.data;
     },
@@ -154,6 +178,34 @@ export const ChallengeDetailPage = () => {
             </div>
           </div>
         </motion.div>
+
+
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+          <h3 className="text-base font-bold text-gray-900 mb-3">내 목표 시간 설정</h3>
+          <p className="text-sm text-gray-500 mb-4">참여 후 preparing 단계에서 사용할 개인 목표시간입니다 (KST).</p>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <select value={hour12} onChange={(e) => setHour12(Number(e.target.value))} className="px-3 py-2.5 border border-gray-300 rounded-xl">
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                <option key={h} value={h}>{h}시</option>
+              ))}
+            </select>
+            <select value={minute} onChange={(e) => setMinute(Number(e.target.value))} className="px-3 py-2.5 border border-gray-300 rounded-xl">
+              {[0, 10, 20, 30, 40, 50].map((m) => (
+                <option key={m} value={m}>{String(m).padStart(2, '0')}분</option>
+              ))}
+            </select>
+            <select value={meridiem} onChange={(e) => setMeridiem(e.target.value as 'AM' | 'PM')} className="px-3 py-2.5 border border-gray-300 rounded-xl">
+              <option value="AM">오전</option>
+              <option value="PM">오후</option>
+            </select>
+          </div>
+          <input
+            value={personalGoal}
+            onChange={(e) => setPersonalGoal(e.target.value)}
+            placeholder="개인 목표 메모 (선택)"
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl"
+          />
+        </div>
 
         {/* 참여 버튼 */}
         <Button

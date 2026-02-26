@@ -2,16 +2,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
-<<<<<<< HEAD
-import { CognitoIdentityProviderClient, InitiateAuthCommand } from '@aws-sdk/client-cognito-identity-provider';
-=======
 import {
   CognitoIdentityProviderClient,
   InitiateAuthCommand,
   ForgotPasswordCommand,
   ConfirmForgotPasswordCommand
 } from '@aws-sdk/client-cognito-identity-provider';
->>>>>>> codex/fix-500-error-during-login-t38adv
 import { z } from 'zod';
 
 const dynamoClient = new DynamoDBClient({});
@@ -58,24 +54,6 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
-<<<<<<< HEAD
-function getUserSubFromIdToken(idToken?: string): string | null {
-  if (!idToken) {
-    return null;
-  }
-
-  try {
-    const payload = idToken.split('.')[1];
-    if (!payload) {
-      return null;
-    }
-
-    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const decodedPayload = Buffer.from(normalizedPayload, 'base64').toString('utf8');
-    const parsedPayload = JSON.parse(decodedPayload);
-
-    return parsedPayload.sub ?? null;
-=======
 function parseIdTokenPayload(idToken?: string): IdTokenPayload | null {
   if (!idToken) return null;
 
@@ -86,20 +64,17 @@ function parseIdTokenPayload(idToken?: string): IdTokenPayload | null {
     const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
     const decodedPayload = Buffer.from(normalizedPayload, 'base64').toString('utf8');
     return JSON.parse(decodedPayload) as IdTokenPayload;
->>>>>>> codex/fix-500-error-during-login-t38adv
   } catch (error) {
     console.error('Failed to parse Cognito idToken payload:', error);
     return null;
   }
 }
 
-<<<<<<< HEAD
-=======
-function isEmailVerified(payload: IdTokenPayload): boolean {
+function isEmailVerified(payload: IdTokenPayload | null): boolean {
+  if (!payload) return false;
   return payload.email_verified === true || payload.email_verified === 'true';
 }
 
->>>>>>> codex/fix-500-error-during-login-t38adv
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = JSON.parse(event.body || '{}');
@@ -165,30 +140,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-<<<<<<< HEAD
-    const idToken = authResult.AuthenticationResult.IdToken;
-    const userId = getUserSubFromIdToken(idToken);
-
-    if (!userId) {
-      return response(500, {
-        error: 'INVALID_IDENTITY_TOKEN',
-        message: '사용자 식별 정보 확인에 실패했습니다'
-      });
-    }
-
-    // 2. DynamoDB에서 사용자 정보 조회 (PK=userId 기준)
-    const userResult = await docClient.send(new GetCommand({
-      TableName: process.env.USERS_TABLE!,
-      Key: {
-        userId
-      }
-    }));
-
-    if (!userResult.Item) {
-      return response(404, {
-        error: 'USER_NOT_FOUND',
-        message: '사용자를 찾을 수 없습니다'
-=======
     const userResult = await docClient.send(new GetCommand({
       TableName: process.env.USERS_TABLE!,
       Key: { userId }
@@ -198,7 +149,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(409, {
         error: 'USER_PROFILE_NOT_READY',
         message: '계정 정보 동기화가 필요합니다. 다시 회원가입을 진행해주세요'
->>>>>>> codex/fix-500-error-during-login-t38adv
       });
     }
 
