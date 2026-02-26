@@ -48,6 +48,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       items = result.Items || [];
     }
 
+    // 조회 불가/비활성 챌린지 숨김 (admin 콘솔 포함 공통 정책)
+    items = items.filter((item: any) => item?.isVisible !== false && item?.isActive !== false);
+
     // 정렬
     if (sortBy === 'popular') {
       items.sort((a, b) => (b.stats?.totalParticipants || 0) - (a.stats?.totalParticipants || 0));

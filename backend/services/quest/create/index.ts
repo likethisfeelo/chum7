@@ -2,7 +2,7 @@
  * POST /admin/quests
  * Admin이 퀘스트를 생성한다.
  *
- * Quest는 챌린지에 연결되거나 독립적으로 존재할 수 있다.
+ * Quest는 반드시 특정 챌린지에 연결되어 생성된다.
  * verificationType에 따라 사용자 제출 방식이 달라진다:
  *   - image : 이미지 업로드 (S3)
  *   - video : 영상 업로드 (S3, 최대 1분 HD)
@@ -32,13 +32,13 @@ const verificationConfigSchema = z.object({
 const createQuestSchema = z.object({
   title: z.string().min(1).max(100),
   description: z.string().min(1).max(1000),
-  challengeId: z.string().uuid().optional().nullable(),           // null = 챌린지 독립 퀘스트
+  challengeId: z.string().uuid(),                                 // 챌린지별 퀘스트 필수
   verificationType: z.enum(['image', 'video', 'link', 'text']),
-  verificationGuide: z.string().min(1).max(500),                  // 제출 방법 안내
+  verificationGuide: z.string().min(1).max(500).optional(),       // 제출 방법 안내
   verificationConfig: verificationConfigSchema,
   rewardPoints: z.number().int().min(0).max(1000).default(10),
   rewardBadgeId: z.string().max(50).optional().nullable(),
-  startAt: z.string().datetime(),
+  startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional().nullable(),             // null = 기간 무제한
   approvalRequired: z.boolean().default(true),
   displayOrder: z.number().int().min(0).default(0),              // 보드 내 표시 순서
@@ -83,45 +83,49 @@ function parseGroups(rawGroups: unknown): string[] {
     .filter(Boolean);
 }
 
-function isAdmin(event: APIGatewayProxyEvent): boolean {
+function canManageByGroup(event: APIGatewayProxyEvent): boolean {
   const groupsRaw = event.requestContext.authorizer?.jwt?.claims['cognito:groups'];
-  return parseGroups(groupsRaw).includes('admins');
+  const groups = parseGroups(groupsRaw);
+  const allowed = new Set(['admins', 'productowners', 'managers']);
+  return groups.some(group => allowed.has(group));
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    if (!isAdmin(event)) {
-      return response(403, { error: 'FORBIDDEN', message: '관리자 권한이 필요합니다' });
-    }
-
     const body = JSON.parse(event.body || '{}');
     const input = createQuestSchema.parse(body);
 
-    // challengeId가 있으면 존재 확인
-    if (input.challengeId) {
-      const challengeResult = await docClient.send(new GetCommand({
-        TableName: process.env.CHALLENGES_TABLE!,
-        Key: { challengeId: input.challengeId },
-      }));
-      if (!challengeResult.Item) {
-        return response(404, { error: 'CHALLENGE_NOT_FOUND', message: '연결할 챌린지가 없습니다' });
-      }
+    // challengeId 존재 확인
+    const challengeResult = await docClient.send(new GetCommand({
+      TableName: process.env.CHALLENGES_TABLE!,
+      Key: { challengeId: input.challengeId },
+    }));
+    if (!challengeResult.Item) {
+      return response(404, { error: 'CHALLENGE_NOT_FOUND', message: '연결할 챌린지가 없습니다' });
+    }
+    const challenge = challengeResult.Item;
+
+    const requesterId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
+    const isChallengeCreator = challenge?.createdBy && challenge.createdBy === requesterId;
+    if (!canManageByGroup(event) && !isChallengeCreator) {
+      return response(403, { error: 'FORBIDDEN', message: '퀘스트 생성 권한이 없습니다' });
     }
 
     const questId = uuidv4();
     const now = new Date().toISOString();
+    const verificationGuide = input.verificationGuide?.trim() || input.description;
 
     const quest = {
       questId,
       title: input.title,
       description: input.description,
-      challengeId: input.challengeId ?? null,
+      challengeId: input.challengeId,
       verificationType: input.verificationType,
-      verificationGuide: input.verificationGuide,
+      verificationGuide,
       verificationConfig: input.verificationConfig,
       rewardPoints: input.rewardPoints,
       rewardBadgeId: input.rewardBadgeId ?? null,
-      startAt: input.startAt,
+      startAt: input.startAt ?? now,
       endAt: input.endAt ?? null,
       approvalRequired: input.approvalRequired,
       displayOrder: input.displayOrder,
@@ -130,7 +134,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       approvedCount: 0,
       createdAt: now,
       updatedAt: now,
-      createdBy: event.requestContext.authorizer?.jwt?.claims?.sub as string,
+      createdBy: requesterId,
     };
 
     await docClient.send(new PutCommand({

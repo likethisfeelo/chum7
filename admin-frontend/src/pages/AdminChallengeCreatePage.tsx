@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 
+type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
+
 const CATEGORIES = [
   { value: 'health',        label: '💪 건강' },
   { value: 'habit',         label: '📅 습관' },
@@ -34,24 +36,26 @@ export const AdminChallengeCreatePage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [createdChallengeId, setCreatedChallengeId] = useState('');
-  const [startLoading, setStartLoading] = useState(false);
+  const [lifecycleLoading, setLifecycleLoading] = useState<Lifecycle | null>(null);
+  const [currentLifecycle, setCurrentLifecycle] = useState<Lifecycle | null>(null);
 
   const set = <K extends keyof typeof INITIAL>(key: K, val: (typeof INITIAL)[K]) =>
     setForm(prev => ({ ...prev, [key]: val }));
 
 
-  const handleStartChallenge = async () => {
+  const handleTransition = async (target: Lifecycle, reason: string) => {
     if (!createdChallengeId) return;
-    setStartLoading(true);
+    setLifecycleLoading(target);
     setError('');
     try {
-      await apiClient.put(`/admin/challenges/${createdChallengeId}/lifecycle`, { lifecycle: 'active', reason: 'admin_manual_start' });
-      alert('챌린지가 active로 전환되었습니다');
+      await apiClient.put(`/admin/challenges/${createdChallengeId}/lifecycle`, { lifecycle: target, reason });
+      setCurrentLifecycle(target);
+      alert(`챌린지가 ${target} 상태로 전환되었습니다`);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      setError(e.response?.data?.message || '챌린지 시작 전환에 실패했습니다. preparing 상태인지 확인해주세요.');
+      setError(e.response?.data?.message || '챌린지 상태 전환에 실패했습니다. 현재 상태와 전환 경로를 확인해주세요.');
     } finally {
-      setStartLoading(false);
+      setLifecycleLoading(null);
     }
   };
 
@@ -87,8 +91,10 @@ export const AdminChallengeCreatePage = () => {
 
       const res = await apiClient.post('/admin/challenges', payload);
       const challengeId = res.data?.data?.challengeId || '';
+      const lifecycle = (res.data?.data?.lifecycle || null) as Lifecycle | null;
       setCreatedChallengeId(challengeId);
-      alert('챌린지가 생성되었습니다. 참가자 준비 후 아래 버튼으로 시작 전환할 수 있습니다.');
+      setCurrentLifecycle(lifecycle);
+      alert('챌린지가 생성되었습니다. 아래 운영 버튼으로 모집 시작/마감/챌린지 시작을 수동 전환할 수 있습니다.');
       navigate('/admin/challenges/create');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
@@ -285,14 +291,33 @@ export const AdminChallengeCreatePage = () => {
         {createdChallengeId && (
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
             <p className="text-sm text-blue-800 mb-2">최근 생성 챌린지 ID: <span className="font-semibold">{createdChallengeId}</span></p>
-            <button
-              type="button"
-              onClick={handleStartChallenge}
-              disabled={startLoading}
-              className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold disabled:opacity-50"
-            >
-              {startLoading ? '전환 중...' : '챌린지 시작(active)'}
-            </button>
+            <p className="text-xs text-blue-700 mb-3">현재 상태: <span className="font-semibold">{currentLifecycle ?? 'unknown'}</span></p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => handleTransition('recruiting', 'admin_manual_recruiting_start')}
+                disabled={lifecycleLoading !== null || currentLifecycle === 'recruiting'}
+                className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold disabled:opacity-50"
+              >
+                {lifecycleLoading === 'recruiting' ? '전환 중...' : '리크루팅 시작'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTransition('preparing', 'admin_manual_recruiting_close')}
+                disabled={lifecycleLoading !== null || currentLifecycle === 'preparing'}
+                className="px-4 py-2 rounded-xl bg-amber-600 text-white font-semibold disabled:opacity-50"
+              >
+                {lifecycleLoading === 'preparing' ? '전환 중...' : '리크루팅 종료(Preparing)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTransition('active', 'admin_manual_challenge_start')}
+                disabled={lifecycleLoading !== null || currentLifecycle === 'active'}
+                className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold disabled:opacity-50"
+              >
+                {lifecycleLoading === 'active' ? '전환 중...' : '챌린지 시작(Active)'}
+              </button>
+            </div>
           </div>
         )}
 
