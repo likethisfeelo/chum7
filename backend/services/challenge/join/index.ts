@@ -8,9 +8,28 @@ import { v4 as uuidv4 } from 'uuid';
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
+const personalTargetSchema = z.object({
+  hour12: z.number().int().min(1).max(12),
+  minute: z.number().int().min(0).max(59),
+  meridiem: z.enum(['AM', 'PM']),
+  timezone: z.string().min(1).max(100).default('Asia/Seoul'),
+});
+
 const joinSchema = z.object({
   personalGoal: z.string().max(200).optional(),
+  personalTarget: personalTargetSchema.optional(),
 });
+
+function to24Hour(hour12: number, meridiem: 'AM' | 'PM'): number {
+  if (meridiem === 'AM') return hour12 === 12 ? 0 : hour12;
+  return hour12 === 12 ? 12 : hour12 + 12;
+}
+
+function toTime24(hour12: number, minute: number, meridiem: 'AM' | 'PM'): string {
+  const hh = String(to24Hour(hour12, meridiem)).padStart(2, '0');
+  const mm = String(minute).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
@@ -105,6 +124,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const userChallengeId = uuidv4();
     const now = new Date().toISOString();
 
+    const personalTarget = input.personalTarget
+      ? {
+          ...input.personalTarget,
+          time24: toTime24(input.personalTarget.hour12, input.personalTarget.minute, input.personalTarget.meridiem),
+        }
+      : null;
+
     const userChallenge = {
       userChallengeId,
       userId,
@@ -122,6 +148,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       cheerCount: 0,
       groupId,
       personalGoal: input.personalGoal ?? null,
+      personalTarget,
       consecutiveDays: 0,
       createdAt: now,
       updatedAt: now,
@@ -161,6 +188,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         },
         startDate,
         groupId,
+        personalTarget,
       },
     });
 
