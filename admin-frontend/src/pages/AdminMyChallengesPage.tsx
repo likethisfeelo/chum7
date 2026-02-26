@@ -29,8 +29,8 @@ export const AdminMyChallengesPage = () => {
         return res.data?.data?.challenges ?? [];
       } catch (err: any) {
         const status = err?.response?.status;
-        // 인프라에 신규 admin route가 아직 연결되지 않은 환경(404)에서는
-        // 기존 공개 목록 API로 graceful fallback 후 생성자 기준 필터링.
+        // 머지 충돌 해결 기준: 서버 전용 endpoint(/admin/challenges/mine)를 우선 사용하고,
+        // 인프라 라우트 미연결 환경(404)에서만 공개 목록 API로 fallback + 생성자 필터를 적용한다.
         if (status === 404) {
           const fallback = await apiClient.get('/challenges?sortBy=latest&limit=200');
           const challenges = fallback.data?.data?.challenges ?? [];
