@@ -27,6 +27,7 @@ export const VerificationSheet = ({
     todayNote: '',
     tomorrowPromise: '',
     completedAt: '',
+    verificationDate: new Date().toISOString().slice(0, 10),
   });
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,7 +67,8 @@ export const VerificationSheet = ({
         imageUrl,
         todayNote: formData.todayNote,
         tomorrowPromise: formData.tomorrowPromise,
-        completedAt: formData.completedAt || new Date().toISOString(),
+        performedAt: formData.completedAt || new Date().toISOString(),
+        verificationDate: formData.verificationDate || new Date().toISOString().slice(0, 10),
         isPublic: true,
       });
 
@@ -77,7 +79,7 @@ export const VerificationSheet = ({
       toast.success('인증 완료! 오늘도 잘 하셨어요 🎉');
       setImageFile(null);
       setImagePreview(null);
-      setFormData({ todayNote: '', tomorrowPromise: '', completedAt: '' });
+      setFormData({ todayNote: '', tomorrowPromise: '', completedAt: '', verificationDate: new Date().toISOString().slice(0, 10) });
       onClose();
       if (onSuccess) onSuccess(data);
     },
@@ -146,6 +148,20 @@ export const VerificationSheet = ({
             capture="environment"
             onChange={handleImageSelect}
             className="hidden"
+          />
+        </div>
+
+
+        {/* 인증 기준일 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            인증 기준일 📅
+          </label>
+          <input
+            type="date"
+            value={formData.verificationDate}
+            onChange={(e) => setFormData({ ...formData, verificationDate: e.target.value })}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
 

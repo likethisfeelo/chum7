@@ -60,7 +60,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           immediateTargets: [],
           schedulableTargets: [],
           myTickets: 0,
-          myDelta: 0
+          myDelta: 0,
+          availableTickets: []
         }
       });
     }
@@ -79,8 +80,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }));
 
-    const myTickets = ticketsResult.Items?.length || 0;
-    const myDelta = ticketsResult.Items?.[0]?.delta || 0; // 가장 최근 티켓의 델타
+    const availableTickets = (ticketsResult.Items || []).map((ticket: any) => ({
+      ticketId: ticket.ticketId,
+      challengeId: ticket.challengeId,
+      delta: ticket.delta,
+      expiresAt: ticket.expiresAt
+    }));
+    const myTickets = availableTickets.length;
+    const myDelta = availableTickets[0]?.delta || 0; // 가장 최근 티켓의 델타
 
     // 3. 같은 그룹의 다른 사용자 조회
     const immediateTargets: any[] = [];
@@ -150,7 +157,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         immediateTargets: immediateTargets.slice(0, 10), // 최대 10명
         schedulableTargets: schedulableTargets.slice(0, 10),
         myTickets,
-        myDelta
+        myDelta,
+        availableTickets
       }
     });
 
