@@ -33,9 +33,27 @@ export const AdminChallengeCreatePage = () => {
   const [form, setForm] = useState(INITIAL);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [createdChallengeId, setCreatedChallengeId] = useState('');
+  const [startLoading, setStartLoading] = useState(false);
 
   const set = <K extends keyof typeof INITIAL>(key: K, val: (typeof INITIAL)[K]) =>
     setForm(prev => ({ ...prev, [key]: val }));
+
+
+  const handleStartChallenge = async () => {
+    if (!createdChallengeId) return;
+    setStartLoading(true);
+    setError('');
+    try {
+      await apiClient.put(`/admin/challenges/${createdChallengeId}/lifecycle`, { lifecycle: 'active', reason: 'admin_manual_start' });
+      alert('챌린지가 active로 전환되었습니다');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setError(e.response?.data?.message || '챌린지 시작 전환에 실패했습니다. preparing 상태인지 확인해주세요.');
+    } finally {
+      setStartLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,9 +85,11 @@ export const AdminChallengeCreatePage = () => {
         payload.maxParticipants = Number(form.maxParticipants);
       }
 
-      await apiClient.post('/admin/challenges', payload);
-      alert('챌린지가 생성되었습니다');
-      navigate('/admin/challenges');
+      const res = await apiClient.post('/admin/challenges', payload);
+      const challengeId = res.data?.data?.challengeId || '';
+      setCreatedChallengeId(challengeId);
+      alert('챌린지가 생성되었습니다. 참가자 준비 후 아래 버튼으로 시작 전환할 수 있습니다.');
+      navigate('/admin/challenges/create');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setError(e.response?.data?.message || '생성에 실패했습니다');
@@ -260,6 +280,21 @@ export const AdminChallengeCreatePage = () => {
           />
           <p className="text-xs text-gray-400 mt-1">비워두면 참가자 수 제한 없음</p>
         </div>
+
+
+        {createdChallengeId && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+            <p className="text-sm text-blue-800 mb-2">최근 생성 챌린지 ID: <span className="font-semibold">{createdChallengeId}</span></p>
+            <button
+              type="button"
+              onClick={handleStartChallenge}
+              disabled={startLoading}
+              className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold disabled:opacity-50"
+            >
+              {startLoading ? '전환 중...' : '챌린지 시작(active)'}
+            </button>
+          </div>
+        )}
 
         <button
           type="submit"
