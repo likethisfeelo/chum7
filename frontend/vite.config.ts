@@ -10,6 +10,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt', 'icons/*.png'],
+      manifestFilename: 'manifest.json',
       manifest: {
         name: 'CHME - Challenge Earth with ME',
         short_name: 'CHME',

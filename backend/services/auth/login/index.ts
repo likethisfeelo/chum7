@@ -1,7 +1,7 @@
 // backend/services/auth/login/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { CognitoIdentityProviderClient, InitiateAuthCommand } from '@aws-sdk/client-cognito-identity-provider';
 import { z } from 'zod';
 
@@ -28,6 +28,28 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
+function getUserSubFromIdToken(idToken?: string): string | null {
+  if (!idToken) {
+    return null;
+  }
+
+  try {
+    const payload = idToken.split('.')[1];
+    if (!payload) {
+      return null;
+    }
+
+    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const decodedPayload = Buffer.from(normalizedPayload, 'base64').toString('utf8');
+    const parsedPayload = JSON.parse(decodedPayload);
+
+    return parsedPayload.sub ?? null;
+  } catch (error) {
+    console.error('Failed to parse Cognito idToken payload:', error);
+    return null;
+  }
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = JSON.parse(event.body || '{}');
@@ -50,24 +72,32 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    // 2. DynamoDB에서 사용자 정보 조회
-    const userResult = await docClient.send(new QueryCommand({
+    const idToken = authResult.AuthenticationResult.IdToken;
+    const userId = getUserSubFromIdToken(idToken);
+
+    if (!userId) {
+      return response(500, {
+        error: 'INVALID_IDENTITY_TOKEN',
+        message: '사용자 식별 정보 확인에 실패했습니다'
+      });
+    }
+
+    // 2. DynamoDB에서 사용자 정보 조회 (PK=userId 기준)
+    const userResult = await docClient.send(new GetCommand({
       TableName: process.env.USERS_TABLE!,
-      IndexName: 'email-index',
-      KeyConditionExpression: 'email = :email',
-      ExpressionAttributeValues: {
-        ':email': input.email
+      Key: {
+        userId
       }
     }));
 
-    if (!userResult.Items || userResult.Items.length === 0) {
+    if (!userResult.Item) {
       return response(404, {
         error: 'USER_NOT_FOUND',
         message: '사용자를 찾을 수 없습니다'
       });
     }
 
-    const user = userResult.Items[0];
+    const user = userResult.Item;
 
     // 3. 토큰 및 사용자 정보 반환
     return response(200, {
@@ -77,7 +107,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         tokens: {
           accessToken: authResult.AuthenticationResult.AccessToken,
           refreshToken: authResult.AuthenticationResult.RefreshToken,
-          idToken: authResult.AuthenticationResult.IdToken,
+          idToken,
           expiresIn: authResult.AuthenticationResult.ExpiresIn
         },
         user: {
