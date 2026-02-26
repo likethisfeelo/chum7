@@ -30,7 +30,16 @@ export const LoginPage = () => {
       navigate('/me');
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || '로그인에 실패했습니다');
+      const serverError = error.response?.data?.error;
+      const message = error.response?.data?.message || '로그인에 실패했습니다';
+
+      if (serverError === 'USER_NOT_CONFIRMED' || serverError === 'EMAIL_NOT_VERIFIED') {
+        toast.error(message);
+        navigate(`/verify-email?email=${encodeURIComponent(formData.email)}`);
+        return;
+      }
+
+      toast.error(message);
     },
   });
 
@@ -42,11 +51,7 @@ export const LoginPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary-50 to-white flex flex-col">
       <div className="flex-1 flex flex-col justify-center p-6 max-w-md mx-auto w-full">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          {/* 로고 */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <div className="text-center mb-10">
             <div className="w-20 h-20 bg-gradient-to-br from-primary-400 to-primary-600 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-lg">
               <span className="text-white font-bold text-2xl">ME</span>
@@ -57,9 +62,7 @@ export const LoginPage = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                이메일
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">이메일</label>
               <input
                 type="email"
                 value={formData.email}
@@ -71,9 +74,7 @@ export const LoginPage = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                비밀번호
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">비밀번호</label>
               <input
                 type="password"
                 value={formData.password}
@@ -94,35 +95,9 @@ export const LoginPage = () => {
             </motion.button>
           </form>
 
-          {/* 소셜 로그인 (준비 중) */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white text-gray-500">또는</span>
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <button
-                className="w-full py-3 bg-[#FEE500] text-gray-900 font-semibold rounded-2xl flex items-center justify-center gap-3 hover:bg-[#FFDE00] transition-colors opacity-60 cursor-not-allowed"
-                disabled
-                title="준비 중입니다"
-              >
-                <span className="text-xl">💬</span>
-                카카오로 로그인 (준비 중)
-              </button>
-              <button
-                className="w-full py-3 bg-white border-2 border-gray-200 text-gray-700 font-semibold rounded-2xl flex items-center justify-center gap-3 hover:bg-gray-50 transition-colors opacity-60 cursor-not-allowed"
-                disabled
-                title="준비 중입니다"
-              >
-                <span className="text-xl">🔍</span>
-                구글로 로그인 (준비 중)
-              </button>
-            </div>
+          <div className="mt-6 text-center space-y-2">
+            <Link to="/forgot-password" className="block text-sm text-primary-600 hover:text-primary-700">비밀번호를 잊으셨나요?</Link>
+            <Link to="/verify-email" className="block text-sm text-gray-600 hover:text-gray-800">이메일 인증/재발송</Link>
           </div>
 
           <div className="mt-8 text-center space-y-3">

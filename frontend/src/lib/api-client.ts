@@ -25,12 +25,16 @@ apiClient.interceptors.request.use(
 );
 
 // Response interceptor - 에러 처리
+const AUTH_EXCLUDED_PATHS = ['/auth/login', '/auth/register', '/auth/refresh-token'];
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const requestUrl: string = originalRequest?.url || '';
+    const isAuthExcluded = AUTH_EXCLUDED_PATHS.some((path) => requestUrl.includes(path));
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest?._retry && !isAuthExcluded) {
       originalRequest._retry = true;
 
       try {
@@ -45,6 +49,7 @@ apiClient.interceptors.response.use(
 
         localStorage.setItem('accessToken', data.data.accessToken);
 
+        originalRequest.headers = originalRequest.headers || {};
         originalRequest.headers.Authorization = `Bearer ${data.data.accessToken}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
