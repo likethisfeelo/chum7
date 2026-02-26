@@ -16,7 +16,46 @@ const NAV = [
   { path: '/admin/quests/create', label: '➕ 퀘스트 생성' },
 ];
 
-const isAuthenticated = () => !!localStorage.getItem('accessToken');
+type JwtPayload = {
+  exp?: number;
+  ['cognito:groups']?: string | string[];
+};
+
+function parseJwtPayload(token: string): JwtPayload | null {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = atob(normalized);
+    return JSON.parse(decoded) as JwtPayload;
+  } catch {
+    return null;
+  }
+}
+
+function hasAdminRole(payload: JwtPayload): boolean {
+  const groups = payload['cognito:groups'];
+  if (!groups) return false;
+  if (typeof groups === 'string') return groups === 'admins' || groups === 'leaders';
+  return groups.includes('admins') || groups.includes('leaders');
+}
+
+const isAuthenticated = () => {
+  const token = localStorage.getItem('accessToken');
+  if (!token) return false;
+
+  const payload = parseJwtPayload(token);
+  if (!payload) return false;
+
+  if (!hasAdminRole(payload)) return false;
+
+  if (payload.exp) {
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (payload.exp <= nowSec) return false;
+  }
+
+  return true;
+};
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   if (!isAuthenticated()) return <Navigate to="/login" replace />;
@@ -91,7 +130,10 @@ export default function App() {
             }
           />
 
-          <Route path="/" element={<Navigate to="/admin/quests/submissions" replace />} />
+          <Route
+            path="/"
+            element={<Navigate to={isAuthenticated() ? '/admin/quests/submissions' : '/login'} replace />}
+          />
 
           <Route
             path="/admin/quests/submissions"
