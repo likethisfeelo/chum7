@@ -22,6 +22,7 @@ export const AdminMyChallengesPage = () => {
 
   const { data: challengesData, isLoading, error } = useQuery({
     queryKey: ['admin-my-challenges', mySub],
+    enabled: Boolean(mySub),
     queryFn: async () => {
       try {
         const res = await apiClient.get('/admin/challenges/mine');
