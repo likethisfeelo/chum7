@@ -72,6 +72,25 @@ export const ChallengeDetailPage = () => {
   if (isLoading) return <Loading fullScreen />;
   if (!challenge) return <div className="p-6 text-center text-gray-500">챌린지를 찾을 수 없습니다</div>;
 
+  const lifecycle = String(challenge.lifecycle || 'draft');
+  const canJoin = lifecycle === 'recruiting';
+  const ctaLabelMap: Record<string, string> = {
+    recruiting: '챌린지 참여 신청하기',
+    preparing: '모집 마감 (Preparing)',
+    active: '진행 중 (참여 마감)',
+    completed: '종료된 챌린지',
+    archived: '보관된 챌린지',
+    draft: '공개 전 챌린지',
+  };
+  const lifecycleHintMap: Record<string, string> = {
+    recruiting: '지금 참여 신청할 수 있습니다.',
+    preparing: '모집이 종료되어 새로운 참여 신청은 불가능합니다.',
+    active: '챌린지가 진행 중이라 신규 참여가 불가능합니다.',
+    completed: '종료된 챌린지입니다.',
+    archived: '보관된 챌린지입니다.',
+    draft: '아직 공개되지 않은 챌린지입니다.',
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 헤더 */}
@@ -207,14 +226,17 @@ export const ChallengeDetailPage = () => {
           />
         </div>
 
+        <p className="text-sm text-gray-600 mb-3">상태: <span className="font-semibold">{lifecycle}</span> · {lifecycleHintMap[lifecycle] ?? '참여 가능 상태를 확인해주세요.'}</p>
+
         {/* 참여 버튼 */}
         <Button
           fullWidth
           size="lg"
-          onClick={() => joinMutation.mutate()}
+          onClick={() => canJoin && joinMutation.mutate()}
           loading={joinMutation.isPending}
+          disabled={!canJoin}
         >
-          챌린지 시작하기 🚀
+          {ctaLabelMap[lifecycle] ?? '챌린지 참여하기'}
         </Button>
 
         <p className="text-xs text-gray-500 text-center mt-4">
