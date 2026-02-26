@@ -4,22 +4,21 @@ import { AdminQuestCreatePage } from '@/pages/AdminQuestCreatePage';
 import { AdminQuestSubmissionsPage } from '@/pages/AdminQuestSubmissionsPage';
 import { AdminChallengeCreatePage } from '@/pages/AdminChallengeCreatePage';
 import { AdminLoginPage } from '@/pages/AdminLoginPage';
+import { AdminMyChallengesPage } from '@/pages/AdminMyChallengesPage';
+import { AdminAllChallengesPage } from '@/pages/AdminAllChallengesPage';
 import '@/styles/index.css';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 1000 * 60 } },
 });
 
-const NAV = [
-  { path: '/admin/challenges/create', label: '🏆 챌린지 생성' },
-  { path: '/admin/quests/submissions', label: '📋 제출물 심사' },
-  { path: '/admin/quests/create', label: '➕ 퀘스트 생성' },
-];
-
 type JwtPayload = {
+  sub?: string;
   exp?: number;
   ['cognito:groups']?: string | string[];
 };
+
+type Role = 'admins' | 'productowners' | 'leaders' | 'managers';
 
 function parseJwtPayload(token: string): JwtPayload | null {
   try {
@@ -33,43 +32,78 @@ function parseJwtPayload(token: string): JwtPayload | null {
   }
 }
 
-function hasAdminRole(payload: JwtPayload): boolean {
-  const groups = payload['cognito:groups'];
-  if (!groups) return false;
-  if (typeof groups === 'string') return groups === 'admins' || groups === 'leaders';
-  return groups.includes('admins') || groups.includes('leaders');
+function parseGroups(payload: JwtPayload | null): string[] {
+  if (!payload) return [];
+  const raw = payload['cognito:groups'];
+  if (Array.isArray(raw)) return raw.map(String);
+  if (typeof raw === 'string') {
+    return raw
+      .split(/[,:]/)
+      .map(s => s.replace(/[\[\]"']/g, '').trim())
+      .filter(Boolean);
+  }
+  return [];
 }
 
-const isAuthenticated = () => {
+function getAuthContext() {
   const token = localStorage.getItem('accessToken');
-  if (!token) return false;
+  if (!token) return { authenticated: false, groups: [] as string[], payload: null as JwtPayload | null };
 
   const payload = parseJwtPayload(token);
-  if (!payload) return false;
-
-  if (!hasAdminRole(payload)) return false;
+  if (!payload) return { authenticated: false, groups: [] as string[], payload: null as JwtPayload | null };
 
   if (payload.exp) {
     const nowSec = Math.floor(Date.now() / 1000);
-    if (payload.exp <= nowSec) return false;
+    if (payload.exp <= nowSec) return { authenticated: false, groups: [] as string[], payload: null as JwtPayload | null };
   }
 
-  return true;
-};
+  const groups = parseGroups(payload);
+  const allowed = new Set<Role>(['admins', 'productowners', 'leaders', 'managers']);
+  const authenticated = groups.some(g => allowed.has(g as Role));
 
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  if (!isAuthenticated()) return <Navigate to="/login" replace />;
+  return { authenticated, groups, payload };
+}
+
+function hasAnyRole(groups: string[], roles: Role[]) {
+  return roles.some(role => groups.includes(role));
+}
+
+const RoleRoute = ({ children, roles }: { children: React.ReactNode; roles: Role[] }) => {
+  const { authenticated, groups } = getAuthContext();
+  if (!authenticated) return <Navigate to="/login" replace />;
+  if (!hasAnyRole(groups, roles)) return <Navigate to="/admin/forbidden" replace />;
   return <>{children}</>;
 };
 
 const PublicOnlyRoute = ({ children }: { children: React.ReactNode }) => {
-  if (isAuthenticated()) return <Navigate to="/admin/quests/submissions" replace />;
+  const { authenticated } = getAuthContext();
+  if (authenticated) return <Navigate to="/admin/challenges/mine" replace />;
   return <>{children}</>;
 };
 
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { groups } = getAuthContext();
+
+  const nav: Array<{ path: string; label: string }> = [];
+
+  if (hasAnyRole(groups, ['admins', 'productowners', 'leaders'])) {
+    nav.push({ path: '/admin/challenges/create', label: '🏆 챌린지 생성' });
+  }
+
+  if (hasAnyRole(groups, ['admins'])) {
+    nav.push({ path: '/admin/challenges/all', label: '🚨 응급운영 전체조회(관리자)' });
+  }
+
+  if (hasAnyRole(groups, ['admins', 'productowners', 'leaders'])) {
+    nav.push({ path: '/admin/challenges/mine', label: '📚 내 챌린지/퀘스트' });
+  }
+
+  if (hasAnyRole(groups, ['admins', 'productowners', 'leaders', 'managers'])) {
+    nav.push({ path: '/admin/quests/create', label: '➕ 퀘스트 생성' });
+    nav.push({ path: '/admin/quests/submissions', label: '📋 제출물 심사' });
+  }
 
   const handleLogout = () => {
     localStorage.clear();
@@ -83,7 +117,7 @@ const Sidebar = () => {
         <p className="text-xs text-gray-400 mt-0.5">관리자 대시보드</p>
       </div>
       <nav className="p-3 flex-1">
-        {NAV.map((item) => (
+        {nav.map((item) => (
           <button
             key={item.path}
             onClick={() => navigate(item.path)}
@@ -116,6 +150,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
+const ForbiddenPage = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+    <div className="bg-white border border-red-200 rounded-2xl p-6 max-w-md w-full text-center">
+      <h1 className="text-xl font-bold text-gray-900 mb-2">접근 권한이 없습니다</h1>
+      <p className="text-sm text-gray-600">현재 계정 그룹으로는 이 메뉴에 접근할 수 없습니다.</p>
+    </div>
+  </div>
+);
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -130,41 +173,68 @@ export default function App() {
             }
           />
 
+          <Route path="/admin/forbidden" element={<ForbiddenPage />} />
+
           <Route
             path="/"
-            element={<Navigate to={isAuthenticated() ? '/admin/quests/submissions' : '/login'} replace />}
+            element={<Navigate to={getAuthContext().authenticated ? '/admin/challenges/mine' : '/login'} replace />}
           />
 
           <Route
             path="/admin/quests/submissions"
             element={
-              <ProtectedRoute>
+              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
                 <Layout>
                   <AdminQuestSubmissionsPage />
                 </Layout>
-              </ProtectedRoute>
+              </RoleRoute>
             }
           />
+
           <Route
             path="/admin/quests/create"
             element={
-              <ProtectedRoute>
+              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
                 <Layout>
                   <AdminQuestCreatePage />
                 </Layout>
-              </ProtectedRoute>
+              </RoleRoute>
             }
           />
+
           <Route
             path="/admin/challenges/create"
             element={
-              <ProtectedRoute>
+              <RoleRoute roles={['admins', 'productowners', 'leaders']}>
                 <Layout>
                   <AdminChallengeCreatePage />
                 </Layout>
-              </ProtectedRoute>
+              </RoleRoute>
             }
           />
+
+          <Route
+            path="/admin/challenges/all"
+            element={
+              <RoleRoute roles={['admins']}>
+                <Layout>
+                  <AdminAllChallengesPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/admin/challenges/mine"
+            element={
+              <RoleRoute roles={['admins', 'productowners', 'leaders']}>
+                <Layout>
+                  <AdminMyChallengesPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
