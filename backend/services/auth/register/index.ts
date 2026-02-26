@@ -1,7 +1,7 @@
 // backend/services/auth/register/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { CognitoIdentityProviderClient, SignUpCommand, AdminConfirmSignUpCommand } from '@aws-sdk/client-cognito-identity-provider';
 import { z } from 'zod';
 
@@ -47,24 +47,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const body = JSON.parse(event.body || '{}');
     const input: RegisterInput = registerSchema.parse(body);
 
-    // 2. 이메일 중복 확인
-    const existingUser = await docClient.send(new QueryCommand({
-      TableName: process.env.USERS_TABLE!,
-      IndexName: 'email-index',
-      KeyConditionExpression: 'email = :email',
-      ExpressionAttributeValues: {
-        ':email': input.email
-      }
-    }));
+    // 2. Cognito 사용자 생성
 
-    if (existingUser.Items && existingUser.Items.length > 0) {
-      return response(409, {
-        error: 'EMAIL_ALREADY_EXISTS',
-        message: '이미 사용 중인 이메일입니다'
-      });
-    }
-
-    // 3. Cognito 사용자 생성
     const signUpResult = await cognitoClient.send(new SignUpCommand({
       ClientId: process.env.USER_POOL_CLIENT_ID!,
       Username: input.email,
@@ -77,15 +61,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const userId = signUpResult.UserSub!;
 
-    // DEV 환경에서는 자동 확인
-    if (process.env.STAGE === 'dev') {
-      await cognitoClient.send(new AdminConfirmSignUpCommand({
-        UserPoolId: process.env.USER_POOL_ID!,
-        Username: input.email
-      }));
+    // 자동 확인은 명시적으로 활성화된 경우에만 수행
+    const shouldAutoConfirmInDev = process.env.STAGE === 'dev' && process.env.AUTO_CONFIRM_SIGNUP === 'true';
+    if (shouldAutoConfirmInDev && process.env.USER_POOL_ID) {
+      try {
+        await cognitoClient.send(new AdminConfirmSignUpCommand({
+          UserPoolId: process.env.USER_POOL_ID,
+          Username: input.email
+        }));
+      } catch (confirmError) {
+        console.warn('Auto confirm sign-up failed in dev stage:', confirmError);
+      }
     }
 
-    // 4. DynamoDB에 사용자 정보 저장
+    // 3. DynamoDB에 사용자 정보 저장
     const now = new Date().toISOString();
     const user = {
       userId,
@@ -115,7 +104,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       Item: user
     }));
 
-    // 5. 응답
+    // 4. 응답
     return response(201, {
       success: true,
       message: '회원가입이 완료되었습니다',
@@ -124,7 +113,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         email: user.email,
         name: user.name,
         animalIcon: user.animalIcon,
-        requiresEmailVerification: process.env.STAGE !== 'dev'
+        requiresEmailVerification: !shouldAutoConfirmInDev
       }
     });
 
