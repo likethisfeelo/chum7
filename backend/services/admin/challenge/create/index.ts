@@ -51,12 +51,44 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
+function parseGroups(rawGroups: unknown): string[] {
+  if (!rawGroups) return [];
+
+  if (Array.isArray(rawGroups)) {
+    return rawGroups.map(String).map(g => g.trim()).filter(Boolean);
+  }
+
+  if (typeof rawGroups !== 'string') {
+    return [];
+  }
+
+  const value = rawGroups.trim();
+  if (!value) return [];
+
+  // Some authorizer payloads stringify arrays (e.g. '["admins"]')
+  if (value.startsWith('[') && value.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map(String).map(g => g.trim()).filter(Boolean);
+      }
+    } catch {
+      // fall through to delimiter parsing
+    }
+  }
+
+  return value
+    .split(/[,:]/)
+    .map(g => g.replace(/[\[\]"']/g, '').trim())
+    .filter(Boolean);
+}
+
 function isAuthorized(event: APIGatewayProxyEvent): boolean {
-  const groups = event.requestContext.authorizer?.jwt?.claims['cognito:groups'];
-  if (!groups) return false;
-  const ALLOWED = ['admins', 'leaders'];
-  if (typeof groups === 'string') return ALLOWED.includes(groups);
-  return Array.isArray(groups) && groups.some(g => ALLOWED.includes(g));
+  const groupsRaw = event.requestContext.authorizer?.jwt?.claims['cognito:groups'];
+  const groups = parseGroups(groupsRaw);
+  const ALLOWED = new Set(['admins', 'leaders']);
+
+  return groups.some(group => ALLOWED.has(group));
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {

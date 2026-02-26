@@ -2,9 +2,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
-<<<<<<< HEAD
-import { CognitoIdentityProviderClient, SignUpCommand, AdminConfirmSignUpCommand } from '@aws-sdk/client-cognito-identity-provider';
-=======
 import {
   CognitoIdentityProviderClient,
   SignUpCommand,
@@ -12,7 +9,6 @@ import {
   ConfirmSignUpCommand,
   ResendConfirmationCodeCommand
 } from '@aws-sdk/client-cognito-identity-provider';
->>>>>>> codex/fix-500-error-during-login-t38adv
 import { z } from 'zod';
 
 const dynamoClient = new DynamoDBClient({});
@@ -63,10 +59,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   try {
     const body = JSON.parse(event.body || '{}');
 
-<<<<<<< HEAD
-    // 2. Cognito 사용자 생성
-
-=======
     if (body.action === 'resendConfirmation') {
       const input = resendConfirmationSchema.parse(body);
 
@@ -98,7 +90,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const input: RegisterInput = registerSchema.parse(body);
 
->>>>>>> codex/fix-500-error-during-login-t38adv
     const signUpResult = await cognitoClient.send(new SignUpCommand({
       ClientId: process.env.USER_POOL_CLIENT_ID!,
       Username: input.email,
@@ -111,13 +102,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const userId = signUpResult.UserSub!;
 
-<<<<<<< HEAD
-    // DEV 환경에서는 자동 확인 (실패 시에도 회원가입은 유지)
-    if (process.env.STAGE === 'dev' && process.env.USER_POOL_ID) {
-=======
-    const shouldAutoConfirmInDev = process.env.STAGE === 'dev' && process.env.AUTO_CONFIRM_SIGNUP === 'true';
+    // dev에서는 기본 auto-confirm (AUTO_CONFIRM_SIGNUP=false이면 비활성화)
+    const shouldAutoConfirmInDev = process.env.STAGE === 'dev' && process.env.AUTO_CONFIRM_SIGNUP !== 'false';
     if (shouldAutoConfirmInDev && process.env.USER_POOL_ID) {
->>>>>>> codex/fix-500-error-during-login-t38adv
       try {
         await cognitoClient.send(new AdminConfirmSignUpCommand({
           UserPoolId: process.env.USER_POOL_ID,
@@ -128,10 +115,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-<<<<<<< HEAD
-    // 3. DynamoDB에 사용자 정보 저장
-=======
->>>>>>> codex/fix-500-error-during-login-t38adv
     const now = new Date().toISOString();
     const user = {
       userId,
@@ -161,10 +144,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       Item: user
     }));
 
-<<<<<<< HEAD
-    // 4. 응답
-=======
->>>>>>> codex/fix-500-error-during-login-t38adv
     return response(201, {
       success: true,
       message: '회원가입이 완료되었습니다',
