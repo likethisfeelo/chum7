@@ -109,6 +109,44 @@ export class AdminStack extends Stack {
       integration: new HttpLambdaIntegration('AdminToggleChallengeIntegration', toggleChallengeFunction),
     });
 
+    // ==================== List All Challenges Lambda (admins/productowners) ====================
+    const listAllChallengesFunction = new NodejsFunction(this, 'ListAllChallengesFunction', {
+      functionName: `chme-${stage}-admin-list-all-challenges`,
+      entry: path.join(__dirname, '../../backend/services/admin/challenge/list-all/index.ts'),
+      handler: 'handler',
+      runtime: Runtime.NODEJS_24_X,
+      timeout: Duration.seconds(30),
+      memorySize: 256,
+      environment: commonEnv,
+    });
+
+    challengesTable.grantReadData(listAllChallengesFunction);
+
+    apiGateway.addRoutes({
+      path: '/admin/challenges/all',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminListAllChallengesIntegration', listAllChallengesFunction),
+    });
+
+    // ==================== List My Challenges Lambda (creator scoped) ====================
+    const listMyChallengesFunction = new NodejsFunction(this, 'ListMyChallengesFunction', {
+      functionName: `chme-${stage}-admin-list-my-challenges`,
+      entry: path.join(__dirname, '../../backend/services/admin/challenge/list-mine/index.ts'),
+      handler: 'handler',
+      runtime: Runtime.NODEJS_24_X,
+      timeout: Duration.seconds(30),
+      memorySize: 256,
+      environment: commonEnv,
+    });
+
+    challengesTable.grantReadData(listMyChallengesFunction);
+
+    apiGateway.addRoutes({
+      path: '/admin/challenges/mine',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminListMyChallengesIntegration', listMyChallengesFunction),
+    });
+
     // ==================== List Users Lambda ====================
     const listUsersFunction = new NodejsFunction(this, 'ListUsersFunction', {
       functionName: `chme-${stage}-admin-list-users`,

@@ -103,6 +103,36 @@ export class AdminStack extends Stack {
       integration: new HttpLambdaIntegration('AdminToggleChallengeIntegration', toggleChallengeFunction),
     });
 
+    // 4-1. List All Challenges (admins/productowners)
+    const listAllChallengesFunction = new NodejsFunction(this, 'ListAllChallengesFunction', {
+      ...commonLambdaProps,
+      functionName: `chme-${stage}-admin-list-all-challenges`,
+      entry: '../backend/services/admin/challenge/list-all/index.ts',
+      handler: 'handler',
+    });
+    challengesTable.grantReadData(listAllChallengesFunction);
+
+    apiGateway.addRoutes({
+      path: '/admin/challenges/all',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminListAllChallengesIntegration', listAllChallengesFunction),
+    });
+
+    // 4-2. List My Challenges (creator scoped)
+    const listMyChallengesFunction = new NodejsFunction(this, 'ListMyChallengesFunction', {
+      ...commonLambdaProps,
+      functionName: `chme-${stage}-admin-list-my-challenges`,
+      entry: '../backend/services/admin/challenge/list-mine/index.ts',
+      handler: 'handler',
+    });
+    challengesTable.grantReadData(listMyChallengesFunction);
+
+    apiGateway.addRoutes({
+      path: '/admin/challenges/mine',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminListMyChallengesIntegration', listMyChallengesFunction),
+    });
+
     // ==================== Admin User Functions ====================
 
     // 5. List Users
