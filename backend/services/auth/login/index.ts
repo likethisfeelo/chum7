@@ -16,6 +16,11 @@ const loginSchema = z.object({
 
 type LoginInput = z.infer<typeof loginSchema>;
 
+type IdTokenPayload = {
+  sub?: string;
+  email_verified?: boolean | string;
+};
+
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
     statusCode,
@@ -28,7 +33,7 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
-function getUserSubFromIdToken(idToken?: string): string | null {
+function parseIdTokenPayload(idToken?: string): IdTokenPayload | null {
   if (!idToken) {
     return null;
   }
@@ -41,13 +46,15 @@ function getUserSubFromIdToken(idToken?: string): string | null {
 
     const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
     const decodedPayload = Buffer.from(normalizedPayload, 'base64').toString('utf8');
-    const parsedPayload = JSON.parse(decodedPayload);
-
-    return parsedPayload.sub ?? null;
+    return JSON.parse(decodedPayload) as IdTokenPayload;
   } catch (error) {
     console.error('Failed to parse Cognito idToken payload:', error);
     return null;
   }
+}
+
+function isEmailVerified(payload: IdTokenPayload): boolean {
+  return payload.email_verified === true || payload.email_verified === 'true';
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -55,7 +62,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const body = JSON.parse(event.body || '{}');
     const input: LoginInput = loginSchema.parse(body);
 
-    // 1. Cognito 인증
     const authResult = await cognitoClient.send(new InitiateAuthCommand({
       ClientId: process.env.USER_POOL_CLIENT_ID!,
       AuthFlow: 'USER_PASSWORD_AUTH',
@@ -73,7 +79,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const idToken = authResult.AuthenticationResult.IdToken;
-    const userId = getUserSubFromIdToken(idToken);
+    const tokenPayload = parseIdTokenPayload(idToken);
+    const userId = tokenPayload?.sub;
 
     if (!userId) {
       return response(500, {
@@ -82,7 +89,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    // 2. DynamoDB에서 사용자 정보 조회 (PK=userId 기준)
+    if (!isEmailVerified(tokenPayload)) {
+      return response(403, {
+        error: 'EMAIL_NOT_VERIFIED',
+        message: '이메일 인증이 완료되지 않았습니다. 메일함에서 인증을 완료해주세요'
+      });
+    }
+
     const userResult = await docClient.send(new GetCommand({
       TableName: process.env.USERS_TABLE!,
       Key: {
@@ -91,15 +104,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
 
     if (!userResult.Item) {
-      return response(404, {
-        error: 'USER_NOT_FOUND',
-        message: '사용자를 찾을 수 없습니다'
+      return response(409, {
+        error: 'USER_PROFILE_NOT_READY',
+        message: '계정 정보 동기화가 필요합니다. 다시 회원가입을 진행해주세요'
       });
     }
 
     const user = userResult.Item;
 
-    // 3. 토큰 및 사용자 정보 반환
     return response(200, {
       success: true,
       message: '로그인 성공',
@@ -140,7 +152,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         message: '이메일 또는 비밀번호가 올바르지 않습니다'
       });
     }
-
 
     if (error.name === 'UserNotConfirmedException') {
       return response(403, {

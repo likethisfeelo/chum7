@@ -2,14 +2,18 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { CognitoIdentityProviderClient, SignUpCommand, AdminConfirmSignUpCommand } from '@aws-sdk/client-cognito-identity-provider';
+import {
+  CognitoIdentityProviderClient,
+  SignUpCommand,
+  AdminConfirmSignUpCommand,
+  ConfirmSignUpCommand
+} from '@aws-sdk/client-cognito-identity-provider';
 import { z } from 'zod';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const cognitoClient = new CognitoIdentityProviderClient({});
 
-// 입력 검증 스키마
 const registerSchema = z.object({
   email: z.string().email('유효한 이메일 주소를 입력해주세요'),
   password: z.string()
@@ -20,9 +24,14 @@ const registerSchema = z.object({
   name: z.string().min(2, '이름은 최소 2자 이상이어야 합니다').max(50)
 });
 
-type RegisterInput = z.infer<typeof registerSchema>;
+const confirmSchema = z.object({
+  email: z.string().email('유효한 이메일 주소를 입력해주세요'),
+  confirmationCode: z.string().trim().length(6, '인증 코드는 6자리입니다')
+});
 
-// 응답 헬퍼
+type RegisterInput = z.infer<typeof registerSchema>;
+type ConfirmInput = z.infer<typeof confirmSchema>;
+
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
     statusCode,
@@ -35,7 +44,6 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
-// 동물 아이콘 랜덤 선택
 function getRandomAnimalIcon(): string {
   const animals = ['🐰', '🐻', '🦊', '🐼', '🐸', '🦁', '🐯', '🐨', '🐵', '🐶', '🐱', '🐭'];
   return animals[Math.floor(Math.random() * animals.length)];
@@ -43,11 +51,24 @@ function getRandomAnimalIcon(): string {
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    // 1. 입력 검증
     const body = JSON.parse(event.body || '{}');
-    const input: RegisterInput = registerSchema.parse(body);
 
-    // 2. Cognito 사용자 생성
+    if (body.confirmationCode) {
+      const input: ConfirmInput = confirmSchema.parse(body);
+
+      await cognitoClient.send(new ConfirmSignUpCommand({
+        ClientId: process.env.USER_POOL_CLIENT_ID!,
+        Username: input.email,
+        ConfirmationCode: input.confirmationCode
+      }));
+
+      return response(200, {
+        success: true,
+        message: '이메일 인증이 완료되었습니다. 로그인해주세요.'
+      });
+    }
+
+    const input: RegisterInput = registerSchema.parse(body);
 
     const signUpResult = await cognitoClient.send(new SignUpCommand({
       ClientId: process.env.USER_POOL_CLIENT_ID!,
@@ -61,7 +82,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const userId = signUpResult.UserSub!;
 
-    // 자동 확인은 명시적으로 활성화된 경우에만 수행
     const shouldAutoConfirmInDev = process.env.STAGE === 'dev' && process.env.AUTO_CONFIRM_SIGNUP === 'true';
     if (shouldAutoConfirmInDev && process.env.USER_POOL_ID) {
       try {
@@ -74,7 +94,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-    // 3. DynamoDB에 사용자 정보 저장
     const now = new Date().toISOString();
     const user = {
       userId,
@@ -104,7 +123,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       Item: user
     }));
 
-    // 4. 응답
     return response(201, {
       success: true,
       message: '회원가입이 완료되었습니다',
@@ -120,7 +138,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   } catch (error: any) {
     console.error('Registration error:', error);
 
-    // Zod 검증 에러
     if (error instanceof z.ZodError) {
       return response(400, {
         error: 'VALIDATION_ERROR',
@@ -129,11 +146,31 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    // Cognito 에러
     if (error.name === 'UsernameExistsException') {
       return response(409, {
         error: 'EMAIL_ALREADY_EXISTS',
         message: '이미 사용 중인 이메일입니다'
+      });
+    }
+
+    if (error.name === 'CodeMismatchException') {
+      return response(400, {
+        error: 'INVALID_CONFIRMATION_CODE',
+        message: '인증 코드가 올바르지 않습니다'
+      });
+    }
+
+    if (error.name === 'ExpiredCodeException') {
+      return response(400, {
+        error: 'EXPIRED_CONFIRMATION_CODE',
+        message: '인증 코드가 만료되었습니다. 새 코드를 요청해주세요'
+      });
+    }
+
+    if (error.name === 'NotAuthorizedException') {
+      return response(409, {
+        error: 'ALREADY_CONFIRMED',
+        message: '이미 이메일 인증이 완료된 계정입니다'
       });
     }
 
@@ -144,7 +181,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    // 일반 에러
     return response(500, {
       error: 'INTERNAL_SERVER_ERROR',
       message: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요'
