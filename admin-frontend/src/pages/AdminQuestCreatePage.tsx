@@ -84,6 +84,7 @@ export const AdminQuestCreatePage = () => {
       const payload: any = {
         title:            form.title.trim(),
         description:      form.description.trim(),
+        verificationGuide: form.description.trim() || `${form.title.trim()} 인증을 제출해주세요.`,
         icon:             form.icon.trim() || '📋',
         rewardPoints:     Number(form.rewardPoints),
         verificationType: form.verificationType,
@@ -91,7 +92,9 @@ export const AdminQuestCreatePage = () => {
         displayOrder:     Number(form.displayOrder),
       };
       payload.challengeId = challengeId.trim();
-      if (form.startAt)  payload.startAt         = new Date(form.startAt).toISOString();
+      payload.startAt = form.startAt
+        ? new Date(form.startAt).toISOString()
+        : new Date().toISOString();
       if (form.endAt)    payload.endAt            = new Date(form.endAt).toISOString();
       if (form.verificationType === 'link') {
         payload.verificationConfig = {};

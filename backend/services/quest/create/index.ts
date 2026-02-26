@@ -34,11 +34,11 @@ const createQuestSchema = z.object({
   description: z.string().min(1).max(1000),
   challengeId: z.string().uuid(),                                 // 챌린지별 퀘스트 필수
   verificationType: z.enum(['image', 'video', 'link', 'text']),
-  verificationGuide: z.string().min(1).max(500),                  // 제출 방법 안내
+  verificationGuide: z.string().min(1).max(500).optional(),       // 제출 방법 안내
   verificationConfig: verificationConfigSchema,
   rewardPoints: z.number().int().min(0).max(1000).default(10),
   rewardBadgeId: z.string().max(50).optional().nullable(),
-  startAt: z.string().datetime(),
+  startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional().nullable(),             // null = 기간 무제한
   approvalRequired: z.boolean().default(true),
   displayOrder: z.number().int().min(0).default(0),              // 보드 내 표시 순서
@@ -113,6 +113,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const questId = uuidv4();
     const now = new Date().toISOString();
+    const verificationGuide = input.verificationGuide?.trim() || input.description;
 
     const quest = {
       questId,
@@ -120,11 +121,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       description: input.description,
       challengeId: input.challengeId,
       verificationType: input.verificationType,
-      verificationGuide: input.verificationGuide,
+      verificationGuide,
       verificationConfig: input.verificationConfig,
       rewardPoints: input.rewardPoints,
       rewardBadgeId: input.rewardBadgeId ?? null,
-      startAt: input.startAt,
+      startAt: input.startAt ?? now,
       endAt: input.endAt ?? null,
       approvalRequired: input.approvalRequired,
       displayOrder: input.displayOrder,
