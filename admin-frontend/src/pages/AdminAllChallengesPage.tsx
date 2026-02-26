@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 
@@ -10,6 +10,7 @@ export const AdminAllChallengesPage = () => {
   const { data: challengesData, isLoading, error, refetch } = useQuery({
     queryKey: ['admin-all-challenges', submittedReason],
     enabled: false,
+    retry: false,
     queryFn: async () => {
       const query = submittedReason ? `?reason=${encodeURIComponent(submittedReason)}` : '';
       const res = await apiClient.get(`/admin/challenges/all${query}`);
@@ -28,10 +29,17 @@ export const AdminAllChallengesPage = () => {
     },
   });
 
-  const handleSearch = async () => {
+  useEffect(() => {
+    if (!submittedReason) return;
+    void refetch();
+  }, [submittedReason, refetch]);
+
+  const handleSearch = () => {
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length < 5) return;
+
     setSelectedChallengeId('');
-    setSubmittedReason(reason.trim());
-    await refetch();
+    setSubmittedReason(trimmedReason);
   };
 
   return (
@@ -62,10 +70,14 @@ export const AdminAllChallengesPage = () => {
         <button
           type="button"
           onClick={handleSearch}
-          className="px-4 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold"
+          disabled={reason.trim().length < 5 || isLoading}
+          className="px-4 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
         >
           전체 조회 실행
         </button>
+        {reason.trim().length > 0 && reason.trim().length < 5 && (
+          <p className="text-xs text-red-700">사유를 5자 이상 입력해주세요.</p>
+        )}
       </div>
 
       {isLoading && <div className="text-sm text-gray-500">챌린지 목록을 불러오는 중...</div>}
