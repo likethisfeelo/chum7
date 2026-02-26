@@ -42,19 +42,37 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
-function isAdmin(event: APIGatewayProxyEvent): boolean {
-  const groups = event.requestContext.authorizer?.jwt?.claims['cognito:groups'];
-  if (!groups) return false;
-  if (typeof groups === 'string') return groups === 'admins';
-  return Array.isArray(groups) && groups.includes('admins');
+function parseGroups(rawGroups: unknown): string[] {
+  if (!rawGroups) return [];
+  if (Array.isArray(rawGroups)) return rawGroups.map(String).map(g => g.trim()).filter(Boolean);
+  if (typeof rawGroups !== 'string') return [];
+
+  const value = rawGroups.trim();
+  if (!value) return [];
+  if (value.startsWith('[') && value.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String).map(g => g.trim()).filter(Boolean);
+    } catch {
+      // fall through
+    }
+  }
+
+  return value
+    .split(/[,:]/)
+    .map(g => g.replace(/[\[\]\"']/g, '').trim())
+    .filter(Boolean);
+}
+
+function canReviewSubmission(event: APIGatewayProxyEvent): boolean {
+  const groupsRaw = event.requestContext.authorizer?.jwt?.claims['cognito:groups'];
+  const groups = parseGroups(groupsRaw);
+  const allowed = new Set(['admins', 'productowners', 'managers']);
+  return groups.some(group => allowed.has(group));
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    if (!isAdmin(event)) {
-      return response(403, { error: 'FORBIDDEN', message: '관리자 권한이 필요합니다' });
-    }
-
     const submissionId = event.pathParameters?.submissionId;
     if (!submissionId) {
       return response(400, { error: 'MISSING_SUBMISSION_ID' });
@@ -73,6 +91,27 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const submission = submissionResult.Item;
+
+    const questResult = await docClient.send(new GetCommand({
+      TableName: process.env.QUESTS_TABLE!,
+      Key: { questId: submission.questId },
+    }));
+
+    if (!questResult.Item) {
+      return response(404, { error: 'QUEST_NOT_FOUND', message: '퀘스트를 찾을 수 없습니다' });
+    }
+
+    const quest = questResult.Item;
+    const challengeResult = await docClient.send(new GetCommand({
+      TableName: process.env.CHALLENGES_TABLE!,
+      Key: { challengeId: quest.challengeId },
+    }));
+
+    const requesterId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
+    const isCreator = challengeResult.Item?.createdBy && challengeResult.Item.createdBy === requesterId;
+    if (!canReviewSubmission(event) && !isCreator) {
+      return response(403, { error: 'FORBIDDEN', message: '제출물 심사 권한이 없습니다' });
+    }
 
     if (submission.status !== 'pending') {
       return response(409, {
