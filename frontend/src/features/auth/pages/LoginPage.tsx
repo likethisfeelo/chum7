@@ -17,7 +17,15 @@ export const LoginPage = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      const { user, accessToken, refreshToken } = data.data;
+      const user = data?.data?.user;
+      const accessToken = data?.data?.tokens?.accessToken;
+      const refreshToken = data?.data?.tokens?.refreshToken;
+
+      if (!user || !accessToken || !refreshToken) {
+        toast.error('로그인 응답 형식이 올바르지 않습니다. 잠시 후 다시 시도해주세요.');
+        return;
+      }
+
       setAuth(user, accessToken, refreshToken);
       navigate('/me');
     },
