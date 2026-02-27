@@ -106,7 +106,39 @@ export class AdminStack extends Stack {
       authorizer,
     });
 
-    // 5. List Users (Admin) (protected)
+    // 5. List My Challenges (Admin) (protected)
+    const listMyChallengesFn = new NodejsFunction(this, 'ListMyChallengesFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-challenge-list-mine`,
+      entry: path.join(__dirname, '../../backend/services/admin/challenge/list-mine/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadData(listMyChallengesFn);
+    apiGateway.addRoutes({
+      path: '/admin/challenges/mine',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminListMyChallengesIntegration', listMyChallengesFn),
+      authorizer,
+    });
+
+    // 6. List All Challenges (Admin) (protected)
+    const listAllChallengesFn = new NodejsFunction(this, 'ListAllChallengesFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-challenge-list-all`,
+      entry: path.join(__dirname, '../../backend/services/admin/challenge/list-all/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadData(listAllChallengesFn);
+    apiGateway.addRoutes({
+      path: '/admin/challenges/all',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminListAllChallengesIntegration', listAllChallengesFn),
+      authorizer,
+    });
+
+    // 7. List Users (Admin) (protected)
     const listUsersFn = new NodejsFunction(this, 'ListUsersFn', {
       ...commonProps,
       functionName: `chme-${stage}-admin-user-list`,
@@ -122,7 +154,7 @@ export class AdminStack extends Stack {
       authorizer,
     });
 
-    // 6. Stats Overview (Admin) (protected)
+    // 8. Stats Overview (Admin) (protected)
     const statsFn = new NodejsFunction(this, 'StatsFn', {
       ...commonProps,
       functionName: `chme-${stage}-admin-stats`,
