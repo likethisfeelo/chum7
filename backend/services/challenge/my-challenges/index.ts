@@ -81,6 +81,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
       return {
         userChallengeId: uc.userChallengeId,
+        challengeId: uc.challengeId,
+        phase: uc.phase,
         status: uc.status,
         currentDay: uc.currentDay,
         startDate: uc.startDate,
@@ -97,7 +99,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           category: challenge.category,
           targetTime: challenge.targetTime,
           badgeIcon: challenge.badgeIcon,
-          badgeName: challenge.badgeName
+          badgeName: challenge.badgeName,
+          lifecycle: challenge.lifecycle,
+          challengeStartAt: challenge.challengeStartAt,
+          recruitingEndAt: challenge.recruitingEndAt,
         } : null
       };
     });

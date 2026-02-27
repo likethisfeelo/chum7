@@ -13,7 +13,7 @@ export const BadgeCollectionPage = () => {
   const { data: badges, isLoading } = useQuery({
     queryKey: ['my-badges'],
     queryFn: async () => {
-      const response = await apiClient.get('/user/challenges?status=completed');
+      const response = await apiClient.get('/challenges/my?status=completed');
       return response.data.data.challenges;
     },
   });
