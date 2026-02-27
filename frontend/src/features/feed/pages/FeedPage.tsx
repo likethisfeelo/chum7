@@ -9,6 +9,11 @@ import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import toast from 'react-hot-toast';
 
+const FILTER_GUIDE_TEXT: Record<'all' | 'extra', string> = {
+  all: '오늘의 핵심 인증과 공개된 추가 기록을 함께 볼 수 있어요.',
+  extra: '추가 기록만 모아보며 복기/회고 흐름을 확인할 수 있어요.',
+};
+
 export const FeedPage = () => {
   const [feedFilter, setFeedFilter] = useState<'all' | 'extra'>('all');
 
@@ -72,9 +77,19 @@ export const FeedPage = () => {
             📝 추가 기록만
           </button>
         </div>
+
+        <p className="mt-3 text-xs text-gray-500">💡 {FILTER_GUIDE_TEXT[feedFilter]}</p>
       </div>
 
       <div className="px-6 py-6 space-y-4">
+        <section className="bg-white border border-gray-200 rounded-2xl p-4">
+          <h2 className="text-sm font-bold text-gray-900 mb-2">인증 흐름 안내</h2>
+          <ul className="text-xs text-gray-600 space-y-1">
+            <li>• 일반 인증: 오늘의 핵심 실천 기록</li>
+            <li>• 추가 기록: 같은 날 추가 실천(기본 나만보기 → 공개 전환 가능)</li>
+            <li>• Day6 보완: 실패 Day를 다시 연결하는 회복 루트</li>
+          </ul>
+        </section>
         {isLoading ? (
           <Loading />
         ) : !publicFeed || publicFeed.length === 0 ? (

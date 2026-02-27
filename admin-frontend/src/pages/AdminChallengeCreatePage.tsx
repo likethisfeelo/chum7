@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 
 type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
+type ChallengeType = 'leader_only' | 'personal_only' | 'leader_personal' | 'mixed';
 
 const CATEGORIES = [
   { value: 'health',        label: '💪 건강' },
@@ -14,6 +15,13 @@ const CATEGORIES = [
 ] as const;
 
 type Category = typeof CATEGORIES[number]['value'];
+
+const CHALLENGE_TYPES: Array<{ value: ChallengeType; label: string; hint: string }> = [
+  { value: 'leader_only', label: '리더 퀘스트형', hint: '참여자는 리더가 설계한 퀘스트 중심으로 수행' },
+  { value: 'personal_only', label: '개인 퀘스트형', hint: '참여자 개인 입력/개인 목표 중심으로 수행' },
+  { value: 'leader_personal', label: '리더+개인 혼합형', hint: '공통 퀘스트와 개인 목표를 함께 수행' },
+  { value: 'mixed', label: '혼합형(확장)', hint: '레이어 정책을 함께 사용하는 확장형' },
+];
 
 const INITIAL = {
   title:             '',
@@ -28,6 +36,10 @@ const INITIAL = {
   challengeStartAt:  '',
   durationDays:      7,
   maxParticipants:   '' as string,   // '' = 무제한
+  challengeType:     'leader_personal' as ChallengeType,
+  requirePersonalGoalOnJoin: false,
+  requirePersonalTargetOnJoin: true,
+  allowExtraVisibilityToggle: true,
 };
 
 export const AdminChallengeCreatePage = () => {
@@ -84,6 +96,12 @@ export const AdminChallengeCreatePage = () => {
         recruitingEndAt:   new Date(form.recruitingEndAt).toISOString(),
         challengeStartAt:  new Date(form.challengeStartAt).toISOString(),
         durationDays:      Number(form.durationDays),
+        challengeType:     form.challengeType,
+        layerPolicy: {
+          requirePersonalGoalOnJoin: form.requirePersonalGoalOnJoin,
+          requirePersonalTargetOnJoin: form.requirePersonalTargetOnJoin,
+          allowExtraVisibilityToggle: form.allowExtraVisibilityToggle,
+        },
       };
       if (form.maxParticipants !== '') {
         payload.maxParticipants = Number(form.maxParticipants);
@@ -217,6 +235,42 @@ export const AdminChallengeCreatePage = () => {
                 required
               />
             </div>
+          </div>
+        </div>
+
+
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+          <h2 className="font-bold text-gray-800">레이어/참여 정책</h2>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">챌린지 유형 *</label>
+            <select
+              value={form.challengeType}
+              onChange={e => set('challengeType', e.target.value as ChallengeType)}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              {CHALLENGE_TYPES.map((type) => (
+                <option key={type.value} value={type.value}>{type.label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              {CHALLENGE_TYPES.find((type) => type.value === form.challengeType)?.hint}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={form.requirePersonalGoalOnJoin} onChange={e => set('requirePersonalGoalOnJoin', e.target.checked)} />
+              참여 시 개인 목표 입력 필수
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={form.requirePersonalTargetOnJoin} onChange={e => set('requirePersonalTargetOnJoin', e.target.checked)} />
+              참여 시 개인 목표시간 필수
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={form.allowExtraVisibilityToggle} onChange={e => set('allowExtraVisibilityToggle', e.target.checked)} />
+              추가 기록 공개 전환 허용
+            </label>
           </div>
         </div>
 
