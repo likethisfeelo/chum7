@@ -20,6 +20,14 @@ function toIsoFromLocalDateTime(localDateTime: string): string {
   return parsed.toISOString();
 }
 
+
+function isLikelyCorsOrPreflightError(error: any): boolean {
+  const status = error?.response?.status;
+  if (status === 403) return true;
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('failed to fetch') || message.includes('networkerror') || message.includes('cors');
+}
+
 function extractApiErrorMessage(error: any): string {
   const apiMessage = error?.response?.data?.message;
   const details = error?.response?.data?.details;
@@ -71,20 +79,32 @@ export const VerificationSheet = ({
       let imageUrl = '';
 
       if (imageFile) {
-        const challengeId = userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
-        const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
-          fileName: imageFile.name,
-          fileType: imageFile.type,
-          challengeId,
-        });
+        try {
+          const challengeId = userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
+          const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
+            fileName: imageFile.name,
+            fileType: imageFile.type,
+            challengeId,
+          });
 
-        await fetch(uploadData.data.uploadUrl, {
-          method: 'PUT',
-          body: imageFile,
-          headers: { 'Content-Type': imageFile.type },
-        });
+          const uploadResp = await fetch(uploadData.data.uploadUrl, {
+            method: 'PUT',
+            body: imageFile,
+            headers: { 'Content-Type': imageFile.type },
+          });
 
-        imageUrl = uploadData.data.fileUrl;
+          if (!uploadResp.ok) {
+            throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
+          }
+
+          imageUrl = uploadData.data.fileUrl;
+        } catch (uploadError: any) {
+          if (isLikelyCorsOrPreflightError(uploadError)) {
+            toast.error('이미지 업로드가 브라우저 CORS 제한으로 실패했습니다. 이미지 없이 인증을 계속 제출합니다.');
+          } else {
+            throw uploadError;
+          }
+        }
       }
 
       const response = await apiClient.post('/verifications', {
