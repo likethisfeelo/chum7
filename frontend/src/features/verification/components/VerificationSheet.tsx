@@ -126,13 +126,33 @@ export const VerificationSheet = ({
         performedAt: toIsoFromLocalDateTime(formData.completedAt),
         verificationDate: formData.verificationDate || new Date().toISOString().slice(0, 10),
         isPublic: true,
+        isAnonymous: true,
       });
 
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
-      toast.success('인증 완료! 오늘도 잘 하셨어요 🎉');
+
+      const payload = data?.data || {};
+      if (payload.isExtra) {
+        toast.success(payload.message || '추가 기록이 저장되었어요 📝');
+        if (payload.notice) {
+          toast(payload.notice, { icon: 'ℹ️' });
+        }
+
+        const shouldMakePublic = window.confirm('추가 기록을 피드에 공개할까요? (챌린지 기간 내 전환 가능)');
+        if (shouldMakePublic && payload.verificationId) {
+          try {
+            await apiClient.patch(`/verifications/${payload.verificationId}/visibility`, { isPersonalOnly: false });
+            toast.success('추가 기록을 공개 피드로 전환했어요 🌍');
+          } catch (visibilityError: any) {
+            toast.error(visibilityError?.response?.data?.message || '공개 전환에 실패했습니다');
+          }
+        }
+      } else {
+        toast.success(data?.message || '인증 완료! 오늘도 잘 하셨어요 🎉');
+      }
       setImageFile(null);
       setImagePreview(null);
       setFormData({
