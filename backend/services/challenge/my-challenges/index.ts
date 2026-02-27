@@ -81,6 +81,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
       return {
         userChallengeId: uc.userChallengeId,
+        challengeId: uc.challengeId,
+        phase: uc.phase,
         status: uc.status,
         currentDay: uc.currentDay,
         startDate: uc.startDate,

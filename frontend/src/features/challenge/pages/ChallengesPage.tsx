@@ -42,7 +42,7 @@ export const ChallengesPage = () => {
   });
 
   const joinedChallengeIds = useMemo(
-    () => new Set((myChallengesData?.challenges ?? []).map((c: any) => c.challengeId)),
+    () => new Set((myChallengesData?.challenges ?? []).map((c: any) => c.challengeId ?? c.challenge?.challengeId).filter(Boolean)),
     [myChallengesData?.challenges],
   );
 

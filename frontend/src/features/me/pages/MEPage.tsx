@@ -33,12 +33,15 @@ export const MEPage = () => {
 
   const challenges = data?.challenges || [];
 
-  const preparingChallenges = useMemo(
-    () => challenges.filter((challenge: any) => challenge.phase === 'preparing'),
+  const pendingChallenges = useMemo(
+    () => challenges.filter((challenge: any) => {
+      const lifecycle = String(challenge.challenge?.lifecycle || '');
+      return lifecycle === 'recruiting' || lifecycle === 'preparing' || challenge.phase === 'preparing';
+    }),
     [challenges],
   );
   const activeChallenges = useMemo(
-    () => challenges.filter((challenge: any) => challenge.phase !== 'preparing'),
+    () => challenges.filter((challenge: any) => String(challenge.challenge?.lifecycle || '') === 'active'),
     [challenges],
   );
 
@@ -67,7 +70,7 @@ export const MEPage = () => {
       <div className="p-6 space-y-4">
         {isLoading ? (
           <Loading />
-        ) : activeChallenges.length === 0 && preparingChallenges.length === 0 ? (
+        ) : activeChallenges.length === 0 && pendingChallenges.length === 0 ? (
           <EmptyState
             icon="🎯"
             title="진행 중인 챌린지가 없어요"
@@ -148,33 +151,48 @@ export const MEPage = () => {
               );
             })}
 
-            {preparingChallenges.length > 0 && (
+            {pendingChallenges.length > 0 && (
               <section className="bg-white rounded-2xl p-5 border border-amber-200 space-y-3">
                 <div>
-                  <h2 className="text-lg font-bold text-gray-900">준비중인 챌린지</h2>
-                  <p className="text-sm text-gray-500">챌린지 시작 전 미리 상세를 확인하고 준비해보세요.</p>
+                  <h2 className="text-lg font-bold text-gray-900">참여신청/준비중 챌린지</h2>
+                  <p className="text-sm text-gray-500">리크루팅/준비중 단계에서는 인증 대신 상세/퀘스트 보드 확인이 가능합니다.</p>
                 </div>
                 <div className="space-y-2">
-                  {preparingChallenges.map((challenge: any) => (
-                    <button
-                      key={challenge.userChallengeId}
-                      type="button"
-                      onClick={() => navigate(`/challenges/${challenge.challengeId}`)}
-                      className="w-full text-left border border-amber-100 bg-amber-50 rounded-xl p-3 hover:bg-amber-100 transition-colors"
-                    >
-                      <p className="font-semibold text-gray-900">{challenge.challenge?.title}</p>
-                      <p className="text-xs text-amber-700 mt-1">
-                        시작일: {challenge.startDate || '-'} · 상태: 준비중
-                      </p>
-                    </button>
-                  ))}
+                  {pendingChallenges.map((challenge: any) => {
+                    const lifecycle = String(challenge.challenge?.lifecycle || 'preparing');
+                    const statusLabel = lifecycle === 'recruiting' ? '리크루팅' : '준비중';
+                    return (
+                      <div key={challenge.userChallengeId} className="border border-amber-100 bg-amber-50 rounded-xl p-3 space-y-2">
+                        <p className="font-semibold text-gray-900">{challenge.challenge?.title}</p>
+                        <p className="text-xs text-amber-700">
+                          시작일: {challenge.startDate || '-'} · 상태: {statusLabel}
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/challenges/${challenge.challengeId}`)}
+                            className="px-3 py-1.5 text-xs rounded-lg bg-white border border-amber-200 text-amber-800"
+                          >
+                            챌린지 소개 보기
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/quests?challengeId=${challenge.challengeId}`)}
+                            className="px-3 py-1.5 text-xs rounded-lg bg-amber-600 text-white"
+                          >
+                            퀘스트 보드 보기
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             )}
           </>
         )}
 
-        {(activeChallenges.length > 0 || preparingChallenges.length > 0) && (
+        {(activeChallenges.length > 0 || pendingChallenges.length > 0) && (
           <button
             onClick={() => navigate('/challenges')}
             className="w-full py-4 border-2 border-dashed border-gray-300 rounded-2xl text-gray-500 hover:border-primary-400 hover:text-primary-500 transition-colors font-medium"
