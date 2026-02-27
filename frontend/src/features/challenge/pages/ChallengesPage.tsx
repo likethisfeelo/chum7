@@ -36,7 +36,7 @@ export const ChallengesPage = () => {
   const { data: myChallengesData } = useQuery({
     queryKey: ['my-challenges', 'active-for-join-state'],
     queryFn: async () => {
-      const response = await apiClient.get('/user/challenges?status=active');
+      const response = await apiClient.get('/challenges/my?status=active');
       return response.data.data;
     },
   });

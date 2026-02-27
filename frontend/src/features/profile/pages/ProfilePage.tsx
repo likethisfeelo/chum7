@@ -16,7 +16,7 @@ export const ProfilePage = () => {
   const { data: myChallenges } = useQuery({
     queryKey: ['my-challenges', 'all'],
     queryFn: async () => {
-      const response = await apiClient.get('/user/challenges?status=all');
+      const response = await apiClient.get('/challenges/my?status=all');
       return response.data.data;
     },
   });
