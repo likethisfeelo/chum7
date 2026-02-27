@@ -97,7 +97,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           category: challenge.category,
           targetTime: challenge.targetTime,
           badgeIcon: challenge.badgeIcon,
-          badgeName: challenge.badgeName
+          badgeName: challenge.badgeName,
+          lifecycle: challenge.lifecycle,
+          challengeStartAt: challenge.challengeStartAt,
+          recruitingEndAt: challenge.recruitingEndAt,
         } : null
       };
     });
