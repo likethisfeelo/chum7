@@ -17,6 +17,12 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (userTimezone) {
+      config.headers['x-user-timezone'] = userTimezone;
+    }
+
     return config;
   },
   (error) => {

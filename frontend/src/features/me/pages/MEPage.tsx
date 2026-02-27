@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
@@ -8,6 +8,7 @@ import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ProgressBar } from '@/shared/components/ProgressBar';
 import { VerificationSheet } from '@/features/verification/components/VerificationSheet';
+import toast from 'react-hot-toast';
 
 const DAY_STATUS_COLORS: Record<string, string> = {
   completed: 'bg-green-500',
@@ -22,6 +23,8 @@ export const MEPage = () => {
   const user = useAuthStore((s) => s.user);
   const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
   const [showVerification, setShowVerification] = useState(false);
+  const [pendingVisibilityId, setPendingVisibilityId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-challenges'],
@@ -32,6 +35,63 @@ export const MEPage = () => {
   });
 
   const challenges = data?.challenges || [];
+
+  const { data: myExtraFeedPage, isFetching: isFetchingExtra } = useQuery({
+    queryKey: ['verifications', 'mine-extra'],
+    queryFn: async () => {
+      const response = await apiClient.get('/verifications?mine=true&isExtra=true&limit=10');
+      return {
+        verifications: response.data.data.verifications || [],
+        nextToken: response.data.data.nextToken || null,
+      };
+    },
+  });
+
+  const [extraItems, setExtraItems] = useState<any[]>([]);
+  const [extraNextToken, setExtraNextToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    setExtraItems(myExtraFeedPage?.verifications || []);
+    setExtraNextToken(myExtraFeedPage?.nextToken || null);
+  }, [myExtraFeedPage]);
+
+  const loadMoreExtraMutation = useMutation({
+    mutationFn: async () => {
+      if (!extraNextToken) return null;
+      const response = await apiClient.get(`/verifications?mine=true&isExtra=true&limit=10&nextToken=${encodeURIComponent(extraNextToken)}`);
+      return {
+        verifications: response.data.data.verifications || [],
+        nextToken: response.data.data.nextToken || null,
+      };
+    },
+    onSuccess: (data) => {
+      if (!data) return;
+      setExtraItems((prev) => [...prev, ...data.verifications]);
+      setExtraNextToken(data.nextToken);
+    },
+    onError: () => {
+      toast.error('추가 기록을 더 불러오지 못했어요');
+    }
+  });
+
+  const visibilityMutation = useMutation({
+    mutationFn: async (verificationId: string) => {
+      setPendingVisibilityId(verificationId);
+      await apiClient.patch(`/verifications/${verificationId}/visibility`, { isPersonalOnly: false });
+      return verificationId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['verifications', 'mine-extra'] });
+      queryClient.invalidateQueries({ queryKey: ['verifications', 'public'] });
+      toast.success('추가 기록을 공개 피드로 전환했어요 🌍');
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || '공개 전환에 실패했습니다');
+    },
+    onSettled: () => {
+      setPendingVisibilityId(null);
+    }
+  });
 
   const pendingChallenges = useMemo(
     () => challenges.filter((challenge: any) => {
@@ -190,6 +250,51 @@ export const MEPage = () => {
               </section>
             )}
           </>
+        )}
+
+
+        {extraItems?.length > 0 && (
+          <section className="bg-white rounded-2xl p-5 border border-gray-200 space-y-3">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">내 추가 기록</h2>
+              <p className="text-sm text-gray-500">추가 인증은 기본적으로 나만 보기로 저장되며, 여기서 공개 전환할 수 있어요.</p>
+            </div>
+
+            <div className="space-y-2">
+              {extraItems.map((item: any) => (
+                <div key={item.verificationId} className="border border-gray-100 rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">Day {item.day} · 📝 추가 기록</p>
+                    <p className="text-xs text-gray-500 truncate">{item.todayNote || '소감 없음'}</p>
+                  </div>
+
+                  {item.isPersonalOnly ? (
+                    <button
+                      type="button"
+                      onClick={() => visibilityMutation.mutate(item.verificationId)}
+                      className="px-3 py-1.5 text-xs rounded-lg bg-primary-600 text-white disabled:opacity-50"
+                      disabled={visibilityMutation.isPending && pendingVisibilityId === item.verificationId}
+                    >
+                      {visibilityMutation.isPending && pendingVisibilityId === item.verificationId ? '전환 중...' : '피드 공개'}
+                    </button>
+                  ) : (
+                    <span className="px-3 py-1.5 text-xs rounded-lg bg-green-50 text-green-700 border border-green-200">공개됨</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {extraNextToken && (
+              <button
+                type="button"
+                onClick={() => loadMoreExtraMutation.mutate()}
+                disabled={loadMoreExtraMutation.isPending || isFetchingExtra}
+                className="w-full mt-2 py-2 text-sm rounded-xl border border-gray-200 text-gray-700 disabled:opacity-50"
+              >
+                {loadMoreExtraMutation.isPending ? '불러오는 중...' : '추가 기록 더보기'}
+              </button>
+            )}
+          </section>
         )}
 
         {(activeChallenges.length > 0 || pendingChallenges.length > 0) && (
