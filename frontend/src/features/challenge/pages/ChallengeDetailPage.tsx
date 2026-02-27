@@ -17,6 +17,7 @@ export const ChallengeDetailPage = () => {
   const [hour12, setHour12] = useState(7);
   const [minute, setMinute] = useState(0);
   const [meridiem, setMeridiem] = useState<'AM' | 'PM'>('AM');
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Seoul';
 
 
   const { data: challenge, isLoading } = useQuery({
@@ -72,7 +73,7 @@ export const ChallengeDetailPage = () => {
           hour12,
           minute,
           meridiem,
-          timezone: 'Asia/Seoul',
+          timezone: userTimezone,
         };
       }
 
@@ -223,6 +224,7 @@ export const ChallengeDetailPage = () => {
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
           <h3 className="text-base font-bold text-gray-900 mb-3">참여 정보 입력</h3>
           <p className="text-sm text-gray-500 mb-4">챌린지 유형/레이어 정책에 따라 입력 항목이 달라집니다.</p>
+          <p className="text-xs text-gray-500 mb-2">입력되는 시간대: {userTimezone}</p>
           <p className="text-xs text-primary-700 mb-3">유형: {challengeType}</p>
           {requirePersonalTargetOnJoin && (
           <div className="grid grid-cols-3 gap-3 mb-3">
