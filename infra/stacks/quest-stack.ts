@@ -4,6 +4,7 @@
  * 퀘스트 보드 API:
  *   Admin:
  *     POST /admin/quests                                  - 퀘스트 생성
+ *     PUT  /admin/quests/{questId}                        - 퀘스트 수정
  *     PUT  /admin/quests/submissions/{submissionId}/review - 제출물 승인/거절
  *
  *   User:
@@ -80,7 +81,24 @@ export class QuestStack extends Stack {
       authorizer,
     });
 
-    // 2. User: List Quests (현재 제출 상태 포함) (protected)
+
+    // 2. Admin: Update Quest
+    const updateQuestFn = new NodejsFunction(this, 'UpdateQuestFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-quest-update`,
+      entry: path.join(__dirname, '../../backend/services/quest/update/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    questsTable.grantReadWriteData(updateQuestFn);
+    apiGateway.addRoutes({
+      path: '/admin/quests/{questId}',
+      methods: [HttpMethod.PUT],
+      integration: new HttpLambdaIntegration('AdminUpdateQuestIntegration', updateQuestFn),
+      authorizer,
+    });
+
+    // 3. User: List Quests (현재 제출 상태 포함) (protected)
     const listQuestsFn = new NodejsFunction(this, 'ListQuestsFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-list`,
@@ -97,7 +115,7 @@ export class QuestStack extends Stack {
       authorizer,
     });
 
-    // 3. User: Submit Quest (protected)
+    // 4. User: Submit Quest (protected)
     const submitQuestFn = new NodejsFunction(this, 'SubmitQuestFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-submit`,
@@ -115,7 +133,7 @@ export class QuestStack extends Stack {
       authorizer,
     });
 
-    // 4. Admin: Review (Approve / Reject) (protected)
+    // 5. Admin: Review (Approve / Reject) (protected)
     const approveQuestFn = new NodejsFunction(this, 'ApproveQuestFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-approve`,
@@ -133,7 +151,7 @@ export class QuestStack extends Stack {
       authorizer,
     });
 
-    // 5. Admin: List Submissions (pending 큐 + 퀘스트별 필터) (protected)
+    // 6. Admin: List Submissions (pending 큐 + 퀘스트별 필터) (protected)
     const adminListSubmissionsFn = new NodejsFunction(this, 'AdminListSubmissionsFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-admin-list-submissions`,
@@ -150,7 +168,7 @@ export class QuestStack extends Stack {
       authorizer,
     });
 
-    // 6. User: My Submissions (현재 상태 or 전체 이력) (protected)
+    // 7. User: My Submissions (현재 상태 or 전체 이력) (protected)
     const mySubmissionsFn = new NodejsFunction(this, 'MySubmissionsFn', {
       ...commonProps,
       functionName: `chme-${stage}-quest-my-submissions`,

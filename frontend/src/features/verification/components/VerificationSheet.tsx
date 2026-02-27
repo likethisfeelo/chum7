@@ -13,6 +13,35 @@ interface VerificationSheetProps {
   onSuccess?: (data: any) => void;
 }
 
+function toIsoFromLocalDateTime(localDateTime: string): string {
+  if (!localDateTime) return new Date().toISOString();
+  const parsed = new Date(localDateTime);
+  if (Number.isNaN(parsed.getTime())) return new Date().toISOString();
+  return parsed.toISOString();
+}
+
+
+function isLikelyCorsOrPreflightError(error: any): boolean {
+  const status = error?.response?.status;
+  if (status === 403) return true;
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('failed to fetch') || message.includes('networkerror') || message.includes('cors');
+}
+
+function extractApiErrorMessage(error: any): string {
+  const apiMessage = error?.response?.data?.message;
+  const details = error?.response?.data?.details;
+
+  if (Array.isArray(details) && details.length > 0) {
+    const first = details[0];
+    if (first?.path?.length && first?.message) {
+      return `입력값 오류(${first.path.join('.')}): ${first.message}`;
+    }
+  }
+
+  return apiMessage || '인증에 실패했습니다';
+}
+
 export const VerificationSheet = ({
   isOpen,
   onClose,
@@ -26,13 +55,18 @@ export const VerificationSheet = ({
   const [formData, setFormData] = useState({
     todayNote: '',
     tomorrowPromise: '',
-    completedAt: '',
+    completedAt: new Date().toISOString().slice(0, 16),
     verificationDate: new Date().toISOString().slice(0, 10),
   });
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('이미지 파일만 업로드할 수 있어요.');
+      return;
+    }
 
     setImageFile(file);
     const reader = new FileReader();
@@ -44,21 +78,33 @@ export const VerificationSheet = ({
     mutationFn: async () => {
       let imageUrl = '';
 
-      // 이미지 업로드
       if (imageFile) {
-        const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
-          fileName: imageFile.name,
-          contentType: imageFile.type,
-          userChallengeId: userChallenge.userChallengeId,
-        });
+        try {
+          const challengeId = userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
+          const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
+            fileName: imageFile.name,
+            fileType: imageFile.type,
+            challengeId,
+          });
 
-        await fetch(uploadData.data.uploadUrl, {
-          method: 'PUT',
-          body: imageFile,
-          headers: { 'Content-Type': imageFile.type },
-        });
+          const uploadResp = await fetch(uploadData.data.uploadUrl, {
+            method: 'PUT',
+            body: imageFile,
+            headers: { 'Content-Type': imageFile.type },
+          });
 
-        imageUrl = uploadData.data.imageUrl;
+          if (!uploadResp.ok) {
+            throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
+          }
+
+          imageUrl = uploadData.data.fileUrl;
+        } catch (uploadError: any) {
+          if (isLikelyCorsOrPreflightError(uploadError)) {
+            toast.error('이미지 업로드가 브라우저 CORS 제한으로 실패했습니다. 이미지 없이 인증을 계속 제출합니다.');
+          } else {
+            throw uploadError;
+          }
+        }
       }
 
       const response = await apiClient.post('/verifications', {
@@ -67,7 +113,7 @@ export const VerificationSheet = ({
         imageUrl,
         todayNote: formData.todayNote,
         tomorrowPromise: formData.tomorrowPromise,
-        performedAt: formData.completedAt || new Date().toISOString(),
+        performedAt: toIsoFromLocalDateTime(formData.completedAt),
         verificationDate: formData.verificationDate || new Date().toISOString().slice(0, 10),
         isPublic: true,
       });
@@ -79,12 +125,17 @@ export const VerificationSheet = ({
       toast.success('인증 완료! 오늘도 잘 하셨어요 🎉');
       setImageFile(null);
       setImagePreview(null);
-      setFormData({ todayNote: '', tomorrowPromise: '', completedAt: '', verificationDate: new Date().toISOString().slice(0, 10) });
+      setFormData({
+        todayNote: '',
+        tomorrowPromise: '',
+        completedAt: new Date().toISOString().slice(0, 16),
+        verificationDate: new Date().toISOString().slice(0, 10),
+      });
       onClose();
       if (onSuccess) onSuccess(data);
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || '인증에 실패했습니다');
+      toast.error(extractApiErrorMessage(error));
     },
   });
 
@@ -102,7 +153,6 @@ export const VerificationSheet = ({
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="오늘의 인증 📸">
       <form onSubmit={handleSubmit} className="px-6 pb-8 space-y-5">
-        {/* 챌린지 정보 */}
         <div className="flex items-center gap-3 p-4 bg-primary-50 rounded-2xl">
           <span className="text-3xl">{userChallenge.challenge?.badgeIcon || '🎯'}</span>
           <div>
@@ -111,18 +161,11 @@ export const VerificationSheet = ({
           </div>
         </div>
 
-        {/* 이미지 업로드 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            인증 사진 📸
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">인증 사진 📸</label>
           {imagePreview ? (
             <div className="relative">
-              <img
-                src={imagePreview}
-                alt="Preview"
-                className="w-full h-48 object-cover rounded-2xl"
-              />
+              <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover rounded-2xl" />
               <button
                 type="button"
                 onClick={() => { setImageFile(null); setImagePreview(null); }}
@@ -151,12 +194,8 @@ export const VerificationSheet = ({
           />
         </div>
 
-
-        {/* 인증 기준일 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            인증 기준일 📅
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">인증 기준일 📅</label>
           <input
             type="date"
             value={formData.verificationDate}
@@ -165,24 +204,20 @@ export const VerificationSheet = ({
           />
         </div>
 
-        {/* 목표 달성 시간 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            실천 시간 ⏰
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">실천 시간 ⏰</label>
+          <p className="text-xs text-gray-500 mb-2">실제로 실천한 시간을 기록해주세요. 기본값은 현재 시각이며 필요 시 수정할 수 있어요.</p>
           <input
             type="datetime-local"
             value={formData.completedAt}
             onChange={(e) => setFormData({ ...formData, completedAt: e.target.value })}
+            max={new Date().toISOString().slice(0, 16)}
             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
 
-        {/* 오늘의 소감 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            오늘의 소감 ✍️ <span className="text-red-500">*</span>
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">오늘의 소감 ✍️ <span className="text-red-500">*</span></label>
           <textarea
             value={formData.todayNote}
             onChange={(e) => setFormData({ ...formData, todayNote: e.target.value })}
@@ -193,11 +228,8 @@ export const VerificationSheet = ({
           />
         </div>
 
-        {/* 내일의 다짐 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            내일의 다짐 🌅 (선택)
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">내일의 다짐 🌅 (선택)</label>
           <textarea
             value={formData.tomorrowPromise}
             onChange={(e) => setFormData({ ...formData, tomorrowPromise: e.target.value })}

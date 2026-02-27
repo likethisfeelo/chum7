@@ -35,6 +35,15 @@ export const ChallengeDetailPage = () => {
     },
   });
 
+
+  const { data: myChallengesData } = useQuery({
+    queryKey: ['my-challenges', 'active-on-detail'],
+    queryFn: async () => {
+      const response = await apiClient.get('/challenges/my?status=active');
+      return response.data.data;
+    },
+  });
+
   useEffect(() => {
     if (!challenge?.targetTime) return;
     const [hh, mm] = String(challenge.targetTime).split(':').map((v: string) => Number(v));
@@ -73,9 +82,10 @@ export const ChallengeDetailPage = () => {
   if (!challenge) return <div className="p-6 text-center text-gray-500">챌린지를 찾을 수 없습니다</div>;
 
   const lifecycle = String(challenge.lifecycle || 'draft');
-  const canJoin = lifecycle === 'recruiting';
+  const alreadyJoined = (myChallengesData?.challenges ?? []).some((item: any) => (item.challengeId ?? item.challenge?.challengeId) === challengeId);
+  const canJoin = lifecycle === 'recruiting' && !alreadyJoined;
   const ctaLabelMap: Record<string, string> = {
-    recruiting: '챌린지 참여 신청하기',
+    recruiting: alreadyJoined ? '이미 참여신청한 챌린지' : '챌린지 참여 신청하기',
     preparing: '모집 마감 (Preparing)',
     active: '진행 중 (참여 마감)',
     completed: '종료된 챌린지',
@@ -83,7 +93,7 @@ export const ChallengeDetailPage = () => {
     draft: '공개 전 챌린지',
   };
   const lifecycleHintMap: Record<string, string> = {
-    recruiting: '지금 참여 신청할 수 있습니다.',
+    recruiting: alreadyJoined ? '이미 참여신청을 완료한 챌린지입니다.' : '지금 참여 신청할 수 있습니다.',
     preparing: '모집이 종료되어 새로운 참여 신청은 불가능합니다.',
     active: '챌린지가 진행 중이라 신규 참여가 불가능합니다.',
     completed: '종료된 챌린지입니다.',
@@ -227,6 +237,9 @@ export const ChallengeDetailPage = () => {
         </div>
 
         <p className="text-sm text-gray-600 mb-3">상태: <span className="font-semibold">{lifecycle}</span> · {lifecycleHintMap[lifecycle] ?? '참여 가능 상태를 확인해주세요.'}</p>
+        {alreadyJoined && (
+          <p className="text-xs text-amber-700 mb-3">이미 참여신청한 챌린지입니다. ME 탭에서 준비/진행 상태를 확인해주세요.</p>
+        )}
 
         {/* 참여 버튼 */}
         <Button
@@ -234,7 +247,7 @@ export const ChallengeDetailPage = () => {
           size="lg"
           onClick={() => canJoin && joinMutation.mutate()}
           loading={joinMutation.isPending}
-          disabled={!canJoin}
+          disabled={!canJoin || alreadyJoined}
         >
           {ctaLabelMap[lifecycle] ?? '챌린지 참여하기'}
         </Button>
