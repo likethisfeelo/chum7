@@ -34,7 +34,7 @@ export class ApiStack extends Stack {
         CorsHttpMethod.DELETE,
         CorsHttpMethod.OPTIONS,
       ],
-      allowHeaders: ['Content-Type', 'Authorization', 'x-user-timezone', 'X-User-Timezone'],
+      allowHeaders: ['Content-Type', 'Authorization', 'x-user-timezone'],
       maxAge: Duration.days(1),
     };
 
