@@ -17,6 +17,7 @@ export const ChallengeDetailPage = () => {
   const [hour12, setHour12] = useState(7);
   const [minute, setMinute] = useState(0);
   const [meridiem, setMeridiem] = useState<'AM' | 'PM'>('AM');
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Seoul';
 
 
   const { data: challenge, isLoading } = useQuery({
@@ -55,17 +56,28 @@ export const ChallengeDetailPage = () => {
     setMeridiem(isPm ? 'PM' : 'AM');
   }, [challenge?.targetTime]);
 
+
+  const challengeType = String(challenge?.challengeType || 'leader_personal');
+  const defaultRequireGoal = challengeType === 'personal_only' || challengeType === 'mixed';
+  const defaultRequireTarget = challengeType !== 'leader_only';
+  const requirePersonalGoalOnJoin = challenge?.layerPolicy?.requirePersonalGoalOnJoin ?? defaultRequireGoal;
+  const requirePersonalTargetOnJoin = challenge?.layerPolicy?.requirePersonalTargetOnJoin ?? defaultRequireTarget;
+
+
   const joinMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiClient.post(`/challenges/${challengeId}/join`, {
-        personalGoal: personalGoal.trim() || undefined,
-        personalTarget: {
+      const payload: any = {};
+      if (personalGoal.trim()) payload.personalGoal = personalGoal.trim();
+      if (requirePersonalTargetOnJoin) {
+        payload.personalTarget = {
           hour12,
           minute,
           meridiem,
-          timezone: 'Asia/Seoul',
-        },
-      });
+          timezone: userTimezone,
+        };
+      }
+
+      const response = await apiClient.post(`/challenges/${challengeId}/join`, payload);
       return response.data;
     },
     onSuccess: () => {
@@ -210,8 +222,11 @@ export const ChallengeDetailPage = () => {
 
 
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
-          <h3 className="text-base font-bold text-gray-900 mb-3">내 목표 시간 설정</h3>
-          <p className="text-sm text-gray-500 mb-4">참여 후 preparing 단계에서 사용할 개인 목표시간입니다 (KST).</p>
+          <h3 className="text-base font-bold text-gray-900 mb-3">참여 정보 입력</h3>
+          <p className="text-sm text-gray-500 mb-4">챌린지 유형/레이어 정책에 따라 입력 항목이 달라집니다.</p>
+          <p className="text-xs text-gray-500 mb-2">입력되는 시간대: {userTimezone}</p>
+          <p className="text-xs text-primary-700 mb-3">유형: {challengeType}</p>
+          {requirePersonalTargetOnJoin && (
           <div className="grid grid-cols-3 gap-3 mb-3">
             <select value={hour12} onChange={(e) => setHour12(Number(e.target.value))} className="px-3 py-2.5 border border-gray-300 rounded-xl">
               {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
@@ -228,10 +243,11 @@ export const ChallengeDetailPage = () => {
               <option value="PM">오후</option>
             </select>
           </div>
+          )}
           <input
             value={personalGoal}
             onChange={(e) => setPersonalGoal(e.target.value)}
-            placeholder="개인 목표 메모 (선택)"
+            placeholder={requirePersonalGoalOnJoin ? '개인 목표 메모 (필수)' : '개인 목표 메모 (선택)'}
             className="w-full px-4 py-3 border border-gray-300 rounded-xl"
           />
         </div>
@@ -245,7 +261,18 @@ export const ChallengeDetailPage = () => {
         <Button
           fullWidth
           size="lg"
-          onClick={() => canJoin && joinMutation.mutate()}
+          onClick={() => {
+            if (!canJoin) return;
+            if (requirePersonalGoalOnJoin && personalGoal.trim().length === 0) {
+              toast.error('개인 목표를 입력해주세요');
+              return;
+            }
+            if (requirePersonalTargetOnJoin && (hour12 < 1 || hour12 > 12)) {
+              toast.error('개인 목표시간을 확인해주세요');
+              return;
+            }
+            joinMutation.mutate();
+          }}
           loading={joinMutation.isPending}
           disabled={!canJoin || alreadyJoined}
         >

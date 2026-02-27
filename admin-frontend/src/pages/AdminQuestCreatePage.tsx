@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 
 type VerificationType = 'image' | 'link' | 'text' | 'video';
+type QuestLayer = 'A' | 'B' | 'D';
+type QuestScope = 'leader' | 'personal' | 'mixed';
 
 const VERIFICATION_TYPES: { value: VerificationType; label: string }[] = [
   { value: 'image', label: '📸 사진' },
@@ -24,6 +26,9 @@ const INITIAL = {
   linkExample:     '',
   linkPattern:     '',
   maxChars:        2000,
+  questLayer:      'A' as QuestLayer,
+  questScope:      'leader' as QuestScope,
+  requireOnJoinInput: false,
 };
 
 export const AdminQuestCreatePage = () => {
@@ -90,6 +95,9 @@ export const AdminQuestCreatePage = () => {
         verificationType: form.verificationType,
         approvalRequired: form.approvalRequired,
         displayOrder:     Number(form.displayOrder),
+        questLayer:       form.questLayer,
+        questScope:       form.questScope,
+        requireOnJoinInput: form.requireOnJoinInput,
       };
       payload.challengeId = challengeId.trim();
       payload.startAt = form.startAt
@@ -284,6 +292,51 @@ export const AdminQuestCreatePage = () => {
               관리자 승인 필요 (체크 해제 시 자동 승인)
             </label>
           </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+          <h2 className="font-bold text-gray-800">레이어/스코프 정책</h2>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">퀘스트 레이어</label>
+              <select
+                value={form.questLayer}
+                onChange={e => set('questLayer', e.target.value as QuestLayer)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="A">A 레이어 (공통)</option>
+                <option value="B">B 레이어 (운영 확장)</option>
+                <option value="D">D 레이어 (개인화)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">퀘스트 스코프</label>
+              <select
+                value={form.questScope}
+                onChange={e => set('questScope', e.target.value as QuestScope)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="leader">리더 중심</option>
+                <option value="personal">개인 중심</option>
+                <option value="mixed">혼합</option>
+              </select>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={form.requireOnJoinInput}
+              onChange={e => set('requireOnJoinInput', e.target.checked)}
+            />
+            챌린지 참여 시 이 퀘스트용 추가 입력 필수
+          </label>
+
+          <p className="text-xs text-gray-500">
+            참여자 입력 필수 옵션은 개인화 레이어에서 사용하세요. 리더 중심 퀘스트는 해제 권장.
+          </p>
         </div>
 
         {/* 기간 */}

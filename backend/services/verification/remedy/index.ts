@@ -4,18 +4,20 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { remedyScore, safeTimezone, validatePracticeAt } from '../../../shared/lib/challenge-quest-policy';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const remedySchema = z.object({
   userChallengeId: z.string().uuid(),
-  originalDay: z.number().min(1).max(5), // Day 1-5만 보완 가능
+  originalDay: z.number().min(1).max(5),
   imageUrl: z.string().url().optional(),
-  reflectionNote: z.string().min(10).max(500), // 회고 (필수)
+  reflectionNote: z.string().min(10).max(500),
   todayNote: z.string().min(1).max(500),
   tomorrowPromise: z.string().max(500).optional(),
-  completedAt: z.string().datetime()
+  completedAt: z.string().datetime().optional(),
+  practiceAt: z.string().datetime().optional()
 });
 
 type RemedyInput = z.infer<typeof remedySchema>;
@@ -32,7 +34,6 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
-// 응원권 생성
 async function createCheerTicket(
   userId: string,
   challengeId: string,
@@ -79,7 +80,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const body = JSON.parse(event.body || '{}');
     const input: RemedyInput = remedySchema.parse(body);
 
-    // 1. UserChallenge 조회
     const userChallengeResult = await docClient.send(new GetCommand({
       TableName: process.env.USER_CHALLENGES_TABLE!,
       Key: { userChallengeId: input.userChallengeId }
@@ -94,7 +94,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const userChallenge = userChallengeResult.Item;
 
-    // 2. 권한 확인
     if (userChallenge.userId !== userId) {
       return response(403, {
         error: 'FORBIDDEN',
@@ -102,57 +101,84 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    // 3. Day 6인지 확인
     if (userChallenge.currentDay !== 6) {
       return response(400, {
-        error: 'NOT_DAY_6',
+        error: 'REMEDY_WRONG_DAY',
         message: 'Day 6에만 보완 인증이 가능합니다'
       });
     }
 
-    // 4. 해당 Day가 실패 상태인지 확인
     const progress = userChallenge.progress || [];
-    const originalDayProgress = progress.find((p: any) => p.day === input.originalDay);
-
-    if (originalDayProgress && originalDayProgress.status === 'success') {
+    const failedDays = progress.filter((p: any) => p.status !== 'success' && p.day <= 5);
+    if (failedDays.length === 0) {
       return response(400, {
-        error: 'DAY_ALREADY_COMPLETED',
-        message: '이미 완료한 날은 보완할 수 없습니다'
+        error: 'REMEDY_NO_FAILED_DAYS',
+        message: '보완할 실패일이 없습니다'
       });
     }
 
-    // 5. 이미 보완했는지 확인
-    if (originalDayProgress && originalDayProgress.remedied) {
+    const remedyPolicy = userChallenge.remedyPolicy || { type: 'open', maxRemedyDays: null };
+    if (remedyPolicy.type === 'limited' && remedyPolicy.maxRemedyDays && failedDays.length > remedyPolicy.maxRemedyDays) {
+      return response(400, {
+        error: 'REMEDY_TOO_MANY_FAILS',
+        message: '허용된 보완 횟수를 초과했습니다'
+      });
+    }
+
+    const originalDayProgress = progress.find((p: any) => p.day === input.originalDay);
+    if (!originalDayProgress || originalDayProgress.status === 'success') {
+      return response(400, {
+        error: 'REMEDY_TARGET_INVALID',
+        message: '복구 대상 day가 실제 실패일이 아닙니다'
+      });
+    }
+
+    if (originalDayProgress.remedied) {
       return response(409, {
-        error: 'ALREADY_REMEDIED',
-        message: '이미 보완한 날입니다'
+        error: 'REMEDY_TARGET_ALREADY_DONE',
+        message: '이미 보완한 day입니다'
       });
     }
 
-    // 6. 보완 인증 생성
+    const nowIso = new Date().toISOString();
+    const practiceAt = input.practiceAt || input.completedAt || nowIso;
+    const timezone = safeTimezone((event.headers?.['x-user-timezone'] || event.headers?.['X-User-Timezone']) as string | undefined || userChallenge.timezone);
+    const practiceValidation = validatePracticeAt(practiceAt, nowIso, timezone);
+    if (!practiceValidation.ok) {
+      return response(400, {
+        error: practiceValidation.errorCode,
+        message: practiceValidation.errorCode === 'FUTURE_PRACTICE_TIME' ? 'practiceAt이 uploadAt보다 미래입니다' : 'practiceAt이 허용 범위를 초과했습니다'
+      });
+    }
+
     const verificationId = uuidv4();
-    const now = new Date().toISOString();
+    const basePoints = Number(originalDayProgress.score || 10);
+    const scoreEarned = remedyScore(basePoints);
 
     const verification = {
       verificationId,
       userId,
       userChallengeId: input.userChallengeId,
       challengeId: userChallenge.challengeId,
-      day: 6, // Day 6에 제출
+      day: 6,
       type: 'remedy',
       imageUrl: input.imageUrl || null,
       todayNote: input.todayNote,
       tomorrowPromise: input.tomorrowPromise || null,
-      completedAt: input.completedAt,
-      targetTime: null, // 보완은 델타 없음
-      delta: 0,
-      score: 7, // 70% 점수
+      certDate: practiceValidation.certDate,
+      practiceAt,
+      completedAt: practiceAt,
+      uploadAt: nowIso,
+      targetTime: null,
+      delta: null,
+      score: scoreEarned,
+      scoreEarned,
       cheerCount: 0,
       isPublic: 'false',
       isAnonymous: true,
       originalDay: input.originalDay,
       reflectionNote: input.reflectionNote,
-      createdAt: now
+      createdAt: nowIso
     };
 
     await docClient.send(new PutCommand({
@@ -160,7 +186,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       Item: verification
     }));
 
-    // 7. UserChallenge 업데이트
     const updatedProgress = [...progress];
     const originalIndex = updatedProgress.findIndex((p: any) => p.day === input.originalDay);
 
@@ -169,9 +194,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         day: input.originalDay,
         status: 'success',
         verificationId,
-        timestamp: input.completedAt,
+        timestamp: practiceAt,
         delta: 0,
-        score: 7,
+        score: scoreEarned,
         remedied: true
       };
     }
@@ -187,11 +212,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       ExpressionAttributeValues: {
         ':progress': updatedProgress,
         ':score': totalScore,
-        ':updatedAt': now
+        ':updatedAt': nowIso
       }
     }));
 
-    // 8. 보너스 응원권 생성
     await createCheerTicket(
       userId,
       userChallenge.challengeId,
@@ -205,8 +229,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       data: {
         verificationId,
         originalDay: input.originalDay,
-        scoreEarned: 7,
+        scoreEarned,
         totalScore,
+        remainingRemedyDays: Math.max((remedyPolicy.maxRemedyDays || failedDays.length) - 1, 0),
         cheerTicketGranted: true,
         newBadges: []
       }

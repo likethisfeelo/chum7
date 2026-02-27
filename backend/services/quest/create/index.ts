@@ -42,6 +42,9 @@ const createQuestSchema = z.object({
   endAt: z.string().datetime().optional().nullable(),             // null = 기간 무제한
   approvalRequired: z.boolean().default(true),
   displayOrder: z.number().int().min(0).default(0),              // 보드 내 표시 순서
+  questLayer: z.enum(['A', 'B', 'D']).optional().default('A'),
+  questScope: z.enum(['leader', 'personal', 'mixed']).optional().default('leader'),
+  requireOnJoinInput: z.boolean().optional().default(false),
 });
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
@@ -129,6 +132,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       endAt: input.endAt ?? null,
       approvalRequired: input.approvalRequired,
       displayOrder: input.displayOrder,
+      questLayer: input.questLayer,
+      questScope: input.questScope,
+      requireOnJoinInput: input.requireOnJoinInput,
       status: 'active',
       submissionCount: 0,
       approvedCount: 0,

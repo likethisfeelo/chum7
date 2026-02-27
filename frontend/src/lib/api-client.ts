@@ -10,6 +10,20 @@ export const apiClient = axios.create({
   },
 });
 
+const TIMEZONE_HEADER_EXCLUDED_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh-token',
+  '/auth/refresh',
+  '/auth/verify-email',
+  '/auth/resend-verification',
+];
+
+function shouldAttachTimezoneHeader(url?: string): boolean {
+  if (!url) return true;
+  return !TIMEZONE_HEADER_EXCLUDED_PATHS.some((path) => url.includes(path));
+}
+
 // Request interceptor - 토큰 추가
 apiClient.interceptors.request.use(
   (config) => {
@@ -17,6 +31,12 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (userTimezone && shouldAttachTimezoneHeader(config.url)) {
+      config.headers['x-user-timezone'] = userTimezone;
+    }
+
     return config;
   },
   (error) => {

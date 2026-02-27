@@ -15,19 +15,32 @@ interface AdminStackProps extends StackProps {
   usersTable: Table;
   challengesTable: Table;
   userChallengesTable: Table;
+  questSubmissionsTable: Table;
+  verificationsTable: Table;
 }
 
 export class AdminStack extends Stack {
   constructor(scope: Construct, id: string, props: AdminStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, authorizer, usersTable, challengesTable, userChallengesTable } = props;
+    const {
+      stage,
+      apiGateway,
+      authorizer,
+      usersTable,
+      challengesTable,
+      userChallengesTable,
+      questSubmissionsTable,
+      verificationsTable,
+    } = props;
 
     const commonEnv = {
       STAGE: stage,
       USERS_TABLE: usersTable.tableName,
       CHALLENGES_TABLE: challengesTable.tableName,
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
+      QUEST_SUBMISSIONS_TABLE: questSubmissionsTable.tableName,
+      VERIFICATIONS_TABLE: verificationsTable.tableName,
     };
 
     const commonProps = {
@@ -165,10 +178,34 @@ export class AdminStack extends Stack {
     usersTable.grantReadData(statsFn);
     challengesTable.grantReadData(statsFn);
     userChallengesTable.grantReadData(statsFn);
+    questSubmissionsTable.grantReadData(statsFn);
+    verificationsTable.grantReadData(statsFn);
     apiGateway.addRoutes({
       path: '/admin/stats',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('AdminStatsIntegration', statsFn),
+      authorizer,
+    });
+    apiGateway.addRoutes({
+      path: '/admin/stats/overview',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminStatsOverviewIntegration', statsFn),
+      authorizer,
+    });
+
+    // 9. Audit Logs (Admin) (protected)
+    const auditLogsFn = new NodejsFunction(this, 'AuditLogsFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-audit-logs`,
+      entry: path.join(__dirname, '../../backend/services/admin/audit/list/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    questSubmissionsTable.grantReadData(auditLogsFn);
+    apiGateway.addRoutes({
+      path: '/admin/audit/logs',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminAuditLogsIntegration', auditLogsFn),
       authorizer,
     });
   }

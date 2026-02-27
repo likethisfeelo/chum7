@@ -88,6 +88,8 @@ new AdminStack(app, `chme-${stage}-admin`, {
   usersTable: coreStack.usersTable,
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
+  questSubmissionsTable: coreStack.questSubmissionsTable,
+  verificationsTable: coreStack.verificationsTable,
 });
 
 new QuestStack(app, `chme-${stage}-quest`, {
