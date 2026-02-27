@@ -4,6 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { calculateChallengeDay, isInvalidDayDelta, safeTimezone, validatePracticeAt } from '../../../shared/lib/challenge-quest-policy';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -16,7 +17,7 @@ const submitSchema = z.object({
   tomorrowPromise: z.string().max(500).optional(),
   verificationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   performedAt: z.string().datetime().optional(),
-  completedAt: z.string().datetime().optional(), // backward compatibility
+  completedAt: z.string().datetime().optional(),
   targetTime: z.string().datetime().optional(),
   isPublic: z.boolean().default(true),
   isAnonymous: z.boolean().default(true)
@@ -52,7 +53,6 @@ function buildTargetDateTimeISO(verificationDate: string, time24: string, timezo
     return new Date(utcMs).toISOString();
   }
 
-  // fallback: timezone 고도화 전까지 UTC 취급
   return new Date(Date.UTC(y, m - 1, d, hh, mm, 0, 0)).toISOString();
 }
 
@@ -141,18 +141,34 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const userChallenge = userChallengeResult.Item;
+    if (userChallenge.userId && userChallenge.userId !== userId) {
+      return response(403, { error: 'FORBIDDEN', message: '본인 챌린지만 인증할 수 있습니다' });
+    }
 
-    const progress = userChallenge.progress || [];
-    const dayProgress = progress.find((p: any) => p.day === input.day);
-    if (dayProgress && dayProgress.status === 'success') {
-      return response(409, {
-        error: 'ALREADY_VERIFIED',
-        message: '이미 인증을 완료했습니다'
+    const nowIso = new Date().toISOString();
+    const performedAt = input.performedAt || input.completedAt || nowIso;
+    const timezone = safeTimezone((event.headers?.['x-user-timezone'] || event.headers?.['X-User-Timezone']) as string | undefined || userChallenge.timezone);
+
+    const practiceValidation = validatePracticeAt(performedAt, nowIso, timezone);
+    if (!practiceValidation.ok) {
+      return response(400, {
+        error: practiceValidation.errorCode,
+        message: practiceValidation.errorCode === 'FUTURE_PRACTICE_TIME' ? 'practiceAt이 uploadAt보다 미래입니다' : 'practiceAt이 허용 범위를 초과했습니다'
       });
     }
 
-    const performedAt = input.performedAt || input.completedAt || new Date().toISOString();
-    const verificationDate = input.verificationDate || performedAt.slice(0, 10);
+    if (userChallenge.startDate) {
+      const calculatedDay = calculateChallengeDay(userChallenge.startDate, practiceValidation.certDate, timezone);
+      if (isInvalidDayDelta(input.day, calculatedDay)) {
+        return response(400, { error: 'INVALID_DAY', message: '요청 day가 서버 계산 day와 불일치합니다' });
+      }
+    }
+
+    const progress = userChallenge.progress || [];
+    const dayProgress = progress.find((p: any) => p.day === input.day);
+    const isExtra = !!(dayProgress && dayProgress.status === 'success');
+
+    const verificationDate = input.verificationDate || practiceValidation.certDate;
 
     const personalTarget = userChallenge.personalTarget;
     const derivedTargetTime = personalTarget?.time24
@@ -160,18 +176,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       : undefined;
     const effectiveTargetTime = input.targetTime || derivedTargetTime;
 
-    if (!effectiveTargetTime) {
+    if (!effectiveTargetTime && !isExtra) {
       return response(400, {
         error: 'MISSING_TARGET_TIME',
         message: '개인 목표시간 설정 또는 targetTime 입력이 필요합니다'
       });
     }
 
-    const delta = calculateDelta(effectiveTargetTime, performedAt);
-    const isEarlyCompletion = delta > 0;
+    const delta = isExtra ? null : calculateDelta(effectiveTargetTime!, performedAt);
+    const isEarlyCompletion = !isExtra && (delta || 0) > 0;
 
     const verificationId = uuidv4();
-    const now = new Date().toISOString();
 
     const verification = {
       verificationId,
@@ -184,24 +199,46 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       todayNote: input.todayNote,
       tomorrowPromise: input.tomorrowPromise || null,
       verificationDate,
+      certDate: verificationDate,
+      practiceAt: performedAt,
       performedAt,
-      uploadedAt: now,
+      uploadAt: nowIso,
+      uploadedAt: nowIso,
       completedAt: performedAt,
-      targetTime: effectiveTargetTime,
+      targetTime: effectiveTargetTime || null,
       delta,
-      score: 10,
+      score: isExtra ? 0 : 10,
+      scoreEarned: isExtra ? 0 : 10,
       cheerCount: 0,
       isPublic: input.isPublic ? 'true' : 'false',
       isAnonymous: input.isAnonymous,
       originalDay: null,
       reflectionNote: null,
-      createdAt: now
+      isExtra,
+      primaryVerificationId: isExtra ? dayProgress?.verificationId || null : null,
+      isPersonalOnly: isExtra ? true : false,
+      createdAt: nowIso
     };
 
     await docClient.send(new PutCommand({
       TableName: process.env.VERIFICATIONS_TABLE!,
       Item: verification
     }));
+
+    if (isExtra) {
+      return response(200, {
+        success: true,
+        message: '오늘의 추가 기록이 저장되었어요 📝',
+        data: {
+          verificationId,
+          isExtra: true,
+          scoreEarned: 0,
+          delta: null,
+          cheerOpportunity: null,
+          notice: '점수와 응원 혜택은 오늘의 첫 번째 인증에만 적용됩니다.'
+        }
+      });
+    }
 
     const updatedProgress = [...progress];
     const existingIndex = updatedProgress.findIndex((p: any) => p.day === input.day);
@@ -211,7 +248,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       status: 'success',
       verificationId,
       timestamp: performedAt,
-      delta,
+      delta: delta || 0,
       score: 10
     };
 
@@ -223,7 +260,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     let consecutiveDays = 0;
     for (let i = 1; i <= input.day; i++) {
-      const p = updatedProgress.find((p: any) => p.day === i);
+      const p = updatedProgress.find((pr: any) => pr.day === i);
       if (p && p.status === 'success') {
         consecutiveDays++;
       } else {
@@ -244,7 +281,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         ':currentDay': input.day,
         ':score': totalScore,
         ':consecutiveDays': consecutiveDays,
-        ':updatedAt': now
+        ':updatedAt': nowIso
       }
     }));
 
@@ -272,7 +309,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           userId,
           userChallenge.challengeId,
           verificationId,
-          delta,
+          delta || 0,
           'early_completion'
         );
       }
@@ -285,7 +322,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         userId,
         userChallenge.challengeId,
         verificationId,
-        delta,
+        delta || 0,
         'streak_3'
       );
       cheerOpportunity.cheerTicketGranted = true;
@@ -298,7 +335,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           userId,
           userChallenge.challengeId,
           verificationId,
-          delta,
+          delta || 0,
           'complete'
         );
       }
@@ -315,9 +352,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       message,
       data: {
         verificationId,
+        isExtra: false,
         verificationDate,
         performedAt,
-        uploadedAt: now,
+        uploadedAt: nowIso,
         day: input.day,
         delta,
         isEarlyCompletion,

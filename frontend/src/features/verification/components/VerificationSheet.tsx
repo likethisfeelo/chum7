@@ -33,6 +33,34 @@ function isLikelyCorsOrPreflightError(error: any): boolean {
   return message.includes('failed to fetch') || message.includes('networkerror') || message.includes('cors');
 }
 
+
+const CHALLENGE_TYPE_LABEL: Record<string, string> = {
+  leader_only: '리더 퀘스트',
+  personal_only: '개인 퀘스트',
+  leader_personal: '리더+개인',
+  mixed: '혼합형',
+};
+
+function getChallengeTypeLabel(userChallenge: any): string {
+  const key = String(userChallenge?.challenge?.challengeType || userChallenge?.challenge?.type || '').toLowerCase();
+  return CHALLENGE_TYPE_LABEL[key] || '일반 챌린지';
+}
+
+function getVerificationGuide(userChallenge: any): string {
+  const key = String(userChallenge?.challenge?.challengeType || userChallenge?.challenge?.type || '').toLowerCase();
+  if (key === 'leader_only') return '리더가 제시한 공통 퀘스트 실천 내용을 중심으로 인증해요.';
+  if (key === 'personal_only') return '개인 퀘스트 실천 흐름을 구체적으로 기록해요.';
+  if (key === 'leader_personal' || key === 'mixed') return '공통/개인 퀘스트 중 오늘 수행한 항목을 명확히 적어주세요.';
+  return '오늘 핵심 실천을 먼저 인증하고, 추가 실천은 추가 기록으로 남길 수 있어요.';
+}
+
+
+function getSuccessToastMessage(payload: any): string {
+  if (payload?.isExtra) return payload.message || '추가 기록이 저장되었어요 📝';
+  if (payload?.type === 'remedy') return payload.message || '보완 인증이 완료되었어요 💪';
+  return payload?.message || '핵심 인증이 완료됐어요 ✅';
+}
+
 function extractApiErrorMessage(error: any): string {
   const apiMessage = error?.response?.data?.message;
   const details = error?.response?.data?.details;
@@ -126,13 +154,33 @@ export const VerificationSheet = ({
         performedAt: toIsoFromLocalDateTime(formData.completedAt),
         verificationDate: formData.verificationDate || new Date().toISOString().slice(0, 10),
         isPublic: true,
+        isAnonymous: true,
       });
 
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
-      toast.success('인증 완료! 오늘도 잘 하셨어요 🎉');
+
+      const payload = data?.data || {};
+      if (payload.isExtra) {
+        toast.success(getSuccessToastMessage(payload));
+        if (payload.notice) {
+          toast(payload.notice, { icon: 'ℹ️' });
+        }
+
+        const shouldMakePublic = window.confirm('추가 기록을 피드에 공개할까요? (챌린지 기간 내 전환 가능)');
+        if (shouldMakePublic && payload.verificationId) {
+          try {
+            await apiClient.patch(`/verifications/${payload.verificationId}/visibility`, { isPersonalOnly: false });
+            toast.success('추가 기록을 공개 피드로 전환했어요 🌍');
+          } catch (visibilityError: any) {
+            toast.error(visibilityError?.response?.data?.message || '공개 전환에 실패했습니다');
+          }
+        }
+      } else {
+        toast.success(getSuccessToastMessage(payload));
+      }
       setImageFile(null);
       setImagePreview(null);
       setFormData({
@@ -168,9 +216,16 @@ export const VerificationSheet = ({
           <span className="text-3xl">{userChallenge.challenge?.badgeIcon || '🎯'}</span>
           <div>
             <p className="font-bold text-gray-900">{userChallenge.challenge?.title}</p>
-            <p className="text-sm text-primary-600">Day {safeDay} / 7</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-sm text-primary-600">Day {safeDay} / 7</p>
+              <span className="px-2 py-0.5 text-[11px] rounded-full bg-primary-100 text-primary-700">{getChallengeTypeLabel(userChallenge)}</span>
+            </div>
           </div>
         </div>
+
+        <p className="text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+          💡 {getVerificationGuide(userChallenge)}
+        </p>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">인증 사진 📸</label>

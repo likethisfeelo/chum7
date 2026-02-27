@@ -19,6 +19,7 @@ export const RemedyPage = () => {
     reflectionNote: '',
     todayNote: '',
     tomorrowPromise: '',
+    practiceAt: new Date().toISOString().slice(0, 16),
   });
 
   const remedyMutation = useMutation({
@@ -49,7 +50,7 @@ export const RemedyPage = () => {
       reflectionNote: formData.reflectionNote,
       todayNote: formData.todayNote,
       tomorrowPromise: formData.tomorrowPromise,
-      completedAt: new Date().toISOString(),
+      practiceAt: new Date(formData.practiceAt).toISOString(),
     });
   };
 
@@ -109,6 +110,18 @@ export const RemedyPage = () => {
             rows={4}
             required
           />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">실천 시각 (내 로컬 시간) ⏰</label>
+            <input
+              type="datetime-local"
+              value={formData.practiceAt}
+              onChange={(e) => setFormData({ ...formData, practiceAt: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">현재 시각 기준 4시간 이내만 제출할 수 있어요.</p>
+          </div>
 
           <Textarea
             label="다짐 (선택)"
