@@ -6,6 +6,8 @@ import { AdminChallengeCreatePage } from '@/pages/AdminChallengeCreatePage';
 import { AdminLoginPage } from '@/pages/AdminLoginPage';
 import { AdminMyChallengesPage } from '@/pages/AdminMyChallengesPage';
 import { AdminAllChallengesPage } from '@/pages/AdminAllChallengesPage';
+import { AdminOpsDashboardPage } from '@/pages/AdminOpsDashboardPage';
+import { AdminAuditLogsPage } from '@/pages/AdminAuditLogsPage';
 import '@/styles/index.css';
 
 const queryClient = new QueryClient({
@@ -101,6 +103,8 @@ const Sidebar = () => {
   }
 
   if (hasAnyRole(groups, ['admins', 'productowners', 'leaders', 'managers'])) {
+    nav.push({ path: '/admin/ops/dashboard', label: '📊 운영 대시보드' });
+    nav.push({ path: '/admin/audit/logs', label: '🧾 감사 로그' });
     nav.push({ path: '/admin/quests/create', label: '➕ 퀘스트 생성' });
     nav.push({ path: '/admin/quests/submissions', label: '📋 제출물 심사' });
   }
@@ -178,6 +182,29 @@ export default function App() {
           <Route
             path="/"
             element={<Navigate to={getAuthContext().authenticated ? '/admin/challenges/mine' : '/login'} replace />}
+          />
+
+
+          <Route
+            path="/admin/ops/dashboard"
+            element={
+              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
+                <Layout>
+                  <AdminOpsDashboardPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/admin/audit/logs"
+            element={
+              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
+                <Layout>
+                  <AdminAuditLogsPage />
+                </Layout>
+              </RoleRoute>
+            }
           />
 
           <Route

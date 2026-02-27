@@ -37,6 +37,12 @@ const createChallengeSchema = z.object({
   // Config
   durationDays: z.number().int().min(1).max(30).default(7),
   maxParticipants: z.number().int().min(1).optional().nullable(), // null = 무제한
+  challengeType: z.enum(['leader_only', 'personal_only', 'leader_personal', 'mixed']).default('leader_personal'),
+  layerPolicy: z.object({
+    requirePersonalGoalOnJoin: z.boolean().default(false),
+    requirePersonalTargetOnJoin: z.boolean().default(true),
+    allowExtraVisibilityToggle: z.boolean().default(true),
+  }).default({}),
 });
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
@@ -141,6 +147,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       challengeEndAt: challengeEnd.toISOString(),
       durationDays: input.durationDays,
       maxParticipants: input.maxParticipants ?? null,
+      challengeType: input.challengeType,
+      layerPolicy: {
+        requirePersonalGoalOnJoin: input.layerPolicy.requirePersonalGoalOnJoin,
+        requirePersonalTargetOnJoin: input.layerPolicy.requirePersonalTargetOnJoin,
+        allowExtraVisibilityToggle: input.layerPolicy.allowExtraVisibilityToggle,
+      },
 
       // Stats
       stats: {

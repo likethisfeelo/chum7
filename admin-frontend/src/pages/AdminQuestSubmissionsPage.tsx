@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -28,19 +28,41 @@ export const AdminQuestSubmissionsPage = () => {
   const [reviewing, setReviewing] = useState<{ id: string; action: 'approve' | 'reject' } | null>(null);
   const [reviewNote, setReviewNote] = useState('');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['admin-quest-submissions', statusFilter, questId],
     queryFn: async () => {
-      // GET /quests/my-submissions는 user용 — admin용은 status-createdAt-index 기반 pending 큐
-      // 현재 백엔드 API: GET /admin/quests/submissions?status=pending&questId=xxx (미구현, 추후 추가)
-      // 임시: admin이 quest별 제출물을 questId-createdAt-index로 조회하는 별도 API 필요
-      // 지금은 status-createdAt-index 기반 목록 API로 조회
       const params = new URLSearchParams({ status: statusFilter });
       if (questId) params.set('questId', questId);
       const res = await apiClient.get(`/admin/quests/submissions?${params}`);
       return res.data.data;
     },
     retry: false,
+  });
+
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [nextToken, setNextToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSubmissions(data?.submissions ?? []);
+    setNextToken(data?.nextToken ?? null);
+  }, [data]);
+
+  const loadMoreMutation = useMutation({
+    mutationFn: async () => {
+      if (!nextToken) return null;
+      const params = new URLSearchParams({ status: statusFilter, nextToken });
+      if (questId) params.set('questId', questId);
+      const res = await apiClient.get(`/admin/quests/submissions?${params}`);
+      return res.data.data;
+    },
+    onSuccess: (pageData) => {
+      if (!pageData) return;
+      setSubmissions((prev) => [...prev, ...(pageData.submissions ?? [])]);
+      setNextToken(pageData.nextToken ?? null);
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || '제출물을 더 불러오지 못했습니다');
+    },
   });
 
   const reviewMutation = useMutation({
@@ -60,8 +82,6 @@ export const AdminQuestSubmissionsPage = () => {
       alert(err.response?.data?.message || '처리에 실패했습니다');
     },
   });
-
-  const submissions: any[] = data?.submissions ?? [];
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -212,8 +232,8 @@ export const AdminQuestSubmissionsPage = () => {
                     <div className="flex gap-2">
                       <button
                         onClick={() => {
-                          if (reviewing?.action === 'reject' && !reviewNote.trim()) {
-                            alert('거절 사유를 입력해주세요');
+                          if (reviewing?.action === 'reject' && reviewNote.trim().length < 10) {
+                            alert('거절 사유를 10자 이상 입력해주세요');
                             return;
                           }
                           reviewMutation.mutate({
@@ -243,6 +263,17 @@ export const AdminQuestSubmissionsPage = () => {
               </div>
             );
           })}
+
+          {nextToken && (
+            <button
+              type="button"
+              onClick={() => loadMoreMutation.mutate()}
+              disabled={loadMoreMutation.isPending || isFetching}
+              className="w-full py-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 disabled:opacity-50"
+            >
+              {loadMoreMutation.isPending ? '불러오는 중...' : '제출물 더보기'}
+            </button>
+          )}
         </div>
       )}
     </div>

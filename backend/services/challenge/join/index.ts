@@ -96,6 +96,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
+
+    const challengeType = String(challenge.challengeType || 'leader_personal');
+    const layerPolicy = challenge.layerPolicy || {};
+    const defaultRequireGoal = challengeType === 'personal_only' || challengeType === 'mixed';
+    const defaultRequireTarget = challengeType !== 'leader_only';
+    const requirePersonalGoalOnJoin = layerPolicy.requirePersonalGoalOnJoin ?? defaultRequireGoal;
+    const requirePersonalTargetOnJoin = layerPolicy.requirePersonalTargetOnJoin ?? defaultRequireTarget;
+
+    if (requirePersonalGoalOnJoin && !input.personalGoal?.trim()) {
+      return response(400, { error: 'PERSONAL_GOAL_REQUIRED', message: '이 챌린지는 참여 시 개인 목표 입력이 필요합니다' });
+    }
+
+    if (requirePersonalTargetOnJoin && !input.personalTarget) {
+      return response(400, { error: 'PERSONAL_TARGET_REQUIRED', message: '이 챌린지는 참여 시 개인 목표시간 입력이 필요합니다' });
+    }
+
     // 2. 이미 참여 중인지 확인
     const existingResult = await docClient.send(new QueryCommand({
       TableName: process.env.USER_CHALLENGES_TABLE!,
@@ -189,6 +205,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         startDate,
         groupId,
         personalTarget,
+        challengeType: challenge.challengeType || 'leader_personal',
+        layerPolicy: challenge.layerPolicy || null,
       },
     });
 

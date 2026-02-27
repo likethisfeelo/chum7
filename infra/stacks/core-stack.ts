@@ -168,6 +168,12 @@ export class CoreStack extends Stack {
       sortKey: { name: 'createdAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
+    this.verificationsTable.addGlobalSecondaryIndex({
+      indexName: 'isPublic-createdAt-index',
+      partitionKey: { name: 'isPublic', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
 
     this.cheersTable = new Table(this, 'CheersTable', {
       tableName: `chme-${stage}-cheers`,
