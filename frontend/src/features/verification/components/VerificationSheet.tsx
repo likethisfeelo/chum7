@@ -20,6 +20,11 @@ function toIsoFromLocalDateTime(localDateTime: string): string {
   return parsed.toISOString();
 }
 
+function toLocalDateTimeInputValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 
 function isLikelyCorsOrPreflightError(error: any): boolean {
   const status = error?.response?.status;
@@ -55,7 +60,7 @@ export const VerificationSheet = ({
   const [formData, setFormData] = useState({
     todayNote: '',
     tomorrowPromise: '',
-    completedAt: new Date().toISOString().slice(0, 16),
+    completedAt: toLocalDateTimeInputValue(new Date()),
     verificationDate: new Date().toISOString().slice(0, 10),
   });
 
@@ -79,37 +84,42 @@ export const VerificationSheet = ({
       let imageUrl = '';
 
       if (imageFile) {
-        try {
-          const challengeId = userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
-          const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
-            fileName: imageFile.name,
-            fileType: imageFile.type,
-            challengeId,
-          });
+        const isTestWeb = typeof window !== 'undefined' && window.location.origin.includes('test.chum7.com');
+        if (isTestWeb) {
+          toast.error('현재 TEST 웹에서는 S3 업로드 CORS 설정 이슈로 이미지 업로드를 건너뜁니다. 텍스트 인증만 먼저 제출됩니다.');
+        } else {
+          try {
+            const challengeId = userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
+            const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
+              fileName: imageFile.name,
+              fileType: imageFile.type,
+              challengeId,
+            });
 
-          const uploadResp = await fetch(uploadData.data.uploadUrl, {
-            method: 'PUT',
-            body: imageFile,
-            headers: { 'Content-Type': imageFile.type },
-          });
+            const uploadResp = await fetch(uploadData.data.uploadUrl, {
+              method: 'PUT',
+              body: imageFile,
+              headers: { 'Content-Type': imageFile.type },
+            });
 
-          if (!uploadResp.ok) {
-            throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
-          }
+            if (!uploadResp.ok) {
+              throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
+            }
 
-          imageUrl = uploadData.data.fileUrl;
-        } catch (uploadError: any) {
-          if (isLikelyCorsOrPreflightError(uploadError)) {
-            toast.error('이미지 업로드가 브라우저 CORS 제한으로 실패했습니다. 이미지 없이 인증을 계속 제출합니다.');
-          } else {
-            throw uploadError;
+            imageUrl = uploadData.data.fileUrl;
+          } catch (uploadError: any) {
+            if (isLikelyCorsOrPreflightError(uploadError)) {
+              toast.error('이미지 업로드가 브라우저 CORS 제한으로 실패했습니다. 이미지 없이 인증을 계속 제출합니다.');
+            } else {
+              throw uploadError;
+            }
           }
         }
       }
 
       const response = await apiClient.post('/verifications', {
         userChallengeId: userChallenge.userChallengeId,
-        day: userChallenge.currentDay,
+        day: Math.max(1, Number(userChallenge.currentDay || 1)),
         imageUrl,
         todayNote: formData.todayNote,
         tomorrowPromise: formData.tomorrowPromise,
@@ -128,7 +138,7 @@ export const VerificationSheet = ({
       setFormData({
         todayNote: '',
         tomorrowPromise: '',
-        completedAt: new Date().toISOString().slice(0, 16),
+        completedAt: toLocalDateTimeInputValue(new Date()),
         verificationDate: new Date().toISOString().slice(0, 10),
       });
       onClose();
@@ -149,6 +159,7 @@ export const VerificationSheet = ({
   };
 
   if (!userChallenge) return null;
+  const safeDay = Math.max(1, Number(userChallenge.currentDay || 1));
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="오늘의 인증 📸">
@@ -157,7 +168,7 @@ export const VerificationSheet = ({
           <span className="text-3xl">{userChallenge.challenge?.badgeIcon || '🎯'}</span>
           <div>
             <p className="font-bold text-gray-900">{userChallenge.challenge?.title}</p>
-            <p className="text-sm text-primary-600">Day {userChallenge.currentDay} / 7</p>
+            <p className="text-sm text-primary-600">Day {safeDay} / 7</p>
           </div>
         </div>
 
@@ -211,7 +222,7 @@ export const VerificationSheet = ({
             type="datetime-local"
             value={formData.completedAt}
             onChange={(e) => setFormData({ ...formData, completedAt: e.target.value })}
-            max={new Date().toISOString().slice(0, 16)}
+            max={toLocalDateTimeInputValue(new Date())}
             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
