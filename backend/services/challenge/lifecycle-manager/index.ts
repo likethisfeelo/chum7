@@ -251,6 +251,45 @@ async function expirePendingProposals(challenge: any): Promise<void> {
   }
 }
 
+
+async function expirePendingProposals(challenge: any): Promise<void> {
+  if (!challenge.personalQuestEnabled || challenge.personalQuestAutoApprove) return;
+
+  const targetStatuses = ['pending', 'revision_pending', 'rejected'];
+  for (const targetStatus of targetStatuses) {
+    let lastKey: any = undefined;
+    do {
+      const result: any = await docClient.send(new QueryCommand({
+        TableName: PERSONAL_QUEST_PROPOSALS_TABLE,
+        IndexName: 'challengeId-status-index',
+        KeyConditionExpression: 'challengeId = :cid AND #status = :status',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':cid': challenge.challengeId, ':status': targetStatus },
+        ExclusiveStartKey: lastKey,
+      }));
+
+      for (const proposal of result.Items ?? []) {
+      await docClient.send(new UpdateCommand({
+        TableName: PERSONAL_QUEST_PROPOSALS_TABLE,
+        Key: { proposalId: proposal.proposalId },
+        UpdateExpression: 'SET #status = :expired, updatedAt = :now',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':expired': 'expired', ':now': new Date().toISOString() },
+      }));
+      await docClient.send(new UpdateCommand({
+        TableName: USER_CHALLENGES_TABLE,
+        Key: { userChallengeId: proposal.userChallengeId },
+        UpdateExpression: 'SET #status = :status, updatedAt = :now',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':status': 'disqualified', ':now': new Date().toISOString() },
+      }));
+    }
+
+      lastKey = result.LastEvaluatedKey;
+    } while (lastKey);
+  }
+}
+
 export const handler = async (): Promise<void> => {
   const now = new Date().toISOString();
   console.log(`[lifecycle-manager] Running at ${now}`);

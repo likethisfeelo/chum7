@@ -195,7 +195,6 @@ export class ChallengeStack extends Stack {
     challengesTable.grantReadWriteData(lifecycleManagerFn);
     userChallengesTable.grantReadWriteData(lifecycleManagerFn);
     personalQuestProposalsTable.grantReadWriteData(lifecycleManagerFn);
-    notificationsTable.grantReadWriteData(lifecycleManagerFn);
 
     new Rule(this, 'LifecycleManagerRule', {
       // 매 1시간 실행 (운영환경에서는 더 짧게 조정 가능)

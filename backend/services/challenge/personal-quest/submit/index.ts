@@ -48,10 +48,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const items = existing.Items || [];
     if (items.some((p: any) => p.status === 'approved')) return response(409, { error: 'ALREADY_APPROVED', message: '이미 승인된 개인 퀘스트가 있습니다' });
 
-    const latest = [...items].sort((a: any, b: any) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))[0];
-    if (latest?.status === 'expired' || ((latest?.status === 'rejected') && Number(latest?.revisionCount || 0) >= 2)) {
-      return response(409, { error: 'PROPOSAL_EXPIRED', message: '수정 가능 횟수를 초과했습니다' });
-    }
+    const rejectedCount = items.filter((p: any) => p.status === 'rejected').length;
+    if (rejectedCount > 2) return response(409, { error: 'PROPOSAL_EXPIRED', message: '수정 가능 횟수를 초과했습니다' });
 
     const proposalId = uuidv4();
     const now = new Date().toISOString();
