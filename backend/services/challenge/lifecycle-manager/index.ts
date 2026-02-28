@@ -23,6 +23,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const CHALLENGES_TABLE = process.env.CHALLENGES_TABLE!;
 const USER_CHALLENGES_TABLE = process.env.USER_CHALLENGES_TABLE!;
+const PERSONAL_QUEST_PROPOSALS_TABLE = process.env.PERSONAL_QUEST_PROPOSALS_TABLE!;
 
 type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
 
@@ -153,6 +154,45 @@ async function finalizeUserChallenges(challengeId: string, durationDays: number)
   } while (lastKey);
 }
 
+
+async function expirePendingProposals(challenge: any): Promise<void> {
+  if (!challenge.personalQuestEnabled || challenge.personalQuestAutoApprove) return;
+
+  const targetStatuses = ['pending', 'revision_pending', 'rejected'];
+  for (const targetStatus of targetStatuses) {
+    let lastKey: any = undefined;
+    do {
+      const result: any = await docClient.send(new QueryCommand({
+        TableName: PERSONAL_QUEST_PROPOSALS_TABLE,
+        IndexName: 'challengeId-status-index',
+        KeyConditionExpression: 'challengeId = :cid AND #status = :status',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':cid': challenge.challengeId, ':status': targetStatus },
+        ExclusiveStartKey: lastKey,
+      }));
+
+      for (const proposal of result.Items ?? []) {
+      await docClient.send(new UpdateCommand({
+        TableName: PERSONAL_QUEST_PROPOSALS_TABLE,
+        Key: { proposalId: proposal.proposalId },
+        UpdateExpression: 'SET #status = :expired, updatedAt = :now',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':expired': 'expired', ':now': new Date().toISOString() },
+      }));
+      await docClient.send(new UpdateCommand({
+        TableName: USER_CHALLENGES_TABLE,
+        Key: { userChallengeId: proposal.userChallengeId },
+        UpdateExpression: 'SET #status = :status, updatedAt = :now',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':status': 'disqualified', ':now': new Date().toISOString() },
+      }));
+    }
+
+      lastKey = result.LastEvaluatedKey;
+    } while (lastKey);
+  }
+}
+
 export const handler = async (): Promise<void> => {
   const now = new Date().toISOString();
   console.log(`[lifecycle-manager] Running at ${now}`);
@@ -170,6 +210,7 @@ export const handler = async (): Promise<void> => {
 
         // 전환 후 side effect 처리
         if (rule.from === 'preparing' && rule.to === 'active') {
+          await expirePendingProposals(challenge);
           await activateUserChallenges(challenge.challengeId);
         }
         if (rule.from === 'active' && rule.to === 'completed') {

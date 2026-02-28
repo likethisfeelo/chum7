@@ -16,18 +16,22 @@ interface ChallengeStackProps extends StackProps {
   authorizer: HttpJwtAuthorizer;
   challengesTable: Table;
   userChallengesTable: Table;
+  personalQuestProposalsTable: Table;
+  notificationsTable: Table;
 }
 
 export class ChallengeStack extends Stack {
   constructor(scope: Construct, id: string, props: ChallengeStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable } = props;
+    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable, personalQuestProposalsTable, notificationsTable } = props;
 
     const commonEnv = {
       STAGE: stage,
       CHALLENGES_TABLE: challengesTable.tableName,
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
+      PERSONAL_QUEST_PROPOSALS_TABLE: personalQuestProposalsTable.tableName,
+      NOTIFICATIONS_TABLE: notificationsTable.tableName,
     };
 
     const commonProps = {
@@ -121,6 +125,63 @@ export class ChallengeStack extends Stack {
       integration: new HttpLambdaIntegration('ChallengeStatsIntegration', statsFn),
     });
 
+
+    const personalQuestSubmitFn = new NodejsFunction(this, 'PersonalQuestSubmitFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-personal-quest-submit`,
+      entry: path.join(__dirname, '../../backend/services/challenge/personal-quest/submit/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadData(personalQuestSubmitFn);
+    userChallengesTable.grantReadData(personalQuestSubmitFn);
+    personalQuestProposalsTable.grantReadWriteData(personalQuestSubmitFn);
+    notificationsTable.grantReadWriteData(personalQuestSubmitFn);
+    apiGateway.addRoutes({ path: '/challenges/{challengeId}/personal-quest', methods: [HttpMethod.POST], integration: new HttpLambdaIntegration('PersonalQuestSubmitIntegration', personalQuestSubmitFn), authorizer });
+
+
+    const personalQuestMyFn = new NodejsFunction(this, 'PersonalQuestMyFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-personal-quest-my`,
+      entry: path.join(__dirname, '../../backend/services/challenge/personal-quest/my/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    personalQuestProposalsTable.grantReadData(personalQuestMyFn);
+    apiGateway.addRoutes({ path: '/challenges/{challengeId}/personal-quest', methods: [HttpMethod.GET], integration: new HttpLambdaIntegration('PersonalQuestMyIntegration', personalQuestMyFn), authorizer });
+
+    const personalQuestReviseFn = new NodejsFunction(this, 'PersonalQuestReviseFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-personal-quest-revise`,
+      entry: path.join(__dirname, '../../backend/services/challenge/personal-quest/revise/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    personalQuestProposalsTable.grantReadWriteData(personalQuestReviseFn);
+    challengesTable.grantReadData(personalQuestReviseFn);
+    notificationsTable.grantReadWriteData(personalQuestReviseFn);
+    apiGateway.addRoutes({ path: '/challenges/{challengeId}/personal-quest/{proposalId}', methods: [HttpMethod.PUT], integration: new HttpLambdaIntegration('PersonalQuestReviseIntegration', personalQuestReviseFn), authorizer });
+
+    const myNotificationsFn = new NodejsFunction(this, 'NotificationListFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-notification-list`,
+      entry: path.join(__dirname, '../../backend/services/notification/list/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    notificationsTable.grantReadData(myNotificationsFn);
+    apiGateway.addRoutes({ path: '/users/me/notifications', methods: [HttpMethod.GET], integration: new HttpLambdaIntegration('NotificationListIntegration', myNotificationsFn), authorizer });
+
+    const markReadFn = new NodejsFunction(this, 'NotificationMarkReadFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-notification-mark-read`,
+      entry: path.join(__dirname, '../../backend/services/notification/mark-read/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    notificationsTable.grantReadWriteData(markReadFn);
+    apiGateway.addRoutes({ path: '/users/me/notifications/{notificationId}/read', methods: [HttpMethod.PATCH], integration: new HttpLambdaIntegration('NotificationMarkReadIntegration', markReadFn), authorizer });
+
     // 6. Lifecycle Manager (EventBridge - 매 1시간 자동 실행)
     const lifecycleManagerFn = new NodejsFunction(this, 'LifecycleManagerFn', {
       ...commonProps,
@@ -133,6 +194,7 @@ export class ChallengeStack extends Stack {
     });
     challengesTable.grantReadWriteData(lifecycleManagerFn);
     userChallengesTable.grantReadWriteData(lifecycleManagerFn);
+    personalQuestProposalsTable.grantReadWriteData(lifecycleManagerFn);
 
     new Rule(this, 'LifecycleManagerRule', {
       // 매 1시간 실행 (운영환경에서는 더 짧게 조정 가능)
