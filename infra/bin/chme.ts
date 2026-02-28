@@ -56,6 +56,8 @@ new ChallengeStack(app, `chme-${stage}-challenge`, {
   authorizer: apiStack.cognitoAuthorizer,
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
+  personalQuestProposalsTable: coreStack.personalQuestProposalsTable,
+  notificationsTable: coreStack.notificationsTable,
 });
 
 new VerificationStack(app, `chme-${stage}-verification`, {
@@ -90,6 +92,8 @@ new AdminStack(app, `chme-${stage}-admin`, {
   userChallengesTable: coreStack.userChallengesTable,
   questSubmissionsTable: coreStack.questSubmissionsTable,
   verificationsTable: coreStack.verificationsTable,
+  personalQuestProposalsTable: coreStack.personalQuestProposalsTable,
+  notificationsTable: coreStack.notificationsTable,
 });
 
 new QuestStack(app, `chme-${stage}-quest`, {
@@ -113,6 +117,8 @@ new BulletinStack(app, `chme-${stage}-bulletin`, {
   bulletinLikesTable: coreStack.bulletinLikesTable,
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
+  personalQuestProposalsTable: coreStack.personalQuestProposalsTable,
+  notificationsTable: coreStack.notificationsTable,
 });
 
 new FrontendStack(app, `chme-${stage}-frontend`, {

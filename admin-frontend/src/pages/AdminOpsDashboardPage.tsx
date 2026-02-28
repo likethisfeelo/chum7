@@ -12,6 +12,17 @@ export const AdminOpsDashboardPage = () => {
     },
   });
 
+
+  const { data: notifications } = useQuery({
+    queryKey: ['admin-notification-unread-count'],
+    queryFn: async () => {
+      const res = await apiClient.get('/users/me/notifications');
+      return res.data.data || [];
+    },
+    refetchInterval: 30000,
+  });
+  const unreadCount = Array.isArray(notifications) ? notifications.filter((n: any) => !n.isRead).length : 0;
+
   if (isLoading) {
     return <div className="p-6 text-gray-500">운영 지표를 불러오는 중...</div>;
   }
@@ -60,6 +71,13 @@ export const AdminOpsDashboardPage = () => {
             className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700"
           >
             감사 로그 보기
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/admin/notifications')}
+            className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700"
+          >
+            알림함 {unreadCount > 0 ? `(${unreadCount})` : ''}
           </button>
           <button
             type="button"

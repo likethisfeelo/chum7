@@ -117,7 +117,7 @@ export const FeedPage = () => {
                     {verification.isAnonymous ? '익명의 챌린저' : verification.userName}
                   </p>
                   <p className="text-sm text-gray-500">
-                    Day {verification.day} · {format(new Date(verification.createdAt), 'HH:mm', { locale: ko })}
+                    Day {verification.day} · {format(new Date(verification.practiceAt || verification.performedAt || verification.createdAt), 'M월 d일 · HH:mm 실천', { locale: ko })}
                   </p>
                   {verification.isExtra && (
                     <span className="inline-flex items-center mt-1 px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">

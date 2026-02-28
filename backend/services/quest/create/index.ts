@@ -29,6 +29,12 @@ const verificationConfigSchema = z.object({
   maxChars: z.number().int().min(1).max(2000).optional(),         // text
 }).default({});
 
+const remedyPolicySchema = z.object({
+  type: z.enum(['strict', 'limited', 'open']).default('open'),
+  maxRemedyDays: z.number().int().min(1).max(2).nullable().default(null),
+  allowBulk: z.boolean().nullable().default(null),
+}).default({ type: 'open', maxRemedyDays: null, allowBulk: null });
+
 const createQuestSchema = z.object({
   title: z.string().min(1).max(100),
   description: z.string().min(1).max(1000),
@@ -45,6 +51,10 @@ const createQuestSchema = z.object({
   questLayer: z.enum(['A', 'B', 'D']).optional().default('A'),
   questScope: z.enum(['leader', 'personal', 'mixed']).optional().default('leader'),
   requireOnJoinInput: z.boolean().optional().default(false),
+  remedyPolicy: remedyPolicySchema,
+  startDay: z.number().int().min(1).max(7).nullable().optional().default(null),
+  endDay: z.number().int().min(1).max(7).nullable().optional().default(null),
+  revealAt: z.string().datetime().nullable().optional().default(null),
 });
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
@@ -135,6 +145,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       questLayer: input.questLayer,
       questScope: input.questScope,
       requireOnJoinInput: input.requireOnJoinInput,
+      remedyPolicy: input.remedyPolicy,
+      startDay: input.startDay,
+      endDay: input.endDay,
+      revealAt: input.revealAt,
       status: 'active',
       submissionCount: 0,
       approvedCount: 0,

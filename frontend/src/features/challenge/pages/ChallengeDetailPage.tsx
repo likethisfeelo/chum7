@@ -18,6 +18,9 @@ export const ChallengeDetailPage = () => {
   const [minute, setMinute] = useState(0);
   const [meridiem, setMeridiem] = useState<'AM' | 'PM'>('AM');
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Seoul';
+  const [personalQuestTitle, setPersonalQuestTitle] = useState('');
+  const [personalQuestDescription, setPersonalQuestDescription] = useState('');
+  const [personalQuestVerificationType, setPersonalQuestVerificationType] = useState<'image'|'text'|'link'|'video'>('image');
 
 
   const { data: challenge, isLoading } = useQuery({
@@ -80,7 +83,20 @@ export const ChallengeDetailPage = () => {
       const response = await apiClient.post(`/challenges/${challengeId}/join`, payload);
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: async (result) => {
+      const userChallengeId = result?.data?.userChallengeId;
+      if (challenge?.personalQuestEnabled && personalQuestTitle.trim() && userChallengeId) {
+        try {
+          await apiClient.post(`/challenges/${challengeId}/personal-quest`, {
+            userChallengeId,
+            title: personalQuestTitle.trim(),
+            description: personalQuestDescription.trim(),
+            verificationType: personalQuestVerificationType,
+          });
+        } catch (e: any) {
+          toast.error(e?.response?.data?.message || '개인 퀘스트 제안 제출에 실패했습니다');
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
       toast.success('챌린지 참여 완료! 오늘부터 시작하세요 🎉');
       navigate('/me');
@@ -251,6 +267,34 @@ export const ChallengeDetailPage = () => {
             className="w-full px-4 py-3 border border-gray-300 rounded-xl"
           />
         </div>
+
+
+        {challenge?.personalQuestEnabled && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6 space-y-3">
+            <h3 className="text-base font-bold text-gray-900">📝 개인 퀘스트 등록 (선택)</h3>
+            <p className="text-sm text-gray-500">챌린지 주제에 맞는 나만의 퀘스트를 등록하세요</p>
+            <input
+              value={personalQuestTitle}
+              onChange={(e) => setPersonalQuestTitle(e.target.value)}
+              placeholder="퀘스트 제목"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl"
+            />
+            <input
+              value={personalQuestDescription}
+              onChange={(e) => setPersonalQuestDescription(e.target.value)}
+              placeholder="설명 (선택)"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl"
+            />
+            <div className="flex gap-2">
+              {(['image','text','link','video'] as const).map((v) => (
+                <button key={v} type="button" onClick={() => setPersonalQuestVerificationType(v)} className={`px-3 py-1.5 rounded-lg text-sm ${personalQuestVerificationType===v ? 'bg-primary-600 text-white':'bg-gray-100 text-gray-700'}`}>
+                  {v}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500">{challenge?.personalQuestAutoApprove ? '✅ 자동 승인됩니다' : '⏳ 리더 검토가 필요합니다'}</p>
+          </div>
+        )}
 
         <p className="text-sm text-gray-600 mb-3">상태: <span className="font-semibold">{lifecycle}</span> · {lifecycleHintMap[lifecycle] ?? '참여 가능 상태를 확인해주세요.'}</p>
         {alreadyJoined && (

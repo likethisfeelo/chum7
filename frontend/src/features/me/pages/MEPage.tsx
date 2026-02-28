@@ -47,6 +47,7 @@ export const MEPage = () => {
   const [isBulkPublishing, setIsBulkPublishing] = useState(false);
   const [selectedExtraIds, setSelectedExtraIds] = useState<string[]>([]);
   const [failedPublishIds, setFailedPublishIds] = useState<string[]>([]);
+  const [proposalFormByChallenge, setProposalFormByChallenge] = useState<Record<string, { title: string; description: string; verificationType: 'image' | 'text' | 'link' | 'video' }>>({});
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -58,6 +59,47 @@ export const MEPage = () => {
   });
 
   const challenges = data?.challenges || [];
+
+
+  const personalQuestTargetChallenges = useMemo(
+    () => challenges.filter((challenge: any) => Boolean(challenge?.challenge?.personalQuestEnabled)),
+    [challenges],
+  );
+
+  const { data: personalQuestProposalMap, refetch: refetchPersonalQuestProposals } = useQuery({
+    queryKey: ['my-personal-quest-proposals', personalQuestTargetChallenges.map((c: any) => c.challengeId).join(',')],
+    enabled: personalQuestTargetChallenges.length > 0,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        personalQuestTargetChallenges.map(async (challenge: any) => {
+          const response = await apiClient.get(`/challenges/${challenge.challengeId}/personal-quest`);
+          return [challenge.challengeId, response.data?.data?.latestProposal || null] as const;
+        }),
+      );
+      return Object.fromEntries(entries) as Record<string, any>;
+    },
+  });
+
+  const revisePersonalQuestMutation = useMutation({
+    mutationFn: async ({ challengeId, proposalId }: { challengeId: string; proposalId: string }) => {
+      const form = proposalFormByChallenge[challengeId];
+      if (!form?.title?.trim()) {
+        throw new Error('퀘스트 제목을 입력해주세요');
+      }
+      await apiClient.put(`/challenges/${challengeId}/personal-quest/${proposalId}`, {
+        title: form.title.trim(),
+        description: form.description?.trim() || '',
+        verificationType: form.verificationType,
+      });
+    },
+    onSuccess: async () => {
+      toast.success('수정 재제출이 완료되었습니다 🔄');
+      await refetchPersonalQuestProposals();
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || error?.message || '수정 재제출에 실패했습니다');
+    },
+  });
 
   const { data: myExtraFeedPage, isFetching: isFetchingExtra } = useQuery({
     queryKey: ['verifications', 'mine-extra'],
@@ -225,6 +267,16 @@ export const MEPage = () => {
     [challenges],
   );
 
+
+  const getProposalStatusMeta = (status?: string) => {
+    const key = String(status || 'pending');
+    if (key === 'approved') return { label: '승인됨', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
+    if (key === 'rejected') return { label: '수정 필요', color: 'text-rose-700 bg-rose-50 border-rose-200' };
+    if (key === 'revision_pending') return { label: '재심사 대기', color: 'text-indigo-700 bg-indigo-50 border-indigo-200' };
+    if (key === 'expired') return { label: '기간 만료', color: 'text-gray-700 bg-gray-100 border-gray-200' };
+    return { label: '검토중', color: 'text-amber-700 bg-amber-50 border-amber-200' };
+  };
+
   const handleVerify = (challenge: any) => {
     setSelectedChallenge(challenge);
     setShowVerification(true);
@@ -356,6 +408,56 @@ export const MEPage = () => {
                         <p className="text-xs text-amber-700">
                           시작일: {challenge.startDate || '-'} · 상태: {statusLabel}
                         </p>
+                        {challenge.challenge?.personalQuestEnabled && (() => {
+                          const proposal = personalQuestProposalMap?.[challenge.challengeId];
+                          const statusMeta = getProposalStatusMeta(proposal?.status);
+                          const currentForm = proposalFormByChallenge[challenge.challengeId] || {
+                            title: proposal?.title || '',
+                            description: proposal?.description || '',
+                            verificationType: (proposal?.verificationType || 'image') as 'image' | 'text' | 'link' | 'video',
+                          };
+                          return (
+                            <div className="rounded-lg border border-amber-200 bg-white p-3 space-y-2">
+                              <p className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${statusMeta.color}`}>개인 퀘스트: {statusMeta.label}</p>
+                              <p className="text-xs text-gray-700">{proposal?.title || '아직 제출한 개인 퀘스트가 없습니다.'}</p>
+                              {proposal?.leaderFeedback && <p className="text-xs text-rose-700">피드백: {proposal.leaderFeedback}</p>}
+                              {proposal?.status === 'rejected' && (
+                                <div className="space-y-2">
+                                  <input
+                                    value={currentForm.title}
+                                    onChange={(e) => setProposalFormByChallenge((prev) => ({ ...prev, [challenge.challengeId]: { ...currentForm, title: e.target.value } }))}
+                                    placeholder="퀘스트 제목"
+                                    className="w-full px-2.5 py-2 text-xs border border-gray-300 rounded-lg"
+                                  />
+                                  <input
+                                    value={currentForm.description}
+                                    onChange={(e) => setProposalFormByChallenge((prev) => ({ ...prev, [challenge.challengeId]: { ...currentForm, description: e.target.value } }))}
+                                    placeholder="설명"
+                                    className="w-full px-2.5 py-2 text-xs border border-gray-300 rounded-lg"
+                                  />
+                                  <select
+                                    value={currentForm.verificationType}
+                                    onChange={(e) => setProposalFormByChallenge((prev) => ({ ...prev, [challenge.challengeId]: { ...currentForm, verificationType: e.target.value as 'image' | 'text' | 'link' | 'video' } }))}
+                                    className="w-full px-2.5 py-2 text-xs border border-gray-300 rounded-lg"
+                                  >
+                                    <option value="image">사진</option>
+                                    <option value="text">텍스트</option>
+                                    <option value="link">링크</option>
+                                    <option value="video">영상</option>
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => revisePersonalQuestMutation.mutate({ challengeId: challenge.challengeId, proposalId: proposal.proposalId })}
+                                    className="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white"
+                                    disabled={revisePersonalQuestMutation.isPending}
+                                  >
+                                    {revisePersonalQuestMutation.isPending ? '재제출 중...' : '수정하기'}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         <div className="flex gap-2">
                           <button
                             type="button"

@@ -17,6 +17,8 @@ interface AdminStackProps extends StackProps {
   userChallengesTable: Table;
   questSubmissionsTable: Table;
   verificationsTable: Table;
+  personalQuestProposalsTable: Table;
+  notificationsTable: Table;
 }
 
 export class AdminStack extends Stack {
@@ -32,6 +34,8 @@ export class AdminStack extends Stack {
       userChallengesTable,
       questSubmissionsTable,
       verificationsTable,
+      personalQuestProposalsTable,
+      notificationsTable,
     } = props;
 
     const commonEnv = {
@@ -41,6 +45,8 @@ export class AdminStack extends Stack {
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
       QUEST_SUBMISSIONS_TABLE: questSubmissionsTable.tableName,
       VERIFICATIONS_TABLE: verificationsTable.tableName,
+      PERSONAL_QUEST_PROPOSALS_TABLE: personalQuestProposalsTable.tableName,
+      NOTIFICATIONS_TABLE: notificationsTable.tableName,
     };
 
     const commonProps = {
@@ -206,6 +212,38 @@ export class AdminStack extends Stack {
       path: '/admin/audit/logs',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('AdminAuditLogsIntegration', auditLogsFn),
+      authorizer,
+    });
+
+
+    const personalQuestReviewFn = new NodejsFunction(this, 'PersonalQuestReviewFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-personal-quest-review`,
+      entry: path.join(__dirname, '../../backend/services/admin/personal-quest/review/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    personalQuestProposalsTable.grantReadWriteData(personalQuestReviewFn);
+    notificationsTable.grantReadWriteData(personalQuestReviewFn);
+    apiGateway.addRoutes({
+      path: '/admin/personal-quest-proposals/{proposalId}/review',
+      methods: [HttpMethod.PUT],
+      integration: new HttpLambdaIntegration('AdminPersonalQuestReviewIntegration', personalQuestReviewFn),
+      authorizer,
+    });
+
+    const personalQuestListFn = new NodejsFunction(this, 'PersonalQuestListFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-personal-quest-list`,
+      entry: path.join(__dirname, '../../backend/services/admin/personal-quest/list/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    personalQuestProposalsTable.grantReadData(personalQuestListFn);
+    apiGateway.addRoutes({
+      path: '/admin/challenges/{challengeId}/personal-quest-proposals',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminPersonalQuestListIntegration', personalQuestListFn),
       authorizer,
     });
   }
