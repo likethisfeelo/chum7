@@ -58,6 +58,7 @@ new ChallengeStack(app, `chme-${stage}-challenge`, {
   userChallengesTable: coreStack.userChallengesTable,
   personalQuestProposalsTable: coreStack.personalQuestProposalsTable,
   notificationsTable: coreStack.notificationsTable,
+
 });
 
 new VerificationStack(app, `chme-${stage}-verification`, {
@@ -117,8 +118,6 @@ new BulletinStack(app, `chme-${stage}-bulletin`, {
   bulletinLikesTable: coreStack.bulletinLikesTable,
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
-  personalQuestProposalsTable: coreStack.personalQuestProposalsTable,
-  notificationsTable: coreStack.notificationsTable,
 });
 
 new FrontendStack(app, `chme-${stage}-frontend`, {

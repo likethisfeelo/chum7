@@ -27,6 +27,8 @@ interface BulletinStackProps extends StackProps {
   bulletinLikesTable: Table;
   challengesTable: Table;
   userChallengesTable: Table;
+  personalQuestProposalsTable?: Table;
+  notificationsTable?: Table;
 }
 
 export class BulletinStack extends Stack {
