@@ -31,6 +31,17 @@ function toTime24(hour12: number, minute: number, meridiem: 'AM' | 'PM'): string
   return `${hh}:${mm}`;
 }
 
+
+function getProposalDeadline(challengeStartAt?: string): string | null {
+  if (!challengeStartAt) return null;
+  const start = new Date(challengeStartAt);
+  if (Number.isNaN(start.getTime())) return null;
+  const d = new Date(start);
+  d.setDate(d.getDate() - 1);
+  d.setHours(23, 59, 0, 0);
+  return d.toISOString();
+}
+
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
     statusCode,
@@ -147,6 +158,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         }
       : null;
 
+    const remedyPolicy = challenge.defaultRemedyPolicy || { type: 'open', maxRemedyDays: null, allowBulk: null };
+    const proposalDeadline = getProposalDeadline(challenge.challengeStartAt);
+
     const userChallenge = {
       userChallengeId,
       userId,
@@ -166,6 +180,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       personalGoal: input.personalGoal ?? null,
       personalTarget,
       consecutiveDays: 0,
+      remedyPolicy,
       createdAt: now,
       updatedAt: now,
     };
@@ -207,6 +222,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         personalTarget,
         challengeType: challenge.challengeType || 'leader_personal',
         layerPolicy: challenge.layerPolicy || null,
+        proposalDeadline,
+        personalQuestAutoApprove: challenge.personalQuestAutoApprove ?? true,
       },
     });
 
