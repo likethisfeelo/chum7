@@ -117,6 +117,8 @@ new BulletinStack(app, `chme-${stage}-bulletin`, {
   bulletinLikesTable: coreStack.bulletinLikesTable,
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
+  personalQuestProposalsTable: coreStack.personalQuestProposalsTable,
+  notificationsTable: coreStack.notificationsTable,
 });
 
 new FrontendStack(app, `chme-${stage}-frontend`, {

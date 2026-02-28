@@ -17,6 +17,7 @@
  */
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { sendNotification } from '../../../shared/lib/notification';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -110,8 +111,9 @@ async function activateUserChallenges(challengeId: string): Promise<void> {
     );
     await Promise.all(updates);
 
-    lastKey = result.LastEvaluatedKey;
-  } while (lastKey);
+      lastKey = result.LastEvaluatedKey;
+    } while (lastKey);
+  }
 }
 
 async function finalizeUserChallenges(challengeId: string, durationDays: number): Promise<void> {
@@ -150,8 +152,103 @@ async function finalizeUserChallenges(challengeId: string, durationDays: number)
     });
     await Promise.all(updates);
 
-    lastKey = result.LastEvaluatedKey;
-  } while (lastKey);
+      lastKey = result.LastEvaluatedKey;
+    } while (lastKey);
+  }
+}
+
+
+async function expirePendingProposals(challenge: any): Promise<void> {
+  if (!challenge.personalQuestEnabled || challenge.personalQuestAutoApprove) return;
+
+  const targetStatuses = ['pending', 'revision_pending', 'rejected'];
+  for (const targetStatus of targetStatuses) {
+    let lastKey: any = undefined;
+    do {
+      const result: any = await docClient.send(new QueryCommand({
+        TableName: PERSONAL_QUEST_PROPOSALS_TABLE,
+        IndexName: 'challengeId-status-index',
+        KeyConditionExpression: 'challengeId = :cid AND #status = :status',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':cid': challenge.challengeId, ':status': targetStatus },
+        ExclusiveStartKey: lastKey,
+      }));
+
+      for (const proposal of result.Items ?? []) {
+      await docClient.send(new UpdateCommand({
+        TableName: PERSONAL_QUEST_PROPOSALS_TABLE,
+        Key: { proposalId: proposal.proposalId },
+        UpdateExpression: 'SET #status = :expired, updatedAt = :now',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':expired': 'expired', ':now': new Date().toISOString() },
+      }));
+      await docClient.send(new UpdateCommand({
+        TableName: USER_CHALLENGES_TABLE,
+        Key: { userChallengeId: proposal.userChallengeId },
+        UpdateExpression: 'SET #status = :status, updatedAt = :now',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':status': 'disqualified', ':now': new Date().toISOString() },
+      }));
+      await sendNotification({
+        recipientId: proposal.userId,
+        type: 'quest_proposal_expired',
+        title: '개인 퀘스트 없이 챌린지가 시작돼요',
+        body: '리더 피드백 반영 기간이 지나 개인 퀘스트 제안이 만료됐어요. 리더 퀘스트에 집중해보세요!',
+        relatedId: proposal.proposalId,
+        relatedType: 'personal_quest_proposal',
+      });
+    }
+
+      lastKey = result.LastEvaluatedKey;
+    } while (lastKey);
+  }
+}
+
+
+async function expirePendingProposals(challenge: any): Promise<void> {
+  if (!challenge.personalQuestEnabled || challenge.personalQuestAutoApprove) return;
+
+  const targetStatuses = ['pending', 'revision_pending', 'rejected'];
+  for (const targetStatus of targetStatuses) {
+    let lastKey: any = undefined;
+    do {
+      const result: any = await docClient.send(new QueryCommand({
+        TableName: PERSONAL_QUEST_PROPOSALS_TABLE,
+        IndexName: 'challengeId-status-index',
+        KeyConditionExpression: 'challengeId = :cid AND #status = :status',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':cid': challenge.challengeId, ':status': targetStatus },
+        ExclusiveStartKey: lastKey,
+      }));
+
+      for (const proposal of result.Items ?? []) {
+      await docClient.send(new UpdateCommand({
+        TableName: PERSONAL_QUEST_PROPOSALS_TABLE,
+        Key: { proposalId: proposal.proposalId },
+        UpdateExpression: 'SET #status = :expired, updatedAt = :now',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':expired': 'expired', ':now': new Date().toISOString() },
+      }));
+      await docClient.send(new UpdateCommand({
+        TableName: USER_CHALLENGES_TABLE,
+        Key: { userChallengeId: proposal.userChallengeId },
+        UpdateExpression: 'SET #status = :status, updatedAt = :now',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':status': 'disqualified', ':now': new Date().toISOString() },
+      }));
+      await sendNotification({
+        recipientId: proposal.userId,
+        type: 'quest_proposal_expired',
+        title: '개인 퀘스트 없이 챌린지가 시작돼요',
+        body: '리더 피드백 반영 기간이 지나 개인 퀘스트 제안이 만료됐어요. 리더 퀘스트에 집중해보세요!',
+        relatedId: proposal.proposalId,
+        relatedType: 'personal_quest_proposal',
+      });
+    }
+
+      lastKey = result.LastEvaluatedKey;
+    } while (lastKey);
+  }
 }
 
 
