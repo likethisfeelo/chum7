@@ -43,6 +43,13 @@ const createChallengeSchema = z.object({
     requirePersonalTargetOnJoin: z.boolean().default(true),
     allowExtraVisibilityToggle: z.boolean().default(true),
   }).default({}),
+  defaultRemedyPolicy: z.object({
+    type: z.enum(['strict', 'limited', 'open']).default('open'),
+    maxRemedyDays: z.number().int().min(1).max(2).nullable().default(null),
+    allowBulk: z.boolean().nullable().default(null),
+  }).default({ type: 'open', maxRemedyDays: null, allowBulk: null }),
+  personalQuestEnabled: z.boolean().default(false),
+  personalQuestAutoApprove: z.boolean().default(true),
 });
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
@@ -153,6 +160,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         requirePersonalTargetOnJoin: input.layerPolicy.requirePersonalTargetOnJoin,
         allowExtraVisibilityToggle: input.layerPolicy.allowExtraVisibilityToggle,
       },
+      defaultRemedyPolicy: input.defaultRemedyPolicy,
+      personalQuestEnabled: input.personalQuestEnabled,
+      personalQuestAutoApprove: input.personalQuestAutoApprove,
 
       // Stats
       stats: {

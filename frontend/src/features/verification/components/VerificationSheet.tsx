@@ -89,7 +89,6 @@ export const VerificationSheet = ({
     todayNote: '',
     tomorrowPromise: '',
     completedAt: toLocalDateTimeInputValue(new Date()),
-    verificationDate: new Date().toISOString().slice(0, 10),
   });
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,7 +151,6 @@ export const VerificationSheet = ({
         todayNote: formData.todayNote,
         tomorrowPromise: formData.tomorrowPromise,
         performedAt: toIsoFromLocalDateTime(formData.completedAt),
-        verificationDate: formData.verificationDate || new Date().toISOString().slice(0, 10),
         isPublic: true,
         isAnonymous: true,
       });
@@ -187,7 +185,6 @@ export const VerificationSheet = ({
         todayNote: '',
         tomorrowPromise: '',
         completedAt: toLocalDateTimeInputValue(new Date()),
-        verificationDate: new Date().toISOString().slice(0, 10),
       });
       onClose();
       if (onSuccess) onSuccess(data);
@@ -259,20 +256,9 @@ export const VerificationSheet = ({
             className="hidden"
           />
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">인증 기준일 📅</label>
-          <input
-            type="date"
-            value={formData.verificationDate}
-            onChange={(e) => setFormData({ ...formData, verificationDate: e.target.value })}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">실천 시간 ⏰</label>
-          <p className="text-xs text-gray-500 mb-2">실제로 실천한 시간을 기록해주세요. 기본값은 현재 시각이며 필요 시 수정할 수 있어요.</p>
+          <label className="block text-sm font-medium text-gray-700 mb-2">실천한 시간 ⏰</label>
+          <p className="text-xs text-gray-500 mb-2">실제로 습관을 실천한 시간을 선택해주세요 (현재 시각 기준 4시간 이내).</p>
           <input
             type="datetime-local"
             value={formData.completedAt}

@@ -117,12 +117,24 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    const remedyPolicy = userChallenge.remedyPolicy || { type: 'open', maxRemedyDays: null };
-    if (remedyPolicy.type === 'limited' && remedyPolicy.maxRemedyDays && failedDays.length > remedyPolicy.maxRemedyDays) {
+    const defaultPolicy = { type: 'open', maxRemedyDays: null, allowBulk: null };
+    const remedyPolicy = userChallenge.remedyPolicy || userChallenge.challenge?.defaultRemedyPolicy || defaultPolicy;
+
+    if (remedyPolicy.type === 'strict') {
       return response(400, {
-        error: 'REMEDY_TOO_MANY_FAILS',
-        message: '허용된 보완 횟수를 초과했습니다'
+        error: 'REMEDY_NOT_ALLOWED',
+        message: '이 챌린지는 보완이 허용되지 않습니다'
       });
+    }
+
+    const alreadyRemediedCount = progress.filter((p: any) => p.remedied === true).length;
+    if (remedyPolicy.type === 'limited' && remedyPolicy.maxRemedyDays !== null) {
+      if (alreadyRemediedCount >= remedyPolicy.maxRemedyDays) {
+        return response(409, {
+          error: 'REMEDY_MAX_REACHED',
+          message: '최대 보완 횟수에 도달했습니다'
+        });
+      }
     }
 
     const originalDayProgress = progress.find((p: any) => p.day === input.originalDay);
@@ -231,7 +243,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         originalDay: input.originalDay,
         scoreEarned,
         totalScore,
-        remainingRemedyDays: Math.max((remedyPolicy.maxRemedyDays || failedDays.length) - 1, 0),
+        remainingRemedyDays: remedyPolicy.type === 'limited' && remedyPolicy.maxRemedyDays !== null ? Math.max(remedyPolicy.maxRemedyDays - (alreadyRemediedCount + 1), 0) : Math.max(failedDays.length - (alreadyRemediedCount + 1), 0),
         cheerTicketGranted: true,
         newBadges: []
       }
