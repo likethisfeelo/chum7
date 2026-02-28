@@ -42,6 +42,8 @@ export class CoreStack extends Stack {
   public readonly questsTable: Table;
   public readonly questSubmissionsTable: Table;         // 전체 이력 (append-only)
   public readonly activeQuestSubmissionsTable: Table;  // 현재 상태 + 유니크 보장
+  public readonly personalQuestProposalsTable: Table;
+  public readonly notificationsTable: Table;
 
   // Bulletin board tables
   public readonly bulletinPostsTable: Table;
@@ -291,6 +293,41 @@ export class CoreStack extends Stack {
       indexName: 'questId-index',
       partitionKey: { name: 'questId', type: AttributeType.STRING },
       sortKey: { name: 'updatedAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+
+    this.personalQuestProposalsTable = new Table(this, 'PersonalQuestProposalsTable', {
+      tableName: `chme-${stage}-personal-quest-proposals`,
+      partitionKey: { name: 'proposalId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    this.personalQuestProposalsTable.addGlobalSecondaryIndex({
+      indexName: 'challengeId-status-index',
+      partitionKey: { name: 'challengeId', type: AttributeType.STRING },
+      sortKey: { name: 'status', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    this.personalQuestProposalsTable.addGlobalSecondaryIndex({
+      indexName: 'userId-challengeId-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'challengeId', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    this.notificationsTable = new Table(this, 'NotificationsTable', {
+      tableName: `chme-${stage}-notifications`,
+      partitionKey: { name: 'notificationId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    this.notificationsTable.addGlobalSecondaryIndex({
+      indexName: 'recipientId-createdAt-index',
+      partitionKey: { name: 'recipientId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
 
