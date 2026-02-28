@@ -29,6 +29,12 @@ const INITIAL = {
   questLayer:      'A' as QuestLayer,
   questScope:      'leader' as QuestScope,
   requireOnJoinInput: false,
+  remedyType: 'open' as 'strict'|'limited'|'open',
+  maxRemedyDays: 1,
+  allowBulk: false,
+  startDay: '',
+  endDay: '',
+  revealAt: '',
 };
 
 export const AdminQuestCreatePage = () => {
@@ -98,6 +104,14 @@ export const AdminQuestCreatePage = () => {
         questLayer:       form.questLayer,
         questScope:       form.questScope,
         requireOnJoinInput: form.requireOnJoinInput,
+        remedyPolicy: {
+          type: form.remedyType,
+          maxRemedyDays: form.remedyType === 'limited' ? Number(form.maxRemedyDays) : null,
+          allowBulk: form.remedyType === 'open' ? Boolean(form.allowBulk) : null,
+        },
+        startDay: form.questLayer === 'D' && form.startDay ? Number(form.startDay) : null,
+        endDay: form.questLayer === 'D' && form.endDay ? Number(form.endDay) : null,
+        revealAt: form.questLayer === 'D' && form.revealAt ? new Date(form.revealAt).toISOString() : null,
       };
       payload.challengeId = challengeId.trim();
       payload.startAt = form.startAt
@@ -277,6 +291,24 @@ export const AdminQuestCreatePage = () => {
                 onChange={e => set('maxChars', Number(e.target.value) as any)}
                 className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
+            </div>
+          )}
+
+
+          <div className="mt-4 pt-4 border-t space-y-3">
+            <p className="text-sm font-semibold text-gray-700">Remedy Policy</p>
+            <div className="flex gap-4">{(['strict','limited','open'] as const).map((t)=> <label key={t} className="text-sm flex items-center gap-1"><input type="radio" checked={form.remedyType===t} onChange={()=>set('remedyType', t as any)} /> {t}</label>)}</div>
+            {form.remedyType === 'limited' && <select value={form.maxRemedyDays} onChange={(e)=>set('maxRemedyDays', Number(e.target.value) as any)} className="px-3 py-2 border rounded-lg"><option value={1}>1일</option><option value={2}>2일</option></select>}
+            {form.remedyType === 'open' && <label className="text-sm flex items-center gap-2"><input type="checkbox" checked={form.allowBulk} onChange={(e)=>set('allowBulk', e.target.checked as any)} /> 몰아서 제출 허용</label>}
+          </div>
+          {form.questLayer === 'D' && (
+            <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
+              <p className="text-xs text-amber-700">(추후 기능, 현재 저장만 됨)</p>
+              <div className="grid grid-cols-3 gap-2">
+                <input type="number" min={1} max={7} placeholder="startDay" value={form.startDay} onChange={(e)=>set('startDay', e.target.value as any)} className="px-3 py-2 border rounded-lg"/>
+                <input type="number" min={1} max={7} placeholder="endDay" value={form.endDay} onChange={(e)=>set('endDay', e.target.value as any)} className="px-3 py-2 border rounded-lg"/>
+                <input type="datetime-local" value={form.revealAt} onChange={(e)=>set('revealAt', e.target.value as any)} className="px-3 py-2 border rounded-lg"/>
+              </div>
             </div>
           )}
 

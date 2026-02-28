@@ -40,6 +40,11 @@ const INITIAL = {
   requirePersonalGoalOnJoin: false,
   requirePersonalTargetOnJoin: true,
   allowExtraVisibilityToggle: true,
+  remedyType: 'open' as 'strict'|'limited'|'open',
+  maxRemedyDays: 1,
+  allowBulk: false,
+  personalQuestEnabled: false,
+  personalQuestAutoApprove: true,
 };
 
 export const AdminChallengeCreatePage = () => {
@@ -97,6 +102,13 @@ export const AdminChallengeCreatePage = () => {
         challengeStartAt:  new Date(form.challengeStartAt).toISOString(),
         durationDays:      Number(form.durationDays),
         challengeType:     form.challengeType,
+        defaultRemedyPolicy: {
+          type: form.remedyType,
+          maxRemedyDays: form.remedyType === 'limited' ? Number(form.maxRemedyDays) : null,
+          allowBulk: form.remedyType === 'open' ? Boolean(form.allowBulk) : null,
+        },
+        personalQuestEnabled: form.personalQuestEnabled,
+        personalQuestAutoApprove: form.personalQuestAutoApprove,
         layerPolicy: {
           requirePersonalGoalOnJoin: form.requirePersonalGoalOnJoin,
           requirePersonalTargetOnJoin: form.requirePersonalTargetOnJoin,
@@ -270,6 +282,38 @@ export const AdminChallengeCreatePage = () => {
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={form.allowExtraVisibilityToggle} onChange={e => set('allowExtraVisibilityToggle', e.target.checked)} />
               추가 기록 공개 전환 허용
+            </label>
+          </div>
+        </div>
+
+
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+          <h2 className="font-bold text-gray-800">Remedy Policy</h2>
+          <div className="flex gap-4">
+            {(['strict', 'limited', 'open'] as const).map((t) => (
+              <label key={t} className="text-sm flex items-center gap-1">
+                <input type="radio" checked={form.remedyType === t} onChange={() => set('remedyType', t as any)} />
+                {t}
+              </label>
+            ))}
+          </div>
+          {form.remedyType === 'limited' && (
+            <select value={form.maxRemedyDays} onChange={(e) => set('maxRemedyDays', Number(e.target.value) as any)} className="px-3 py-2 border rounded-lg">
+              <option value={1}>1일</option>
+              <option value={2}>2일</option>
+            </select>
+          )}
+          {form.remedyType === 'open' && (
+            <label className="text-sm flex items-center gap-2">
+              <input type="checkbox" checked={form.allowBulk} onChange={(e) => set('allowBulk', e.target.checked as any)} /> 몰아서 제출 허용
+            </label>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-sm flex items-center gap-2">
+              <input type="checkbox" checked={form.personalQuestEnabled} onChange={(e) => set('personalQuestEnabled', e.target.checked as any)} /> 개인 퀘스트 제안 사용
+            </label>
+            <label className="text-sm flex items-center gap-2">
+              <input type="checkbox" checked={form.personalQuestAutoApprove} onChange={(e) => set('personalQuestAutoApprove', e.target.checked as any)} /> 개인 퀘스트 자동 승인
             </label>
           </div>
         </div>

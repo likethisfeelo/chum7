@@ -8,6 +8,8 @@ import { AdminMyChallengesPage } from '@/pages/AdminMyChallengesPage';
 import { AdminAllChallengesPage } from '@/pages/AdminAllChallengesPage';
 import { AdminOpsDashboardPage } from '@/pages/AdminOpsDashboardPage';
 import { AdminAuditLogsPage } from '@/pages/AdminAuditLogsPage';
+import { AdminPersonalQuestProposalsPage } from '@/pages/AdminPersonalQuestProposalsPage';
+import { AdminNotificationsPage } from '@/pages/AdminNotificationsPage';
 import '@/styles/index.css';
 
 const queryClient = new QueryClient({
@@ -107,6 +109,8 @@ const Sidebar = () => {
     nav.push({ path: '/admin/audit/logs', label: '🧾 감사 로그' });
     nav.push({ path: '/admin/quests/create', label: '➕ 퀘스트 생성' });
     nav.push({ path: '/admin/quests/submissions', label: '📋 제출물 심사' });
+    nav.push({ path: '/admin/personal-quest-proposals', label: '📝 개인퀘스트 심사' });
+    nav.push({ path: '/admin/notifications', label: '🔔 알림함' });
   }
 
   const handleLogout = () => {
@@ -257,6 +261,29 @@ export default function App() {
               <RoleRoute roles={['admins', 'productowners', 'leaders']}>
                 <Layout>
                   <AdminMyChallengesPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
+
+          <Route
+            path="/admin/personal-quest-proposals"
+            element={
+              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
+                <Layout>
+                  <AdminPersonalQuestProposalsPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/admin/notifications"
+            element={
+              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
+                <Layout>
+                  <AdminNotificationsPage />
                 </Layout>
               </RoleRoute>
             }
