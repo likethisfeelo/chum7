@@ -80,6 +80,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const challenge = challengeResult.Item;
+    const challengePrice = Number(challenge.price ?? 0);
+    const isPaidChallenge = Boolean(challenge.isPaid) || challengePrice > 0;
+    const requiresApproval = isPaidChallenge ? (challenge.joinApprovalRequired ?? true) : false;
 
     // recruiting 단계에서만 참여 가능
     if (challenge.lifecycle !== 'recruiting') {
@@ -167,7 +170,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       challengeId,
       startDate,
       phase: 'preparing',         // preparing → active (챌린지 시작일에 lifecycle-manager가 전환)
-      status: 'active',
+      status: requiresApproval ? 'pending' : 'active',
       currentDay: 0,
       progress: Array.from({ length: challenge.durationDays ?? 7 }, (_, i) => ({
         day: i + 1,
@@ -179,6 +182,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       groupId,
       personalGoal: input.personalGoal ?? null,
       personalTarget,
+      joinStatus: requiresApproval ? 'requested' : 'approved',
+      paymentStatus: isPaidChallenge ? (requiresApproval ? 'paid_pending_approval' : 'paid_confirmed') : 'free',
+      refundStatus: 'none',
+      refundLockedAt: challenge.challengeStartAt ?? null,
       consecutiveDays: 0,
       remedyPolicy,
       createdAt: now,
@@ -190,11 +197,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       Item: userChallenge,
     }));
 
-    // 5. 챌린지 stats 업데이트
+    // 5. 챌린지 stats 업데이트 (승인 즉시 참여 케이스만 active 반영)
     await docClient.send(new UpdateCommand({
       TableName: process.env.CHALLENGES_TABLE!,
       Key: { challengeId },
-      UpdateExpression: 'SET stats.totalParticipants = if_not_exists(stats.totalParticipants, :zero) + :inc, stats.activeParticipants = if_not_exists(stats.activeParticipants, :zero) + :inc, updatedAt = :now',
+      UpdateExpression: requiresApproval
+        ? 'SET stats.totalParticipants = if_not_exists(stats.totalParticipants, :zero) + :inc, stats.pendingParticipants = if_not_exists(stats.pendingParticipants, :zero) + :inc, updatedAt = :now'
+        : 'SET stats.totalParticipants = if_not_exists(stats.totalParticipants, :zero) + :inc, stats.activeParticipants = if_not_exists(stats.activeParticipants, :zero) + :inc, updatedAt = :now',
       ExpressionAttributeValues: {
         ':zero': 0,
         ':inc': 1,
@@ -204,10 +213,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     return response(201, {
       success: true,
-      message: '챌린지 참여가 완료되었습니다',
+      message: requiresApproval ? '참여 신청이 접수되었습니다. 승인 후 참여가 확정됩니다.' : '챌린지 참여가 완료되었습니다',
       data: {
         userChallengeId,
         phase: 'preparing',
+        joinStatus: requiresApproval ? 'requested' : 'approved',
+        paymentStatus: isPaidChallenge ? (requiresApproval ? 'paid_pending_approval' : 'paid_confirmed') : 'free',
         challenge: {
           challengeId: challenge.challengeId,
           title: challenge.title,

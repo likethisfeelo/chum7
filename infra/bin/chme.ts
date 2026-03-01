@@ -11,6 +11,7 @@ import { CheerStack } from '../stacks/cheer-stack';
 import { AdminStack } from '../stacks/admin-stack';
 import { QuestStack } from '../stacks/quest-stack';
 import { BulletinStack } from '../stacks/bulletin-stack';
+import { ChallengeBoardStack } from '../stacks/challenge-board-stack';
 import { FrontendStack } from '../stacks/frontend-stack';
 
 import { devConfig } from '../config/dev';
@@ -95,6 +96,7 @@ new AdminStack(app, `chme-${stage}-admin`, {
   verificationsTable: coreStack.verificationsTable,
   personalQuestProposalsTable: coreStack.personalQuestProposalsTable,
   notificationsTable: coreStack.notificationsTable,
+  payoutAuditLogsTable: coreStack.payoutAuditLogsTable,
 });
 
 new QuestStack(app, `chme-${stage}-quest`, {
@@ -118,6 +120,19 @@ new BulletinStack(app, `chme-${stage}-bulletin`, {
   bulletinLikesTable: coreStack.bulletinLikesTable,
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
+});
+
+
+new ChallengeBoardStack(app, `chme-${stage}-challenge-board`, {
+  env,
+  stage,
+  apiGateway: apiStack.apiGateway,
+  authorizer: apiStack.cognitoAuthorizer,
+  challengesTable: coreStack.challengesTable,
+  userChallengesTable: coreStack.userChallengesTable,
+  challengeBoardsTable: coreStack.challengeBoardsTable,
+  challengeCommentsTable: coreStack.challengeCommentsTable,
+  challengePreviewsTable: coreStack.challengePreviewsTable,
 });
 
 new FrontendStack(app, `chme-${stage}-frontend`, {
