@@ -90,6 +90,8 @@ export const VerificationSheet = ({
     tomorrowPromise: '',
     completedAt: toLocalDateTimeInputValue(new Date()),
   });
+  const [submittedPayload, setSubmittedPayload] = useState<any | null>(null);
+  const [extraVisibilityPrompt, setExtraVisibilityPrompt] = useState<{ verificationId: string } | null>(null);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -161,24 +163,24 @@ export const VerificationSheet = ({
       queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
 
       const payload = data?.data || {};
-      if (payload.isExtra) {
-        toast.success(getSuccessToastMessage(payload));
-        if (payload.notice) {
-          toast(payload.notice, { icon: 'ℹ️' });
-        }
+      setSubmittedPayload(payload);
 
-        const shouldMakePublic = window.confirm('추가 기록을 피드에 공개할까요? (챌린지 기간 내 전환 가능)');
-        if (shouldMakePublic && payload.verificationId) {
-          try {
-            await apiClient.patch(`/verifications/${payload.verificationId}/visibility`, { isPersonalOnly: false });
-            toast.success('추가 기록을 공개 피드로 전환했어요 🌍');
-          } catch (visibilityError: any) {
-            toast.error(visibilityError?.response?.data?.message || '공개 전환에 실패했습니다');
-          }
-        }
-      } else {
-        toast.success(getSuccessToastMessage(payload));
+      const feedback = [
+        payload?.scoreEarned !== undefined ? `+${payload.scoreEarned}점` : null,
+        payload?.consecutiveDays ? `연속 ${payload.consecutiveDays}일` : null,
+        payload?.delta !== null && payload?.delta !== undefined ? `델타 ${payload.delta}분` : null,
+      ].filter(Boolean).join(' · ');
+
+      toast.success(feedback ? `${getSuccessToastMessage(payload)} (${feedback})` : getSuccessToastMessage(payload));
+
+      if (payload?.newBadges?.length) {
+        toast(`새 뱃지: ${payload.newBadges.join(', ')}`, { icon: '🏅' });
       }
+
+      if (payload?.cheerOpportunity?.cheerTicketGranted) {
+        toast('응원권 1장을 획득했어요 🎟', { icon: '🎉' });
+      }
+
       setImageFile(null);
       setImagePreview(null);
       setFormData({
@@ -186,6 +188,12 @@ export const VerificationSheet = ({
         tomorrowPromise: '',
         completedAt: toLocalDateTimeInputValue(new Date()),
       });
+
+      if (payload.isExtra && payload.verificationId) {
+        setExtraVisibilityPrompt({ verificationId: payload.verificationId });
+        return;
+      }
+
       onClose();
       if (onSuccess) onSuccess(data);
     },
@@ -201,6 +209,31 @@ export const VerificationSheet = ({
       return;
     }
     verificationMutation.mutate();
+  };
+
+
+  const closeWithReset = () => {
+    setExtraVisibilityPrompt(null);
+    setSubmittedPayload(null);
+    onClose();
+  };
+
+  const makeExtraPublic = async () => {
+    if (!extraVisibilityPrompt?.verificationId) {
+      closeWithReset();
+      return;
+    }
+
+    try {
+      await apiClient.patch(`/verifications/${extraVisibilityPrompt.verificationId}/visibility`, { isPersonalOnly: false });
+      toast.success('추가 기록을 공개 피드로 전환했어요 🌍');
+      queryClient.invalidateQueries({ queryKey: ['verifications', 'mine-extra'] });
+      queryClient.invalidateQueries({ queryKey: ['verifications', 'public'] });
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || '공개 전환에 실패했습니다');
+    } finally {
+      closeWithReset();
+    }
   };
 
   if (!userChallenge) return null;
@@ -290,6 +323,35 @@ export const VerificationSheet = ({
             rows={3}
           />
         </div>
+
+
+        {extraVisibilityPrompt && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+            <p className="text-xs text-amber-800">추가 기록(Extra)이 저장되었습니다. 지금 공개 피드로 전환할까요?</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={makeExtraPublic}
+                className="px-3 py-1.5 text-xs rounded-lg bg-amber-600 text-white"
+              >
+                지금 공개
+              </button>
+              <button
+                type="button"
+                onClick={closeWithReset}
+                className="px-3 py-1.5 text-xs rounded-lg border border-amber-300 text-amber-700 bg-white"
+              >
+                나중에
+              </button>
+            </div>
+          </div>
+        )}
+
+        {submittedPayload && !extraVisibilityPrompt && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+            제출 결과: 총점 {submittedPayload.totalScore ?? '-'} · 연속 {submittedPayload.consecutiveDays ?? '-'}일
+          </div>
+        )}
 
         <motion.button
           whileTap={{ scale: 0.98 }}

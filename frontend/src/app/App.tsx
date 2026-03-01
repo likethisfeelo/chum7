@@ -19,6 +19,7 @@ import { RemedyPage } from '@/features/verification/pages/RemedyPage';
 import { UseTicketPage } from '@/features/cheer/pages/UseTicketPage';
 import { QuestBoardPage } from '@/features/quest/pages/QuestBoardPage';
 import { MyQuestSubmissionsPage } from '@/features/quest/pages/MyQuestSubmissionsPage';
+import { ParticipantFlowPlanPage } from '@/features/planning/pages/ParticipantFlowPlanPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -187,6 +188,17 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MyQuestSubmissionsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/ux-plan"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <ParticipantFlowPlanPage />
+              </MainLayout>
             </ProtectedRoute>
           }
         />

@@ -6,9 +6,11 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 export const TodayPage = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: cheers, isLoading: cheersLoading } = useQuery({
     queryKey: ['my-cheers'],
@@ -39,8 +41,18 @@ export const TodayPage = () => {
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
       <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
-        <h1 className="text-2xl font-bold text-gray-900">투데이 📊</h1>
-        <p className="text-sm text-gray-500">{today}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">투데이 📊</h1>
+            <p className="text-sm text-gray-500">{today}</p>
+          </div>
+          <button
+            onClick={() => navigate('/ux-plan')}
+            className="px-3 py-2 rounded-xl bg-violet-50 text-violet-700 text-xs font-semibold hover:bg-violet-100 transition-colors"
+          >
+            PHASE1-2 테스트
+          </button>
+        </div>
       </div>
 
       <div className="p-6 space-y-6">
