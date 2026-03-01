@@ -54,7 +54,12 @@ export const RemedyPage = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
-      toast.success(data.message || '보완 인증 완료! 💪');
+      const remaining = data?.data?.remainingRemedyDays;
+      if (remaining !== undefined && remaining !== null) {
+        toast.success(`${data.message || '보완 인증 완료! 💪'} · 남은 보완 ${remaining}회`);
+      } else {
+        toast.success(data.message || '보완 인증 완료! 💪');
+      }
       navigate('/me');
     },
     onError: (error: any) => {
