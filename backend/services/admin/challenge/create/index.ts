@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const MIN_PREPARING_GAP_MS = 60 * 1000;
 
 /**
  * Challenge Lifecycle States:
@@ -121,8 +122,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (recruitingEnd <= recruitingStart) {
       return response(400, { error: 'INVALID_TIMELINE', message: '모집 마감일은 모집 시작일 이후여야 합니다' });
     }
-    if (challengeStart <= recruitingEnd) {
-      return response(400, { error: 'INVALID_TIMELINE', message: '챌린지 시작일은 모집 마감일 이후여야 합니다' });
+    if (challengeStart.getTime() < recruitingEnd.getTime() + MIN_PREPARING_GAP_MS) {
+      return response(400, {
+        error: 'INVALID_TIMELINE',
+        message: '챌린지 시작일은 모집 마감 시각으로부터 최소 1분 이후여야 합니다',
+      });
     }
 
     // challengeEndAt = challengeStartAt + durationDays

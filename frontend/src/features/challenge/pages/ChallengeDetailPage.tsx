@@ -114,15 +114,15 @@ export const ChallengeDetailPage = () => {
   const canJoin = lifecycle === 'recruiting' && !alreadyJoined;
   const ctaLabelMap: Record<string, string> = {
     recruiting: alreadyJoined ? '이미 참여신청한 챌린지' : '챌린지 참여 신청하기',
-    preparing: '모집 마감 (Preparing)',
-    active: '진행 중 (참여 마감)',
+    preparing: '모집이 마감된 챌린지',
+    active: '진행 중 (신규 참여 불가)',
     completed: '종료된 챌린지',
     archived: '보관된 챌린지',
-    draft: '공개 전 챌린지',
+    draft: '모집 전 챌린지',
   };
   const lifecycleHintMap: Record<string, string> = {
     recruiting: alreadyJoined ? '이미 참여신청을 완료한 챌린지입니다.' : '지금 참여 신청할 수 있습니다.',
-    preparing: '모집이 종료되어 새로운 참여 신청은 불가능합니다.',
+    preparing: '모집이 종료되어 새로운 참여 신청은 불가능합니다. 준비중 공지/게시판만 확인할 수 있어요.',
     active: '챌린지가 진행 중이라 신규 참여가 불가능합니다.',
     completed: '종료된 챌린지입니다.',
     archived: '보관된 챌린지입니다.',
@@ -241,7 +241,8 @@ export const ChallengeDetailPage = () => {
           <h3 className="text-base font-bold text-gray-900 mb-3">참여 정보 입력</h3>
           <p className="text-sm text-gray-500 mb-4">챌린지 유형/레이어 정책에 따라 입력 항목이 달라집니다.</p>
           <p className="text-xs text-gray-500 mb-2">입력되는 시간대: {userTimezone}</p>
-          <p className="text-xs text-primary-700 mb-3">유형: {challengeType}</p>
+          <p className="text-xs text-primary-700 mb-1">유형: {challengeType}</p>
+          <p className="text-xs text-gray-500 mb-3">{requirePersonalGoalOnJoin ? '개인 목표 입력 필수' : '개인 목표 입력 선택'} · {requirePersonalTargetOnJoin ? '개인 목표시각 필수' : '개인 목표시각 선택'}</p>
           {requirePersonalTargetOnJoin && (
           <div className="grid grid-cols-3 gap-3 mb-3">
             <select value={hour12} onChange={(e) => setHour12(Number(e.target.value))} className="px-3 py-2.5 border border-gray-300 rounded-xl">

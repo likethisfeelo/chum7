@@ -8,6 +8,7 @@ import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ProgressBar } from '@/shared/components/ProgressBar';
 import { VerificationSheet } from '@/features/verification/components/VerificationSheet';
+import { getChallengeTypeLabel as getChallengeTypeLabelByType, getRemedyLabel, getRemedyType, getRemainingRemedyCount } from '@/features/challenge/utils/flowPolicy';
 import toast from 'react-hot-toast';
 
 const DAY_STATUS_COLORS: Record<string, string> = {
@@ -18,16 +19,10 @@ const DAY_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-gray-100 border-2 border-gray-300',
 };
 
-const CHALLENGE_TYPE_LABEL: Record<string, string> = {
-  leader_only: '리더 퀘스트',
-  personal_only: '개인 퀘스트',
-  leader_personal: '리더+개인',
-  mixed: '혼합형',
-};
 
 function getChallengeTypeLabel(challenge: any) {
-  const key = String(challenge?.challenge?.challengeType || challenge?.challenge?.type || '').toLowerCase();
-  return CHALLENGE_TYPE_LABEL[key] || '일반 챌린지';
+  const type = String(challenge?.challenge?.challengeType || challenge?.challenge?.type || 'leader_personal');
+  return getChallengeTypeLabelByType(type);
 }
 
 function getTodayGuide(challenge: any) {
@@ -270,11 +265,12 @@ export const MEPage = () => {
 
   const getProposalStatusMeta = (status?: string) => {
     const key = String(status || 'pending');
-    if (key === 'approved') return { label: '승인됨', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
-    if (key === 'rejected') return { label: '수정 필요', color: 'text-rose-700 bg-rose-50 border-rose-200' };
-    if (key === 'revision_pending') return { label: '재심사 대기', color: 'text-indigo-700 bg-indigo-50 border-indigo-200' };
-    if (key === 'expired') return { label: '기간 만료', color: 'text-gray-700 bg-gray-100 border-gray-200' };
-    return { label: '검토중', color: 'text-amber-700 bg-amber-50 border-amber-200' };
+    if (key === 'approved') return { label: '승인됨', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', nextAction: '승인 완료. 활성 단계에서 인증을 진행하세요.' };
+    if (key === 'rejected') return { label: '수정 필요', color: 'text-rose-700 bg-rose-50 border-rose-200', nextAction: '리더 피드백 반영 후 수정 재제출이 필요합니다.' };
+    if (key === 'revision_pending') return { label: '재심사 대기', color: 'text-indigo-700 bg-indigo-50 border-indigo-200', nextAction: '리더가 수정본을 검토 중입니다. 결과를 기다려주세요.' };
+    if (key === 'expired') return { label: '기간 만료', color: 'text-gray-700 bg-gray-100 border-gray-200', nextAction: '제안 마감이 지나 개인 퀘스트 없이 진행됩니다.' };
+    if (key === 'disqualified') return { label: '자격 제한', color: 'text-gray-700 bg-gray-200 border-gray-300', nextAction: '개인 퀘스트 제안 자격이 제한되었습니다.' };
+    return { label: '검토중', color: 'text-amber-700 bg-amber-50 border-amber-200', nextAction: '리더 검토 결과를 기다려주세요.' };
   };
 
   const handleVerify = (challenge: any) => {
@@ -316,11 +312,9 @@ export const MEPage = () => {
           <>
             {activeChallenges.map((challenge: any, index: number) => {
               const progress = challenge.progress || [];
-              const completedDays = progress.filter((p: any) =>
-                ['completed', 'remedy'].includes(p.status)
-              ).length;
+              const completedDays = progress.filter((p: any) => p.status === 'success').length;
               const currentDay = challenge.currentDay || 1;
-              const todayDone = progress[currentDay - 1]?.status === 'completed';
+              const todayDone = progress[currentDay - 1]?.status === 'success';
 
               return (
                 <motion.div
@@ -371,6 +365,17 @@ export const MEPage = () => {
                     })}
                   </div>
 
+                  {(() => {
+                    const remedyType = getRemedyType(challenge.remedyPolicy);
+                    const remaining = getRemainingRemedyCount(challenge.remedyPolicy, progress);
+                    return (
+                      <div className="mb-4 rounded-lg border border-purple-100 bg-purple-50 px-3 py-2 text-xs text-purple-800">
+                        레메디 정책: {getRemedyLabel(challenge.remedyPolicy)} · 남은 보완 {remaining === null ? '제한 없음' : `${remaining}회`}
+                        {remedyType === 'strict' && <span className="ml-1 font-semibold">(보완 버튼 비노출)</span>}
+                      </div>
+                    );
+                  })()}
+
                   {!todayDone && currentDay <= 7 ? (
                     <motion.button
                       whileTap={{ scale: 0.98 }}
@@ -388,6 +393,25 @@ export const MEPage = () => {
                       챌린지 완료 🎉
                     </div>
                   )}
+
+
+                  {(() => {
+                    const remedyType = getRemedyType(challenge.remedyPolicy);
+                    const remaining = getRemainingRemedyCount(challenge.remedyPolicy, progress);
+                    const failedDays = progress.filter((p: any) => p.day <= 5 && p.status !== 'success' && !p.remedied);
+                    const canRemedy = remedyType !== 'strict' && (remaining === null || remaining > 0) && failedDays.length > 0;
+                    if (remedyType === 'strict') return null;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/verification/remedy?userChallengeId=${challenge.userChallengeId}`)}
+                        disabled={!canRemedy}
+                        className="mt-2 w-full py-2.5 rounded-xl border border-purple-200 text-purple-700 bg-purple-50 disabled:opacity-50"
+                      >
+                        Day 6 보완하기 {remaining === null ? '(제한 없음)' : `(${remaining}회 남음)`}
+                      </button>
+                    );
+                  })()}
                 </motion.div>
               );
             })}
@@ -420,6 +444,9 @@ export const MEPage = () => {
                             <div className="rounded-lg border border-amber-200 bg-white p-3 space-y-2">
                               <p className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${statusMeta.color}`}>개인 퀘스트: {statusMeta.label}</p>
                               <p className="text-xs text-gray-700">{proposal?.title || '아직 제출한 개인 퀘스트가 없습니다.'}</p>
+                              {proposal?.registrationDeadline && <p className="text-xs text-gray-500">마감: {String(proposal.registrationDeadline).replace('T', ' ').slice(0, 16)}</p>}
+                              {proposal?.revisionCount !== undefined && <p className="text-xs text-gray-500">수정 사용: {proposal.revisionCount}/2</p>}
+                              <p className="text-xs text-gray-600">다음 할 일: {statusMeta.nextAction}</p>
                               {proposal?.leaderFeedback && <p className="text-xs text-rose-700">피드백: {proposal.leaderFeedback}</p>}
                               {proposal?.status === 'rejected' && (
                                 <div className="space-y-2">
