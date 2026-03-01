@@ -18,13 +18,14 @@ interface ChallengeStackProps extends StackProps {
   userChallengesTable: Table;
   personalQuestProposalsTable: Table;
   notificationsTable: Table;
+  payoutAuditLogsTable: Table;
 }
 
 export class ChallengeStack extends Stack {
   constructor(scope: Construct, id: string, props: ChallengeStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable, personalQuestProposalsTable, notificationsTable } = props;
+    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable, personalQuestProposalsTable, notificationsTable, payoutAuditLogsTable } = props;
 
     const commonEnv = {
       STAGE: stage,
@@ -32,6 +33,7 @@ export class ChallengeStack extends Stack {
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
       PERSONAL_QUEST_PROPOSALS_TABLE: personalQuestProposalsTable.tableName,
       NOTIFICATIONS_TABLE: notificationsTable.tableName,
+      PAYOUT_AUDIT_LOGS_TABLE: payoutAuditLogsTable.tableName,
     };
 
     const commonProps = {
@@ -181,6 +183,110 @@ export class ChallengeStack extends Stack {
     });
     notificationsTable.grantReadWriteData(markReadFn);
     apiGateway.addRoutes({ path: '/users/me/notifications/{notificationId}/read', methods: [HttpMethod.PATCH], integration: new HttpLambdaIntegration('NotificationMarkReadIntegration', markReadFn), authorizer });
+
+
+    // 6. List Join Requests (leader only)
+    const listJoinRequestsFn = new NodejsFunction(this, 'ListJoinRequestsFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-list-join-requests`,
+      entry: path.join(__dirname, '../../backend/services/challenge/list-join-requests/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadData(listJoinRequestsFn);
+    userChallengesTable.grantReadData(listJoinRequestsFn);
+    apiGateway.addRoutes({
+      path: '/challenges/{challengeId}/join-requests',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('ChallengeListJoinRequestsIntegration', listJoinRequestsFn),
+      authorizer,
+    });
+
+    // 7. Review Join Request (leader only)
+    const reviewJoinRequestFn = new NodejsFunction(this, 'ReviewJoinRequestFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-review-join-request`,
+      entry: path.join(__dirname, '../../backend/services/challenge/review-join-request/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadWriteData(reviewJoinRequestFn);
+    userChallengesTable.grantReadWriteData(reviewJoinRequestFn);
+    apiGateway.addRoutes({
+      path: '/challenges/{challengeId}/join-requests/{userChallengeId}/review',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('ChallengeReviewJoinRequestIntegration', reviewJoinRequestFn),
+      authorizer,
+    });
+
+    // 8. Request Refund (participant protected)
+    const requestRefundFn = new NodejsFunction(this, 'RequestRefundFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-request-refund`,
+      entry: path.join(__dirname, '../../backend/services/challenge/request-refund/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadData(requestRefundFn);
+    userChallengesTable.grantReadWriteData(requestRefundFn);
+    apiGateway.addRoutes({
+      path: '/challenges/{challengeId}/refund',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('ChallengeRequestRefundIntegration', requestRefundFn),
+      authorizer,
+    });
+
+    // 9. Review Refund Request (admin only)
+    const reviewRefundFn = new NodejsFunction(this, 'ReviewRefundFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-review-refund`,
+      entry: path.join(__dirname, '../../backend/services/challenge/review-refund/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadWriteData(reviewRefundFn);
+    userChallengesTable.grantReadWriteData(reviewRefundFn);
+    apiGateway.addRoutes({
+      path: '/challenges/{challengeId}/refund/{userChallengeId}/review',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('ChallengeReviewRefundIntegration', reviewRefundFn),
+      authorizer,
+    });
+
+
+    // 10. Review Leader Payout (admin only)
+    const reviewPayoutFn = new NodejsFunction(this, 'ReviewPayoutFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-review-payout`,
+      entry: path.join(__dirname, '../../backend/services/challenge/review-payout/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadWriteData(reviewPayoutFn);
+    payoutAuditLogsTable.grantReadWriteData(reviewPayoutFn);
+    apiGateway.addRoutes({
+      path: '/challenges/{challengeId}/payout/review',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('ChallengeReviewPayoutIntegration', reviewPayoutFn),
+      authorizer,
+    });
+
+    // 11. Finalize Leader Payout (admin only)
+    const finalizePayoutFn = new NodejsFunction(this, 'FinalizePayoutFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-finalize-payout`,
+      entry: path.join(__dirname, '../../backend/services/challenge/finalize-payout/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadWriteData(finalizePayoutFn);
+    payoutAuditLogsTable.grantReadWriteData(finalizePayoutFn);
+    apiGateway.addRoutes({
+      path: '/challenges/{challengeId}/payout/finalize',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('ChallengeFinalizePayoutIntegration', finalizePayoutFn),
+      authorizer,
+    });
 
     // 6. Lifecycle Manager (EventBridge - 매 1시간 자동 실행)
     const lifecycleManagerFn = new NodejsFunction(this, 'LifecycleManagerFn', {

@@ -50,6 +50,12 @@ export class CoreStack extends Stack {
   public readonly bulletinCommentsTable: Table;
   public readonly bulletinLikesTable: Table;
 
+  // Challenge board tables
+  public readonly challengeBoardsTable: Table;
+  public readonly challengeCommentsTable: Table;
+  public readonly challengePreviewsTable: Table;
+  public readonly payoutAuditLogsTable: Table;
+
   public readonly uploadsBucket: IBucket;
   public readonly snsTopic: Topic;
   public readonly eventBus: EventBus;
@@ -383,6 +389,52 @@ export class CoreStack extends Stack {
       partitionKey: { name: 'postId', type: AttributeType.STRING },
       sortKey: { name: 'createdAt', type: AttributeType.STRING },
       projectionType: ProjectionType.KEYS_ONLY,
+    });
+
+
+    // ==================== Challenge Board Tables ====================
+    this.challengeBoardsTable = new Table(this, 'ChallengeBoardsTable', {
+      tableName: `chme-${stage}-challenge-boards`,
+      partitionKey: { name: 'challengeId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+
+    this.challengeCommentsTable = new Table(this, 'ChallengeCommentsTable', {
+      tableName: `chme-${stage}-challenge-comments`,
+      partitionKey: { name: 'commentId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    this.challengeCommentsTable.addGlobalSecondaryIndex({
+      indexName: 'challengeId-createdAt-index',
+      partitionKey: { name: 'challengeId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    this.challengePreviewsTable = new Table(this, 'ChallengePreviewsTable', {
+      tableName: `chme-${stage}-challenge-previews`,
+      partitionKey: { name: 'challengeId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+
+    this.payoutAuditLogsTable = new Table(this, 'PayoutAuditLogsTable', {
+      tableName: `chme-${stage}-payout-audit-logs`,
+      partitionKey: { name: 'auditLogId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    this.payoutAuditLogsTable.addGlobalSecondaryIndex({
+      indexName: 'challengeId-createdAt-index',
+      partitionKey: { name: 'challengeId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
     });
 
     // ==================== External Resources ====================
