@@ -59,6 +59,7 @@ new ChallengeStack(app, `chme-${stage}-challenge`, {
   userChallengesTable: coreStack.userChallengesTable,
   personalQuestProposalsTable: coreStack.personalQuestProposalsTable,
   notificationsTable: coreStack.notificationsTable,
+  payoutAuditLogsTable: coreStack.payoutAuditLogsTable,
 
 });
 
@@ -96,7 +97,6 @@ new AdminStack(app, `chme-${stage}-admin`, {
   verificationsTable: coreStack.verificationsTable,
   personalQuestProposalsTable: coreStack.personalQuestProposalsTable,
   notificationsTable: coreStack.notificationsTable,
-  payoutAuditLogsTable: coreStack.payoutAuditLogsTable,
 });
 
 new QuestStack(app, `chme-${stage}-quest`, {
