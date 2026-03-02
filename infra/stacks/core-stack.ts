@@ -1,3 +1,4 @@
+import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -19,7 +20,15 @@ import {
 
 import { Bucket, IBucket } from 'aws-cdk-lib/aws-s3';
 import { Topic } from 'aws-cdk-lib/aws-sns';
-import { EventBus } from 'aws-cdk-lib/aws-events';
+import { EventBus, Rule } from 'aws-cdk-lib/aws-events';
+import { Queue } from 'aws-cdk-lib/aws-sqs';
+import { SqsQueue } from 'aws-cdk-lib/aws-events-targets';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import { Runtime } from 'aws-cdk-lib/aws-lambda';
+import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { Alarm, ComparisonOperator, Metric, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
+import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as path from 'path';
 
 export interface CoreStackProps extends StackProps {
   stage: string;
@@ -59,6 +68,9 @@ export class CoreStack extends Stack {
   public readonly uploadsBucket: IBucket;
   public readonly snsTopic: Topic;
   public readonly eventBus: EventBus;
+  public readonly kpiEventsQueue: Queue;
+  public readonly kpiEventsDlq: Queue;
+  public readonly kpiEventsTable: Table;
 
   constructor(scope: Construct, id: string, props: CoreStackProps) {
     super(scope, id, props);
@@ -437,10 +449,123 @@ export class CoreStack extends Stack {
       projectionType: ProjectionType.ALL,
     });
 
+    this.kpiEventsTable = new Table(this, 'KpiEventsTable', {
+      tableName: `chme-${stage}-kpi-events`,
+      partitionKey: { name: 'eventId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    this.kpiEventsTable.addGlobalSecondaryIndex({
+      indexName: 'eventName-occurredAt-index',
+      partitionKey: { name: 'eventName', type: AttributeType.STRING },
+      sortKey: { name: 'occurredAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
     // ==================== External Resources ====================
     this.uploadsBucket = Bucket.fromBucketName(this, 'Uploads', config.s3.uploadsBucket);
     this.snsTopic = new Topic(this, 'Topic');
     this.eventBus = new EventBus(this, 'Bus');
+
+    this.kpiEventsDlq = new Queue(this, 'KpiEventsDlq', {
+      queueName: `chme-${stage}-kpi-events-dlq`,
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    this.kpiEventsQueue = new Queue(this, 'KpiEventsQueue', {
+      queueName: `chme-${stage}-kpi-events`,
+      deadLetterQueue: {
+        queue: this.kpiEventsDlq,
+        maxReceiveCount: 5,
+      },
+    });
+
+    const kpiEventsToSqsRule = new Rule(this, 'KpiEventsToSqsRule', {
+      eventBus: this.eventBus,
+      eventPattern: {
+        source: ['chme.challenge-board.kpi'],
+      },
+      targets: [new SqsQueue(this.kpiEventsQueue)],
+    });
+
+    const kpiIngestFn = new NodejsFunction(this, 'KpiIngestFn', {
+      runtime: Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      bundling: {
+        minify: true,
+        sourceMap: stage === 'dev',
+        externalModules: ['@aws-sdk/*'],
+      },
+      functionName: `chme-${stage}-kpi-ingest`,
+      entry: path.join(__dirname, '../../backend/services/kpi/ingest/index.ts'),
+      handler: 'handler',
+      environment: {
+        STAGE: stage,
+        KPI_EVENTS_TABLE: this.kpiEventsTable.tableName,
+      },
+    });
+    kpiIngestFn.addEventSource(new SqsEventSource(this.kpiEventsQueue, {
+      batchSize: 10,
+      reportBatchItemFailures: true,
+    }));
+    this.kpiEventsTable.grantWriteData(kpiIngestFn);
+
+    const alarmAction = new SnsAction(this.snsTopic);
+
+    const kpiDlqVisibleAlarm = new Alarm(this, 'KpiDlqVisibleAlarm', {
+      alarmName: `chme-${stage}-kpi-dlq-visible`,
+      metric: this.kpiEventsDlq.metricApproximateNumberOfMessagesVisible(),
+      threshold: 0,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+    });
+    kpiDlqVisibleAlarm.addAlarmAction(alarmAction);
+
+    const kpiQueueOldestAgeAlarm = new Alarm(this, 'KpiQueueOldestAgeAlarm', {
+      alarmName: `chme-${stage}-kpi-queue-oldest-age`,
+      metric: this.kpiEventsQueue.metricApproximateAgeOfOldestMessage(),
+      threshold: 300,
+      evaluationPeriods: 2,
+      datapointsToAlarm: 2,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+    });
+    kpiQueueOldestAgeAlarm.addAlarmAction(alarmAction);
+
+    const kpiRuleFailedInvocationsAlarm = new Alarm(this, 'KpiRuleFailedInvocationsAlarm', {
+      alarmName: `chme-${stage}-kpi-rule-failed-invocations`,
+      metric: new Metric({
+        namespace: 'AWS/Events',
+        metricName: 'FailedInvocations',
+        dimensionsMap: {
+          RuleName: kpiEventsToSqsRule.ruleName,
+          EventBusName: this.eventBus.eventBusName,
+        },
+        statistic: 'sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+    });
+    kpiRuleFailedInvocationsAlarm.addAlarmAction(alarmAction);
+
+    const kpiIngestFnErrorsAlarm = new Alarm(this, 'KpiIngestFnErrorsAlarm', {
+      alarmName: `chme-${stage}-kpi-ingest-errors`,
+      metric: kpiIngestFn.metricErrors({ period: cdk.Duration.minutes(5), statistic: 'sum' }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+    });
+    kpiIngestFnErrorsAlarm.addAlarmAction(alarmAction);
 
   }
 }

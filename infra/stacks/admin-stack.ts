@@ -19,6 +19,7 @@ interface AdminStackProps extends StackProps {
   verificationsTable: Table;
   personalQuestProposalsTable: Table;
   notificationsTable: Table;
+  kpiEventsTable: Table;
 }
 
 export class AdminStack extends Stack {
@@ -36,6 +37,7 @@ export class AdminStack extends Stack {
       verificationsTable,
       personalQuestProposalsTable,
       notificationsTable,
+      kpiEventsTable,
     } = props;
 
     const commonEnv = {
@@ -47,6 +49,7 @@ export class AdminStack extends Stack {
       VERIFICATIONS_TABLE: verificationsTable.tableName,
       PERSONAL_QUEST_PROPOSALS_TABLE: personalQuestProposalsTable.tableName,
       NOTIFICATIONS_TABLE: notificationsTable.tableName,
+      KPI_EVENTS_TABLE: kpiEventsTable.tableName,
     };
 
     const commonProps = {
@@ -244,6 +247,22 @@ export class AdminStack extends Stack {
       path: '/admin/challenges/{challengeId}/personal-quest-proposals',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('AdminPersonalQuestListIntegration', personalQuestListFn),
+      authorizer,
+    });
+
+
+    const listKpiEventsFn = new NodejsFunction(this, 'ListKpiEventsFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-kpi-events-list`,
+      entry: path.join(__dirname, '../../backend/services/admin/kpi/list/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    kpiEventsTable.grantReadData(listKpiEventsFn);
+    apiGateway.addRoutes({
+      path: '/admin/kpi/events',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminListKpiEventsIntegration', listKpiEventsFn),
       authorizer,
     });
   }

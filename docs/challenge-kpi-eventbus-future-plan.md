@@ -28,3 +28,12 @@
 - API 성공/실패와 KPI 발행 실패가 분리되어야 함.
 - 이벤트 누락률 모니터링이 가능해야 함.
 - BI 팀에서 사용하는 스키마 버전 계약이 문서화되어야 함.
+
+## 구현 현황(1차)
+- `trackKpiEvent` EventBridge 발행(best-effort) 적용
+- EventBridge Rule -> SQS(+DLQ) 라우팅 적용
+- SQS consumer(`kpi-ingest`)가 KPI 이벤트를 DynamoDB(`kpi-events`)에 적재
+- 운영 알람 4종(DLQ/적체/Rule 실패/Consumer 에러) 추가
+- 상세 스키마/버전 정책은 `docs/challenge-kpi-event-schema-v1.md` 참고
+- idempotency: deterministic `eventId` 정책 적용
+- admin 조회 경로: `GET /admin/kpi/events` 추가
