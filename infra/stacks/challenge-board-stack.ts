@@ -6,6 +6,7 @@ import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
+import { EventBus } from 'aws-cdk-lib/aws-events';
 import * as path from 'path';
 
 interface ChallengeBoardStackProps extends StackProps {
@@ -17,6 +18,7 @@ interface ChallengeBoardStackProps extends StackProps {
   challengeBoardsTable: Table;
   challengeCommentsTable: Table;
   challengePreviewsTable: Table;
+  eventBus: EventBus;
 }
 
 export class ChallengeBoardStack extends Stack {
@@ -32,6 +34,7 @@ export class ChallengeBoardStack extends Stack {
       challengeBoardsTable,
       challengeCommentsTable,
       challengePreviewsTable,
+      eventBus,
     } = props;
 
     const commonEnv = {
@@ -41,6 +44,9 @@ export class ChallengeBoardStack extends Stack {
       CHALLENGE_BOARDS_TABLE: challengeBoardsTable.tableName,
       CHALLENGE_COMMENTS_TABLE: challengeCommentsTable.tableName,
       CHALLENGE_PREVIEWS_TABLE: challengePreviewsTable.tableName,
+      EVENT_BUS_NAME: eventBus.eventBusName,
+      KPI_EVENT_SOURCE: 'chme.challenge-board.kpi',
+      KPI_EVENT_VERSION: '1',
     };
 
     const commonProps = {
@@ -63,6 +69,7 @@ export class ChallengeBoardStack extends Stack {
     });
     challengeBoardsTable.grantReadData(getBoardFn);
     userChallengesTable.grantReadData(getBoardFn);
+    eventBus.grantPutEventsTo(getBoardFn);
     apiGateway.addRoutes({
       path: '/challenge-board/{challengeId}',
       methods: [HttpMethod.GET],
@@ -78,6 +85,7 @@ export class ChallengeBoardStack extends Stack {
     });
     challengeBoardsTable.grantReadWriteData(upsertBoardFn);
     challengesTable.grantReadData(upsertBoardFn);
+    eventBus.grantPutEventsTo(upsertBoardFn);
     apiGateway.addRoutes({
       path: '/challenge-board/{challengeId}',
       methods: [HttpMethod.POST],
@@ -93,6 +101,7 @@ export class ChallengeBoardStack extends Stack {
     });
     challengeCommentsTable.grantWriteData(submitCommentFn);
     userChallengesTable.grantReadData(submitCommentFn);
+    eventBus.grantPutEventsTo(submitCommentFn);
     apiGateway.addRoutes({
       path: '/challenge-board/{challengeId}/comments',
       methods: [HttpMethod.POST],
@@ -124,6 +133,7 @@ export class ChallengeBoardStack extends Stack {
     challengeBoardsTable.grantReadWriteData(quoteCommentFn);
     challengeCommentsTable.grantReadWriteData(quoteCommentFn);
     challengesTable.grantReadData(quoteCommentFn);
+    eventBus.grantPutEventsTo(quoteCommentFn);
     apiGateway.addRoutes({
       path: '/challenge-board/{challengeId}/comments/{commentId}/quote',
       methods: [HttpMethod.POST],
@@ -138,6 +148,7 @@ export class ChallengeBoardStack extends Stack {
       handler: 'handler',
     });
     challengePreviewsTable.grantReadData(getPreviewFn);
+    eventBus.grantPutEventsTo(getPreviewFn);
     apiGateway.addRoutes({
       path: '/challenge-preview/{challengeId}',
       methods: [HttpMethod.GET],

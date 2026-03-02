@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { QueryCommand, GetCommand, DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 
 export type BlockType = 'text' | 'image' | 'link' | 'quote';
 
@@ -103,7 +104,46 @@ export function validateBlocks(blocks: any[], allowQuote: boolean): { valid: boo
   return { valid: true };
 }
 
+const eventBridgeClient = new EventBridgeClient({});
+
 export function trackKpiEvent(name: string, payload: Record<string, unknown>) {
-  // 확장 포인트: EventBridge/Kinesis/Analytics SDK로 대체 가능
-  console.log(JSON.stringify({ type: 'kpi-event', name, ...payload }));
+  const eventBusName = process.env.EVENT_BUS_NAME;
+  if (!eventBusName) {
+    console.log(JSON.stringify({ type: 'kpi-event', mode: 'log-only', name, ...payload }));
+    return;
+  }
+
+  const occurredAt = (payload.occurredAt ?? payload.at ?? new Date().toISOString()) as string;
+  const actorId = (payload.actorId ?? payload.actorUserId ?? null) as string | null;
+  const challengeId = (payload.challengeId ?? null) as string | null;
+
+  const metadata = Object.fromEntries(Object.entries(payload).filter(([key]) => !['actorId', 'actorUserId', 'challengeId', 'occurredAt', 'at'].includes(key)));
+
+  const detail = {
+    eventName: name,
+    eventVersion: process.env.KPI_EVENT_VERSION ?? '1',
+    actorId,
+    challengeId,
+    occurredAt,
+    metadata,
+  };
+
+  eventBridgeClient.send(new PutEventsCommand({
+    Entries: [
+      {
+        EventBusName: eventBusName,
+        Source: process.env.KPI_EVENT_SOURCE ?? 'chme.challenge-board.kpi',
+        DetailType: 'ChallengeKpiEvent',
+        Time: new Date(occurredAt),
+        Detail: JSON.stringify(detail),
+      },
+    ],
+  })).catch((error) => {
+    console.warn('kpi event publish failed (best-effort)', {
+      error,
+      eventName: name,
+      challengeId,
+      actorId,
+    });
+  });
 }

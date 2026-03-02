@@ -97,6 +97,7 @@ new AdminStack(app, `chme-${stage}-admin`, {
   verificationsTable: coreStack.verificationsTable,
   personalQuestProposalsTable: coreStack.personalQuestProposalsTable,
   notificationsTable: coreStack.notificationsTable,
+  kpiEventsTable: coreStack.kpiEventsTable,
 });
 
 new QuestStack(app, `chme-${stage}-quest`, {
@@ -133,6 +134,7 @@ new ChallengeBoardStack(app, `chme-${stage}-challenge-board`, {
   challengeBoardsTable: coreStack.challengeBoardsTable,
   challengeCommentsTable: coreStack.challengeCommentsTable,
   challengePreviewsTable: coreStack.challengePreviewsTable,
+  eventBus: coreStack.eventBus,
 });
 
 new FrontendStack(app, `chme-${stage}-frontend`, {
