@@ -37,7 +37,7 @@ const INITIAL = {
   durationDays:      7,
   maxParticipants:   '' as string,   // '' = 무제한
   challengeType:     'leader_personal' as ChallengeType,
-  requirePersonalGoalOnJoin: false,
+  requirePersonalGoalOnJoin: true,
   requirePersonalTargetOnJoin: true,
   allowExtraVisibilityToggle: true,
   remedyType: 'open' as 'strict'|'limited'|'open',
