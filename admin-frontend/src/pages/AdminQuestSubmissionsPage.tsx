@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+  all: { label: '전체', cls: 'bg-slate-100 text-slate-700' },
   pending: { label: '심사중', cls: 'bg-yellow-100 text-yellow-800' },
   approved: { label: '승인', cls: 'bg-green-100 text-green-800' },
   auto_approved: { label: '자동승인', cls: 'bg-green-100 text-green-800' },
@@ -18,7 +19,7 @@ const SCOPE_LABEL: Record<string, { label: string; cls: string }> = {
   mixed: { label: '혼합 퀘스트', cls: 'bg-purple-100 text-purple-700' },
 };
 
-const FILTER_TABS = ['pending', 'approved', 'rejected'] as const;
+const FILTER_TABS = ['all', 'pending', 'approved', 'rejected'] as const;
 type FilterTab = typeof FILTER_TABS[number];
 type ScopeFilter = 'all' | 'leader' | 'personal' | 'mixed';
 
@@ -58,6 +59,14 @@ export const AdminQuestSubmissionsPage = () => {
   const { data: challengeData } = useQuery({
     queryKey: ['admin-quest-submissions-challenges'],
     queryFn: async () => {
+      try {
+        const mine = await apiClient.get('/admin/challenges/mine');
+        const myChallenges = mine.data?.data?.challenges ?? [];
+        if (Array.isArray(myChallenges) && myChallenges.length > 0) return myChallenges;
+      } catch {
+        // fallback below
+      }
+
       const res = await apiClient.get('/challenges?sortBy=latest&limit=200');
       return res.data?.data?.challenges ?? [];
     },
@@ -86,6 +95,7 @@ export const AdminQuestSubmissionsPage = () => {
 
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [nextToken, setNextToken] = useState<string | null>(null);
+  const summary = data?.summary || { byStatus: {}, byScope: {} };
 
   useEffect(() => {
     setSubmissions(data?.submissions ?? []);
@@ -135,6 +145,25 @@ export const AdminQuestSubmissionsPage = () => {
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-900 transition-colors">← 뒤로</button>
           <h1 className="text-2xl font-bold text-gray-900">퀘스트 제출물 심사</h1>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div className="bg-white border border-gray-200 rounded-xl p-3">
+          <p className="text-xs text-gray-500">전체</p>
+          <p className="text-xl font-bold text-gray-900">{submissions.length}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3">
+          <p className="text-xs text-gray-500">승인</p>
+          <p className="text-xl font-bold text-emerald-600">{summary.byStatus?.approved || 0}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3">
+          <p className="text-xs text-gray-500">심사중</p>
+          <p className="text-xl font-bold text-amber-600">{summary.byStatus?.pending || 0}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3">
+          <p className="text-xs text-gray-500">거절</p>
+          <p className="text-xl font-bold text-rose-600">{summary.byStatus?.rejected || 0}</p>
         </div>
       </div>
 

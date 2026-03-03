@@ -69,10 +69,43 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let submissions: any[] = [];
     let lastEvaluatedKey: any = undefined;
 
-    if (questId) {
+    if (status === 'all' && !questId) {
+      const allStatuses = ['pending', 'approved', 'auto_approved', 'rejected'];
+      const pages = await Promise.all(allStatuses.map((eachStatus) => {
+        const expressionNames: Record<string, string> = { '#status': 'status' };
+        const expressionValues: Record<string, any> = { ':status': eachStatus };
+        let filterExpression: string | undefined = undefined;
+
+        if (challengeId) {
+          filterExpression = 'challengeId = :challengeId';
+          expressionValues[':challengeId'] = challengeId;
+        }
+
+        return docClient.send(new QueryCommand({
+          TableName: process.env.QUEST_SUBMISSIONS_TABLE!,
+          IndexName: 'status-createdAt-index',
+          KeyConditionExpression: '#status = :status',
+          ...(filterExpression ? { FilterExpression: filterExpression } : {}),
+          ExpressionAttributeNames: expressionNames,
+          ExpressionAttributeValues: expressionValues,
+          ScanIndexForward: false,
+          Limit: limit,
+        }));
+      }));
+
+      submissions = pages
+        .flatMap((result) => result.Items ?? [])
+        .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+        .slice(0, limit);
+      lastEvaluatedKey = undefined;
+    } else if (questId) {
       const expressionNames: Record<string, string> = { '#status': 'status' };
       const expressionValues: Record<string, any> = { ':qid': questId, ':status': status };
-      let filterExpression = '#status = :status';
+      let filterExpression = status === 'all' ? 'attribute_exists(submissionId)' : '#status = :status';
+
+      if (status === 'all') {
+        delete expressionValues[':status'];
+      }
 
       if (challengeId) {
         filterExpression += ' AND challengeId = :challengeId';
@@ -143,11 +176,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       enriched = enriched.filter(item => item.quest?.questScope === questScope);
     }
 
+    const summary = enriched.reduce((acc: any, item: any) => {
+      const s = String(item.status || 'unknown');
+      acc.byStatus[s] = (acc.byStatus[s] || 0) + 1;
+      const scope = String(item.quest?.questScope || 'unknown');
+      acc.byScope[scope] = (acc.byScope[scope] || 0) + 1;
+      return acc;
+    }, { byStatus: {}, byScope: {} });
+
     return response(200, {
       success: true,
       data: {
         submissions: enriched,
         total: enriched.length,
+        summary,
         nextToken: lastEvaluatedKey
           ? Buffer.from(JSON.stringify(lastEvaluatedKey)).toString('base64')
           : null,
