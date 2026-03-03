@@ -67,7 +67,7 @@ function parseGroups(rawGroups: unknown): string[] {
 function canReviewSubmission(event: APIGatewayProxyEvent): boolean {
   const groupsRaw = event.requestContext.authorizer?.jwt?.claims['cognito:groups'];
   const groups = parseGroups(groupsRaw);
-  const allowed = new Set(['admins', 'productowners', 'managers']);
+  const allowed = new Set(['admins', 'productowners', 'managers', 'leaders']);
   return groups.some(group => allowed.has(group));
 }
 

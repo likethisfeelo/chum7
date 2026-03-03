@@ -100,7 +100,7 @@ export const VerificationSheet = ({
 
   const verificationMutation = useMutation({
     mutationFn: async () => {
-      let imageUrl = '';
+      let imageUrl: string | undefined;
 
       if (mediaFile) {
         const challengeId = userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
@@ -126,7 +126,7 @@ export const VerificationSheet = ({
       const response = await apiClient.post('/verifications', {
         userChallengeId: userChallenge.userChallengeId,
         day: Math.max(1, Number(userChallenge.currentDay || 1)),
-        imageUrl,
+        ...(imageUrl ? { imageUrl } : {}),
         todayNote: formData.todayNote,
         tomorrowPromise: formData.tomorrowPromise,
         performedAt: toIsoFromLocalDateTime(formData.completedAt),

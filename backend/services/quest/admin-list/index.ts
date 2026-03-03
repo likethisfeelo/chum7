@@ -2,12 +2,10 @@
  * GET /admin/quests/submissions
  *   ?status=pending          (default: pending)
  *   ?questId=xxx             (특정 퀘스트 필터)
+ *   ?challengeId=xxx         (특정 챌린지 필터)
+ *   ?questScope=leader|personal|mixed
  *   ?limit=20
  *   ?nextToken=xxx           (pagination)
- *
- * status-createdAt-index 로 전체 pending 목록 조회.
- * questId 지정 시 questId-createdAt-index 사용.
- * 퀘스트 정보는 BatchGet으로 enrichment.
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -24,65 +22,105 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
-function isAdmin(event: APIGatewayProxyEvent): boolean {
-  const groups = event.requestContext.authorizer?.jwt?.claims['cognito:groups'];
-  if (!groups) return false;
-  if (typeof groups === 'string') return groups === 'admins';
-  return Array.isArray(groups) && groups.includes('admins');
+function parseGroups(rawGroups: unknown): string[] {
+  if (!rawGroups) return [];
+  if (Array.isArray(rawGroups)) return rawGroups.map(String).map(g => g.trim()).filter(Boolean);
+  if (typeof rawGroups !== 'string') return [];
+
+  const value = rawGroups.trim();
+  if (!value) return [];
+  if (value.startsWith('[') && value.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String).map(g => g.trim()).filter(Boolean);
+    } catch {
+      // fall through
+    }
+  }
+
+  return value
+    .split(/[,:]/)
+    .map(g => g.replace(/[\[\]"']/g, '').trim())
+    .filter(Boolean);
+}
+
+function canAccess(event: APIGatewayProxyEvent): boolean {
+  const groups = parseGroups(event.requestContext.authorizer?.jwt?.claims['cognito:groups']);
+  const allowed = new Set(['admins', 'productowners', 'leaders', 'managers']);
+  return groups.some(group => allowed.has(group));
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    if (!isAdmin(event)) {
-      return response(403, { error: 'FORBIDDEN', message: '관리자 권한이 필요합니다' });
+    if (!canAccess(event)) {
+      return response(403, { error: 'FORBIDDEN', message: '제출물 조회 권한이 필요합니다' });
     }
 
-    const params   = event.queryStringParameters || {};
-    const status   = params.status || 'pending';
-    const questId  = params.questId;
-    const limit    = Math.min(Number(params.limit) || 20, 100);
+    const params = event.queryStringParameters || {};
+    const status = params.status || 'pending';
+    const questId = params.questId;
+    const challengeId = params.challengeId;
+    const questScope = params.questScope;
+    const limit = Math.min(Number(params.limit) || 20, 100);
     const nextToken = params.nextToken
       ? JSON.parse(Buffer.from(params.nextToken, 'base64').toString())
       : undefined;
 
-    // ── 제출물 조회 ────────────────────────────────────────────────────
     let submissions: any[] = [];
     let lastEvaluatedKey: any = undefined;
 
     if (questId) {
-      // 특정 퀘스트의 모든 제출물 (questId-createdAt-index)
+      const expressionNames: Record<string, string> = { '#status': 'status' };
+      const expressionValues: Record<string, any> = { ':qid': questId, ':status': status };
+      let filterExpression = '#status = :status';
+
+      if (challengeId) {
+        filterExpression += ' AND challengeId = :challengeId';
+        expressionValues[':challengeId'] = challengeId;
+      }
+
       const result = await docClient.send(new QueryCommand({
-        TableName:  process.env.QUEST_SUBMISSIONS_TABLE!,
-        IndexName:  'questId-createdAt-index',
+        TableName: process.env.QUEST_SUBMISSIONS_TABLE!,
+        IndexName: 'questId-createdAt-index',
         KeyConditionExpression: 'questId = :qid',
-        FilterExpression:       '#status = :status',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: { ':qid': questId, ':status': status },
+        FilterExpression: filterExpression,
+        ExpressionAttributeNames: expressionNames,
+        ExpressionAttributeValues: expressionValues,
         ScanIndexForward: false,
-        Limit:      limit,
+        Limit: limit,
         ExclusiveStartKey: nextToken,
       }));
-      submissions      = result.Items ?? [];
+
+      submissions = result.Items ?? [];
       lastEvaluatedKey = result.LastEvaluatedKey;
     } else {
-      // 전체 status별 목록 (status-createdAt-index)
+      const expressionNames: Record<string, string> = { '#status': 'status' };
+      const expressionValues: Record<string, any> = { ':status': status };
+      let filterExpression: string | undefined = undefined;
+
+      if (challengeId) {
+        filterExpression = 'challengeId = :challengeId';
+        expressionValues[':challengeId'] = challengeId;
+      }
+
       const result = await docClient.send(new QueryCommand({
-        TableName:  process.env.QUEST_SUBMISSIONS_TABLE!,
-        IndexName:  'status-createdAt-index',
+        TableName: process.env.QUEST_SUBMISSIONS_TABLE!,
+        IndexName: 'status-createdAt-index',
         KeyConditionExpression: '#status = :status',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: { ':status': status },
-        ScanIndexForward: false, // 최신순
-        Limit:      limit,
+        ...(filterExpression ? { FilterExpression: filterExpression } : {}),
+        ExpressionAttributeNames: expressionNames,
+        ExpressionAttributeValues: expressionValues,
+        ScanIndexForward: false,
+        Limit: limit,
         ExclusiveStartKey: nextToken,
       }));
-      submissions      = result.Items ?? [];
+
+      submissions = result.Items ?? [];
       lastEvaluatedKey = result.LastEvaluatedKey;
     }
 
-    // ── 퀘스트 정보 BatchGet enrichment ───────────────────────────────
     const questIds = [...new Set(submissions.map(s => s.questId))];
-    let questMap   = new Map<string, any>();
+    let questMap = new Map<string, any>();
 
     if (questIds.length > 0) {
       const batchResult = await docClient.send(new BatchGetCommand({
@@ -93,25 +131,28 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         },
       }));
       const quests = batchResult.Responses?.[process.env.QUESTS_TABLE!] ?? [];
-      questMap = new Map(quests.map(q => [q.questId, q]));
+      questMap = new Map(quests.map((q: any) => [q.questId, q]));
     }
 
-    const enriched = submissions.map(s => ({
+    let enriched = submissions.map(s => ({
       ...s,
       quest: questMap.get(s.questId) ?? null,
     }));
+
+    if (questScope && ['leader', 'personal', 'mixed'].includes(questScope)) {
+      enriched = enriched.filter(item => item.quest?.questScope === questScope);
+    }
 
     return response(200, {
       success: true,
       data: {
         submissions: enriched,
-        total:       enriched.length,
-        nextToken:   lastEvaluatedKey
+        total: enriched.length,
+        nextToken: lastEvaluatedKey
           ? Buffer.from(JSON.stringify(lastEvaluatedKey)).toString('base64')
           : null,
       },
     });
-
   } catch (error: any) {
     console.error('Admin list quest submissions error:', error);
     return response(500, { error: 'INTERNAL_SERVER_ERROR' });
