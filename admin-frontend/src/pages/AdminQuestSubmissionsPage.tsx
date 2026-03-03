@@ -43,13 +43,26 @@ const mediaSummary = (content: any) => {
   return chips.join(' · ');
 };
 
+function isVideoUrl(url: string): boolean {
+  const lower = String(url || '').toLowerCase();
+  return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.mov') || lower.includes('.m4v');
+}
+
+function resolveMediaUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/uploads/')) return url;
+  if (url.startsWith('uploads/')) return `/${url}`;
+  return `/uploads/${url.replace(/^\/+/, '')}`;
+}
+
 export const AdminQuestSubmissionsPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const initialChallengeId = searchParams.get('challengeId') ?? 'all';
 
-  const [statusFilter, setStatusFilter] = useState<FilterTab>('pending');
+  const [statusFilter, setStatusFilter] = useState<FilterTab>('all');
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
   const [challengeFilter, setChallengeFilter] = useState(initialChallengeId);
   const [reviewing, setReviewing] = useState<{ id: string; action: 'approve' | 'reject' } | null>(null);
@@ -89,6 +102,19 @@ export const AdminQuestSubmissionsPage = () => {
       if (scopeFilter !== 'all') params.set('questScope', scopeFilter);
       const res = await apiClient.get(`/admin/quests/submissions?${params}`);
       return res.data.data;
+    },
+    retry: false,
+  });
+
+  const { data: verificationMonitor } = useQuery({
+    queryKey: ['admin-verification-monitor', challengeFilter],
+    queryFn: async () => {
+      const res = await apiClient.get('/verifications?limit=40');
+      let items = res.data?.data?.verifications ?? [];
+      if (challengeFilter !== 'all') {
+        items = items.filter((item: any) => item.challengeId === challengeFilter);
+      }
+      return items;
     },
     retry: false,
   });
@@ -217,10 +243,30 @@ export const AdminQuestSubmissionsPage = () => {
       {isLoading ? (
         <div className="text-center py-12 text-gray-500">로딩 중...</div>
       ) : submissions.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
-          <p className="text-4xl mb-3">📭</p>
-          <p>{STATUS_LABEL[statusFilter]?.label} 제출물이 없습니다</p>
-        </div>
+        (verificationMonitor?.length ? (
+          <div className="space-y-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
+              퀘스트 제출물은 없지만, 최근 인증 게시물 모니터링 목록을 표시합니다.
+            </div>
+            {verificationMonitor.map((v: any) => (
+              <div key={v.verificationId} className="bg-white border border-gray-200 rounded-2xl p-4">
+                <p className="text-sm font-semibold text-gray-900">인증 게시물 #{String(v.verificationId).slice(0, 8)}</p>
+                <p className="text-xs text-gray-500 mt-1">Day {v.day} · {formatDate(v.performedAt || v.createdAt)}</p>
+                {v.imageUrl && (isVideoUrl(v.imageUrl) ? (
+                  <video src={resolveMediaUrl(v.imageUrl)} controls className="w-full h-48 object-cover rounded-xl mt-3 bg-black" />
+                ) : (
+                  <img src={resolveMediaUrl(v.imageUrl)} alt="인증 이미지" className="w-full h-48 object-cover rounded-xl mt-3" />
+                ))}
+                {v.todayNote && <p className="text-sm text-gray-700 mt-3 whitespace-pre-wrap">{v.todayNote}</p>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-400">
+            <p className="text-4xl mb-3">📭</p>
+            <p>{STATUS_LABEL[statusFilter]?.label} 제출물이 없습니다</p>
+          </div>
+        ))
       ) : (
         <div className="space-y-3">
           {submissions.map((sub) => {

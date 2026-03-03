@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -16,21 +16,46 @@ const CHEER_MESSAGES = [
   '내일도 화이팅! 🌟',
 ];
 
+type ChallengeFilter = 'all' | string;
+
 export const UseTicketPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedMessage, setSelectedMessage] = useState(CHEER_MESSAGES[0]);
+  const [challengeFilter, setChallengeFilter] = useState<ChallengeFilter>('all');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['cheer-targets'],
     queryFn: async () => {
       const response = await apiClient.get('/cheer/targets');
       return response.data.data;
     },
+    retry: false,
   });
 
-  const firstTicket = data?.availableTickets?.[0];
   const immediateTargets = data?.immediateTargets || [];
+  const availableTickets = data?.availableTickets || [];
+
+  const challengeOptions = useMemo(() => {
+    const map = new Map<string, { challengeId: string; label: string }>();
+    availableTickets.forEach((ticket: any) => {
+      const key = ticket.challengeId || 'unknown';
+      if (!map.has(key)) {
+        map.set(key, {
+          challengeId: key,
+          label: ticket.challengeId ? `챌린지 ${String(ticket.challengeId).slice(0, 8)}` : '미지정 챌린지',
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [availableTickets]);
+
+  const filteredTickets = useMemo(() => {
+    if (challengeFilter === 'all') return availableTickets;
+    return availableTickets.filter((ticket: any) => ticket.challengeId === challengeFilter);
+  }, [availableTickets, challengeFilter]);
+
+  const selectedTicket = filteredTickets[0] || availableTickets[0] || null;
 
   const useTicketMutation = useMutation({
     mutationFn: async ({ ticketId }: { ticketId: string }) => {
@@ -68,6 +93,34 @@ export const UseTicketPage = () => {
           <p className="text-sm text-gray-600 mt-1">즉시 응원 대상(미완료): <span className="font-bold text-gray-900">{immediateTargets.length}</span>명</p>
         </div>
 
+        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4">
+          <p className="text-sm font-bold text-indigo-800 mb-1">응원권 기능 분화 기획(프론트 자산 반영)</p>
+          <p className="text-xs text-indigo-700">챌린지별 조회/사용을 위해 아래에서 챌린지 필터를 먼저 선택할 수 있도록 UI를 분리했습니다.</p>
+        </div>
+
+        <div>
+          <h2 className="text-base font-bold text-gray-900 mb-3">챌린지 선택</h2>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setChallengeFilter('all')}
+              className={`px-3 py-1.5 rounded-full text-xs border ${challengeFilter === 'all' ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-700 border-gray-300'}`}
+            >
+              전체
+            </button>
+            {challengeOptions.map((option) => (
+              <button
+                key={option.challengeId}
+                type="button"
+                onClick={() => setChallengeFilter(option.challengeId)}
+                className={`px-3 py-1.5 rounded-full text-xs border ${challengeFilter === option.challengeId ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-700 border-gray-300'}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div>
           <h2 className="text-base font-bold text-gray-900 mb-3">응원 메시지 선택</h2>
           <div className="space-y-2">
@@ -91,6 +144,17 @@ export const UseTicketPage = () => {
           <h2 className="text-base font-bold text-gray-900 mb-3">발송 방식</h2>
           {isLoading ? (
             <Loading />
+          ) : isError ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
+              <p className="text-sm text-amber-800">응원 대상 조회에 실패했어요. 잠시 후 다시 시도해주세요.</p>
+              <button
+                type="button"
+                onClick={() => refetch()}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 text-white"
+              >
+                다시 조회
+              </button>
+            </div>
           ) : (!data || data.myTickets === 0) ? (
             <EmptyState
               icon="🎟"
@@ -110,16 +174,17 @@ export const UseTicketPage = () => {
                 <p className="text-sm">응원권 1장으로 같은 챌린지 미완료 참여자 전원에게 익명 즉시 발송</p>
               </div>
               <p className="text-xs text-gray-500">대상 수: {immediateTargets.length}명</p>
+              <p className="text-xs text-gray-500 mt-1">선택된 챌린지 응원권: {filteredTickets.length}장</p>
             </div>
           )}
         </div>
 
-        {firstTicket && immediateTargets.length > 0 && (
+        {selectedTicket && immediateTargets.length > 0 && (
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => useTicketMutation.mutate({ ticketId: firstTicket.ticketId })}
+            onClick={() => useTicketMutation.mutate({ ticketId: selectedTicket.ticketId })}
             disabled={useTicketMutation.isPending}
             className="w-full py-4 bg-gradient-to-r from-primary-500 to-primary-600 text-white font-bold text-lg rounded-2xl hover:from-primary-600 hover:to-primary-700 transition-all disabled:opacity-50"
           >
