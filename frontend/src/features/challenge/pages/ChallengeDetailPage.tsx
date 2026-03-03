@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -7,21 +7,38 @@ import { FiArrowLeft, FiUsers, FiTrendingUp, FiClock } from 'react-icons/fi';
 import { Button } from '@/shared/components/Button';
 import { Loading } from '@/shared/components/Loading';
 import toast from 'react-hot-toast';
+import { JoinWizardBottomSheet } from '@/features/challenge/components/JoinWizardBottomSheet';
+import { WizardFormState } from '@/features/challenge/components/join-wizard/types';
+
+const parseTargetTimeToFormState = (targetTime?: string): WizardFormState => {
+  const fallback: WizardFormState = {
+    hour12: 7,
+    minute: 0,
+    meridiem: 'AM',
+    questTitle: '',
+    questDescription: '',
+    questVerificationType: 'image',
+  };
+
+  if (!targetTime) return fallback;
+
+  const [hour, minute] = String(targetTime).split(':').map((value) => Number(value));
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return fallback;
+
+  return {
+    ...fallback,
+    hour12: hour % 12 === 0 ? 12 : hour % 12,
+    minute,
+    meridiem: hour >= 12 ? 'PM' : 'AM',
+  };
+};
 
 export const ChallengeDetailPage = () => {
   const { challengeId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const [personalGoal, setPersonalGoal] = useState('');
-  const [hour12, setHour12] = useState(7);
-  const [minute, setMinute] = useState(0);
-  const [meridiem, setMeridiem] = useState<'AM' | 'PM'>('AM');
-  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Seoul';
-  const [personalQuestTitle, setPersonalQuestTitle] = useState('');
-  const [personalQuestDescription, setPersonalQuestDescription] = useState('');
-  const [personalQuestVerificationType, setPersonalQuestVerificationType] = useState<'image'|'text'|'link'|'video'>('image');
-
+  const [isJoinWizardOpen, setIsJoinWizardOpen] = useState(false);
+  const useNewJoinWizard = String(import.meta.env.VITE_USE_NEW_JOIN_WIZARD ?? 'true') === 'true';
 
   const { data: challenge, isLoading } = useQuery({
     queryKey: ['challenge', challengeId],
@@ -39,7 +56,6 @@ export const ChallengeDetailPage = () => {
     },
   });
 
-
   const { data: myChallengesData } = useQuery({
     queryKey: ['my-challenges', 'active-on-detail'],
     queryFn: async () => {
@@ -48,57 +64,42 @@ export const ChallengeDetailPage = () => {
     },
   });
 
-  useEffect(() => {
-    if (!challenge?.targetTime) return;
-    const [hh, mm] = String(challenge.targetTime).split(':').map((v: string) => Number(v));
-    if (Number.isNaN(hh) || Number.isNaN(mm)) return;
-    const isPm = hh >= 12;
-    const nextHour = hh % 12 === 0 ? 12 : hh % 12;
-    setHour12(nextHour);
-    setMinute(mm);
-    setMeridiem(isPm ? 'PM' : 'AM');
-  }, [challenge?.targetTime]);
-
-
-  const challengeType = String(challenge?.challengeType || 'leader_personal');
-  const defaultRequireGoal = challengeType === 'personal_only' || challengeType === 'mixed';
-  const defaultRequireTarget = challengeType !== 'leader_only';
-  const requirePersonalGoalOnJoin = challenge?.layerPolicy?.requirePersonalGoalOnJoin ?? defaultRequireGoal;
-  const requirePersonalTargetOnJoin = challenge?.layerPolicy?.requirePersonalTargetOnJoin ?? defaultRequireTarget;
-
-
   const joinMutation = useMutation({
-    mutationFn: async () => {
-      const payload: any = {};
-      if (personalGoal.trim()) payload.personalGoal = personalGoal.trim();
-      if (requirePersonalTargetOnJoin) {
-        payload.personalTarget = {
-          hour12,
-          minute,
-          meridiem,
-          timezone: userTimezone,
-        };
-      }
+    mutationFn: async (formState: WizardFormState) => {
+      const response = await apiClient.post(`/challenges/${challengeId}/join`, {
+        personalTarget: {
+          hour12: formState.hour12,
+          minute: formState.minute,
+          meridiem: formState.meridiem,
+          timezone: 'Asia/Seoul',
+        },
+      });
 
-      const response = await apiClient.post(`/challenges/${challengeId}/join`, payload);
-      return response.data;
+      return {
+        joinResult: response.data,
+        formState,
+      };
     },
-    onSuccess: async (result) => {
-      const userChallengeId = result?.data?.userChallengeId;
-      if (challenge?.personalQuestEnabled && personalQuestTitle.trim() && userChallengeId) {
+    onSuccess: async ({ joinResult, formState }) => {
+      const userChallengeId = joinResult?.data?.userChallengeId;
+      const hasQuestInput = formState.questTitle.trim() && formState.questDescription.trim();
+
+      if (challenge?.personalQuestEnabled && hasQuestInput && userChallengeId) {
         try {
           await apiClient.post(`/challenges/${challengeId}/personal-quest`, {
             userChallengeId,
-            title: personalQuestTitle.trim(),
-            description: personalQuestDescription.trim(),
-            verificationType: personalQuestVerificationType,
+            title: formState.questTitle.trim(),
+            description: formState.questDescription.trim(),
+            verificationType: formState.questVerificationType,
           });
         } catch (e: any) {
           toast.error(e?.response?.data?.message || '개인 퀘스트 제안 제출에 실패했습니다');
         }
       }
+
       queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
       toast.success('챌린지 참여 완료! 오늘부터 시작하세요 🎉');
+      setIsJoinWizardOpen(false);
       navigate('/me');
     },
     onError: (error: any) => {
@@ -112,6 +113,7 @@ export const ChallengeDetailPage = () => {
   const lifecycle = String(challenge.lifecycle || 'draft');
   const alreadyJoined = (myChallengesData?.challenges ?? []).some((item: any) => (item.challengeId ?? item.challenge?.challengeId) === challengeId);
   const canJoin = lifecycle === 'recruiting' && !alreadyJoined;
+
   const ctaLabelMap: Record<string, string> = {
     recruiting: alreadyJoined ? '이미 참여신청한 챌린지' : '챌린지 참여 신청하기',
     preparing: '모집이 마감된 챌린지',
@@ -120,6 +122,7 @@ export const ChallengeDetailPage = () => {
     archived: '보관된 챌린지',
     draft: '모집 전 챌린지',
   };
+
   const lifecycleHintMap: Record<string, string> = {
     recruiting: alreadyJoined ? '이미 참여신청을 완료한 챌린지입니다.' : '지금 참여 신청할 수 있습니다.',
     preparing: '모집이 종료되어 새로운 참여 신청은 불가능합니다. 준비중 공지/게시판만 확인할 수 있어요.',
@@ -131,7 +134,6 @@ export const ChallengeDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* 헤더 */}
       <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4 z-10">
         <button
           onClick={() => navigate(-1)}
@@ -139,7 +141,7 @@ export const ChallengeDetailPage = () => {
         >
           <FiArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-bold">챌린지 상세</h1>
+        <h1 className="text-lg font-bold text-gray-900">챌린지 상세</h1>
       </div>
 
       <div className="p-6">
@@ -156,9 +158,7 @@ export const ChallengeDetailPage = () => {
               <span className="inline-block px-3 py-1 bg-primary-100 text-primary-700 text-xs font-medium rounded-full mb-2">
                 {challenge.category}
               </span>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                {challenge.title}
-              </h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">{challenge.title}</h2>
               <p className="text-sm text-gray-600 flex items-center gap-1">
                 <FiClock className="w-4 h-4" />
                 목표 시간: {challenge.targetTime}
@@ -166,11 +166,8 @@ export const ChallengeDetailPage = () => {
             </div>
           </div>
 
-          <p className="text-gray-700 leading-relaxed mb-6">
-            {challenge.description}
-          </p>
+          <p className="text-gray-700 leading-relaxed mb-6">{challenge.description}</p>
 
-          {/* 통계 */}
           {stats && (
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="text-center p-4 bg-gray-50 rounded-xl">
@@ -191,31 +188,22 @@ export const ChallengeDetailPage = () => {
             </div>
           )}
 
-          {/* Day별 완료율 */}
           {stats?.dayCompletionRates && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-700 mb-3">Day별 완료율</p>
               {stats.dayCompletionRates.map((day: any) => (
                 <div key={day.day} className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-gray-600 w-12">
-                    Day {day.day}
-                  </span>
+                  <span className="text-sm font-medium text-gray-600 w-12">Day {day.day}</span>
                   <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-primary-400 to-primary-600 transition-all"
-                      style={{ width: `${day.completionRate}%` }}
-                    />
+                    <div className="h-full bg-gradient-to-r from-primary-400 to-primary-600 transition-all" style={{ width: `${day.completionRate}%` }} />
                   </div>
-                  <span className="text-sm text-gray-600 w-12 text-right">
-                    {Math.round(day.completionRate)}%
-                  </span>
+                  <span className="text-sm text-gray-600 w-12 text-right">{Math.round(day.completionRate)}%</span>
                 </div>
               ))}
             </div>
           )}
         </motion.div>
 
-        {/* 획득 뱃지 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -229,94 +217,35 @@ export const ChallengeDetailPage = () => {
             </div>
             <div>
               <p className="font-bold text-gray-900">{challenge.badgeName}</p>
-              <p className="text-sm text-gray-600">
-                "나는 {challenge.identityKeyword} 사람"
-              </p>
+              <p className="text-sm text-gray-600">"나는 {challenge.identityKeyword} 사람"</p>
             </div>
           </div>
         </motion.div>
 
+        <p className="text-sm text-gray-600 mb-3">
+          상태: <span className="font-semibold">{lifecycle}</span> · {lifecycleHintMap[lifecycle] ?? '참여 가능 상태를 확인해주세요.'}
+        </p>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
-          <h3 className="text-base font-bold text-gray-900 mb-3">참여 정보 입력</h3>
-          <p className="text-sm text-gray-500 mb-4">챌린지 유형/레이어 정책에 따라 입력 항목이 달라집니다.</p>
-          <p className="text-xs text-gray-500 mb-2">입력되는 시간대: {userTimezone}</p>
-          <p className="text-xs text-primary-700 mb-1">유형: {challengeType}</p>
-          <p className="text-xs text-gray-500 mb-3">{requirePersonalGoalOnJoin ? '개인 목표 입력 필수' : '개인 목표 입력 선택'} · {requirePersonalTargetOnJoin ? '개인 목표시각 필수' : '개인 목표시각 선택'}</p>
-          {requirePersonalTargetOnJoin && (
-          <div className="grid grid-cols-3 gap-3 mb-3">
-            <select value={hour12} onChange={(e) => setHour12(Number(e.target.value))} className="px-3 py-2.5 border border-gray-300 rounded-xl">
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-                <option key={h} value={h}>{h}시</option>
-              ))}
-            </select>
-            <select value={minute} onChange={(e) => setMinute(Number(e.target.value))} className="px-3 py-2.5 border border-gray-300 rounded-xl">
-              {[0, 10, 20, 30, 40, 50].map((m) => (
-                <option key={m} value={m}>{String(m).padStart(2, '0')}분</option>
-              ))}
-            </select>
-            <select value={meridiem} onChange={(e) => setMeridiem(e.target.value as 'AM' | 'PM')} className="px-3 py-2.5 border border-gray-300 rounded-xl">
-              <option value="AM">오전</option>
-              <option value="PM">오후</option>
-            </select>
-          </div>
-          )}
-          <input
-            value={personalGoal}
-            onChange={(e) => setPersonalGoal(e.target.value)}
-            placeholder={requirePersonalGoalOnJoin ? '개인 목표 메모 (필수)' : '개인 목표 메모 (선택)'}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-          />
-        </div>
-
-
-        {challenge?.personalQuestEnabled && (
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6 space-y-3">
-            <h3 className="text-base font-bold text-gray-900">📝 개인 퀘스트 등록 (선택)</h3>
-            <p className="text-sm text-gray-500">챌린지 주제에 맞는 나만의 퀘스트를 등록하세요</p>
-            <input
-              value={personalQuestTitle}
-              onChange={(e) => setPersonalQuestTitle(e.target.value)}
-              placeholder="퀘스트 제목"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-            />
-            <input
-              value={personalQuestDescription}
-              onChange={(e) => setPersonalQuestDescription(e.target.value)}
-              placeholder="설명 (선택)"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-            />
-            <div className="flex gap-2">
-              {(['image','text','link','video'] as const).map((v) => (
-                <button key={v} type="button" onClick={() => setPersonalQuestVerificationType(v)} className={`px-3 py-1.5 rounded-lg text-sm ${personalQuestVerificationType===v ? 'bg-primary-600 text-white':'bg-gray-100 text-gray-700'}`}>
-                  {v}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-gray-500">{challenge?.personalQuestAutoApprove ? '✅ 자동 승인됩니다' : '⏳ 리더 검토가 필요합니다'}</p>
-          </div>
+        {!useNewJoinWizard && canJoin && (
+          <p className="text-xs text-amber-700 mb-3">
+            점진 롤아웃 설정으로 간편 참여 모드가 활성화되어, 기본 시간으로 즉시 참여합니다.
+          </p>
         )}
 
-        <p className="text-sm text-gray-600 mb-3">상태: <span className="font-semibold">{lifecycle}</span> · {lifecycleHintMap[lifecycle] ?? '참여 가능 상태를 확인해주세요.'}</p>
         {alreadyJoined && (
           <p className="text-xs text-amber-700 mb-3">이미 참여신청한 챌린지입니다. ME 탭에서 준비/진행 상태를 확인해주세요.</p>
         )}
 
-        {/* 참여 버튼 */}
         <Button
           fullWidth
           size="lg"
           onClick={() => {
             if (!canJoin) return;
-            if (requirePersonalGoalOnJoin && personalGoal.trim().length === 0) {
-              toast.error('개인 목표를 입력해주세요');
+            if (useNewJoinWizard) {
+              setIsJoinWizardOpen(true);
               return;
             }
-            if (requirePersonalTargetOnJoin && (hour12 < 1 || hour12 > 12)) {
-              toast.error('개인 목표시간을 확인해주세요');
-              return;
-            }
-            joinMutation.mutate();
+            joinMutation.mutate(parseTargetTimeToFormState(challenge?.targetTime));
           }}
           loading={joinMutation.isPending}
           disabled={!canJoin || alreadyJoined}
@@ -324,10 +253,18 @@ export const ChallengeDetailPage = () => {
           {ctaLabelMap[lifecycle] ?? '챌린지 참여하기'}
         </Button>
 
-        <p className="text-xs text-gray-500 text-center mt-4">
-          💡 오늘부터 7일간 진행됩니다
-        </p>
+        <p className="text-xs text-gray-500 text-center mt-4">💡 오늘부터 7일간 진행됩니다</p>
       </div>
+
+      {useNewJoinWizard && (
+        <JoinWizardBottomSheet
+          isOpen={isJoinWizardOpen}
+          onClose={() => setIsJoinWizardOpen(false)}
+          challenge={challenge}
+          loading={joinMutation.isPending}
+          onSubmit={(formState) => joinMutation.mutate(formState)}
+        />
+      )}
     </div>
   );
 };
