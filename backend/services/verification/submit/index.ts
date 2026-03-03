@@ -93,6 +93,10 @@ async function checkIncompleteUsers(
   groupId: string,
   currentDay: number
 ): Promise<{ hasIncompletePeople: boolean; incompleteCount: number }> {
+  if (!groupId) {
+    return { hasIncompletePeople: false, incompleteCount: 0 };
+  }
+
   const result = await docClient.send(new QueryCommand({
     TableName: process.env.USER_CHALLENGES_TABLE!,
     IndexName: 'groupId-index',
@@ -293,53 +297,65 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
     if (isEarlyCompletion) {
-      const incompleteCheck = await checkIncompleteUsers(
-        userChallenge.groupId,
-        input.day
-      );
-
-      cheerOpportunity = {
-        ...incompleteCheck,
-        canCheerNow: incompleteCheck.hasIncompletePeople,
-        cheerTicketGranted: !incompleteCheck.hasIncompletePeople
-      };
-
-      if (!incompleteCheck.hasIncompletePeople) {
-        await createCheerTicket(
-          userId,
-          userChallenge.challengeId,
-          verificationId,
-          delta || 0,
-          'early_completion'
+      try {
+        const incompleteCheck = await checkIncompleteUsers(
+          userChallenge.groupId,
+          input.day
         );
+
+        cheerOpportunity = {
+          ...incompleteCheck,
+          canCheerNow: incompleteCheck.hasIncompletePeople,
+          cheerTicketGranted: !incompleteCheck.hasIncompletePeople
+        };
+
+        if (!incompleteCheck.hasIncompletePeople) {
+          await createCheerTicket(
+            userId,
+            userChallenge.challengeId,
+            verificationId,
+            delta || 0,
+            'early_completion'
+          );
+        }
+      } catch (cheerError) {
+        console.error('Early completion cheer ticket error:', cheerError);
       }
     }
 
     const newBadges: string[] = [];
 
     if (consecutiveDays === 3) {
-      await createCheerTicket(
-        userId,
-        userChallenge.challengeId,
-        verificationId,
-        delta || 0,
-        'streak_3'
-      );
-      cheerOpportunity.cheerTicketGranted = true;
-      newBadges.push('3-day-streak');
-    }
-
-    if (input.day === 7 && consecutiveDays === 7) {
-      for (let i = 0; i < 3; i++) {
+      try {
         await createCheerTicket(
           userId,
           userChallenge.challengeId,
           verificationId,
           delta || 0,
-          'complete'
+          'streak_3'
         );
+        cheerOpportunity.cheerTicketGranted = true;
+      } catch (cheerError) {
+        console.error('Streak cheer ticket error:', cheerError);
       }
-      cheerOpportunity.cheerTicketGranted = true;
+      newBadges.push('3-day-streak');
+    }
+
+    if (input.day === 7 && consecutiveDays === 7) {
+      try {
+        for (let i = 0; i < 3; i++) {
+          await createCheerTicket(
+            userId,
+            userChallenge.challengeId,
+            verificationId,
+            delta || 0,
+            'complete'
+          );
+        }
+        cheerOpportunity.cheerTicketGranted = true;
+      } catch (cheerError) {
+        console.error('Complete cheer ticket error:', cheerError);
+      }
       newBadges.push('7-day-master');
     }
 

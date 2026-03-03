@@ -14,6 +14,11 @@ const FILTER_GUIDE_TEXT: Record<'all' | 'extra', string> = {
   extra: '추가 기록만 모아보며 복기/회고 흐름을 확인할 수 있어요.',
 };
 
+function isVideoUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.mov') || lower.includes('.m4v');
+}
+
 export const FeedPage = () => {
   const [feedFilter, setFeedFilter] = useState<'all' | 'extra'>('all');
 
@@ -128,11 +133,19 @@ export const FeedPage = () => {
               </div>
 
               {verification.imageUrl && (
-                <img
-                  src={verification.imageUrl}
-                  alt="Verification"
-                  className="w-full h-56 object-cover rounded-2xl mb-4"
-                />
+                isVideoUrl(verification.imageUrl) ? (
+                  <video
+                    src={verification.imageUrl}
+                    controls
+                    className="w-full h-56 object-cover rounded-2xl mb-4 bg-black"
+                  />
+                ) : (
+                  <img
+                    src={verification.imageUrl}
+                    alt="Verification"
+                    className="w-full h-56 object-cover rounded-2xl mb-4"
+                  />
+                )
               )}
 
               {verification.todayNote && (

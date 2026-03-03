@@ -8,7 +8,7 @@ const s3Client = new S3Client({});
 
 const uploadUrlSchema = z.object({
   fileName: z.string().min(1),
-  fileType: z.string().regex(/^image\/(jpeg|jpg|png|webp|gif)$/),
+  fileType: z.string().regex(/^(image\/(jpeg|jpg|png|webp|gif)|video\/(mp4|webm|quicktime))$/),
   challengeId: z.string().uuid()
 });
 
@@ -41,7 +41,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const input: UploadUrlInput = uploadUrlSchema.parse(body);
 
     // 파일 확장자 추출
-    const fileExtension = input.fileType.split('/')[1];
+    const fileExtension = input.fileType === 'video/quicktime'
+      ? 'mov'
+      : input.fileType.split('/')[1];
     
     // S3 키 생성: userId/challengeId/timestamp-random.ext
     const timestamp = Date.now();
