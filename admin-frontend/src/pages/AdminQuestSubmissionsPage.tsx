@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -6,41 +6,122 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-  pending:      { label: '심사중',    cls: 'bg-yellow-100 text-yellow-800' },
-  approved:     { label: '승인',      cls: 'bg-green-100  text-green-800'  },
-  auto_approved:{ label: '자동승인',  cls: 'bg-green-100  text-green-800'  },
-  rejected:     { label: '거절됨',    cls: 'bg-red-100    text-red-800'    },
+  all: { label: '전체', cls: 'bg-slate-100 text-slate-700' },
+  pending: { label: '심사중', cls: 'bg-yellow-100 text-yellow-800' },
+  approved: { label: '승인', cls: 'bg-green-100 text-green-800' },
+  auto_approved: { label: '자동승인', cls: 'bg-green-100 text-green-800' },
+  rejected: { label: '거절됨', cls: 'bg-red-100 text-red-800' },
 };
 
-const FILTER_TABS = ['pending', 'approved', 'rejected'] as const;
-type FilterTab = typeof FILTER_TABS[number];
+const SCOPE_LABEL: Record<string, { label: string; cls: string }> = {
+  leader: { label: '리더 퀘스트', cls: 'bg-indigo-100 text-indigo-700' },
+  personal: { label: '개인 퀘스트', cls: 'bg-emerald-100 text-emerald-700' },
+  mixed: { label: '혼합 퀘스트', cls: 'bg-purple-100 text-purple-700' },
+};
 
-const formatDate = (iso: string) =>
-  format(new Date(iso), 'M월 d일 HH:mm', { locale: ko });
+const FILTER_TABS = ['all', 'pending', 'approved', 'rejected'] as const;
+type FilterTab = typeof FILTER_TABS[number];
+type ScopeFilter = 'all' | 'leader' | 'personal' | 'mixed';
+
+const formatDate = (iso?: string) => {
+  if (!iso) return '-';
+  return format(new Date(iso), 'M월 d일 HH:mm', { locale: ko });
+};
+
+const shortText = (text?: string, limit = 36) => {
+  if (!text) return '-';
+  const compact = text.replace(/\s+/g, ' ').trim();
+  return compact.length > limit ? `${compact.slice(0, limit)}…` : compact;
+};
+
+const mediaSummary = (content: any) => {
+  const chips: string[] = [];
+  if (content?.imageUrl) chips.push('사진');
+  if (content?.videoUrl) chips.push('영상');
+  if (content?.linkUrl) chips.push('링크');
+  if (!chips.length) return '없음';
+  return chips.join(' · ');
+};
+
+function isVideoUrl(url: string): boolean {
+  const lower = String(url || '').toLowerCase();
+  return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.mov') || lower.includes('.m4v');
+}
+
+function resolveMediaUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/uploads/')) return url;
+  if (url.startsWith('uploads/')) return `/${url}`;
+  return `/uploads/${url.replace(/^\/+/, '')}`;
+}
 
 export const AdminQuestSubmissionsPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const questId = searchParams.get('questId');
+  const initialChallengeId = searchParams.get('challengeId') ?? 'all';
 
-  const [statusFilter, setStatusFilter] = useState<FilterTab>('pending');
+  const [statusFilter, setStatusFilter] = useState<FilterTab>('all');
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
+  const [challengeFilter, setChallengeFilter] = useState(initialChallengeId);
   const [reviewing, setReviewing] = useState<{ id: string; action: 'approve' | 'reject' } | null>(null);
   const [reviewNote, setReviewNote] = useState('');
+  const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
+
+  const { data: challengeData } = useQuery({
+    queryKey: ['admin-quest-submissions-challenges'],
+    queryFn: async () => {
+      try {
+        const mine = await apiClient.get('/admin/challenges/mine');
+        const myChallenges = mine.data?.data?.challenges ?? [];
+        if (Array.isArray(myChallenges) && myChallenges.length > 0) return myChallenges;
+      } catch {
+        // fallback below
+      }
+
+      const res = await apiClient.get('/challenges?sortBy=latest&limit=200');
+      return res.data?.data?.challenges ?? [];
+    },
+    retry: false,
+  });
+
+  const challengeOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    (challengeData ?? []).forEach((challenge: any) => {
+      if (challenge?.challengeId) map.set(challenge.challengeId, challenge.title ?? '제목 없음');
+    });
+    return Array.from(map.entries()).map(([challengeId, title]) => ({ challengeId, title }));
+  }, [challengeData]);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['admin-quest-submissions', statusFilter, questId],
+    queryKey: ['admin-quest-submissions', statusFilter, challengeFilter, scopeFilter],
     queryFn: async () => {
       const params = new URLSearchParams({ status: statusFilter });
-      if (questId) params.set('questId', questId);
+      if (challengeFilter !== 'all') params.set('challengeId', challengeFilter);
+      if (scopeFilter !== 'all') params.set('questScope', scopeFilter);
       const res = await apiClient.get(`/admin/quests/submissions?${params}`);
       return res.data.data;
     },
     retry: false,
   });
 
+  const { data: verificationMonitor } = useQuery({
+    queryKey: ['admin-verification-monitor', challengeFilter],
+    queryFn: async () => {
+      const res = await apiClient.get('/verifications?limit=40');
+      let items = res.data?.data?.verifications ?? [];
+      if (challengeFilter !== 'all') {
+        items = items.filter((item: any) => item.challengeId === challengeFilter);
+      }
+      return items;
+    },
+    retry: false,
+  });
+
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [nextToken, setNextToken] = useState<string | null>(null);
+  const summary = data?.summary || { byStatus: {}, byScope: {} };
 
   useEffect(() => {
     setSubmissions(data?.submissions ?? []);
@@ -51,7 +132,8 @@ export const AdminQuestSubmissionsPage = () => {
     mutationFn: async () => {
       if (!nextToken) return null;
       const params = new URLSearchParams({ status: statusFilter, nextToken });
-      if (questId) params.set('questId', questId);
+      if (challengeFilter !== 'all') params.set('challengeId', challengeFilter);
+      if (scopeFilter !== 'all') params.set('questScope', scopeFilter);
       const res = await apiClient.get(`/admin/quests/submissions?${params}`);
       return res.data.data;
     },
@@ -84,152 +166,181 @@ export const AdminQuestSubmissionsPage = () => {
   });
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      {/* 헤더 */}
+    <div className="max-w-6xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-900 transition-colors">
-            ← 뒤로
-          </button>
+          <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-900 transition-colors">← 뒤로</button>
           <h1 className="text-2xl font-bold text-gray-900">퀘스트 제출물 심사</h1>
         </div>
       </div>
 
-      {/* 상태 필터 */}
-      <div className="flex gap-2 mb-5">
-        {FILTER_TABS.map(tab => (
-          <button
-            key={tab}
-            onClick={() => setStatusFilter(tab)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-              statusFilter === tab
-                ? 'bg-primary-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {STATUS_LABEL[tab]?.label ?? tab}
-          </button>
-        ))}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div className="bg-white border border-gray-200 rounded-xl p-3">
+          <p className="text-xs text-gray-500">전체</p>
+          <p className="text-xl font-bold text-gray-900">{submissions.length}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3">
+          <p className="text-xs text-gray-500">승인</p>
+          <p className="text-xl font-bold text-emerald-600">{summary.byStatus?.approved || 0}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3">
+          <p className="text-xs text-gray-500">심사중</p>
+          <p className="text-xl font-bold text-amber-600">{summary.byStatus?.pending || 0}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3">
+          <p className="text-xs text-gray-500">거절</p>
+          <p className="text-xl font-bold text-rose-600">{summary.byStatus?.rejected || 0}</p>
+        </div>
       </div>
 
-      {/* 목록 */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-5 space-y-4">
+        <div className="flex gap-2">
+          {FILTER_TABS.map(tab => (
+            <button
+              key={tab}
+              onClick={() => setStatusFilter(tab)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                statusFilter === tab ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {STATUS_LABEL[tab]?.label ?? tab}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">챌린지 선택</label>
+            <select
+              value={challengeFilter}
+              onChange={(e) => setChallengeFilter(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm"
+            >
+              <option value="all">전체 챌린지</option>
+              {challengeOptions.map((challenge) => (
+                <option key={challenge.challengeId} value={challenge.challengeId}>
+                  {challenge.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">퀘스트 구분</label>
+            <select
+              value={scopeFilter}
+              onChange={(e) => setScopeFilter(e.target.value as ScopeFilter)}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm"
+            >
+              <option value="all">전체</option>
+              <option value="leader">리더 퀘스트</option>
+              <option value="personal">개인 퀘스트</option>
+              <option value="mixed">혼합 퀘스트</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       {isLoading ? (
         <div className="text-center py-12 text-gray-500">로딩 중...</div>
       ) : submissions.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
-          <p className="text-4xl mb-3">📭</p>
-          <p>{STATUS_LABEL[statusFilter]?.label} 제출물이 없습니다</p>
-        </div>
+        (verificationMonitor?.length ? (
+          <div className="space-y-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
+              퀘스트 제출물은 없지만, 최근 인증 게시물 모니터링 목록을 표시합니다.
+            </div>
+            {verificationMonitor.map((v: any) => (
+              <div key={v.verificationId} className="bg-white border border-gray-200 rounded-2xl p-4">
+                <p className="text-sm font-semibold text-gray-900">인증 게시물 #{String(v.verificationId).slice(0, 8)}</p>
+                <p className="text-xs text-gray-500 mt-1">Day {v.day} · {formatDate(v.performedAt || v.createdAt)}</p>
+                {v.imageUrl && (isVideoUrl(v.imageUrl) ? (
+                  <video src={resolveMediaUrl(v.imageUrl)} controls className="w-full h-48 object-cover rounded-xl mt-3 bg-black" />
+                ) : (
+                  <img src={resolveMediaUrl(v.imageUrl)} alt="인증 이미지" className="w-full h-48 object-cover rounded-xl mt-3" />
+                ))}
+                {v.todayNote && <p className="text-sm text-gray-700 mt-3 whitespace-pre-wrap">{v.todayNote}</p>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-400">
+            <p className="text-4xl mb-3">📭</p>
+            <p>{STATUS_LABEL[statusFilter]?.label} 제출물이 없습니다</p>
+          </div>
+        ))
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {submissions.map((sub) => {
             const badge = STATUS_LABEL[sub.status];
-            const isOpen = reviewing?.id === sub.submissionId;
+            const scopeBadge = SCOPE_LABEL[sub.quest?.questScope || 'leader'];
+            const isReviewOpen = reviewing?.id === sub.submissionId;
 
             return (
-              <div key={sub.submissionId} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-                {/* 카드 헤더 */}
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div>
-                      <p className="font-bold text-gray-900">
-                        {sub.quest?.title ?? `퀘스트 #${sub.questId?.slice(-6)}`}
-                      </p>
-                      <p className="text-sm text-gray-500 mt-0.5">
-                        제출자: <span className="font-medium">{sub.userId?.slice(-8)}</span>
-                        {sub.attemptNumber > 1 && (
-                          <span className="ml-2 text-primary-600">({sub.attemptNumber}번째 시도)</span>
-                        )}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-0.5">{formatDate(sub.createdAt)}</p>
-                    </div>
-                    {badge && (
-                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${badge.cls}`}>
-                        {badge.label}
-                      </span>
-                    )}
+              <div key={sub.submissionId} className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+                <div className="p-4 grid grid-cols-1 lg:grid-cols-[1.4fr_1fr_1fr_1fr_auto] gap-3 items-center">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSubmission(sub)}
+                    className="text-left hover:bg-gray-50 rounded-lg p-2 -m-2"
+                  >
+                    <p className="font-semibold text-gray-900">{sub.quest?.title ?? `퀘스트 #${sub.questId?.slice(-6)}`}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">제출 ID: {sub.submissionId?.slice(0, 8)}...</p>
+                    <p className="text-xs text-gray-500 mt-1">요약: {shortText(sub.content?.textContent || sub.content?.note)}</p>
+                  </button>
+
+                  <div>
+                    <p className="text-xs text-gray-500">제출일시</p>
+                    <p className="text-sm font-medium text-gray-800">{formatDate(sub.createdAt)}</p>
                   </div>
 
-                  {/* 제출 내용 */}
-                  {sub.content?.imageUrl && (
-                    <a href={sub.content.imageUrl} target="_blank" rel="noreferrer">
-                      <img
-                        src={sub.content.imageUrl}
-                        alt="제출 사진"
-                        className="w-full max-h-64 object-cover rounded-xl mb-3 cursor-pointer hover:opacity-90 transition-opacity"
-                      />
-                    </a>
-                  )}
-                  {sub.content?.linkUrl && (
-                    <a
-                      href={sub.content.linkUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block text-sm text-blue-600 underline mb-3 break-all"
-                    >
-                      {sub.content.linkUrl}
-                    </a>
-                  )}
-                  {sub.content?.textContent && (
-                    <div className="bg-gray-50 rounded-xl p-3 mb-3">
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{sub.content.textContent}</p>
-                    </div>
-                  )}
-                  {sub.content?.note && (
-                    <p className="text-xs text-gray-400 italic mb-3">"{sub.content.note}"</p>
-                  )}
+                  <div>
+                    <p className="text-xs text-gray-500">퀘스트 구분</p>
+                    <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${scopeBadge?.cls || 'bg-gray-100 text-gray-700'}`}>
+                      {scopeBadge?.label || '미지정'}
+                    </span>
+                  </div>
 
-                  {/* 이미 심사된 경우 결과 표시 */}
-                  {sub.status !== 'pending' && sub.reviewNote && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl mb-3">
-                      <p className="text-xs font-semibold text-red-700">거절 사유</p>
-                      <p className="text-sm text-red-600 mt-0.5">{sub.reviewNote}</p>
-                      <p className="text-xs text-red-400 mt-1">
-                        {sub.reviewedAt && formatDate(sub.reviewedAt)}
-                      </p>
-                    </div>
-                  )}
+                  <div>
+                    <p className="text-xs text-gray-500">사진/영상 여부</p>
+                    <p className="text-sm text-gray-800">{mediaSummary(sub.content)}</p>
+                    {badge && <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${badge.cls}`}>{badge.label}</span>}
+                  </div>
 
-                  {/* 심사 버튼 (pending만) */}
-                  {sub.status === 'pending' && (
-                    <div className="flex gap-2 mt-3">
+                  {sub.status === 'pending' ? (
+                    <div className="flex gap-2 justify-end">
                       <button
                         onClick={() => { setReviewing({ id: sub.submissionId, action: 'approve' }); setReviewNote(''); }}
-                        className="flex-1 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors"
+                        className="px-3 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700"
                       >
-                        ✓ 승인
+                        승인
                       </button>
                       <button
                         onClick={() => { setReviewing({ id: sub.submissionId, action: 'reject' }); setReviewNote(''); }}
-                        className="flex-1 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 transition-colors"
+                        className="px-3 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700"
                       >
-                        ✗ 거절
+                        거절
                       </button>
                     </div>
-                  )}
+                  ) : <div />}
                 </div>
 
-                {/* 리뷰 입력 패널 */}
-                {isOpen && (
-                  <div className={`px-5 pb-5 pt-3 border-t ${
-                    reviewing?.action === 'approve' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-                  }`}>
-                    <p className={`text-sm font-semibold mb-2 ${
-                      reviewing?.action === 'approve' ? 'text-green-800' : 'text-red-800'
-                    }`}>
-                      {reviewing?.action === 'approve' ? '✓ 승인 확인' : '✗ 거절 사유 입력'}
-                    </p>
+                {isReviewOpen && (
+                  <div className={`px-4 pb-4 pt-3 border-t ${reviewing?.action === 'approve' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                     {reviewing?.action === 'reject' && (
                       <textarea
                         value={reviewNote}
                         onChange={e => setReviewNote(e.target.value)}
-                        placeholder="거절 사유를 입력해주세요 (사용자에게 표시됩니다)"
+                        placeholder="거절 사유를 입력해주세요 (10자 이상)"
                         rows={3}
-                        className="w-full px-3 py-2 border border-red-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-red-400 text-sm mb-3"
-                        required
+                        className="w-full px-3 py-2 border border-red-300 rounded-xl resize-none text-sm mb-2"
                       />
                     )}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        onClick={() => setReviewing(null)}
+                        className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-300"
+                      >
+                        취소
+                      </button>
                       <button
                         onClick={() => {
                           if (reviewing?.action === 'reject' && reviewNote.trim().length < 10) {
@@ -243,19 +354,9 @@ export const AdminQuestSubmissionsPage = () => {
                           });
                         }}
                         disabled={reviewMutation.isPending}
-                        className={`flex-1 py-2 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 ${
-                          reviewing?.action === 'approve'
-                            ? 'bg-green-600 hover:bg-green-700'
-                            : 'bg-red-600 hover:bg-red-700'
-                        }`}
+                        className={`px-4 py-2 text-white text-sm font-semibold rounded-xl disabled:opacity-50 ${reviewing?.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
                       >
                         {reviewMutation.isPending ? '처리 중...' : '확인'}
-                      </button>
-                      <button
-                        onClick={() => setReviewing(null)}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-300 transition-colors"
-                      >
-                        취소
                       </button>
                     </div>
                   </div>
@@ -274,6 +375,44 @@ export const AdminQuestSubmissionsPage = () => {
               {loadMoreMutation.isPending ? '불러오는 중...' : '제출물 더보기'}
             </button>
           )}
+        </div>
+      )}
+
+      {selectedSubmission && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setSelectedSubmission(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900">제출물 상세</h2>
+              <button onClick={() => setSelectedSubmission(null)} className="text-gray-500 hover:text-gray-900">✕</button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-gray-700"><span className="font-semibold">퀘스트:</span> {selectedSubmission.quest?.title ?? selectedSubmission.questId}</p>
+              <p className="text-sm text-gray-700"><span className="font-semibold">제출일:</span> {formatDate(selectedSubmission.createdAt)}</p>
+              <p className="text-sm text-gray-700"><span className="font-semibold">상태:</span> {STATUS_LABEL[selectedSubmission.status]?.label ?? selectedSubmission.status}</p>
+
+              {selectedSubmission.content?.imageUrl && (
+                <a href={selectedSubmission.content.imageUrl} target="_blank" rel="noreferrer">
+                  <img src={selectedSubmission.content.imageUrl} alt="제출 이미지" className="w-full max-h-80 rounded-xl object-cover" />
+                </a>
+              )}
+              {selectedSubmission.content?.videoUrl && (
+                <video controls src={selectedSubmission.content.videoUrl} className="w-full max-h-80 rounded-xl bg-black" />
+              )}
+              {selectedSubmission.content?.linkUrl && (
+                <a href={selectedSubmission.content.linkUrl} target="_blank" rel="noreferrer" className="text-sm text-blue-600 underline break-all block">
+                  {selectedSubmission.content.linkUrl}
+                </a>
+              )}
+              {selectedSubmission.content?.textContent && (
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedSubmission.content.textContent}</p>
+                </div>
+              )}
+              {selectedSubmission.content?.note && (
+                <p className="text-xs text-gray-500 italic">"{selectedSubmission.content.note}"</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

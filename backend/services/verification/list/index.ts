@@ -36,6 +36,8 @@ function normalizeVerification(v: VerificationItem) {
   return {
     verificationId: v.verificationId,
     userId: v.userId,
+    challengeId: v.challengeId || null,
+    userChallengeId: v.userChallengeId || null,
     userName: v.userName || null,
     day: v.day,
     todayNote: v.todayNote,
@@ -45,6 +47,7 @@ function normalizeVerification(v: VerificationItem) {
     isPersonalOnly: Boolean(v.isPersonalOnly),
     cheerCount: v.cheerCount || 0,
     createdAt: v.createdAt,
+    performedAt: v.performedAt || v.practiceAt || null,
     certDate: v.certDate || v.verificationDate || null,
     scoreEarned: v.scoreEarned ?? v.score ?? 0,
   };
