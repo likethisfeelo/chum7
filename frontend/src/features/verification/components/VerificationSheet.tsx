@@ -26,14 +26,6 @@ function toLocalDateTimeInputValue(date: Date): string {
 }
 
 
-function isLikelyCorsOrPreflightError(error: any): boolean {
-  const status = error?.response?.status;
-  if (status === 403) return true;
-  const message = String(error?.message || '').toLowerCase();
-  return message.includes('failed to fetch') || message.includes('networkerror') || message.includes('cors');
-}
-
-
 const CHALLENGE_TYPE_LABEL: Record<string, string> = {
   leader_only: '리더 퀘스트',
   personal_only: '개인 퀘스트',
@@ -83,8 +75,8 @@ export const VerificationSheet = ({
 }: VerificationSheetProps) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     todayNote: '',
     tomorrowPromise: '',
@@ -93,57 +85,42 @@ export const VerificationSheet = ({
   const [submittedPayload, setSubmittedPayload] = useState<any | null>(null);
   const [extraVisibilityPrompt, setExtraVisibilityPrompt] = useState<{ verificationId: string } | null>(null);
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('이미지 파일만 업로드할 수 있어요.');
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+      toast.error('이미지 또는 영상 파일만 업로드할 수 있어요.');
       return;
     }
 
-    setImageFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setImagePreview(reader.result as string);
-    reader.readAsDataURL(file);
+    setMediaFile(file);
+    setMediaPreview(URL.createObjectURL(file));
   };
 
   const verificationMutation = useMutation({
     mutationFn: async () => {
       let imageUrl = '';
 
-      if (imageFile) {
-        const isTestWeb = typeof window !== 'undefined' && window.location.origin.includes('test.chum7.com');
-        if (isTestWeb) {
-          toast.error('현재 TEST 웹에서는 S3 업로드 CORS 설정 이슈로 이미지 업로드를 건너뜁니다. 텍스트 인증만 먼저 제출됩니다.');
-        } else {
-          try {
-            const challengeId = userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
-            const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
-              fileName: imageFile.name,
-              fileType: imageFile.type,
-              challengeId,
-            });
+      if (mediaFile) {
+        const challengeId = userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
+        const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
+          fileName: mediaFile.name,
+          fileType: mediaFile.type,
+          challengeId,
+        });
 
-            const uploadResp = await fetch(uploadData.data.uploadUrl, {
-              method: 'PUT',
-              body: imageFile,
-              headers: { 'Content-Type': imageFile.type },
-            });
+        const uploadResp = await fetch(uploadData.data.uploadUrl, {
+          method: 'PUT',
+          body: mediaFile,
+          headers: { 'Content-Type': mediaFile.type },
+        });
 
-            if (!uploadResp.ok) {
-              throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
-            }
-
-            imageUrl = uploadData.data.fileUrl;
-          } catch (uploadError: any) {
-            if (isLikelyCorsOrPreflightError(uploadError)) {
-              toast.error('이미지 업로드가 브라우저 CORS 제한으로 실패했습니다. 이미지 없이 인증을 계속 제출합니다.');
-            } else {
-              throw uploadError;
-            }
-          }
+        if (!uploadResp.ok) {
+          throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
         }
+
+        imageUrl = uploadData.data.fileUrl;
       }
 
       const response = await apiClient.post('/verifications', {
@@ -181,8 +158,8 @@ export const VerificationSheet = ({
         toast('응원권 1장을 획득했어요 🎟', { icon: '🎉' });
       }
 
-      setImageFile(null);
-      setImagePreview(null);
+      setMediaFile(null);
+      setMediaPreview(null);
       setFormData({
         todayNote: '',
         tomorrowPromise: '',
@@ -258,13 +235,17 @@ export const VerificationSheet = ({
         </p>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">인증 사진 📸</label>
-          {imagePreview ? (
+          <label className="block text-sm font-medium text-gray-700 mb-2">인증 사진/영상 📸</label>
+          {mediaPreview ? (
             <div className="relative">
-              <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover rounded-2xl" />
+              {mediaFile?.type.startsWith('video/') ? (
+                <video src={mediaPreview} controls className="w-full h-48 object-cover rounded-2xl" />
+              ) : (
+                <img src={mediaPreview} alt="Preview" className="w-full h-48 object-cover rounded-2xl" />
+              )}
               <button
                 type="button"
-                onClick={() => { setImageFile(null); setImagePreview(null); }}
+                onClick={() => { setMediaFile(null); setMediaPreview(null); }}
                 className="absolute top-2 right-2 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70"
               >
                 <FiX className="w-4 h-4" />
@@ -277,15 +258,15 @@ export const VerificationSheet = ({
               className="w-full h-40 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-primary-400 hover:bg-primary-50 transition-colors"
             >
               <FiCamera className="w-8 h-8 text-gray-400" />
-              <span className="text-sm text-gray-500">사진을 선택하거나 찍어주세요</span>
+              <span className="text-sm text-gray-500">사진/영상을 선택하거나 촬영해주세요</span>
             </button>
           )}
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,video/*"
             capture="environment"
-            onChange={handleImageSelect}
+            onChange={handleMediaSelect}
             className="hidden"
           />
         </div>
