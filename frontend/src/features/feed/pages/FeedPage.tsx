@@ -9,6 +9,7 @@ import { apiClient } from '@/lib/api-client';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { Loading } from '@/shared/components/Loading';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
+import { fetchPlazaRecommendations, reactPlazaPost } from '@/features/feed/api/plazaApi';
 
 type PlazaFilter = 'all' | 'recruiting' | 'ongoing' | 'records';
 
@@ -192,28 +193,15 @@ export const FeedPage = () => {
   });
 
   const recommendMutation = useMutation({
-    mutationFn: async ({ verificationId }: { verificationId: string }) => {
-      const response = await apiClient.get(`/plaza/recommendations?verificationId=${encodeURIComponent(verificationId)}&limit=3`);
-      return response.data.data?.recommendations || [];
-    },
+    mutationFn: async ({ verificationId }: { verificationId: string }) => fetchPlazaRecommendations(verificationId),
   });
 
   const reactMutation = useMutation({
-    mutationFn: async ({ verificationId, challengeId }: ReactionInput) => {
-      try {
-        const response = await apiClient.post(`/plaza/${encodeURIComponent(verificationId)}/react`, {
-          reactionType: 'like',
-        });
-        return response.data?.data ?? null;
-      } catch {
-        const fallbackResponse = await apiClient.post('/plaza/reactions', {
-          verificationId,
-          challengeId,
-          reactionType: 'like',
-        });
-        return fallbackResponse.data?.data ?? null;
-      }
-    },
+    mutationFn: async ({ verificationId, challengeId }: ReactionInput) => reactPlazaPost({
+      plazaPostId: verificationId,
+      verificationId,
+      challengeId,
+    }),
   });
 
   const challenges: ChallengeSummary[] = challengesData?.challenges || [];
