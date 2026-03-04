@@ -21,6 +21,9 @@ type ChallengeCard = {
   seatsLabel: string;
   description: string;
   completionRate: number;
+  totalSlots: number;
+  remainingSlots: number;
+  daysUntilClose: number | null;
 };
 
 
@@ -53,6 +56,7 @@ interface ChallengeSummary {
   ownerName?: string;
   startDate?: string;
   schedule?: { startDate?: string };
+  recruitEndAt?: string;
   lifecycle?: string;
   maxParticipants?: number;
   capacity?: number;
@@ -100,6 +104,11 @@ function toChallengeCard(challenge: ChallengeSummary): ChallengeCard {
   const maxParticipants = challenge.maxParticipants ?? challenge.capacity ?? 0;
   const seatsLeft = maxParticipants > 0 ? Math.max(maxParticipants - totalParticipants, 0) : 0;
 
+  const recruitEndAt = challenge.recruitEndAt ? new Date(challenge.recruitEndAt) : null;
+  const daysUntilClose = recruitEndAt
+    ? Math.max(Math.ceil((recruitEndAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)), 0)
+    : null;
+
   return {
     challengeId: challenge.challengeId,
     title: challenge.title,
@@ -108,6 +117,9 @@ function toChallengeCard(challenge: ChallengeSummary): ChallengeCard {
     seatsLabel: maxParticipants > 0 ? `${seatsLeft}자리 / ${maxParticipants}자리` : `${totalParticipants}명 참여 중`,
     description: challenge.description || '챌린지 소개가 준비 중입니다.',
     completionRate: challenge.stats?.completionRate || 0,
+    totalSlots: maxParticipants,
+    remainingSlots: seatsLeft,
+    daysUntilClose,
   };
 }
 
@@ -215,11 +227,26 @@ export const FeedPage = () => {
 
   const challenges: ChallengeSummary[] = challengesData?.challenges || [];
   const recruitingCards = useMemo(
-    () => challenges.filter((c) => String(c.lifecycle) === 'recruiting').map(toChallengeCard),
+    () => challenges
+      .filter((c) => String(c.lifecycle) === 'recruiting')
+      .map(toChallengeCard)
+      .sort((a, b) => {
+        const aHasSlot = a.remainingSlots > 0 ? 1 : 0;
+        const bHasSlot = b.remainingSlots > 0 ? 1 : 0;
+        if (bHasSlot !== aHasSlot) return bHasSlot - aHasSlot;
+        if (a.daysUntilClose !== null && b.daysUntilClose !== null && a.daysUntilClose !== b.daysUntilClose) {
+          return a.daysUntilClose - b.daysUntilClose;
+        }
+        return b.remainingSlots - a.remainingSlots;
+      }),
     [challenges],
   );
   const ongoingCards = useMemo(
-    () => challenges.filter((c) => String(c.lifecycle) === 'active').slice(0, 5).map(toChallengeCard),
+    () => challenges
+      .filter((c) => String(c.lifecycle) === 'active')
+      .map(toChallengeCard)
+      .sort((a, b) => b.completionRate - a.completionRate)
+      .slice(0, 5),
     [challenges],
   );
 
@@ -445,8 +472,12 @@ export const FeedPage = () => {
                             <p className="text-[11px] text-primary-700 font-semibold">카드 A · 모집 공고</p>
                             <h3 className="font-semibold text-gray-900 mt-1">{card.title}</h3>
                             <p className="text-xs text-gray-500 mt-1">리더: {card.leaderName} · 시작일: {card.startDateLabel}</p>
+                            {card.daysUntilClose !== null && <p className="text-xs text-rose-600 mt-1">모집 마감 D-{card.daysUntilClose}</p>}
                             <p className="text-xs text-primary-700 mt-1">잔여: {card.seatsLabel}</p>
-                            <Link to={`/challenges/${card.challengeId}`} className="inline-block mt-3 px-3 py-1.5 text-xs rounded-lg bg-gray-900 text-white">참여하기</Link>
+                            <div className="mt-3 flex items-center gap-3">
+                              <Link to={`/challenges/${card.challengeId}`} className="px-3 py-1.5 text-xs rounded-lg bg-gray-900 text-white">참여하기</Link>
+                              <button type="button" className="text-xs text-gray-500 underline" disabled>리더 보기(준비중)</button>
+                            </div>
                           </motion.article>
                         );
                       }
@@ -516,9 +547,13 @@ export const FeedPage = () => {
                     <p className="text-[11px] text-primary-700 font-semibold">카드 A · 모집 공고</p>
                     <h3 className="font-semibold text-gray-900 mt-1">{card.title}</h3>
                     <p className="text-xs text-gray-500 mt-1">리더: {card.leaderName} · 시작일: {card.startDateLabel}</p>
+                            {card.daysUntilClose !== null && <p className="text-xs text-rose-600 mt-1">모집 마감 D-{card.daysUntilClose}</p>}
                     <p className="text-xs text-primary-700 mt-1">잔여: {card.seatsLabel}</p>
                     <p className="text-sm text-gray-700 mt-2">“{card.description}”</p>
-                    <Link to={`/challenges/${card.challengeId}`} className="inline-block mt-3 px-3 py-1.5 text-xs rounded-lg bg-gray-900 text-white">참여하기</Link>
+                    <div className="mt-3 flex items-center gap-3">
+                              <Link to={`/challenges/${card.challengeId}`} className="px-3 py-1.5 text-xs rounded-lg bg-gray-900 text-white">참여하기</Link>
+                              <button type="button" className="text-xs text-gray-500 underline" disabled>리더 보기(준비중)</button>
+                            </div>
                   </motion.article>
                 ))}
               </>
