@@ -169,14 +169,18 @@ export const MEPage = () => {
     },
     onSuccess: async (res: any) => {
       const threadId = res?.threadId || res?.data?.threadId;
+      const deepLink = res?.deepLink || res?.data?.deepLink;
       const isNew = res?.isNew ?? res?.data?.isNew;
       const message = isNew ? '리더 DM 대화가 열렸어요 ✉️' : '기존 리더 DM 대화로 연결했어요 ✉️';
       if (threadId && navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(String(threadId));
-        toast.success(`${message} (threadId 복사됨)`);
+      }
+      if (typeof deepLink === 'string' && deepLink.startsWith('/messages/')) {
+        toast.success(message);
+        navigate(deepLink);
         return;
       }
-      toast.success(message);
+      toast.success(threadId ? `${message} (threadId 복사됨)` : message);
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message || '리더 DM 연결에 실패했습니다');

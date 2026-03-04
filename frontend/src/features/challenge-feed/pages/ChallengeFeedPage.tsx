@@ -44,12 +44,16 @@ export const ChallengeFeedPage = () => {
     },
     onSuccess: async (res: any) => {
       const threadId = res?.threadId || res?.data?.threadId;
+      const deepLink = res?.deepLink || res?.data?.deepLink;
       if (threadId && navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(String(threadId));
-        toast.success('리더 DM 연결 완료 (threadId 복사됨)');
-      } else {
-        toast.success('리더 DM 연결 완료');
       }
+      if (typeof deepLink === 'string' && deepLink.startsWith('/messages/')) {
+        toast.success('리더 DM 연결 완료');
+        navigate(deepLink);
+        return;
+      }
+      toast.success(threadId ? '리더 DM 연결 완료 (threadId 복사됨)' : '리더 DM 연결 완료');
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message || '리더 DM 연결에 실패했습니다');
@@ -89,6 +93,19 @@ export const ChallengeFeedPage = () => {
         <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
           <h2 className="text-xl font-bold text-gray-900">{challengeData?.title || '챌린지'}</h2>
           <p className="text-sm text-gray-600 mt-2">{challengeData?.description || '챌린지 소개를 불러오지 못했습니다.'}</p>
+        </section>
+
+        <section className="grid grid-cols-2 gap-2">
+          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+            <p className="text-xs text-gray-500">오늘의 인증 현황</p>
+            <p className="mt-1 text-xl font-bold text-gray-900">{(commentsData?.comments || []).length}개</p>
+            <p className="text-xs text-gray-500">최근 댓글 기준</p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+            <p className="text-xs text-gray-500">참여자 현황</p>
+            <p className="mt-1 text-xl font-bold text-gray-900">{challengeData?.stats?.totalParticipants || challengeData?.participantCount || 0}명</p>
+            <p className="text-xs text-gray-500">챌린지 누적 참여</p>
+          </div>
         </section>
 
         <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
