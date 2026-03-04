@@ -18,6 +18,11 @@ const CHEER_MESSAGES = [
 
 type ChallengeFilter = 'all' | string;
 
+type ChallengeOption = {
+  challengeId: string;
+  label: string;
+};
+
 export const UseTicketPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -37,25 +42,44 @@ export const UseTicketPage = () => {
   const availableTickets = data?.availableTickets || [];
 
   const challengeOptions = useMemo(() => {
-    const map = new Map<string, { challengeId: string; label: string }>();
-    availableTickets.forEach((ticket: any) => {
-      const key = ticket.challengeId || 'unknown';
-      if (!map.has(key)) {
-        map.set(key, {
-          challengeId: key,
-          label: ticket.challengeId ? `챌린지 ${String(ticket.challengeId).slice(0, 8)}` : '미지정 챌린지',
+    const map = new Map<string, ChallengeOption>();
+
+    immediateTargets.forEach((target: any) => {
+      if (!target.challengeId) return;
+      if (!map.has(target.challengeId)) {
+        map.set(target.challengeId, {
+          challengeId: target.challengeId,
+          label: target.challengeTitle || `챌린지 ${String(target.challengeId).slice(0, 8)}`,
         });
       }
     });
+
+    availableTickets.forEach((ticket: any) => {
+      if (!ticket.challengeId) return;
+      if (!map.has(ticket.challengeId)) {
+        map.set(ticket.challengeId, {
+          challengeId: ticket.challengeId,
+          label: `챌린지 ${String(ticket.challengeId).slice(0, 8)}`,
+        });
+      }
+    });
+
     return Array.from(map.values());
-  }, [availableTickets]);
+  }, [availableTickets, immediateTargets]);
 
   const filteredTickets = useMemo(() => {
     if (challengeFilter === 'all') return availableTickets;
     return availableTickets.filter((ticket: any) => ticket.challengeId === challengeFilter);
   }, [availableTickets, challengeFilter]);
 
-  const selectedTicket = filteredTickets[0] || availableTickets[0] || null;
+  const filteredTargets = useMemo(() => {
+    if (challengeFilter === 'all') return immediateTargets;
+    return immediateTargets.filter((target: any) => target.challengeId === challengeFilter);
+  }, [challengeFilter, immediateTargets]);
+
+  const selectedTicket = challengeFilter === 'all'
+    ? (filteredTickets[0] || availableTickets[0] || null)
+    : (filteredTickets[0] || null);
 
   const useTicketMutation = useMutation({
     mutationFn: async ({ ticketId }: { ticketId: string }) => {
@@ -161,7 +185,13 @@ export const UseTicketPage = () => {
               title="사용 가능한 응원권이 없어요"
               description="인증을 먼저 완료하고 응원권을 획득해보세요"
             />
-          ) : immediateTargets.length === 0 ? (
+          ) : filteredTickets.length === 0 ? (
+            <EmptyState
+              icon="🎟"
+              title="선택한 챌린지에 사용할 응원권이 없어요"
+              description="다른 챌린지를 선택하거나 인증으로 응원권을 획득해보세요"
+            />
+          ) : filteredTargets.length === 0 ? (
             <EmptyState
               icon="💭"
               title="응원할 미완료 참여자가 없어요"
@@ -173,13 +203,13 @@ export const UseTicketPage = () => {
                 <FiHeart className="w-4 h-4 text-primary-500" />
                 <p className="text-sm">응원권 1장으로 같은 챌린지 미완료 참여자 전원에게 익명 즉시 발송</p>
               </div>
-              <p className="text-xs text-gray-500">대상 수: {immediateTargets.length}명</p>
+              <p className="text-xs text-gray-500">대상 수: {filteredTargets.length}명</p>
               <p className="text-xs text-gray-500 mt-1">선택된 챌린지 응원권: {filteredTickets.length}장</p>
             </div>
           )}
         </div>
 
-        {selectedTicket && immediateTargets.length > 0 && (
+        {selectedTicket && filteredTargets.length > 0 && (
           <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -188,7 +218,7 @@ export const UseTicketPage = () => {
             disabled={useTicketMutation.isPending}
             className="w-full py-4 bg-gradient-to-r from-primary-500 to-primary-600 text-white font-bold text-lg rounded-2xl hover:from-primary-600 hover:to-primary-700 transition-all disabled:opacity-50"
           >
-            {useTicketMutation.isPending ? '발송 중...' : `응원 ${immediateTargets.length}명에게 보내기 💖`}
+            {useTicketMutation.isPending ? '발송 중...' : `응원 ${filteredTargets.length}명에게 보내기 💖`}
           </motion.button>
         )}
       </div>
