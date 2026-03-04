@@ -23,6 +23,15 @@ type ChallengeCard = {
   completionRate: number;
 };
 
+
+type MixedPlazaItem = {
+  id: string;
+  type: 'recruiting' | 'ongoing' | 'record';
+  score: number;
+  createdAtTs: number;
+  payload: ChallengeCard | VerificationRecord;
+};
+
 interface Recommendation {
   id: string;
   title: string;
@@ -219,9 +228,10 @@ export const FeedPage = () => {
   const currentAlias = useMemo(() => ANONYMOUS_NAMES[new Date().getMonth() % ANONYMOUS_NAMES.length], []);
   const nextApplyDate = useMemo(() => format(nextMonday(new Date()), 'M월 d일(E)', { locale: ko }), []);
 
-  const showRecruit = plazaFilter === 'all' || plazaFilter === 'recruiting';
-  const showOngoing = plazaFilter === 'all' || plazaFilter === 'ongoing';
-  const showRecords = plazaFilter === 'all' || plazaFilter === 'records';
+  const isAllTab = plazaFilter === 'all';
+  const showRecruit = plazaFilter === 'recruiting';
+  const showOngoing = plazaFilter === 'ongoing';
+  const showRecords = plazaFilter === 'records';
 
   const filterCountMap: Record<PlazaFilter, number> = {
     all: recruitingCards.length + ongoingCards.length + publicRecords.length,
@@ -229,6 +239,61 @@ export const FeedPage = () => {
     ongoing: ongoingCards.length,
     records: publicRecords.length,
   };
+
+
+  const mixedItems = useMemo<MixedPlazaItem[]>(() => {
+    const now = Date.now();
+    const recruitItems: MixedPlazaItem[] = recruitingCards.map((card) => {
+      const createdAtTs = now;
+      const freshness = 100;
+      const reactionScore = 0;
+      const typeWeight = 1.3;
+      return {
+        id: `mix-recruit-${card.challengeId}`,
+        type: 'recruiting',
+        score: freshness + reactionScore + typeWeight,
+        createdAtTs,
+        payload: card,
+      };
+    });
+
+    const ongoingItems: MixedPlazaItem[] = ongoingCards.map((card) => {
+      const createdAtTs = now;
+      const freshness = 70;
+      const reactionScore = card.completionRate * 0.5;
+      const typeWeight = 1.0;
+      return {
+        id: `mix-ongoing-${card.challengeId}`,
+        type: 'ongoing',
+        score: freshness + reactionScore + typeWeight,
+        createdAtTs,
+        payload: card,
+      };
+    });
+
+    const recordItems: MixedPlazaItem[] = publicRecords.map((record) => {
+      const createdAtTs = new Date(record.createdAt).getTime() || now;
+      const ageHours = Math.max((now - createdAtTs) / (1000 * 60 * 60), 0);
+      const freshness = 100 * Math.exp(-ageHours / 6);
+      const likeCount = reactionCountMap[record.verificationId] ?? 0;
+      const commentCount = 0;
+      const bookmarkCount = 0;
+      const reactionScore = (likeCount * 1) + (commentCount * 2) + (bookmarkCount * 1.5);
+      const typeWeight = 1.0;
+      return {
+        id: `mix-record-${record.verificationId}`,
+        type: 'record',
+        score: freshness + reactionScore + typeWeight,
+        createdAtTs,
+        payload: record,
+      };
+    });
+
+    return [...recruitItems, ...ongoingItems, ...recordItems].sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return b.createdAtTs - a.createdAtTs;
+    });
+  }, [recruitingCards, ongoingCards, publicRecords, reactionCountMap]);
 
   const reactToRecord = async ({ verificationId, challengeId, challengeTitle }: ReactionInput) => {
     setReactingIds((prev) => ({ ...prev, [verificationId]: true }));
@@ -362,7 +427,76 @@ export const FeedPage = () => {
             ))}
           </div>
 
+
           <div className="space-y-3">
+            {isAllTab && (
+              <>
+                {isChallengesLoading || isRecordsLoading ? (
+                  <Loading />
+                ) : mixedItems.length === 0 ? (
+                  <EmptyState icon="🛰️" title="광장 콘텐츠가 아직 없어요" description="모집 공고/진행 업데이트/완주 기록이 순차적으로 노출됩니다." />
+                ) : (
+                  <>
+                    {mixedItems.map((item) => {
+                      if (item.type === 'recruiting') {
+                        const card = item.payload as ChallengeCard;
+                        return (
+                          <motion.article key={item.id} className="border border-gray-200 rounded-2xl p-4">
+                            <p className="text-[11px] text-primary-700 font-semibold">카드 A · 모집 공고</p>
+                            <h3 className="font-semibold text-gray-900 mt-1">{card.title}</h3>
+                            <p className="text-xs text-gray-500 mt-1">리더: {card.leaderName} · 시작일: {card.startDateLabel}</p>
+                            <p className="text-xs text-primary-700 mt-1">잔여: {card.seatsLabel}</p>
+                            <Link to={`/challenges/${card.challengeId}`} className="inline-block mt-3 px-3 py-1.5 text-xs rounded-lg bg-gray-900 text-white">참여하기</Link>
+                          </motion.article>
+                        );
+                      }
+
+                      if (item.type === 'ongoing') {
+                        const card = item.payload as ChallengeCard;
+                        return (
+                          <article key={item.id} className="border border-gray-200 rounded-2xl p-4 bg-indigo-50/40">
+                            <p className="text-[11px] text-indigo-700 font-semibold">카드 B · 진행 중 업데이트</p>
+                            <h3 className="font-semibold text-gray-900 mt-1">{card.title}</h3>
+                            <p className="text-xs text-gray-600 mt-1">리더: {card.leaderName} · 완주율 {card.completionRate}%</p>
+                            <Link to={`/challenges/${card.challengeId}`} className="inline-block mt-3 text-xs text-indigo-700 underline">구경하기</Link>
+                          </article>
+                        );
+                      }
+
+                      const record = item.payload as VerificationRecord;
+                      return (
+                        <article key={item.id} className="border border-gray-200 rounded-2xl p-4 bg-emerald-50/40">
+                          <p className="text-[11px] text-emerald-700 font-semibold">카드 C · 마당 게시물(익명)</p>
+                          <h3 className="font-semibold text-gray-900 mt-1">📚 {record.challengeTitle || '챌린지 인증 기록'}</h3>
+                          <p className="text-xs text-gray-500 mt-1">작성자: 비공개 · {format(new Date(record.createdAt), 'M월 d일 HH:mm', { locale: ko })}</p>
+                          {record.todayNote && <p className="text-sm text-gray-700 mt-3">{record.todayNote}</p>}
+                          <button
+                            type="button"
+                            onClick={() => reactToRecord({ verificationId: record.verificationId, challengeTitle: record.challengeTitle, challengeId: record.challengeId })}
+                            disabled={Boolean(reactingIds[record.verificationId])}
+                            className="mt-3 px-2.5 py-1 text-xs rounded-lg border border-emerald-200 bg-white text-emerald-700 disabled:opacity-50"
+                          >
+                            {reactingIds[record.verificationId] ? '저장 중...' : `반응 남기기 ❤️ ${reactionCountMap[record.verificationId] ?? 0}`}
+                          </button>
+                        </article>
+                      );
+                    })}
+
+                    {hasNextPage && (
+                      <button
+                        type="button"
+                        onClick={() => fetchNextPage()}
+                        disabled={isFetchingNextPage}
+                        className="w-full py-2 text-sm rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50"
+                      >
+                        {isFetchingNextPage ? '불러오는 중...' : '완주 기록 더보기'}
+                      </button>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
             {showRecruit && (
               <>
                 {isChallengesLoading ? (
