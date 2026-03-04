@@ -43,3 +43,12 @@ export async function fetchPlazaRecommendations(verificationId: string): Promise
   const response = await apiClient.get(`/plaza/recommendations?verificationId=${encodeURIComponent(verificationId)}&limit=3`);
   return response.data?.data?.recommendations || [];
 }
+
+export async function dismissRecommendation(recommendationId?: string): Promise<void> {
+  if (!recommendationId) return;
+  try {
+    await apiClient.post(`/recommendations/${encodeURIComponent(recommendationId)}/dismiss`);
+  } catch {
+    // backward compatibility: ignore if endpoint is not ready yet
+  }
+}
