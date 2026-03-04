@@ -127,7 +127,7 @@ export const ChallengeFeedPage = () => {
           </button>
           <button
             type="button"
-            onClick={() => navigate(`/quests?challengeId=${challengeId}`)}
+            onClick={() => navigate(`/challenge-board/${challengeId}`)}
             className="py-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 font-semibold"
           >
             챌린지 보드

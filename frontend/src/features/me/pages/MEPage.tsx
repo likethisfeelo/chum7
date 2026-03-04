@@ -443,13 +443,20 @@ export const MEPage = () => {
                     </div>
                   )}
 
-                  <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div className="mt-2 grid grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
                       className="py-2.5 rounded-xl border border-primary-200 text-primary-700 bg-primary-50"
                     >
                       피드 열기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                      className="py-2.5 rounded-xl border border-amber-200 text-amber-700 bg-amber-50"
+                    >
+                      보드
                     </button>
                     <button
                       type="button"
@@ -498,13 +505,20 @@ export const MEPage = () => {
                         <p className="text-xs text-amber-700">
                           시작일: {challenge.startDate || '-'} · 상태: {statusLabel}
                         </p>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-3 gap-2">
                           <button
                             type="button"
                             onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
                             className="py-2 rounded-lg border border-primary-200 bg-white text-primary-700 text-sm"
                           >
                             피드 열기
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                            className="py-2 rounded-lg border border-amber-200 bg-white text-amber-700 text-sm"
+                          >
+                            보드
                           </button>
                           <button
                             type="button"
@@ -711,13 +725,20 @@ export const MEPage = () => {
               {completedChallenges.slice(0, 5).map((challenge: any) => (
                 <div key={challenge.userChallengeId || challenge.challengeId} className="border border-emerald-100 bg-emerald-50 rounded-xl p-3 space-y-2">
                   <p className="font-semibold text-gray-900">{challenge.challenge?.title || challenge.title}</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
                       className="py-2 rounded-lg border border-primary-200 bg-white text-primary-700 text-sm"
                     >
                       피드 열기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                      className="py-2 rounded-lg border border-amber-200 bg-white text-amber-700 text-sm"
+                    >
+                      보드
                     </button>
                     <button
                       type="button"
