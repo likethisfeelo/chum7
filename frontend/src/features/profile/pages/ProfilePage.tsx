@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuery } from '@tanstack/react-query';
@@ -10,8 +10,23 @@ type ChallengeFilter = 'active' | 'preparing' | 'completed';
 
 export const ProfilePage = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const { user, logout, updateUser } = useAuthStore();
   const [challengeFilter, setChallengeFilter] = useState<ChallengeFilter>('preparing');
+
+
+  const { data: profileData } = useQuery({
+    queryKey: ['auth-profile'],
+    queryFn: async () => {
+      const response = await apiClient.get('/auth/profile');
+      return response.data?.data?.user;
+    },
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!profileData) return;
+    updateUser(profileData);
+  }, [profileData, updateUser]);
 
   const { data: myChallenges } = useQuery({
     queryKey: ['my-challenges', 'all'],

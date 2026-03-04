@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
+import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import toast from 'react-hot-toast';
 
 const FILTER_GUIDE_TEXT: Record<'all' | 'extra', string> = {
@@ -17,14 +18,6 @@ const FILTER_GUIDE_TEXT: Record<'all' | 'extra', string> = {
 function isVideoUrl(url: string): boolean {
   const lower = url.toLowerCase();
   return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.mov') || lower.includes('.m4v');
-}
-
-function resolveMediaUrl(url: string): string {
-  if (!url) return url;
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  if (url.startsWith('/uploads/')) return url;
-  if (url.startsWith('uploads/')) return `/${url}`;
-  return `/uploads/${url.replace(/^\/+/, '')}`;
 }
 
 export const FeedPage = () => {
