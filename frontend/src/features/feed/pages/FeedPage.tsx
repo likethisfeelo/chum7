@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { format, nextMonday } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -27,6 +27,12 @@ interface Recommendation {
   title: string;
   reason: string;
   challengeId?: string;
+}
+
+interface ReactionInput {
+  verificationId: string;
+  challengeId?: string;
+  challengeTitle?: string;
 }
 
 const ANONYMITY_STORAGE_KEY = 'outer-space-anonymous-mode';
@@ -65,7 +71,7 @@ function toChallengeCard(challenge: any): ChallengeCard {
   };
 }
 
-function buildRecommendations(challengeTitle?: string, challengeId?: string): Recommendation[] {
+function buildFallbackRecommendations(challengeTitle?: string, challengeId?: string): Recommendation[] {
   const base = challengeTitle?.trim() || '관심 챌린지';
   return [
     { id: 'rec-1', title: `${base} 후속 모집`, reason: '반응한 게시물과 연관된 챌린지', challengeId },
@@ -79,6 +85,7 @@ export const FeedPage = () => {
   const [isAnonymousMode, setIsAnonymousMode] = useState(false);
   const [reactionCountMap, setReactionCountMap] = useState<Record<string, number>>({});
   const [selectedRecommendations, setSelectedRecommendations] = useState<Recommendation[] | null>(null);
+  const [reactingIds, setReactingIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const saved = localStorage.getItem(ANONYMITY_STORAGE_KEY);
@@ -118,14 +125,31 @@ export const FeedPage = () => {
     getNextPageParam: (lastPage) => lastPage?.nextToken || undefined,
   });
 
+  const recommendMutation = useMutation({
+    mutationFn: async ({ verificationId }: { verificationId: string }) => {
+      const response = await apiClient.get(`/plaza/recommendations?verificationId=${encodeURIComponent(verificationId)}&limit=3`);
+      return response.data.data?.recommendations || [];
+    },
+  });
+
+  const reactMutation = useMutation({
+    mutationFn: async ({ verificationId, challengeId }: ReactionInput) => {
+      await apiClient.post('/plaza/reactions', {
+        verificationId,
+        challengeId,
+        reactionType: 'like',
+      });
+    },
+  });
+
   const challenges = challengesData?.challenges || [];
   const recruitingCards = useMemo(
     () => challenges.filter((c: any) => String(c.lifecycle) === 'recruiting').map(toChallengeCard),
-    [challenges]
+    [challenges],
   );
   const ongoingCards = useMemo(
     () => challenges.filter((c: any) => String(c.lifecycle) === 'active').slice(0, 5).map(toChallengeCard),
-    [challenges]
+    [challenges],
   );
 
   const publicRecords = verificationPages?.pages?.flatMap((p: any) => p.verifications || []) || [];
@@ -144,9 +168,35 @@ export const FeedPage = () => {
     records: publicRecords.length,
   };
 
-  const reactToRecord = (recordId: string, challengeTitle?: string, challengeId?: string) => {
-    setReactionCountMap((prev) => ({ ...prev, [recordId]: (prev[recordId] ?? 0) + 1 }));
-    setSelectedRecommendations(buildRecommendations(challengeTitle, challengeId));
+  const reactToRecord = async ({ verificationId, challengeId, challengeTitle }: ReactionInput) => {
+    setReactingIds((prev) => ({ ...prev, [verificationId]: true }));
+    setReactionCountMap((prev) => ({ ...prev, [verificationId]: (prev[verificationId] ?? 0) + 1 }));
+
+    try {
+      await reactMutation.mutateAsync({ verificationId, challengeId, challengeTitle });
+    } catch {
+      // no-op: fallback UI keeps optimistic reaction count
+    }
+
+    try {
+      const recommended = await recommendMutation.mutateAsync({ verificationId });
+      if (Array.isArray(recommended) && recommended.length > 0) {
+        setSelectedRecommendations(
+          recommended.map((item: any, idx: number) => ({
+            id: String(item.id || `rec-${idx + 1}`),
+            title: item.title || item.challengeTitle || '추천 챌린지',
+            reason: item.reason || '관심 반응 기반 추천',
+            challengeId: item.challengeId,
+          })),
+        );
+      } else {
+        setSelectedRecommendations(buildFallbackRecommendations(challengeTitle, challengeId));
+      }
+    } catch {
+      setSelectedRecommendations(buildFallbackRecommendations(challengeTitle, challengeId));
+    } finally {
+      setReactingIds((prev) => ({ ...prev, [verificationId]: false }));
+    }
   };
 
   return (
@@ -267,10 +317,11 @@ export const FeedPage = () => {
                         <div className="mt-3 flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => reactToRecord(record.verificationId, record.challengeTitle, record.challengeId)}
-                            className="px-2.5 py-1 text-xs rounded-lg border border-emerald-200 bg-white text-emerald-700"
+                            onClick={() => reactToRecord({ verificationId: record.verificationId, challengeTitle: record.challengeTitle, challengeId: record.challengeId })}
+                            disabled={Boolean(reactingIds[record.verificationId])}
+                            className="px-2.5 py-1 text-xs rounded-lg border border-emerald-200 bg-white text-emerald-700 disabled:opacity-50"
                           >
-                            반응 남기기 ❤️ {reactionCountMap[record.verificationId] ?? 0}
+                            {reactingIds[record.verificationId] ? '저장 중...' : `반응 남기기 ❤️ ${reactionCountMap[record.verificationId] ?? 0}`}
                           </button>
                         </div>
                       </article>
