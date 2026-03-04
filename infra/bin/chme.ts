@@ -108,6 +108,7 @@ new QuestStack(app, `chme-${stage}-quest`, {
   questSubmissionsTable: coreStack.questSubmissionsTable,
   activeQuestSubmissionsTable: coreStack.activeQuestSubmissionsTable,
   challengesTable: coreStack.challengesTable,
+  uploadsBucket: coreStack.uploadsBucket,
 });
 
 new BulletinStack(app, `chme-${stage}-bulletin`, {

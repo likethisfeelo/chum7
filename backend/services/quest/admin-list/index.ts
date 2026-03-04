@@ -9,10 +9,13 @@
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const s3Client = new S3Client({});
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
@@ -42,6 +45,45 @@ function parseGroups(rawGroups: unknown): string[] {
     .split(/[,:]/)
     .map(g => g.replace(/[\[\]"']/g, '').trim())
     .filter(Boolean);
+}
+
+
+function extractUploadsKey(url?: string | null): string | null {
+  if (!url) return null;
+  const raw = String(url).trim();
+  if (!raw) return null;
+
+  if (raw.startsWith('/uploads/')) return raw.slice('/uploads/'.length);
+  if (raw.startsWith('uploads/')) return raw.slice('uploads/'.length);
+
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      const parsed = new URL(raw);
+      if (parsed.pathname.startsWith('/uploads/')) return parsed.pathname.slice('/uploads/'.length);
+    } catch {
+      return null;
+    }
+  }
+
+  if (raw.includes('/') && !raw.startsWith('http')) return raw.replace(/^\/+/, '');
+  return null;
+}
+
+async function toRenderableMediaUrl(url?: string | null): Promise<string | null> {
+  if (!url) return null;
+  const key = extractUploadsKey(url);
+  if (!key || !process.env.UPLOADS_BUCKET) return url;
+
+  try {
+    return await getSignedUrl(
+      s3Client,
+      new GetObjectCommand({ Bucket: process.env.UPLOADS_BUCKET, Key: key }),
+      { expiresIn: 3600 },
+    );
+  } catch (error) {
+    console.error('Failed to sign quest submission media url:', error);
+    return url;
+  }
 }
 
 function canAccess(event: APIGatewayProxyEvent): boolean {
@@ -127,29 +169,38 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       submissions = result.Items ?? [];
       lastEvaluatedKey = result.LastEvaluatedKey;
     } else {
-      const expressionNames: Record<string, string> = { '#status': 'status' };
-      const expressionValues: Record<string, any> = { ':status': status };
-      let filterExpression: string | undefined = undefined;
+      const statusList = status === 'approved'
+        ? ['approved', 'auto_approved']
+        : [status];
 
-      if (challengeId) {
-        filterExpression = 'challengeId = :challengeId';
-        expressionValues[':challengeId'] = challengeId;
-      }
+      const pages = await Promise.all(statusList.map((eachStatus) => {
+        const expressionNames: Record<string, string> = { '#status': 'status' };
+        const expressionValues: Record<string, any> = { ':status': eachStatus };
+        let filterExpression: string | undefined = undefined;
 
-      const result = await docClient.send(new QueryCommand({
-        TableName: process.env.QUEST_SUBMISSIONS_TABLE!,
-        IndexName: 'status-createdAt-index',
-        KeyConditionExpression: '#status = :status',
-        ...(filterExpression ? { FilterExpression: filterExpression } : {}),
-        ExpressionAttributeNames: expressionNames,
-        ExpressionAttributeValues: expressionValues,
-        ScanIndexForward: false,
-        Limit: limit,
-        ExclusiveStartKey: nextToken,
+        if (challengeId) {
+          filterExpression = 'challengeId = :challengeId';
+          expressionValues[':challengeId'] = challengeId;
+        }
+
+        return docClient.send(new QueryCommand({
+          TableName: process.env.QUEST_SUBMISSIONS_TABLE!,
+          IndexName: 'status-createdAt-index',
+          KeyConditionExpression: '#status = :status',
+          ...(filterExpression ? { FilterExpression: filterExpression } : {}),
+          ExpressionAttributeNames: expressionNames,
+          ExpressionAttributeValues: expressionValues,
+          ScanIndexForward: false,
+          Limit: limit,
+          ExclusiveStartKey: nextToken,
+        }));
       }));
 
-      submissions = result.Items ?? [];
-      lastEvaluatedKey = result.LastEvaluatedKey;
+      submissions = pages
+        .flatMap((result) => result.Items ?? [])
+        .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+        .slice(0, limit);
+      lastEvaluatedKey = statusList.length === 1 ? pages[0]?.LastEvaluatedKey : undefined;
     }
 
     const questIds = [...new Set(submissions.map(s => s.questId))];
@@ -167,9 +218,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       questMap = new Map(quests.map((q: any) => [q.questId, q]));
     }
 
-    let enriched = submissions.map(s => ({
-      ...s,
-      quest: questMap.get(s.questId) ?? null,
+    let enriched = await Promise.all(submissions.map(async (s) => {
+      const content = s?.content && typeof s.content === 'object' ? { ...s.content } : s.content;
+
+      if (content && typeof content === 'object') {
+        content.imageUrl = await toRenderableMediaUrl(content.imageUrl || null);
+        content.videoUrl = await toRenderableMediaUrl(content.videoUrl || null);
+        content.thumbnailUrl = await toRenderableMediaUrl(content.thumbnailUrl || null);
+      }
+
+      return {
+        ...s,
+        content,
+        quest: questMap.get(s.questId) ?? null,
+      };
     }));
 
     if (questScope && ['leader', 'personal', 'mixed'].includes(questScope)) {

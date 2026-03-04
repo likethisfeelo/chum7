@@ -85,6 +85,7 @@ export class VerificationStack extends Stack {
     });
     verificationsTable.grantReadData(listFn);
     userChallengesTable.grantReadData(listFn);
+    uploadsBucket.grantRead(listFn);
     apiGateway.addRoutes({
       path: '/verifications',
       methods: [HttpMethod.GET],
