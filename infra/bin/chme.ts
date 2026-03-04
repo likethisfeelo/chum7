@@ -81,6 +81,7 @@ new CheerStack(app, `chme-${stage}-cheer`, {
   cheersTable: coreStack.cheersTable,
   userCheerTicketsTable: coreStack.userCheerTicketsTable,
   userChallengesTable: coreStack.userChallengesTable,
+  challengesTable: coreStack.challengesTable,
   snsTopic: coreStack.snsTopic,
   eventBus: coreStack.eventBus,
 });

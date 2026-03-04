@@ -6,12 +6,41 @@ import { apiClient } from '@/lib/api-client';
 import { FiSettings, FiLogOut, FiChevronRight } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
+
 type ChallengeFilter = 'active' | 'preparing' | 'completed';
+
+type ChallengeBucket = 'active' | 'preparing' | 'completed' | 'other';
+
+const resolveChallengeBucket = (item: any): ChallengeBucket => {
+  const userStatus = String(item?.status || '').toLowerCase();
+  const userPhase = String(item?.phase || '').toLowerCase();
+  const lifecycle = String(item?.challenge?.lifecycle || '').toLowerCase();
+
+  if (userStatus === 'completed' || userPhase === 'completed' || lifecycle === 'completed') {
+    return 'completed';
+  }
+
+  if (userStatus === 'active') {
+    if (userPhase === 'preparing' || lifecycle === 'recruiting' || lifecycle === 'preparing') {
+      return 'preparing';
+    }
+    return 'active';
+  }
+
+  return 'other';
+};
+
+const getChallengeStatusLabel = (item: any): string => {
+  const bucket = resolveChallengeBucket(item);
+  if (bucket === 'preparing') return '준비중';
+  if (bucket === 'completed') return '완주';
+  return '진행중';
+};
 
 export const ProfilePage = () => {
   const navigate = useNavigate();
   const { user, logout, updateUser } = useAuthStore();
-  const [challengeFilter, setChallengeFilter] = useState<ChallengeFilter>('preparing');
+  const [challengeFilter, setChallengeFilter] = useState<ChallengeFilter>('active');
 
 
   const { data: profileData } = useQuery({
@@ -39,21 +68,21 @@ export const ProfilePage = () => {
   const challengeItems = myChallenges?.challenges ?? [];
 
   const summary = useMemo(() => {
-    const preparing = challengeItems.filter((item: any) => item.status === 'active' && item.phase === 'preparing').length;
-    const active = challengeItems.filter((item: any) => item.status === 'active' && item.phase !== 'preparing').length;
-    const completed = challengeItems.filter((item: any) => item.status === 'completed').length;
+    const preparing = challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'preparing').length;
+    const active = challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'active').length;
+    const completed = challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'completed').length;
     const receivedCheer = challengeItems.reduce((acc: number, item: any) => acc + Number(item.cheerCount ?? 0), 0);
     return { preparing, active, completed, receivedCheer };
   }, [challengeItems]);
 
   const filteredChallenges = useMemo(() => {
     if (challengeFilter === 'preparing') {
-      return challengeItems.filter((item: any) => item.status === 'active' && item.phase === 'preparing');
+      return challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'preparing');
     }
     if (challengeFilter === 'active') {
-      return challengeItems.filter((item: any) => item.status === 'active' && item.phase !== 'preparing');
+      return challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'active');
     }
-    return challengeItems.filter((item: any) => item.status === 'completed');
+    return challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'completed');
   }, [challengeFilter, challengeItems]);
 
   const handleLogout = () => {
@@ -157,7 +186,7 @@ export const ProfilePage = () => {
                 >
                   <p className="font-semibold text-gray-900">{item.challenge?.title}</p>
                   <p className="text-xs text-gray-500 mt-1">
-                    상태: {item.phase === 'preparing' ? '준비중' : item.status === 'completed' ? '완주' : '진행중'}
+                    상태: {getChallengeStatusLabel(item)}
                     {item.startDate ? ` · 시작일: ${item.startDate}` : ''}
                   </p>
                 </button>
