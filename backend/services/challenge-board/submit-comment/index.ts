@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
-import { response, getUserId, isParticipant, trackKpiEvent } from '../_shared/common';
+import { response, getUserId, isParticipant, trackKpiEvent, createDailyAnonymousId } from '../_shared/common';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -21,7 +21,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const body = JSON.parse(event.body || '{}');
     const content = typeof body.content === 'string' ? body.content.trim() : '';
-    const authorName = typeof body.authorName === 'string' && body.authorName.trim() ? body.authorName.trim() : '익명';
+    const dailyAnonymousId = createDailyAnonymousId(challengeId, userId);
 
     if (!content) return response(400, { error: 'VALIDATION_ERROR', message: '댓글 내용이 필요합니다.' });
     if (content.length > 1000) return response(400, { error: 'VALIDATION_ERROR', message: '댓글은 1000자 이하로 입력해주세요.' });
@@ -33,7 +33,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       commentId,
       challengeId,
       userId,
-      authorName,
+      dailyAnonymousId,
       content,
       isQuoted: false,
       quotedAt: null,
@@ -49,12 +49,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     return response(200, {
       commentId,
-      authorName,
+      dailyAnonymousId,
       content,
       createdAt: now,
     });
   } catch (error) {
     console.error('submit-comment error', error);
+    if ((error as Error).message === 'ANON_SALT_NOT_CONFIGURED') {
+      return response(500, { error: 'ANON_SALT_NOT_CONFIGURED', message: '익명 ID 설정값이 누락되었습니다.' });
+    }
     return response(500, { error: 'INTERNAL_SERVER_ERROR' });
   }
 };

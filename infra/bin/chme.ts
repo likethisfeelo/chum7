@@ -135,6 +135,7 @@ new ChallengeBoardStack(app, `chme-${stage}-challenge-board`, {
   challengeBoardsTable: coreStack.challengeBoardsTable,
   challengeCommentsTable: coreStack.challengeCommentsTable,
   challengePreviewsTable: coreStack.challengePreviewsTable,
+  notificationsTable: coreStack.notificationsTable,
 });
 
 new FrontendStack(app, `chme-${stage}-frontend`, {

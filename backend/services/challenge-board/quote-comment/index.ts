@@ -37,7 +37,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       id: `q-${uuidv4()}`,
       type: 'quote',
       commentId,
-      authorName: comment.authorName,
+      authorName: comment.dailyAnonymousId ?? comment.authorName ?? '익명-000',
       content: comment.content,
     };
 

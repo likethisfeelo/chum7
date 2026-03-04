@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 
@@ -33,6 +33,11 @@ export const AdminMyChallengesPage = () => {
   const [questEditForm, setQuestEditForm] = useState({ title: '', description: '', rewardPoints: 0, displayOrder: 0 });
   const [questSaving, setQuestSaving] = useState(false);
 
+  const [previewDraft, setPreviewDraft] = useState('');
+  const [boardDraft, setBoardDraft] = useState('');
+  const [previewSaving, setPreviewSaving] = useState(false);
+  const [boardSaving, setBoardSaving] = useState(false);
+
   const { data: challengesData, isLoading, error, refetch: refetchChallenges } = useQuery({
     queryKey: ['admin-my-challenges'],
     queryFn: async () => {
@@ -44,6 +49,7 @@ export const AdminMyChallengesPage = () => {
   const filteredChallenges = challengesData ?? [];
   const selectedChallenge = filteredChallenges.find((c: any) => c.challengeId === selectedChallengeId) ?? null;
   const currentLifecycle = (selectedChallenge?.lifecycle ?? null) as Lifecycle | null;
+  const isBoardEditingLocked = currentLifecycle === 'active' || currentLifecycle === 'completed' || currentLifecycle === 'archived';
 
   const { data: questsData, isLoading: questsLoading, refetch: refetchQuests } = useQuery({
     queryKey: ['admin-challenge-quests', selectedChallengeId],
@@ -54,10 +60,91 @@ export const AdminMyChallengesPage = () => {
     },
   });
 
+
+  const { data: previewData, refetch: refetchPreview } = useQuery({
+    queryKey: ['admin-preview-board', selectedChallengeId],
+    enabled: Boolean(selectedChallengeId),
+    queryFn: async () => {
+      const res = await apiClient.get(`/preview-board/${selectedChallengeId}`);
+      return res.data;
+    },
+  });
+
+  const { data: challengeBoardData, refetch: refetchChallengeBoard } = useQuery({
+    queryKey: ['admin-challenge-board', selectedChallengeId],
+    enabled: Boolean(selectedChallengeId),
+    queryFn: async () => {
+      const res = await apiClient.get(`/challenge-board/${selectedChallengeId}`);
+      return res.data;
+    },
+  });
+
   const nextLifecycles = useMemo(
     () => (currentLifecycle ? ALLOWED_TRANSITIONS[currentLifecycle] : []),
     [currentLifecycle],
   );
+
+  useEffect(() => {
+    const previewText = (previewData?.blocks || [])
+      .filter((b: any) => b.type === 'text' && typeof b.content === 'string')
+      .map((b: any) => b.content)
+      .join('\n\n');
+    setPreviewDraft(previewText);
+  }, [previewData]);
+
+  useEffect(() => {
+    const boardText = (challengeBoardData?.blocks || [])
+      .filter((b: any) => b.type === 'text' && typeof b.content === 'string')
+      .map((b: any) => b.content)
+      .join('\n\n');
+    setBoardDraft(boardText);
+  }, [challengeBoardData]);
+
+  const toTextBlocks = (raw: string) =>
+    raw
+      .split(/\n{2,}/)
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .map((content, idx) => ({ id: `t-${idx + 1}-${Date.now()}`, type: 'text', order: idx + 1, content }));
+
+  const savePreviewBoard = async () => {
+    if (!selectedChallengeId) return;
+    if (isBoardEditingLocked) {
+      alert('챌린지 시작 후에는 프리뷰/보드 수정이 원칙적으로 불가합니다.');
+      return;
+    }
+
+    setPreviewSaving(true);
+    try {
+      await apiClient.post(`/preview-board/${selectedChallengeId}`, { blocks: toTextBlocks(previewDraft) });
+      await refetchPreview();
+      alert('프리뷰 보드를 저장했습니다.');
+    } catch (e: any) {
+      alert(e?.response?.data?.message || '프리뷰 보드 저장에 실패했습니다.');
+    } finally {
+      setPreviewSaving(false);
+    }
+  };
+
+  const saveChallengeBoard = async () => {
+    if (!selectedChallengeId) return;
+    if (isBoardEditingLocked) {
+      alert('챌린지 시작 후에는 프리뷰/보드 수정이 원칙적으로 불가합니다.');
+      return;
+    }
+
+    setBoardSaving(true);
+    try {
+      await apiClient.post(`/challenge-board/${selectedChallengeId}`, { blocks: toTextBlocks(boardDraft) });
+      await refetchChallengeBoard();
+      alert('챌린지 보드를 저장했습니다.');
+    } catch (e: any) {
+      alert(e?.response?.data?.message || '챌린지 보드 저장에 실패했습니다.');
+    } finally {
+      setBoardSaving(false);
+    }
+  };
+
 
   const handleLifecycleTransition = async (target: Lifecycle) => {
     if (!selectedChallengeId || !transitionReason.trim()) return;
@@ -164,6 +251,57 @@ export const AdminMyChallengesPage = () => {
                   {transitionLoading === lc ? '변경 중...' : `${lc} 전환`}
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {selectedChallengeId && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">챌린지 프리뷰/보드 내용 관리</h3>
+            <p className="text-sm text-gray-600">챌린지 생성 시 비워둘 수 있으며, 이후 추가/수정 가능합니다. (preparing까지 허용, active부터 원칙적 수정불가)</p>
+            {isBoardEditingLocked && <p className="text-xs text-rose-600 mt-1">현재 lifecycle: {currentLifecycle} · 읽기 전용</p>}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border border-gray-200 rounded-xl p-3 space-y-2">
+              <p className="font-semibold text-gray-900">프리뷰 보드 (공개)</p>
+              <textarea
+                value={previewDraft}
+                onChange={(e) => setPreviewDraft(e.target.value)}
+                disabled={isBoardEditingLocked || previewSaving}
+                className="w-full min-h-[180px] px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder="문단을 빈 줄로 구분해 텍스트 블록으로 저장됩니다."
+              />
+              <button
+                type="button"
+                onClick={savePreviewBoard}
+                disabled={isBoardEditingLocked || previewSaving}
+                className="px-3 py-1.5 rounded bg-blue-600 text-white text-sm disabled:opacity-50"
+              >
+                {previewSaving ? '저장 중...' : '프리뷰 저장'}
+              </button>
+            </div>
+
+            <div className="border border-gray-200 rounded-xl p-3 space-y-2">
+              <p className="font-semibold text-gray-900">챌린지 보드 (참여자 전용)</p>
+              <textarea
+                value={boardDraft}
+                onChange={(e) => setBoardDraft(e.target.value)}
+                disabled={isBoardEditingLocked || boardSaving}
+                className="w-full min-h-[180px] px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder="문단을 빈 줄로 구분해 텍스트 블록으로 저장됩니다."
+              />
+              <button
+                type="button"
+                onClick={saveChallengeBoard}
+                disabled={isBoardEditingLocked || boardSaving}
+                className="px-3 py-1.5 rounded bg-slate-800 text-white text-sm disabled:opacity-50"
+              >
+                {boardSaving ? '저장 중...' : '보드 저장'}
+              </button>
             </div>
           </div>
         </div>

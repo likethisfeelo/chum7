@@ -55,6 +55,14 @@ export const MEPage = () => {
 
   const challenges = data?.challenges || [];
 
+  const { data: completedChallengesData } = useQuery({
+    queryKey: ['my-challenges-completed'],
+    queryFn: async () => {
+      const response = await apiClient.get('/challenges/my?status=completed');
+      return response.data.data;
+    },
+  });
+
 
   const personalQuestTargetChallenges = useMemo(
     () => challenges.filter((challenge: any) => Boolean(challenge?.challenge?.personalQuestEnabled)),
@@ -150,6 +158,46 @@ export const MEPage = () => {
       toast.error('추가 기록을 더 불러오지 못했어요');
     }
   });
+
+  const [leaderDmTargetId, setLeaderDmTargetId] = useState<string | null>(null);
+
+  const leaderDmMutation = useMutation({
+    mutationFn: async (challengeId: string) => {
+      setLeaderDmTargetId(challengeId);
+      const response = await apiClient.post(`/challenge-feed/${challengeId}/leader-dm`);
+      return response.data;
+    },
+    onSuccess: async (res: any) => {
+      const threadId = res?.threadId || res?.data?.threadId;
+      const deepLink = res?.deepLink || res?.data?.deepLink;
+      const isNew = res?.isNew ?? res?.data?.isNew;
+      const message = isNew ? '리더 DM 대화가 열렸어요 ✉️' : '기존 리더 DM 대화로 연결했어요 ✉️';
+      if (threadId && navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(String(threadId));
+      }
+      if (typeof deepLink === 'string' && deepLink.startsWith('/messages/')) {
+        toast.success(message);
+        navigate(deepLink);
+        return;
+      }
+      toast.success(threadId ? `${message} (threadId 복사됨)` : message);
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || '리더 DM 연결에 실패했습니다');
+    },
+    onSettled: () => {
+      setLeaderDmTargetId(null);
+    },
+  });
+
+  const handleLeaderDm = (challenge: any) => {
+    const challengeId = challenge?.challengeId || challenge?.challenge?.challengeId;
+    if (!challengeId) {
+      toast.error('챌린지 정보를 찾지 못했습니다');
+      return;
+    }
+    leaderDmMutation.mutate(challengeId);
+  };
 
   const visibilityMutation = useMutation({
     mutationFn: async (verificationId: string) => {
@@ -262,6 +310,11 @@ export const MEPage = () => {
     [challenges],
   );
 
+  const completedChallenges = useMemo(
+    () => completedChallengesData?.challenges || [],
+    [completedChallengesData],
+  );
+
 
   const getProposalStatusMeta = (status?: string) => {
     const key = String(status || 'pending');
@@ -298,7 +351,7 @@ export const MEPage = () => {
       <div className="p-6 space-y-4">
         {isLoading ? (
           <Loading />
-        ) : activeChallenges.length === 0 && pendingChallenges.length === 0 ? (
+        ) : activeChallenges.length === 0 && pendingChallenges.length === 0 && completedChallenges.length === 0 ? (
           <EmptyState
             icon="🎯"
             title="진행 중인 챌린지가 없어요"
@@ -394,6 +447,30 @@ export const MEPage = () => {
                     </div>
                   )}
 
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                      className="py-2.5 rounded-xl border border-primary-200 text-primary-700 bg-primary-50"
+                    >
+                      피드 열기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                      className="py-2.5 rounded-xl border border-amber-200 text-amber-700 bg-amber-50"
+                    >
+                      보드
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleLeaderDm(challenge)}
+                      disabled={leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId)}
+                      className="py-2.5 rounded-xl border border-blue-200 text-blue-700 bg-blue-50 disabled:opacity-50"
+                    >
+                      {leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId) ? 'DM 연결중...' : '리더 DM'}
+                    </button>
+                  </div>
 
                   {(() => {
                     const remedyType = getRemedyType(challenge.remedyPolicy);
@@ -432,6 +509,30 @@ export const MEPage = () => {
                         <p className="text-xs text-amber-700">
                           시작일: {challenge.startDate || '-'} · 상태: {statusLabel}
                         </p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                            className="py-2 rounded-lg border border-primary-200 bg-white text-primary-700 text-sm"
+                          >
+                            피드 열기
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                            className="py-2 rounded-lg border border-amber-200 bg-white text-amber-700 text-sm"
+                          >
+                            보드
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleLeaderDm(challenge)}
+                            disabled={leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId)}
+                            className="py-2 rounded-lg border border-blue-200 bg-white text-blue-700 text-sm disabled:opacity-50"
+                          >
+                            {leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId) ? 'DM 연결중...' : '리더 DM'}
+                          </button>
+                        </div>
                         {challenge.challenge?.personalQuestEnabled && (() => {
                           const proposal = personalQuestProposalMap?.[challenge.challengeId];
                           const statusMeta = getProposalStatusMeta(proposal?.status);
@@ -618,7 +719,47 @@ export const MEPage = () => {
           </section>
         )}
 
-        {(activeChallenges.length > 0 || pendingChallenges.length > 0) && (
+        {completedChallenges.length > 0 && (
+          <section className="bg-white rounded-2xl p-5 border border-emerald-200 space-y-3">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">완료된 챌린지 바로가기</h2>
+              <p className="text-sm text-gray-500">완료된 챌린지도 피드와 리더 DM으로 다시 진입할 수 있어요.</p>
+            </div>
+            <div className="space-y-2">
+              {completedChallenges.slice(0, 5).map((challenge: any) => (
+                <div key={challenge.userChallengeId || challenge.challengeId} className="border border-emerald-100 bg-emerald-50 rounded-xl p-3 space-y-2">
+                  <p className="font-semibold text-gray-900">{challenge.challenge?.title || challenge.title}</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                      className="py-2 rounded-lg border border-primary-200 bg-white text-primary-700 text-sm"
+                    >
+                      피드 열기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                      className="py-2 rounded-lg border border-amber-200 bg-white text-amber-700 text-sm"
+                    >
+                      보드
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleLeaderDm(challenge)}
+                      disabled={leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId)}
+                      className="py-2 rounded-lg border border-blue-200 bg-white text-blue-700 text-sm disabled:opacity-50"
+                    >
+                      {leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId) ? 'DM 연결중...' : '리더 DM'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {(activeChallenges.length > 0 || pendingChallenges.length > 0 || completedChallenges.length > 0) && (
           <button
             onClick={() => navigate('/challenges')}
             className="w-full py-4 border-2 border-dashed border-gray-300 rounded-2xl text-gray-500 hover:border-primary-400 hover:text-primary-500 transition-colors font-medium"
