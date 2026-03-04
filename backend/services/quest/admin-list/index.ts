@@ -127,29 +127,38 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       submissions = result.Items ?? [];
       lastEvaluatedKey = result.LastEvaluatedKey;
     } else {
-      const expressionNames: Record<string, string> = { '#status': 'status' };
-      const expressionValues: Record<string, any> = { ':status': status };
-      let filterExpression: string | undefined = undefined;
+      const statusList = status === 'approved'
+        ? ['approved', 'auto_approved']
+        : [status];
 
-      if (challengeId) {
-        filterExpression = 'challengeId = :challengeId';
-        expressionValues[':challengeId'] = challengeId;
-      }
+      const pages = await Promise.all(statusList.map((eachStatus) => {
+        const expressionNames: Record<string, string> = { '#status': 'status' };
+        const expressionValues: Record<string, any> = { ':status': eachStatus };
+        let filterExpression: string | undefined = undefined;
 
-      const result = await docClient.send(new QueryCommand({
-        TableName: process.env.QUEST_SUBMISSIONS_TABLE!,
-        IndexName: 'status-createdAt-index',
-        KeyConditionExpression: '#status = :status',
-        ...(filterExpression ? { FilterExpression: filterExpression } : {}),
-        ExpressionAttributeNames: expressionNames,
-        ExpressionAttributeValues: expressionValues,
-        ScanIndexForward: false,
-        Limit: limit,
-        ExclusiveStartKey: nextToken,
+        if (challengeId) {
+          filterExpression = 'challengeId = :challengeId';
+          expressionValues[':challengeId'] = challengeId;
+        }
+
+        return docClient.send(new QueryCommand({
+          TableName: process.env.QUEST_SUBMISSIONS_TABLE!,
+          IndexName: 'status-createdAt-index',
+          KeyConditionExpression: '#status = :status',
+          ...(filterExpression ? { FilterExpression: filterExpression } : {}),
+          ExpressionAttributeNames: expressionNames,
+          ExpressionAttributeValues: expressionValues,
+          ScanIndexForward: false,
+          Limit: limit,
+          ExclusiveStartKey: nextToken,
+        }));
       }));
 
-      submissions = result.Items ?? [];
-      lastEvaluatedKey = result.LastEvaluatedKey;
+      submissions = pages
+        .flatMap((result) => result.Items ?? [])
+        .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+        .slice(0, limit);
+      lastEvaluatedKey = statusList.length === 1 ? pages[0]?.LastEvaluatedKey : undefined;
     }
 
     const questIds = [...new Set(submissions.map(s => s.questId))];

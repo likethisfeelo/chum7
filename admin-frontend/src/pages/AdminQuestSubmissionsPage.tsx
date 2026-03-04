@@ -49,11 +49,37 @@ function isVideoUrl(url: string): boolean {
 }
 
 function resolveMediaUrl(url: string): string {
-  if (!url) return url;
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  if (url.startsWith('/uploads/')) return url;
-  if (url.startsWith('uploads/')) return `/${url}`;
-  return `/uploads/${url.replace(/^\/+/, '')}`;
+  if (!url) return '';
+
+  const raw = String(url).trim();
+  if (!raw) return '';
+
+  const cloudfrontBase = (import.meta.env.VITE_CLOUDFRONT_URL || '').replace(/\/+$/, '');
+  const normalizedPath = raw.replace(/^\/+/, '');
+
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    if (!cloudfrontBase) return raw;
+
+    try {
+      const parsed = new URL(raw);
+      if (parsed.pathname.startsWith('/uploads/')) {
+        return `${cloudfrontBase}${parsed.pathname}`;
+      }
+      return raw;
+    } catch {
+      return raw;
+    }
+  }
+
+  if (normalizedPath.startsWith('uploads/')) {
+    return cloudfrontBase
+      ? `${cloudfrontBase}/${normalizedPath}`
+      : `/${normalizedPath}`;
+  }
+
+  return cloudfrontBase
+    ? `${cloudfrontBase}/uploads/${normalizedPath}`
+    : `/uploads/${normalizedPath}`;
 }
 
 export const AdminQuestSubmissionsPage = () => {
@@ -181,7 +207,7 @@ export const AdminQuestSubmissionsPage = () => {
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-3">
           <p className="text-xs text-gray-500">승인</p>
-          <p className="text-xl font-bold text-emerald-600">{summary.byStatus?.approved || 0}</p>
+          <p className="text-xl font-bold text-emerald-600">{(summary.byStatus?.approved || 0) + (summary.byStatus?.auto_approved || 0)}</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-3">
           <p className="text-xs text-gray-500">심사중</p>

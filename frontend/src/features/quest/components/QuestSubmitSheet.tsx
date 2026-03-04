@@ -47,16 +47,20 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
       if (quest.verificationType === 'image') {
         if (!imageFile) throw new Error('이미지를 선택해주세요');
 
+        const challengeId = quest.challengeId ?? quest.challenge?.challengeId;
+        if (!challengeId) throw new Error('챌린지 정보가 없어 업로드할 수 없습니다');
+
         const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
           fileName: imageFile.name,
-          contentType: imageFile.type,
+          fileType: imageFile.type,
+          challengeId,
         });
         await fetch(uploadData.data.uploadUrl, {
           method: 'PUT',
           body: imageFile,
           headers: { 'Content-Type': imageFile.type },
         });
-        content = { imageUrl: uploadData.data.imageUrl };
+        content = { imageUrl: uploadData.data.fileUrl };
 
       } else if (quest.verificationType === 'link') {
         if (!linkUrl.trim()) throw new Error('URL을 입력해주세요');
