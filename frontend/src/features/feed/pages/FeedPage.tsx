@@ -62,6 +62,10 @@ interface VerificationRecord {
 }
 
 const ANONYMITY_STORAGE_KEY = 'outer-space-anonymous-mode';
+const RECOMMENDATION_DISMISS_KEY = 'outer-space-recommend-dismiss';
+const MAX_RECOMMENDATION_EXPOSURE_PER_SESSION = 2;
+const RECOMMENDATION_SUPPRESS_HOURS = 48;
+
 const ANONYMOUS_NAMES = ['새벽의 곰', '조용한 호랑이', '집중하는 올빼미', '묵묵한 이무기'];
 
 const FILTER_TABS: Array<{ key: PlazaFilter; label: string }> = [
@@ -106,12 +110,43 @@ function buildFallbackRecommendations(challengeTitle?: string, challengeId?: str
   ];
 }
 
+function getDismissMap(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(RECOMMENDATION_DISMISS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function setDismissMap(map: Record<string, string>) {
+  localStorage.setItem(RECOMMENDATION_DISMISS_KEY, JSON.stringify(map));
+}
+
+function isSuppressed(challengeId?: string): boolean {
+  if (!challengeId) return false;
+  const map = getDismissMap();
+  const until = map[challengeId];
+  if (!until) return false;
+  const untilDate = new Date(until);
+  if (Number.isNaN(untilDate.getTime()) || untilDate.getTime() < Date.now()) {
+    delete map[challengeId];
+    setDismissMap(map);
+    return false;
+  }
+  return true;
+}
+
+
 export const FeedPage = () => {
   const [plazaFilter, setPlazaFilter] = useState<PlazaFilter>('all');
   const [isAnonymousMode, setIsAnonymousMode] = useState(false);
   const [reactionCountMap, setReactionCountMap] = useState<Record<string, number>>({});
   const [selectedRecommendations, setSelectedRecommendations] = useState<Recommendation[] | null>(null);
   const [reactingIds, setReactingIds] = useState<Record<string, boolean>>({});
+  const [recommendExposeCount, setRecommendExposeCount] = useState(0);
 
   useEffect(() => {
     const saved = localStorage.getItem(ANONYMITY_STORAGE_KEY);
@@ -165,11 +200,19 @@ export const FeedPage = () => {
 
   const reactMutation = useMutation({
     mutationFn: async ({ verificationId, challengeId }: ReactionInput) => {
-      await apiClient.post('/plaza/reactions', {
-        verificationId,
-        challengeId,
-        reactionType: 'like',
-      });
+      try {
+        const response = await apiClient.post(`/plaza/${encodeURIComponent(verificationId)}/react`, {
+          reactionType: 'like',
+        });
+        return response.data?.data ?? null;
+      } catch {
+        const fallbackResponse = await apiClient.post('/plaza/reactions', {
+          verificationId,
+          challengeId,
+          reactionType: 'like',
+        });
+        return fallbackResponse.data?.data ?? null;
+      }
     },
   });
 
@@ -203,28 +246,64 @@ export const FeedPage = () => {
     setReactingIds((prev) => ({ ...prev, [verificationId]: true }));
     setReactionCountMap((prev) => ({ ...prev, [verificationId]: (prev[verificationId] ?? 0) + 1 }));
 
+    let reactResponse: any = null;
     try {
-      await reactMutation.mutateAsync({ verificationId, challengeId, challengeTitle });
+      reactResponse = await reactMutation.mutateAsync({ verificationId, challengeId, challengeTitle });
+      if (typeof reactResponse?.likeCount === 'number') {
+        setReactionCountMap((prev) => ({ ...prev, [verificationId]: reactResponse.likeCount }));
+      }
     } catch {
       // no-op: fallback UI keeps optimistic reaction count
     }
 
+    const canExposeRecommend = recommendExposeCount < MAX_RECOMMENDATION_EXPOSURE_PER_SESSION;
+    if (!canExposeRecommend) {
+      setReactingIds((prev) => ({ ...prev, [verificationId]: false }));
+      return;
+    }
+
+    const reactInlineRecommendation = reactResponse?.recommendation;
+    if (reactInlineRecommendation && !isSuppressed(reactInlineRecommendation.challengeId)) {
+      setSelectedRecommendations([{
+        id: String(reactInlineRecommendation.recommendationId || `rec-inline-${verificationId}`),
+        title: reactInlineRecommendation.challengeTitle || '추천 챌린지',
+        reason: reactInlineRecommendation.message || '방금 공감한 기록과 연관된 챌린지예요.',
+        challengeId: reactInlineRecommendation.challengeId,
+      }]);
+      setRecommendExposeCount((prev) => prev + 1);
+      setReactingIds((prev) => ({ ...prev, [verificationId]: false }));
+      return;
+    }
+
     try {
       const recommended = await recommendMutation.mutateAsync({ verificationId });
-      if (Array.isArray(recommended) && recommended.length > 0) {
-        setSelectedRecommendations(
-          recommended.map((item: any, idx: number) => ({
+      const normalized = Array.isArray(recommended)
+        ? recommended
+          .map((item: any, idx: number) => ({
             id: String(item.id || `rec-${idx + 1}`),
             title: item.title || item.challengeTitle || '추천 챌린지',
             reason: item.reason || '관심 반응 기반 추천',
             challengeId: item.challengeId,
-          })),
-        );
+          }))
+          .filter((item: Recommendation) => !isSuppressed(item.challengeId))
+        : [];
+
+      if (normalized.length > 0) {
+        setSelectedRecommendations(normalized);
+        setRecommendExposeCount((prev) => prev + 1);
       } else {
-        setSelectedRecommendations(buildFallbackRecommendations(challengeTitle, challengeId));
+        const fallback = buildFallbackRecommendations(challengeTitle, challengeId).filter((item) => !isSuppressed(item.challengeId));
+        if (fallback.length > 0) {
+          setSelectedRecommendations(fallback);
+          setRecommendExposeCount((prev) => prev + 1);
+        }
       }
     } catch {
-      setSelectedRecommendations(buildFallbackRecommendations(challengeTitle, challengeId));
+      const fallback = buildFallbackRecommendations(challengeTitle, challengeId).filter((item) => !isSuppressed(item.challengeId));
+      if (fallback.length > 0) {
+        setSelectedRecommendations(fallback);
+        setRecommendExposeCount((prev) => prev + 1);
+      }
     } finally {
       setReactingIds((prev) => ({ ...prev, [verificationId]: false }));
     }
@@ -389,11 +468,27 @@ export const FeedPage = () => {
                 <article key={item.id} className="rounded-xl border border-primary-100 bg-primary-50 px-3 py-2">
                   <p className="text-sm font-semibold text-gray-900">{item.title}</p>
                   <p className="text-xs text-gray-600 mt-1">{item.reason}</p>
-                  {item.challengeId && (
-                    <Link to={`/challenges/${item.challengeId}`} className="inline-block mt-2 text-xs text-primary-700 underline">
-                      챌린지 보기
-                    </Link>
-                  )}
+                  <div className="mt-2 flex items-center gap-3">
+                    {item.challengeId && (
+                      <Link to={`/challenges/${item.challengeId}`} className="text-xs text-primary-700 underline">
+                        챌린지 보기
+                      </Link>
+                    )}
+                    <button
+                      type="button"
+                      className="text-xs text-gray-500 underline"
+                      onClick={() => {
+                        if (!item.challengeId) return;
+                        const map = getDismissMap();
+                        const until = new Date(Date.now() + RECOMMENDATION_SUPPRESS_HOURS * 60 * 60 * 1000).toISOString();
+                        map[item.challengeId] = until;
+                        setDismissMap(map);
+                        setSelectedRecommendations((prev) => (prev ? prev.filter((r) => r.challengeId !== item.challengeId) : prev));
+                      }}
+                    >
+                      닫기
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>
