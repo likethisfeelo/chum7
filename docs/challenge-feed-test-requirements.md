@@ -51,8 +51,13 @@
 
 ### ChallengeFeedPage
 - 로딩/성공/실패 상태 렌더링
+- 상단 `챌린지 보드 요약` 블록 렌더링 + 보드 이동 버튼 동작
+- 오늘 미인증 상태에서 `오늘 인증 작성하기` 노출 및 VerificationSheet 오픈
+- 오늘 인증 완료 상태에서 완료 배너/응원 가능 문구 노출
+- 오늘 인증 완료 인원/전체 참여자 요약 카드 수치 렌더링
+- `내 응원권/기록 현황` 영역에서 내 인증 누적/응원 상태 문구 렌더링
+- 인증 피드 목록 렌더링(텍스트/이미지) 및 empty 상태 노출
 - 리더 DM 버튼 클릭 시 API 호출 1회
-- 보드 버튼 클릭 시 `/challenge-board/:challengeId` 이동
 
 ### ChallengeBoardPage
 - 보드 blocks 렌더링(text/image/link/quote)
@@ -88,6 +93,13 @@
 - [ ] frontend component/integration 테스트 추가
 - [ ] e2e smoke 테스트 스크립트 확보
 - [ ] release 전 QA 수기 테스트 1회 완료
+
+### 5-1) 지금 확인할 항목(우선)
+- [ ] 챌린지별 인증 피드 필터 정확도(공개 인증 100건 초과 시 페이징 전략)
+- [ ] KST 기준 오늘 인증 집계 정확도(UTC 경계 시간 포함)
+- [ ] 인증 완료 직후 피드 데이터 invalidate/재조회 반영
+- [ ] 미참여자 접근 시 CTA(인증 작성) 비노출 및 오류 문구 처리
+- [ ] 리더 DM deepLink가 없을 때 fallback 토스트 + threadId 복사 동작
 
 ---
 
