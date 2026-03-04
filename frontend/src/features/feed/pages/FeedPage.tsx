@@ -35,6 +35,32 @@ interface ReactionInput {
   challengeTitle?: string;
 }
 
+interface ChallengeSummary {
+  challengeId: string;
+  title: string;
+  description?: string;
+  leaderName?: string;
+  ownerName?: string;
+  startDate?: string;
+  schedule?: { startDate?: string };
+  lifecycle?: string;
+  maxParticipants?: number;
+  capacity?: number;
+  stats?: {
+    totalParticipants?: number;
+    completionRate?: number;
+  };
+}
+
+interface VerificationRecord {
+  verificationId: string;
+  challengeId?: string;
+  challengeTitle?: string;
+  createdAt: string;
+  imageUrl?: string;
+  todayNote?: string;
+}
+
 const ANONYMITY_STORAGE_KEY = 'outer-space-anonymous-mode';
 const ANONYMOUS_NAMES = ['새벽의 곰', '조용한 호랑이', '집중하는 올빼미', '묵묵한 이무기'];
 
@@ -50,7 +76,7 @@ function isVideoUrl(url: string): boolean {
   return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.mov') || lower.includes('.m4v');
 }
 
-function toChallengeCard(challenge: any): ChallengeCard {
+function toChallengeCard(challenge: ChallengeSummary): ChallengeCard {
   const startDateRaw = challenge.startDate || challenge.schedule?.startDate;
   const startDateLabel = startDateRaw
     ? format(new Date(startDateRaw), 'M/d', { locale: ko })
@@ -100,7 +126,11 @@ export const FeedPage = () => {
     });
   };
 
-  const { data: challengesData, isLoading: isChallengesLoading } = useQuery({
+  const {
+    data: challengesData,
+    isLoading: isChallengesLoading,
+    isError: isChallengesError,
+  } = useQuery({
     queryKey: ['challenges', 'outer-space'],
     queryFn: async () => {
       const response = await apiClient.get('/challenges');
@@ -111,6 +141,7 @@ export const FeedPage = () => {
   const {
     data: verificationPages,
     isLoading: isRecordsLoading,
+    isError: isRecordsError,
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
@@ -142,17 +173,17 @@ export const FeedPage = () => {
     },
   });
 
-  const challenges = challengesData?.challenges || [];
+  const challenges: ChallengeSummary[] = challengesData?.challenges || [];
   const recruitingCards = useMemo(
-    () => challenges.filter((c: any) => String(c.lifecycle) === 'recruiting').map(toChallengeCard),
+    () => challenges.filter((c) => String(c.lifecycle) === 'recruiting').map(toChallengeCard),
     [challenges],
   );
   const ongoingCards = useMemo(
-    () => challenges.filter((c: any) => String(c.lifecycle) === 'active').slice(0, 5).map(toChallengeCard),
+    () => challenges.filter((c) => String(c.lifecycle) === 'active').slice(0, 5).map(toChallengeCard),
     [challenges],
   );
 
-  const publicRecords = verificationPages?.pages?.flatMap((p: any) => p.verifications || []) || [];
+  const publicRecords: VerificationRecord[] = verificationPages?.pages?.flatMap((p: any) => p.verifications || []) || [];
 
   const currentAlias = useMemo(() => ANONYMOUS_NAMES[new Date().getMonth() % ANONYMOUS_NAMES.length], []);
   const nextApplyDate = useMemo(() => format(nextMonday(new Date()), 'M월 d일(E)', { locale: ko }), []);
@@ -256,6 +287,8 @@ export const FeedPage = () => {
               <>
                 {isChallengesLoading ? (
                   <Loading />
+                ) : isChallengesError ? (
+                  <EmptyState icon="⚠️" title="모집 데이터를 불러오지 못했어요" description="잠시 후 다시 시도해주세요." />
                 ) : recruitingCards.length === 0 ? (
                   <EmptyState icon="📣" title="모집 중인 챌린지가 없어요" description="리더가 새 모집 공고를 올리면 여기에 표시됩니다." />
                 ) : recruitingCards.map((card: ChallengeCard, index: number) => (
@@ -281,6 +314,8 @@ export const FeedPage = () => {
               <>
                 {isChallengesLoading ? (
                   <Loading />
+                ) : isChallengesError ? (
+                  <EmptyState icon="⚠️" title="진행 데이터를 불러오지 못했어요" description="잠시 후 다시 시도해주세요." />
                 ) : ongoingCards.length === 0 ? (
                   <EmptyState icon="🏁" title="진행 중인 챌린지가 없어요" description="진행 중 업데이트가 생기면 여기에 표시됩니다." />
                 ) : ongoingCards.map((card: ChallengeCard) => (
@@ -299,11 +334,13 @@ export const FeedPage = () => {
               <>
                 {isRecordsLoading ? (
                   <Loading />
+                ) : isRecordsError ? (
+                  <EmptyState icon="⚠️" title="마당 기록을 불러오지 못했어요" description="네트워크 상태를 확인하고 다시 시도해주세요." />
                 ) : publicRecords.length === 0 ? (
                   <EmptyState icon="🌌" title="아직 공개 기록이 없어요" description="다음날 자동 변환되는 마당 게시물이 여기에 표시됩니다." />
                 ) : (
                   <>
-                    {publicRecords.map((record: any) => (
+                    {publicRecords.map((record) => (
                       <article key={record.verificationId} className="border border-gray-200 rounded-2xl p-4 bg-emerald-50/40">
                         <p className="text-[11px] text-emerald-700 font-semibold">카드 C · 마당 게시물(익명)</p>
                         <h3 className="font-semibold text-gray-900 mt-1">📚 {record.challengeTitle || '챌린지 인증 기록'}</h3>
