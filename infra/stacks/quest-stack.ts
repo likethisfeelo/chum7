@@ -24,6 +24,7 @@ import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
+import { IBucket } from 'aws-cdk-lib/aws-s3';
 import * as path from 'path';
 
 interface QuestStackProps extends StackProps {
@@ -34,6 +35,7 @@ interface QuestStackProps extends StackProps {
   questSubmissionsTable: Table;
   activeQuestSubmissionsTable: Table;
   challengesTable: Table;
+  uploadsBucket: IBucket;
 }
 
 export class QuestStack extends Stack {
@@ -42,7 +44,7 @@ export class QuestStack extends Stack {
 
     const {
       stage, apiGateway, authorizer,
-      questsTable, questSubmissionsTable, activeQuestSubmissionsTable, challengesTable,
+      questsTable, questSubmissionsTable, activeQuestSubmissionsTable, challengesTable, uploadsBucket,
     } = props;
 
     const commonEnv = {
@@ -51,6 +53,7 @@ export class QuestStack extends Stack {
       QUEST_SUBMISSIONS_TABLE:         questSubmissionsTable.tableName,
       ACTIVE_QUEST_SUBMISSIONS_TABLE:  activeQuestSubmissionsTable.tableName,
       CHALLENGES_TABLE:                challengesTable.tableName,
+      UPLOADS_BUCKET:                  uploadsBucket.bucketName,
     };
 
     const commonProps = {
@@ -161,6 +164,7 @@ export class QuestStack extends Stack {
     });
     questSubmissionsTable.grantReadData(adminListSubmissionsFn);
     questsTable.grantReadData(adminListSubmissionsFn);
+    uploadsBucket.grantRead(adminListSubmissionsFn);
     apiGateway.addRoutes({
       path: '/admin/quests/submissions',
       methods: [HttpMethod.GET],

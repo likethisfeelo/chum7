@@ -1,5 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBDocumentClient, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
@@ -13,6 +15,47 @@ type ParsedNextToken = {
   mode: ListMode;
   startKey: Record<string, any>;
 };
+
+
+const s3Client = new S3Client({});
+
+function extractUploadsKey(url?: string | null): string | null {
+  if (!url) return null;
+  const raw = String(url).trim();
+  if (!raw) return null;
+
+  if (raw.startsWith('/uploads/')) return raw.slice('/uploads/'.length);
+  if (raw.startsWith('uploads/')) return raw.slice('uploads/'.length);
+
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      const parsed = new URL(raw);
+      if (parsed.pathname.startsWith('/uploads/')) return parsed.pathname.slice('/uploads/'.length);
+    } catch {
+      return null;
+    }
+  }
+
+  if (raw.includes('/') && !raw.startsWith('http')) return raw.replace(/^\/+/, '');
+  return null;
+}
+
+async function toRenderableMediaUrl(url?: string | null): Promise<string | null> {
+  if (!url) return null;
+  const key = extractUploadsKey(url);
+  if (!key || !process.env.UPLOADS_BUCKET) return url;
+
+  try {
+    return await getSignedUrl(
+      s3Client,
+      new GetObjectCommand({ Bucket: process.env.UPLOADS_BUCKET, Key: key }),
+      { expiresIn: 3600 },
+    );
+  } catch (error) {
+    console.error('Failed to sign verification media url:', error);
+    return url;
+  }
+}
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
@@ -32,7 +75,9 @@ function isPublicVerification(v: VerificationItem): boolean {
   return isPublic && !isPersonalOnly;
 }
 
-function normalizeVerification(v: VerificationItem) {
+async function normalizeVerification(v: VerificationItem) {
+  const imageUrl = await toRenderableMediaUrl(v.imageUrl || null);
+
   return {
     verificationId: v.verificationId,
     userId: v.userId,
@@ -41,7 +86,7 @@ function normalizeVerification(v: VerificationItem) {
     userName: v.userName || null,
     day: v.day,
     todayNote: v.todayNote,
-    imageUrl: v.imageUrl || null,
+    imageUrl,
     isAnonymous: Boolean(v.isAnonymous),
     isExtra: Boolean(v.isExtra),
     isPersonalOnly: Boolean(v.isPersonalOnly),
@@ -194,7 +239,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return response(200, {
       success: true,
       data: {
-        verifications: items.map(normalizeVerification),
+        verifications: await Promise.all(items.map(normalizeVerification)),
         count: items.length,
         nextToken,
       },
