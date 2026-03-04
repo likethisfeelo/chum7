@@ -1,248 +1,263 @@
 # CHME 챌린지 피드 / 챌린지보드 구현 작업계획서 (Phase 기반)
 
-- 문서 버전: 0.2.0
-- 작성일: 2026-03-01
-- 작성자: Dark 요청사항 반영 업데이트
-- 목적: 노션 스타일 챌린지보드 구현 + 공개정책/유료화정책/데이터계측까지 포함한 실행계획 확정
+- 문서 버전: 0.2.1
+- 작성일: 2026-03-04
+- 작성자: Dark 피드백 반영 정리본
+- 목적: 확정된 3화면 구조(프리뷰 보드 / 챌린지 피드 / 챌린지 보드) 기준으로 BE/FE/인프라 실행계획 잠금
 
 ---
 
-## 0) 핵심 방향 (이번 업데이트 반영)
+## 변경 요약 (v0.2.0 → v0.2.1)
 
-1. **공개 범위 정책 고정**
-   - 챌린지보드 본문/댓글은 **참여 승인된 참여자만 열람 가능**
-   - 비참여자에게는 본 보드 비공개 (미리보기로 대체)
-2. **미리보기 섹션 신설**
-   - 챌린지 생성 후 리더가 추가할 수 있는 별도 섹션: `Challenge Preview`
-   - 비참여자는 이 미리보기 섹션만 조회 가능
-3. **링크 인앱(WebView) 전환은 추후 개발 분리**
-   - 본 문서에서는 외부 브라우저 오픈 기준 유지
-   - 추후 개발 상세는 별도 MD 문서로 분리
-4. **KPI 기본 계측 심기**
-   - 확장 가능한 이벤트 스키마로 최소 이벤트 먼저 탑재
-5. **유료화 운영 정책 반영**
-   - 유료 챌린지: 결제 → 참여 신청 → 승인 실패 시 자동 결제 취소
-   - 챌린지 시작 시점 이후 환불 불가
-   - 리더 수익 분배는 챌린지 종료 후 확정 정산
-   - 리더 롤 수행 미흡/중대 불만 시 리더 정산 제외(고객 환불 없이 별도 보상 정책)
+| 항목 | v0.2.0 | v0.2.1 |
+|------|--------|--------|
+| 익명 ID | 미확정 | 일 단위 고정 익명 ID 생성 규칙 확정 |
+| 리더 DM | 미확정 | 1차 권장안(기존 알림/메시지 도메인 재사용) 제시 |
+| 프리뷰 보드 DB | 미확정 | 별도 테이블 확정 + 챌린지 메타 자동 프리필 정책 추가 |
+| ME탭 리팩터링 | 범위 협의 | 이번 스프린트 포함으로 확정 |
 
 ---
 
-## 1) 네이밍/도메인 정리 (혼재 방지)
+## 0) 네이밍/도메인 확정
 
-기존 코드에 `QuestBoardPage`가 이미 “퀘스트 제출 보드” 의미로 사용되고 있어 신규 “노션 스타일 보드”와 충돌 가능성이 높음.
+### 용어 사전
 
-### 권장 용어 체계
+| 용어 | 정의 |
+|------|------|
+| **프리뷰 보드 (Preview Board)** | 비참여자 포함 누구나 조회 가능한 소개/참여 독려 콘텐츠 |
+| **챌린지 피드 (Challenge Feed)** | 참여 확정자만 진입 가능한 메인 허브(인증/현황/응원/레메디/보드 진입) |
+| **챌린지 보드 (Challenge Board)** | 챌린지 피드 하위 리더 큐레이션 보드(댓글/인용) |
+| **퀘스트 작업/제출 (Quest Tasks)** | 기존 `QuestBoardPage` 기능(변경 없음) |
 
-- **챌린지 피드 (Challenge Feed)**
-  - 참여자가 챌린지에 들어왔을 때 보는 전체 영역
-- **챌린지보드 (Challenge Board)**
-  - 챌린지 피드 상단 리더 큐레이션 영역 (유료화 차별화 핵심)
-- **챌린지 미리보기 (Challenge Preview)**
-  - 비참여자 대상 공개 요약 섹션 (신설)
-- **퀘스트 제출보드 (Quest Tasks / Quest Submissions)**
-  - 기존 `QuestBoardPage` 기능
+### 네이밍 리팩터링
 
-### 권장 리팩터링
-
-1. `QuestBoardPage` → `QuestTasksPage`
-2. 신규 기능 경로
-   - `features/challenge-feed/challenge-board/*`
-   - `features/challenge-feed/challenge-preview/*`
-3. API path
-   - `/challenge-board/*`, `/challenge-preview/*`
+- `QuestBoardPage` → `QuestTasksPage` (또는 `QuestSubmissionPage`)
+- FE 경로
+  - `features/preview-board/`
+  - `features/challenge-feed/`
+  - `features/challenge-feed/challenge-board/`
+- API path
+  - `/preview-board/:challengeId`
+  - `/challenge-feed/:challengeId`
+  - `/challenge-board/:challengeId`
 
 ---
 
-## 2) 아키텍처 개요
+## 1) 사용자 플로우 확정
 
 ```text
-[비참여자]
-  -> Challenge Preview 조회 가능
-  -> Challenge Board / 댓글 조회 불가
+앱 접속
+  -> 챌린지 탐색(탭1)
+    -> 챌린지 상세 + 프리뷰 보드 조회
+      -> 참여 신청
+        -> 챌린지 피드 진입(참여 확정자)
+          -> 인증 게시물 피드(익명)
+          -> 오늘 인증/현황
+          -> 응원권 / 레메디
+          -> 챌린지 보드 진입
+          -> 리더 DM
 
-[참여자(승인완료)]
-  -> Challenge Feed 전체 접근
-  -> Challenge Board 열람 + 댓글 작성
-
-[리더]
-  -> Challenge Board 편집
-  -> 댓글 인용(quote) + 보드 큐레이션
-  -> Challenge Preview 작성/수정
+ME탭
+  -> 참여 중/완료 챌린지 목록
+    -> 선택한 챌린지 피드로 바로 이동
 ```
 
 ---
 
-## Phase 1. 정책/스키마 잠금
+## 2) 핵심 결정사항 (Dark 피드백 반영)
+
+### 2-1. 익명 ID 생성 규칙 (확정)
+
+- 목적: 피드 내 익명성 유지 + 하루 동안 식별 가능성 확보
+- 표시 포맷: `동물명 + 3자리 숫자` (예: `고래-274`)
+- 생성 규칙(서버):
+  1. `seed = sha256(challengeId + userId + yyyy-mm-dd + ANON_SALT)`
+  2. `animalIndex = seed[0..3] % 동물사전길이`
+  3. `number = (seed[4..7] % 900) + 100`
+- 성질:
+  - 같은 유저라도 **챌린지별/날짜별**로 다른 ID
+  - 같은 날짜에는 동일 챌린지 내 고정
+  - 원본 userId 역추적 불가(서버 SALT 필요)
+
+### 2-2. 리더 DM 1차 권장안 (확정 제안)
+
+- **권장안 A (이번 스프린트 적용)**: 기존 알림/메시지 도메인 재사용 + 1:1 DM 스레드 생성
+  - 버튼 클릭 시 `leaderDmThreadId`가 있으면 스레드 진입
+  - 없으면 `challengeId + participantId + leaderId` 기반으로 스레드 upsert
+- 장점:
+  - 신규 도메인/인프라 최소화
+  - 권한/차단/신고 체계 재사용 가능
+  - 릴리즈 리스크 낮음
+- 추후 확장:
+  - 전용 챌린지 DM 도메인 분리(읽지않음 배지, SLA, 운영도구 강화)
+
+### 2-3. 프리뷰 보드 DB 전략 (확정)
+
+- 별도 테이블 유지: `chme-dev-preview-boards`
+- 이유:
+  - 공개/편집 권한이 챌린지 보드와 다름
+  - 비참여자 고트래픽 조회 분리 가능
+  - 보드 기능 확장 시 스키마 충돌 최소화
+- 단, 작성 편의성을 위해 **초기 프리필(끌어오기) 정책** 추가:
+  - 챌린지 생성/첫 프리뷰 진입 시 아래 항목 자동 블록 생성
+    - 챌린지 유형
+    - 일정(시작/종료)
+    - 참여 방식 요약
+  - 데이터 소스: 챌린지 마스터 테이블(읽기 전용 스냅샷)
+  - 리더가 이후 수정하면 프리뷰 보드 내용 우선(마스터 자동동기화 없음)
+
+### 2-4. ME탭 리팩터링 범위 (확정)
+
+- 이번 스프린트 포함
+- 범위:
+  - 참여 중/완료 챌린지 목록 컴포넌트
+  - 각 아이템에서 챌린지 피드 딥링크
+  - 주요 상태 요약(오늘 인증 여부, 미확인 알림 카운트)
+- 비범위:
+  - ME탭 전면 IA 재설계
+  - 어스탭 통합 리디자인
+
+---
+
+## Phase 1. 도메인/스키마 잠금
 
 ### 목표
-- 공개 정책, 권한, 유료화 상태전이를 개발 가능한 수준으로 확정
+- 3화면 구조와 확정 의사결정을 개발 가능한 상태로 고정
 
 ### 작업
-1. **접근정책 확정**
-   - board/comments: participantOnly
-   - preview: publicReadable
-2. **상태전이 정의 (유료 챌린지)**
-   - `payment_completed -> join_requested -> join_approved | join_rejected(refund)`
-   - `challenge_started` 이후 일반 환불 불가
-3. **리더 정산 정책 정의**
-   - 정산 시점: challenge completed 이후
-   - 정산 보류/제외 플래그: `leaderPayoutStatus = eligible|withheld`
-   - withhold 사유 저장: `payoutWithholdReason`
-4. **블록 스키마 v1 확정**
-   - `text | image | link | quote`
-   - quote는 원댓글 스냅샷 저장
-5. **KPI 이벤트 스키마 v1 확정**
-   - 이벤트명 + actor + challengeId + timestamp + metadata(json)
+1. 블록 스키마 고정
+   - 프리뷰: `text | image | link`
+   - 챌린지 보드: `text | image | link | quote`
+   - 공통 필드: `id, type, order`
+2. 권한 정책 고정
+   - 생성자 편집: `creatorId === requesterId`
+   - 참여자 전용 접근: 챌린지 피드/보드/댓글
+3. Quote/댓글 정책 고정
+   - 스냅샷 저장: `authorName`, `content`
+   - 1댓글 1인용, 댓글 수정/삭제 미구현
+4. 익명 ID 규격/동물사전/해시 알고리즘 문서화
+5. ME탭 리팩터링 요구사항 동결
 
 ### 산출물
 - `docs/challenge-feed-domain-glossary.md`
 - `docs/challenge-board-api-contract-v1.md`
-- `docs/challenge-monetization-policy-v1.md`
+- `docs/challenge-feed-anonymous-id-spec.md` (신규)
 
 ---
 
-## Phase 2. 인프라/CDK
+## Phase 2. 인프라 구축 (CDK + DynamoDB)
 
 ### 목표
-- 보드/댓글/미리보기/결제상태 참조가 가능한 인프라 배포
+- 프리뷰/보드/댓글 + DM 연동에 필요한 인프라 연결
 
 ### 작업
-1. 테이블
-   - `challenge-boards`
-   - `challenge-comments`
-   - `challenge-previews` (신설)
-2. 라우트
-   - Board: `GET/POST /challenge-board/:challengeId`
-   - Comments: `GET/POST /challenge-board/:challengeId/comments`
-   - Quote: `POST /challenge-board/:challengeId/comments/:commentId/quote`
-   - Preview: `GET/POST /challenge-preview/:challengeId`
-3. Authorizer/IAM
-   - board/comments는 참여자 여부 체크 필수
-   - preview GET은 public, POST는 leader only
-4. 관측성
-   - KPI 이벤트 적재 경로(SQS/Firehose/이벤트버스 중 택1) 초기 연결
+1. DynamoDB 테이블
+   - `chme-dev-preview-boards` (별도)
+   - `chme-dev-challenge-boards`
+   - `chme-dev-challenge-comments`
+2. API Gateway 라우트
+   - `GET/POST /preview-board/:challengeId`
+   - `GET/POST /challenge-board/:challengeId`
+   - `GET/POST /challenge-board/:challengeId/comments`
+   - `POST /challenge-board/:challengeId/comments/:commentId/quote`
+3. 프리뷰 초기 프리필 Lambda 트리거
+   - 챌린지 메타 기반 기본 블록 생성
+4. CDK 스택
+   - `infra/stacks/preview-board-stack.ts`
+   - `infra/stacks/challenge-board-stack.ts`
+
+### 완료 기준
+- dev 배포 성공
+- 프리뷰 첫 진입 시 기본 블록 자동생성 확인
 
 ---
 
-## Phase 3. 백엔드 구현
+## Phase 3. 백엔드 구현 (Lambda)
 
 ### 목표
-- 권한 정책 및 유료 정책을 API 레벨에서 강제
-
-### 구현 범위
-1. `get-board`
-   - 참여 승인 상태 확인 실패 시 403
-2. `upsert-board`
-   - leader only
-3. `submit-comment`
-   - participant only
-4. `get-comments`
-   - participant only
-5. `quote-comment`
-   - leader only
-6. `get-preview` (신규)
-   - public read
-7. `upsert-preview` (신규)
-   - leader only
-
-### 유료화 연동 처리
-- join reject 시 결제 취소 트리거 호출 (또는 결제 서비스 이벤트 발행)
-- challenge start 이후 refund API 차단
-- challenge completed 시 정산 배치 대상으로 enqueue
-- 정산 전 리더 수행검토 결과로 `eligible|withheld` 결정
-
-### 데이터 모델 추가 필드 (권장)
-- 참여/결제 도메인
-  - `paymentStatus`, `joinStatus`, `refundStatus`, `refundLockedAt`
-- 정산 도메인
-  - `leaderPayoutStatus`, `leaderPayoutAmount`, `payoutWithholdReason`, `payoutDeterminedAt`
-
----
-
-## Phase 4. 프론트엔드 구현 (노션 스타일)
-
-### 목표
-- 챌린지 피드 상단 보드 + 비참여자 미리보기 분리 제공
+- 프리뷰 2개 + 챌린지보드 5개 + 익명 ID/DM 연동 처리
 
 ### 작업
-1. `ChallengeFeedSection` (참여자 전용)
-   - `ChallengeBoardView`
-   - `CommentSection`
-2. `ChallengePreviewSection` (공개)
-   - 비참여자 랜딩/상세에서 노출
-3. 리더 UX
-   - 보드 편집기 + 미리보기 편집기
-   - 댓글 인용 시 삽입위치 선택
-4. 접근 제어 UX
-   - 비참여자에게 보드 영역은 잠금 카드 + “참여 승인 후 전체 열람” 안내
-5. 이벤트 계측
-   - 뷰/클릭/댓글/인용 이벤트 전송
+1. 프리뷰 보드 서비스
+   - `get-preview-board`
+   - `upsert-preview-board` (생성자 전용)
+   - 미존재 시 챌린지 메타로 프리필 생성
+2. 챌린지 보드 서비스
+   - `get-board`, `upsert-board`, `submit-comment`, `get-comments`, `quote-comment`
+3. 익명 ID 처리
+   - 피드 응답 DTO에서 작성자명 대신 `dailyAnonymousId` 반환
+4. DM 연결 API
+   - `POST /challenge-feed/:challengeId/leader-dm` (thread upsert 후 threadId 반환)
+5. 공통 처리
+   - 에러 형식 `{ error, message, code }`
+   - 접근 차단 403 일관 처리
+
+### 완료 기준
+- API contract 정상/권한/예외 검증
+- 익명 ID 일 단위 변경 E2E 확인
 
 ---
 
-## Phase 5. KPI/운영/정산
+## Phase 4. 프론트엔드 구현
 
 ### 목표
-- 최소 KPI 계측으로 다음 분기 실험 확장 기반 확보
+- 3화면 + ME탭 리팩터링 + DM/익명 표시 반영
 
-### KPI v1 (기본 심기)
-1. `challenge_preview_viewed`
-2. `challenge_join_requested`
-3. `challenge_join_approved`
-4. `challenge_join_rejected_refunded`
-5. `challenge_board_viewed`
-6. `challenge_comment_created`
-7. `challenge_comment_quoted`
-8. `leader_board_updated`
-9. `challenge_refund_blocked_after_start`
-10. `leader_payout_withheld`
+### 작업
+1. 프리뷰 보드
+   - 조회 컴포넌트(비참여자 포함)
+   - 생성자 편집기
+   - 초기 프리필 블록 UI 노출
+2. 챌린지 피드
+   - 인증 피드(익명 ID 표시)
+   - 참여자/오늘 현황, 응원권/레메디
+   - 챌린지 보드 진입 버튼
+   - 리더 DM 버튼(스레드 생성/진입)
+3. 챌린지 보드
+   - 조회/편집/블록 렌더링
+   - 댓글 작성/목록/인용
+4. ME탭 리팩터링
+   - 참여 중/완료 챌린지 리스트
+   - 챌린지 피드 바로가기
+   - 요약 카드(오늘 인증, 알림)
 
-### 운영 정책
-- 고객 환불: 챌린지 시작 이후 불가
-- 리더 분배: 종료 후 확정
-- 리더 정산 제외 시:
-  - 고객 전액환불은 아님
-  - 별도 보상안 지급 가능
-  - 제외 금액은 회사 수익/운영비로 전환 정책 적용
-
----
-
-## 질문/확인 필요사항 (최적화 기본안 포함)
-
-1. **보드 공개 범위**
-   - 최적화 기본안: board/comments participant-only 고정
-   - 확인 질문: 초대코드 소지자(아직 미참여)에게 예외 열람 허용이 필요한가?
-
-2. **미리보기 섹션 콘텐츠 제한**
-   - 최적화 기본안: text/image/link만 허용, quote/comment 연동 없음
-   - 확인 질문: 미리보기에도 CTA 버튼(가격/신청)을 삽입할지?
-
-3. **결제 취소 타이밍**
-   - 최적화 기본안: join reject 이벤트 수신 즉시 자동 취소(실패 시 재시도 큐)
-   - 확인 질문: 수동 승인(운영자 확인 후 취소) 플로우가 필요한가?
-
-4. **리더 정산 제외 기준**
-   - 최적화 기본안: 운영검토 기반의 수동 판정 + 사유 필수 입력
-   - 확인 질문: 최소 정량 지표(예: 공지 업데이트 0회, 신고 n건 이상)를 자동 경고 기준으로 둘지?
-
-5. **KPI 적재 방식**
-   - 최적화 기본안: 이벤트버스 기반 비동기 적재(실패 시 본 기능 영향 없음)
-   - 확인 질문: 우선 GA/Amplitude 연동이 필요한지, 내부 BI만 먼저 할지?
+### 완료 기준
+- 참여자/비참여자/생성자/리더 시나리오별 정상 동작
+- ME탭에서 챌린지 피드 전환 플로우 검증
 
 ---
 
-## 개발 일정 제안 (2주 스프린트)
+## Phase 5. 통합 QA / 릴리즈 준비
 
-- Day 1~2: Phase1 정책 잠금 + API contract freeze
-- Day 3~5: Phase2 인프라 + Phase3 API 기본 경로
-- Day 6~8: Phase4 FE 구현(보드/미리보기/권한 UX)
-- Day 9: KPI 이벤트 연결 + 정산/환불 규칙 점검
-- Day 10: E2E/릴리즈 체크
+### 목표
+- 구조 변경 회귀 없이 릴리즈 가능한 수준까지 통합 검증
+
+### 테스트 시나리오
+1. 비참여자 프리뷰 보드 조회 가능
+2. 비참여자 챌린지 피드/보드 접근 차단(403)
+3. 참여자 챌린지 피드 진입 및 보드 조회 가능
+4. 피드 작성자 익명 ID가 일 단위로 변경되는지 확인
+5. 생성자 프리뷰 편집 반영 + 프리필 유지 동작 확인
+6. 생성자 챌린지 보드 편집 + 댓글 인용 가능
+7. 참여자의 보드 편집/인용 차단(403)
+8. 리더 DM 버튼 클릭 시 스레드 생성/재진입 정상
+9. ME탭에서 챌린지 피드 숏컷 전환 정상
+10. 기존 QuestTasksPage 회귀 없음
+
+### 운영 체크
+- CloudWatch 알람: 5xx, 지연, 권한 실패율
+- 익명 ID 충돌률 모니터링(일일)
+- 롤백 절차 문서화
 
 ---
 
-## 별도 추후개발 문서
+## 스프린트 일정 제안 (2주)
 
-- 링크 인앱(WebView) 전환 계획: `docs/challenge-board-link-inapp-future-plan.md`
+- Day 1~2: Phase 1 잠금(익명ID/DM/프리필/ME 포함)
+- Day 3~5: Phase 2 인프라 + Phase 3 BE 기본 구현
+- Day 6~9: Phase 4 FE 구현 + ME탭 리팩터링
+- Day 10: Phase 5 통합 QA / 버그픽스
 
+---
+
+*문서 버전 0.2.1 — 추가 질문은 Dark에게 문의*

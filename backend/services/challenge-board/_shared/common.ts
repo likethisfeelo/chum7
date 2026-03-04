@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { QueryCommand, GetCommand, DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { createHash } from 'crypto';
 
 export type BlockType = 'text' | 'image' | 'link' | 'quote';
 
@@ -62,7 +63,36 @@ export async function isLeader(
   }));
 
   if (!result.Item) return false;
-  return result.Item.creatorId === userId;
+  return result.Item.creatorId === userId || result.Item.createdBy === userId;
+}
+
+const ANIMAL_DICTIONARY = [
+  '고래', '수달', '여우', '참새', '돌고래', '해달', '호랑이', '판다',
+  '늑대', '펭귄', '매', '고양이', '강아지', '알파카', '사슴', '기린',
+];
+
+function toKstDateKey(date = new Date()): string {
+  const kstText = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+  return kstText;
+}
+
+export function createDailyAnonymousId(challengeId: string, userId: string, date = new Date()): string {
+  const salt = process.env.ANON_ID_SALT;
+  if (!salt) throw new Error('ANON_SALT_NOT_CONFIGURED');
+
+  const dateKey = toKstDateKey(date);
+  const source = `${challengeId}:${userId}:${dateKey}:${salt}`;
+  const seed = createHash('sha256').update(source).digest('hex');
+
+  const animalIndex = parseInt(seed.slice(0, 8), 16) % ANIMAL_DICTIONARY.length;
+  const number = (parseInt(seed.slice(8, 16), 16) % 900) + 100;
+
+  return `${ANIMAL_DICTIONARY[animalIndex]}-${number}`;
 }
 
 export function validateBlocks(blocks: any[], allowQuote: boolean): { valid: boolean; message?: string } {
