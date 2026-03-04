@@ -1,187 +1,181 @@
-import { useInfiniteQuery, useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
-import { apiClient } from '@/lib/api-client';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { FiHeart } from 'react-icons/fi';
-import { format } from 'date-fns';
-import { ko } from 'date-fns/locale';
-import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
-import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
-import toast from 'react-hot-toast';
 
-const FILTER_GUIDE_TEXT: Record<'all' | 'extra', string> = {
-  all: '오늘의 핵심 인증과 공개된 추가 기록을 함께 볼 수 있어요.',
-  extra: '추가 기록만 모아보며 복기/회고 흐름을 확인할 수 있어요.',
-};
+type PlazaFilter = 'all' | 'recruiting' | 'ongoing' | 'records';
+type LeaderVisibility = 'public' | 'anonymous';
 
-function isVideoUrl(url: string): boolean {
-  const lower = url.toLowerCase();
-  return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.mov') || lower.includes('.m4v');
+interface RecruitCard {
+  id: string;
+  title: string;
+  leaderName: string;
+  leaderVisibility: LeaderVisibility;
+  startDate: string;
+  seatsLeft: number;
+  seatsTotal: number;
+  summary: string;
 }
 
+const PHASE_SCOPE = [
+  {
+    phase: 'Phase 1',
+    title: '반익명 커뮤니티 기초',
+    feature: '익명 활동명 ON/OFF + 주기별 활동명 전환 구조',
+    detail: '기본은 닉네임 공개, 익명 ON 시 다음 주부터 랜덤 활동명을 사용해 챌린지 안에서 반익명으로 활동합니다.',
+  },
+  {
+    phase: 'Phase 1',
+    title: '챌린지 리더 시스템 기초',
+    feature: '리더 피드 + 모집 공고 카드(A)',
+    detail: '공개 리더는 브랜드명으로 모집 공고를 올리고, 익명 리더는 노하우 중심으로 챌린지를 운영할 수 있습니다.',
+  },
+  {
+    phase: 'Phase 1',
+    title: '광장 피드 MVP',
+    feature: '카드 A(모집 공고) 중심 노출',
+    detail: '광장에서 모집 공고를 발견하고 리더 피드 → 참여까지 연결되는 기본 동선을 먼저 제공합니다.',
+  },
+  {
+    phase: 'Phase 2+',
+    title: '마당 자동 변환 & 고도화',
+    feature: '카드 B/C + 반응 기반 추천',
+    detail: '다음날 익명 변환 게시물(카드 C), 진행 중 업데이트(카드 B), 추천 알고리즘은 커뮤니티 단계에서 확장합니다.',
+  },
+];
+
+const RECRUIT_CARDS: RecruitCard[] = [
+  {
+    id: 'leader-1',
+    title: '🔥 새벽 기상 챌린지 모집 중',
+    leaderName: 'Dark',
+    leaderVisibility: 'public',
+    startDate: '3/10',
+    seatsLeft: 3,
+    seatsTotal: 12,
+    summary: '매일 5시에 일어나는 루틴을 14일 동안 함께 만듭니다.',
+  },
+  {
+    id: 'leader-2',
+    title: '📚 독서 루틴 챌린지 모집 중',
+    leaderName: '익명 리더',
+    leaderVisibility: 'anonymous',
+    startDate: '3/14',
+    seatsLeft: 5,
+    seatsTotal: 20,
+    summary: '리더 노하우 카드와 함께 하루 20분 독서 루틴을 완주해요.',
+  },
+];
+
+const ANONYMOUS_NAMES = ['새벽의 곰', '조용한 호랑이', '집중하는 올빼미', '묵묵한 이무기'];
+
 export const FeedPage = () => {
-  const [feedFilter, setFeedFilter] = useState<'all' | 'extra'>('all');
+  const [plazaFilter, setPlazaFilter] = useState<PlazaFilter>('all');
+  const [isAnonymousMode, setIsAnonymousMode] = useState(false);
 
-  const {
-    data: publicFeedPages,
-    isLoading,
-    hasNextPage,
-    fetchNextPage,
-    isFetchingNextPage,
-  } = useInfiniteQuery({
-    queryKey: ['verifications', 'public', feedFilter],
-    initialPageParam: null as string | null,
-    queryFn: async ({ pageParam }) => {
-      const nextTokenQuery = pageParam ? `&nextToken=${encodeURIComponent(pageParam)}` : '';
-      const extraFilterQuery = feedFilter === 'extra' ? '&isExtra=true' : '';
-      const response = await apiClient.get(`/verifications?isPublic=true&limit=20${extraFilterQuery}${nextTokenQuery}`);
-      return response.data.data;
-    },
-    getNextPageParam: (lastPage) => lastPage?.nextToken || undefined,
-  });
+  const currentAlias = useMemo(() => ANONYMOUS_NAMES[new Date().getMonth() % ANONYMOUS_NAMES.length], []);
 
-  const publicFeed = publicFeedPages?.pages?.flatMap((p: any) => p.verifications || []) || [];
-
-  const cheerMutation = useMutation({
-    mutationFn: async ({ receiverId, verificationId }: { receiverId: string; verificationId: string }) => {
-      const response = await apiClient.post('/cheer/send-immediate', {
-        receiverId,
-        verificationId,
-        message: '오늘도 수고했어요! 응원해요 💪',
-      });
-      return response.data;
-    },
-    onSuccess: () => {
-      toast.success('응원을 보냈어요 💖');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || '응원 발송에 실패했습니다');
-    },
-  });
+  const filteredRecruitCards = useMemo(() => {
+    if (plazaFilter === 'ongoing' || plazaFilter === 'records') return [];
+    return RECRUIT_CARDS;
+  }, [plazaFilter]);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 헤더 */}
       <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
-        <h1 className="text-2xl font-bold text-gray-900">어스 🌍</h1>
-        <p className="text-sm text-gray-500">전 세계의 챌린저들과 함께해요</p>
-
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            onClick={() => setFeedFilter('all')}
-            className={`px-3 py-1.5 text-xs rounded-full border ${feedFilter === 'all' ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-200'}`}
-          >
-            전체
-          </button>
-          <button
-            type="button"
-            onClick={() => setFeedFilter('extra')}
-            className={`px-3 py-1.5 text-xs rounded-full border ${feedFilter === 'extra' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-600 border-gray-200'}`}
-          >
-            📝 추가 기록만
-          </button>
-        </div>
-
-        <p className="mt-3 text-xs text-gray-500">💡 {FILTER_GUIDE_TEXT[feedFilter]}</p>
+        <h1 className="text-2xl font-bold text-gray-900">마당 (Outer Space) 🚀</h1>
+        <p className="text-sm text-gray-500">리더 모집과 반익명 커뮤니티를 연결하는 공개 광장</p>
       </div>
 
       <div className="px-6 py-6 space-y-4">
         <section className="bg-white border border-gray-200 rounded-2xl p-4">
-          <h2 className="text-sm font-bold text-gray-900 mb-2">인증 흐름 안내</h2>
-          <ul className="text-xs text-gray-600 space-y-1">
-            <li>• 일반 인증: 오늘의 핵심 실천 기록</li>
-            <li>• 추가 기록: 같은 날 추가 실천(기본 나만보기 → 공개 전환 가능)</li>
-            <li>• Day6 보완: 실패 Day를 다시 연결하는 회복 루트</li>
-          </ul>
-        </section>
-        {isLoading ? (
-          <Loading />
-        ) : !publicFeed || publicFeed.length === 0 ? (
-          <EmptyState
-            icon="🌍"
-            title={feedFilter === 'extra' ? '아직 공개된 추가 기록이 없어요' : '아직 공개된 인증이 없어요'}
-            description={feedFilter === 'extra' ? '추가 인증을 공개 전환하면 여기에 표시돼요.' : '첫 번째로 인증을 올려보세요!'}
-          />
-) : (
-          <>
-          {publicFeed.map((verification: any, index: number) => (
-            <motion.div
-              key={verification.verificationId}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center text-xl">
-                  🐰
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-900">
-                    {verification.isAnonymous ? '익명의 챌린저' : verification.userName}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Day {verification.day} · {format(new Date(verification.practiceAt || verification.performedAt || verification.createdAt), 'M월 d일 · HH:mm 실천', { locale: ko })}
-                  </p>
-                  {verification.isExtra && (
-                    <span className="inline-flex items-center mt-1 px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">
-                      📝 추가 기록
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {verification.imageUrl && (
-                isVideoUrl(verification.imageUrl) ? (
-                  <video
-                    src={resolveMediaUrl(verification.imageUrl)}
-                    controls
-                    className="w-full h-56 object-cover rounded-2xl mb-4 bg-black"
-                  />
-                ) : (
-                  <img
-                    src={resolveMediaUrl(verification.imageUrl)}
-                    alt="Verification"
-                    className="w-full h-56 object-cover rounded-2xl mb-4"
-                  />
-                )
-              )}
-
-              {verification.todayNote && (
-                <p className="text-gray-800 mb-4 leading-relaxed">{verification.todayNote}</p>
-              )}
-
-              <div className="flex items-center gap-4 text-sm text-gray-500">
-                <motion.button
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => cheerMutation.mutate({
-                    receiverId: verification.userId,
-                    verificationId: verification.verificationId,
-                  })}
-                  disabled={cheerMutation.isPending}
-                  className="flex items-center gap-1.5 hover:text-primary-500 transition-colors disabled:opacity-50"
-                >
-                  <FiHeart className="w-4 h-4" />
-                  <span>{verification.cheerCount || 0}</span>
-                </motion.button>
-              </div>
-            </motion.div>
-          ))}
-
-          {hasNextPage && (
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-gray-900">1) 반익명 활동명 설정 (선개발)</h2>
+              <p className="text-xs text-gray-600 mt-1">토글 변경은 다음 주부터 적용되고, 진행 중 챌린지는 유지됩니다.</p>
+            </div>
             <button
               type="button"
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="w-full py-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 disabled:opacity-50"
+              onClick={() => setIsAnonymousMode((prev) => !prev)}
+              className={`px-3 py-1.5 text-xs rounded-full border ${isAnonymousMode ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-200'}`}
             >
-              {isFetchingNextPage ? '불러오는 중...' : '피드 더보기'}
+              익명 활동 {isAnonymousMode ? 'ON' : 'OFF'}
             </button>
-          )}
-          </>
-        )}
+          </div>
+          <div className="mt-3 text-xs text-gray-600 space-y-1">
+            <p>• 현재 노출 방식: {isAnonymousMode ? `동물 아이콘 + 활동명 (${currentAlias})` : '기본 닉네임 공개'}</p>
+            <p>• 다음 주 적용 예정 상태를 저장해 챌린지 단위 일관성을 유지합니다.</p>
+          </div>
+        </section>
+
+        <section className="bg-white border border-gray-200 rounded-2xl p-4">
+          <h2 className="text-sm font-bold text-gray-900 mb-2">5) 챌린지 리더 시스템 (선개발)</h2>
+          <ul className="text-xs text-gray-600 space-y-1">
+            <li>• 리더 피드 기본 구조: 모집 공고 / 리더 프로필 / 커리큘럼 소개</li>
+            <li>• 공개 리더 챌린지: 리더명 공개 + 팬 기반 모집</li>
+            <li>• 익명 리더 챌린지: 동물 아이콘 기반 동등 소통</li>
+          </ul>
+        </section>
+
+        <section className="bg-white border border-gray-200 rounded-2xl p-4">
+          <h2 className="text-sm font-bold text-gray-900 mb-3">6) 광장 피드 MVP (카드 A 우선)</h2>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {[
+              { key: 'all', label: '전체' },
+              { key: 'recruiting', label: '모집 중' },
+              { key: 'ongoing', label: '진행 중' },
+              { key: 'records', label: '완주 기록' },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setPlazaFilter(tab.key as PlazaFilter)}
+                className={`px-3 py-1.5 text-xs rounded-full border ${plazaFilter === tab.key ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-200'}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            {filteredRecruitCards.length === 0 ? (
+              <EmptyState icon="🛰️" title="다음 페이즈에서 확장돼요" description="진행 중/완주 기록 카드는 Phase 2에서 추가됩니다." />
+            ) : (
+              filteredRecruitCards.map((card, index) => (
+                <motion.article
+                  key={card.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="border border-gray-200 rounded-2xl p-4"
+                >
+                  <h3 className="font-semibold text-gray-900">{card.title}</h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    리더: {card.leaderName}
+                    {card.leaderVisibility === 'public' ? ' 👑' : ' 🐻'} · 시작일: {card.startDate}
+                  </p>
+                  <p className="text-xs text-primary-700 mt-1">잔여: {card.seatsLeft}자리 / {card.seatsTotal}자리</p>
+                  <p className="text-sm text-gray-700 mt-2">“{card.summary}”</p>
+                  <button type="button" className="mt-3 px-3 py-2 text-xs rounded-xl bg-gray-900 text-white">
+                    참여하기
+                  </button>
+                </motion.article>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="bg-white border border-gray-200 rounded-2xl p-4">
+          <h2 className="text-sm font-bold text-gray-900 mb-2">개발 페이즈 제안</h2>
+          <div className="space-y-2">
+            {PHASE_SCOPE.map((item) => (
+              <div key={`${item.phase}-${item.title}`} className="rounded-xl bg-gray-50 p-3">
+                <p className="text-[11px] font-semibold text-primary-700">{item.phase} · {item.title}</p>
+                <p className="text-xs text-gray-700 mt-1">{item.feature}</p>
+                <p className="text-xs text-gray-500 mt-1">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

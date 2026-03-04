@@ -138,7 +138,7 @@ export default function App() {
           }
         />
         <Route
-          path="/earth"
+          path="/outer-space"
           element={
             <ProtectedRoute>
               <MainLayout>
@@ -220,6 +220,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/earth" element={<Navigate to="/outer-space" replace />} />
 
         {/* 매칭되지 않는 라우트는 홈으로 */}
         <Route path="*" element={<Navigate to="/" replace />} />
