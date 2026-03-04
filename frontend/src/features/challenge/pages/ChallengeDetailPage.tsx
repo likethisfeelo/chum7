@@ -56,6 +56,15 @@ export const ChallengeDetailPage = () => {
     },
   });
 
+
+  const { data: previewBoard } = useQuery({
+    queryKey: ['preview-board', challengeId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/preview-board/${challengeId}`);
+      return response.data;
+    },
+  });
+
   const { data: myChallengesData } = useQuery({
     queryKey: ['my-challenges', 'active-on-detail'],
     queryFn: async () => {
@@ -203,6 +212,43 @@ export const ChallengeDetailPage = () => {
             </div>
           )}
         </motion.div>
+
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-900">프리뷰 보드</h3>
+            <span className="text-xs px-2 py-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600">
+              {previewBoard?.blocks?.length || 0} blocks
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {(previewBoard?.blocks || []).map((block: any) => {
+              if (block.type === 'image') {
+                return <img key={block.id} src={block.url} alt="preview" className="w-full rounded-xl border border-gray-100" />;
+              }
+              if (block.type === 'link') {
+                return (
+                  <a key={block.id} href={block.url} target="_blank" rel="noreferrer" className="block text-sm text-blue-600 underline break-all">
+                    {block.label || block.url}
+                  </a>
+                );
+              }
+              return (
+                <p key={block.id} className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  {block.content}
+                </p>
+              );
+            })}
+            {(!previewBoard?.blocks || previewBoard.blocks.length === 0) && (
+              <p className="text-sm text-gray-500">프리뷰 보드가 아직 작성되지 않았어요.</p>
+            )}
+          </div>
+        </motion.section>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}

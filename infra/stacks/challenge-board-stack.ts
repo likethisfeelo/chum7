@@ -17,6 +17,7 @@ interface ChallengeBoardStackProps extends StackProps {
   challengeBoardsTable: Table;
   challengeCommentsTable: Table;
   challengePreviewsTable: Table;
+  notificationsTable: Table;
 }
 
 export class ChallengeBoardStack extends Stack {
@@ -32,15 +33,18 @@ export class ChallengeBoardStack extends Stack {
       challengeBoardsTable,
       challengeCommentsTable,
       challengePreviewsTable,
+      notificationsTable,
     } = props;
 
     const commonEnv = {
       STAGE: stage,
+      ANON_ID_SALT: process.env.ANON_ID_SALT ?? '',
       CHALLENGES_TABLE: challengesTable.tableName,
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
       CHALLENGE_BOARDS_TABLE: challengeBoardsTable.tableName,
       CHALLENGE_COMMENTS_TABLE: challengeCommentsTable.tableName,
       CHALLENGE_PREVIEWS_TABLE: challengePreviewsTable.tableName,
+      NOTIFICATIONS_TABLE: notificationsTable.tableName,
     };
 
     const commonProps = {
@@ -131,18 +135,43 @@ export class ChallengeBoardStack extends Stack {
       authorizer,
     });
 
+
+    const leaderDmFn = new NodejsFunction(this, 'ChallengeFeedLeaderDmFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-feed-leader-dm`,
+      entry: path.join(__dirname, '../../backend/services/challenge-board/leader-dm/index.ts'),
+      handler: 'handler',
+    });
+    challengesTable.grantReadData(leaderDmFn);
+    userChallengesTable.grantReadData(leaderDmFn);
+    notificationsTable.grantReadWriteData(leaderDmFn);
+    apiGateway.addRoutes({
+      path: '/challenge-feed/{challengeId}/leader-dm',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('ChallengeFeedLeaderDmIntegration', leaderDmFn),
+      authorizer,
+    });
+
     const getPreviewFn = new NodejsFunction(this, 'GetChallengePreviewFn', {
       ...commonProps,
       functionName: `chme-${stage}-challenge-preview-get`,
       entry: path.join(__dirname, '../../backend/services/challenge-board/get-preview/index.ts'),
       handler: 'handler',
     });
-    challengePreviewsTable.grantReadData(getPreviewFn);
+    challengePreviewsTable.grantReadWriteData(getPreviewFn);
+    challengesTable.grantReadData(getPreviewFn);
     apiGateway.addRoutes({
-      path: '/challenge-preview/{challengeId}',
+      path: '/preview-board/{challengeId}',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('GetChallengePreviewIntegration', getPreviewFn),
       // public read
+    });
+
+    apiGateway.addRoutes({
+      path: '/challenge-preview/{challengeId}',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('LegacyGetChallengePreviewIntegration', getPreviewFn),
+      // backward compatibility
     });
 
     const upsertPreviewFn = new NodejsFunction(this, 'UpsertChallengePreviewFn', {
@@ -154,9 +183,16 @@ export class ChallengeBoardStack extends Stack {
     challengePreviewsTable.grantReadWriteData(upsertPreviewFn);
     challengesTable.grantReadData(upsertPreviewFn);
     apiGateway.addRoutes({
-      path: '/challenge-preview/{challengeId}',
+      path: '/preview-board/{challengeId}',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('UpsertChallengePreviewIntegration', upsertPreviewFn),
+      authorizer,
+    });
+
+    apiGateway.addRoutes({
+      path: '/challenge-preview/{challengeId}',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('LegacyUpsertChallengePreviewIntegration', upsertPreviewFn),
       authorizer,
     });
   }

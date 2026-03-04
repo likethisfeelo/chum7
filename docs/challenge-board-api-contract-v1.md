@@ -1,98 +1,171 @@
-# Challenge Feed API Contract v1
+# Challenge Feed / Board API Contract v1
 
-- version: 1.0.0
-- scope: Challenge Board / Preview / Join-Approval / Refund / Payout
+- version: 1.1.0
+- updatedAt: 2026-03-04
+- scope: Preview Board / Challenge Feed / Challenge Board / Comments / Leader DM
 
-## 1) Challenge Board
+---
+
+## 공통
+
+- Error format
+```json
+{ "error": "FORBIDDEN", "message": "participant required", "code": "AUTH_403" }
+```
+- 권한 기본
+  - participant only: 챌린지 피드/보드/댓글 조회/작성
+  - creator only: 보드/프리뷰 수정, quote
+
+---
+
+## 1) Preview Board
+
+### GET `/preview-board/{challengeId}`
+- auth: optional (public read)
+- behavior
+  - preview 문서가 없으면 `challenge metadata` 기반 기본 블록을 생성 후 반환 가능(서버 전략)
+- 200
+```json
+{
+  "challengeId": "c1",
+  "blocks": [
+    { "id": "b1", "type": "text", "order": 1, "content": "챌린지 유형: ..." }
+  ],
+  "updatedAt": "2026-03-04T03:00:00Z",
+  "updatedBy": "leader-1"
+}
+```
+
+### POST `/preview-board/{challengeId}`
+- auth: required, creator only
+- request
+```json
+{
+  "blocks": [
+    { "id": "b1", "type": "text", "order": 1, "content": "소개" },
+    { "id": "b2", "type": "image", "order": 2, "url": "https://..." }
+  ]
+}
+```
+- 200
+```json
+{ "success": true, "updatedAt": "2026-03-04T03:00:00Z" }
+```
+
+---
+
+## 2) Challenge Board
 
 ### GET `/challenge-board/{challengeId}`
-- auth: required, `active` participant only
+- auth: required, active participant only
 - 200
 ```json
-{ "challengeId": "c1", "blocks": [], "updatedAt": "...", "updatedBy": "u1" }
+{
+  "challengeId": "c1",
+  "blocks": [],
+  "updatedAt": "2026-03-04T03:00:00Z",
+  "updatedBy": "leader-1"
+}
 ```
-- 403: `FORBIDDEN`
+- note: 보드 미생성 시에도 `200 + blocks: []`
 
 ### POST `/challenge-board/{challengeId}`
-- auth: required, leader only
+- auth: required, creator only
 - request
 ```json
-{ "blocks": [{ "id": "b1", "type": "text", "content": "..." }] }
+{
+  "blocks": [
+    { "id": "b1", "type": "text", "order": 1, "content": "오늘 가이드" }
+  ]
+}
 ```
 - 200
 ```json
-{ "success": true, "updatedAt": "..." }
+{ "success": true, "updatedAt": "2026-03-04T03:00:00Z" }
 ```
 
-## 2) Challenge Comments
+---
+
+## 3) Comments
 
 ### GET `/challenge-board/{challengeId}/comments`
-- auth: required, `active` participant only
-- 200: `{ "comments": [...] }`
+- auth: required, active participant only
+- 200
+```json
+{
+  "comments": [
+    {
+      "commentId": "cm1",
+      "dailyAnonymousId": "고래-274",
+      "content": "완료!",
+      "isQuoted": false,
+      "createdAt": "2026-03-04T03:00:00Z"
+    }
+  ]
+}
+```
 
 ### POST `/challenge-board/{challengeId}/comments`
-- auth: required, `active` participant only
-- request: `{ "content": "..." }`
-- 200: `{ "commentId": "...", "createdAt": "..." }`
-
-### POST `/challenge-board/{challengeId}/comments/{commentId}/quote`
-- auth: required, leader only
-- request: `{ "insertAfterBlockId": "b2" }`
-- 200: `{ "success": true, "newBlock": { "type": "quote" } }`
-
-## 3) Challenge Preview (non-participant visible)
-
-### GET `/challenge-preview/{challengeId}`
-- auth: optional/public
-- 200: `{ "challengeId": "c1", "sections": [], "updatedAt": "..." }`
-
-### POST `/challenge-preview/{challengeId}`
-- auth: required, leader only
-- request: `{ "sections": [...] }`
-- 200: `{ "success": true, "updatedAt": "..." }`
-
-## 4) Paid Join / Approval
-
-### GET `/challenges/{challengeId}/join-requests`
-- auth: required, leader only
-- 200: `{ "items": [...] }`
-
-### POST `/challenges/{challengeId}/join-requests/{userChallengeId}/review`
-- auth: required, leader only
-- request: `{ "decision": "approve|reject", "reason": "optional" }`
-- 200 approve: `{ "success": true, "decision": "approve" }`
-- 200 reject: `{ "success": true, "decision": "reject", "refund": { "status": "completed" } }`
-- 409: `ALREADY_REVIEWED_OR_INVALID_STATE`
-
-## 5) Refund
-
-### POST `/challenges/{challengeId}/refund`
-- auth: required, participant
-- 정책: 시작 이후 요청 차단
-- 200: `{ "success": true, "refundStatus": "requested" }`
-- 409: `REFUND_BLOCKED_AFTER_START`
-
-### POST `/challenges/{challengeId}/refund/{userChallengeId}/review`
-- auth: required, admin only
-- request: `{ "decision": "approve|reject", "reason": "optional" }`
-- 200 approve: `{ "success": true, "decision": "approve", "refundStatus": "completed" }`
-- 200 reject: `{ "success": true, "decision": "reject", "refundStatus": "rejected" }`
-- 409: `REFUND_REVIEW_CONFLICT`
-
-## 6) Payout
-
-### POST `/challenges/{challengeId}/payout/review`
-- auth: required, admin only
+- auth: required, active participant only
 - request
 ```json
-{ "decision": "eligible|withheld", "reasonCode": "LEADER_INACTIVE|POLICY_VIOLATION|COMPLAINT_CONFIRMED|OTHER", "reason": "..." }
+{ "content": "오늘 인증 완료" }
 ```
-- note: `withheld` 시 `reasonCode` + `reason` 필수
+- 200
+```json
+{
+  "commentId": "cm2",
+  "dailyAnonymousId": "수달-901",
+  "createdAt": "2026-03-04T03:05:00Z"
+}
+```
 
-### POST `/challenges/{challengeId}/payout/finalize`
-- auth: required, admin only
-- 조건
-  - challenge lifecycle: `completed|archived`
-  - `leaderPayoutStatus`가 `eligible` (또는 미설정)
-  - `leaderPayoutAmount > 0`
-  - 이미 finalize된 건 재처리 불가
+### POST `/challenge-board/{challengeId}/comments/{commentId}/quote`
+- auth: required, creator only
+- request
+```json
+{ "insertAfterBlockId": "b2" }
+```
+- 200
+```json
+{
+  "success": true,
+  "newBlock": {
+    "id": "b9",
+    "type": "quote",
+    "order": 3,
+    "authorName": "고래-274",
+    "content": "오늘 인증 완료"
+  }
+}
+```
+
+---
+
+## 4) Challenge Feed: Leader DM
+
+### POST `/challenge-feed/{challengeId}/leader-dm`
+- auth: required, active participant only
+- behavior
+  - 기존 `leaderDmThreadId` 존재 시 재사용
+  - 없으면 `(challengeId, participantId, leaderId)` 조합으로 thread upsert
+- 200
+```json
+{
+  "threadId": "dm-thread-1",
+  "isNew": true,
+  "deepLink": "/messages/dm-thread-1"
+}
+```
+
+---
+
+## 5) Status Codes
+
+- `200 OK`
+- `400 INVALID_REQUEST`
+- `401 UNAUTHORIZED`
+- `403 FORBIDDEN`
+- `404 NOT_FOUND`
+- `409 CONFLICT`
+- `500 INTERNAL_ERROR`

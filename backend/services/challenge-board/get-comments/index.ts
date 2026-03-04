@@ -36,8 +36,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       ExclusiveStartKey: exclusiveStartKey,
     }));
 
+    const comments = (result.Items ?? []).map((item: any) => ({
+      commentId: item.commentId,
+      challengeId: item.challengeId,
+      dailyAnonymousId: item.dailyAnonymousId ?? '익명-000',
+      content: item.content,
+      isQuoted: !!item.isQuoted,
+      quotedAt: item.quotedAt ?? null,
+      createdAt: item.createdAt,
+    }));
+
     return response(200, {
-      comments: result.Items ?? [],
+      comments,
       nextToken: encodeNextToken(result.LastEvaluatedKey as Record<string, unknown> | undefined),
       hasMore: !!result.LastEvaluatedKey,
     });
