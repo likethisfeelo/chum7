@@ -16,11 +16,15 @@ const resolveChallengeBucket = (item: any): ChallengeBucket => {
   const userPhase = String(item?.phase || '').toLowerCase();
   const lifecycle = String(item?.challenge?.lifecycle || '').toLowerCase();
 
+  if (userPhase === 'in_progress' || userPhase === 'active') {
+    return 'active';
+  }
+
   if (userStatus === 'completed' || userPhase === 'completed' || lifecycle === 'completed') {
     return 'completed';
   }
 
-  if (userStatus === 'active') {
+  if (userStatus === 'active' || userStatus === 'in_progress') {
     if (userPhase === 'preparing' || lifecycle === 'recruiting' || lifecycle === 'preparing') {
       return 'preparing';
     }
@@ -181,7 +185,15 @@ export const ProfilePage = () => {
                 <button
                   key={item.userChallengeId}
                   type="button"
-                  onClick={() => navigate(`/challenges/${item.challengeId}`)}
+                  onClick={() => {
+                    const bucket = resolveChallengeBucket(item);
+                    if (bucket === 'active') {
+                      navigate(`/challenge-feed/${item.challengeId}`);
+                      return;
+                    }
+
+                    navigate(`/challenges/${item.challengeId}`);
+                  }}
                   className="w-full text-left border border-gray-200 rounded-xl p-3 hover:bg-gray-50 transition-colors"
                 >
                   <p className="font-semibold text-gray-900">{item.challenge?.title}</p>

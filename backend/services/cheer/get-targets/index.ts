@@ -127,6 +127,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
           const target = {
             userId: member.userId,
+            challengeId: member.challengeId,
             animalIcon: '🐼', // TODO: 실제 아이콘 조회
             challengeTitle: challenge?.title || 'Unknown',
             currentDay,
