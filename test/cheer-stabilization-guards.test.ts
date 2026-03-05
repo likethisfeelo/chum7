@@ -29,6 +29,8 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('createdCheerCount');
     expect(src).toContain('USE_TICKET_POST_CLAIM_PARTIAL_FAILURE');
     expect(src).toContain("UpdateExpression: 'SET #status = :available REMOVE processingAt, processingToken'");
+    expect(src).toContain('ConditionalCheckFailedException');
+    expect(src).toContain('TICKET_CLAIM_FAILED');
   });
 
   test('get-my-cheers sanitizes query params and uses allSettled for read sync', () => {

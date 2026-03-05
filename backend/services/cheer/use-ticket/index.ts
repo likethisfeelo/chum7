@@ -125,9 +125,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }));
       ticketClaimed = true;
     } catch (claimError: any) {
-      return response(409, {
-        error: 'TICKET_NOT_AVAILABLE',
-        message: '이미 사용 중이거나 사용된 응원권입니다'
+      if (claimError?.name === 'ConditionalCheckFailedException') {
+        return response(409, {
+          error: 'TICKET_NOT_AVAILABLE',
+          message: '이미 사용 중이거나 사용된 응원권입니다'
+        });
+      }
+
+      console.error('Ticket claim update failed:', claimError);
+      return response(500, {
+        error: 'TICKET_CLAIM_FAILED',
+        message: '응원권 선점 중 오류가 발생했습니다'
       });
     }
 
