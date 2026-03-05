@@ -73,6 +73,7 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('lastEvaluatedKey');
     expect(src).toContain('const pageCount = Number(ticketResult.Count || 0)');
     expect(src).toContain('totalCount += Number.isFinite(pageCount) ? Math.max(0, Math.floor(pageCount)) : 0');
+    expect(src).toContain('totalCount += ticketResult.Count || 0');
     expect(src).toContain('fallback to user.cheerTickets');
     expect(src).toContain('Number.isFinite(fallbackCheerTickets)');
     expect(src).toContain('Math.max(0, Math.floor(fallbackCheerTickets))');
