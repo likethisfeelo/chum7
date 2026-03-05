@@ -29,6 +29,17 @@ function resolveCheerApiV2SunsetAt(): string {
 
 const CHEER_API_V2_SUNSET_AT = resolveCheerApiV2SunsetAt();
 
+const LEGACY_THANK_WARNING_HEADER = '299 - Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank';
+
+function buildThankMigrationHeaders(): Record<string, string> {
+  return {
+    Warning: LEGACY_THANK_WARNING_HEADER,
+    Deprecation: 'true',
+    Sunset: CHEER_API_V2_SUNSET_AT,
+    Link: '</cheers/{cheerId}/thank>; rel="successor-version"'
+  };
+}
+
 function response(statusCode: number, body: any, extraHeaders: Record<string, string> = {}): APIGatewayProxyResult {
   return {
     statusCode,
@@ -126,12 +137,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(400, {
         error: 'LEGACY_THANK_ROUTE_DISABLED',
         message: '신규 감사 API 경로(/cheers/{cheerId}/thank)를 사용해 주세요'
-      }, {
-        Warning: '299 - Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank',
-        Deprecation: 'true',
-        Sunset: CHEER_API_V2_SUNSET_AT,
-        Link: '</cheers/{cheerId}/thank>; rel="successor-version"'
-      });
+      }, buildThankMigrationHeaders());
     }
 
     if (cheerIdFromPath && !UUID_V4_REGEX.test(cheerIdFromPath)) {
@@ -225,12 +231,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return response(200, {
       success: true,
       message: '감사를 전달했어요!'
-    }, legacyBodyRouteUsed ? {
-      Warning: '299 - Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank',
-      Deprecation: 'true',
-      Sunset: CHEER_API_V2_SUNSET_AT,
-      Link: '</cheers/{cheerId}/thank>; rel="successor-version"'
-    } : {});
+    }, legacyBodyRouteUsed ? buildThankMigrationHeaders() : {});
 
   } catch (error: any) {
     console.error('Thank cheer error:', error);
