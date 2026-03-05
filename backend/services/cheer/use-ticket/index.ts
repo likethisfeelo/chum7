@@ -148,6 +148,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         },
         ExpressionAttributeValues: {
           ':available': 'available',
+          ':processing': 'processing',
           ':processingToken': processingToken
         }
       }));
@@ -227,17 +228,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         await docClient.send(new UpdateCommand({
           TableName: process.env.USER_CHEER_TICKETS_TABLE!,
           Key: { ticketId: parsedBody?.ticketId },
-          UpdateExpression: 'SET #status = :used, usedAt = :usedAt, recoveryRequired = :recoveryRequired, recoveryReason = :recoveryReason, failedAt = :failedAt REMOVE processingAt, processingToken',
+          UpdateExpression: 'SET #status = :failed, failedAt = :failedAt REMOVE processingAt, processingToken',
           ConditionExpression: '#status = :processing AND processingToken = :processingToken',
           ExpressionAttributeNames: {
             '#status': 'status'
           },
           ExpressionAttributeValues: {
-            ':used': 'used',
-            ':usedAt': new Date().toISOString(),
-            ':recoveryRequired': true,
-            ':recoveryReason': 'USE_TICKET_POST_CLAIM_FAILURE',
+            ':failed': 'failed_processing',
             ':failedAt': new Date().toISOString(),
+            ':processing': 'processing',
             ':processingToken': processingToken
           }
         }));
