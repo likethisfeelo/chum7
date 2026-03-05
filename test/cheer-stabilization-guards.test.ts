@@ -31,6 +31,10 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('Deprecation');
     expect(src).toContain('Sunset');
     expect(src).toContain('CHEER_API_V2_SUNSET_AT');
+    expect(src).toContain('DEFAULT_CHEER_API_V2_SUNSET_AT');
+    expect(src).toContain('resolveCheerApiV2SunsetAt');
+    expect(src).toContain('Invalid CHEER_API_V2_SUNSET_AT, fallback to default');
+    expect(src).toContain('successor-version');
   });
 
   test('use-ticket handler has claim/finalize and state-aware recovery', () => {
