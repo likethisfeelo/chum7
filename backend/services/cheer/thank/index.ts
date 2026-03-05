@@ -65,15 +65,25 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-    const cheerIdFromPath = event.pathParameters?.cheerId;
-    const cheerIdFromBody = body?.cheerId;
+    const cheerIdFromPathRaw = event.pathParameters?.cheerId;
+    const cheerIdFromBodyRaw = body?.cheerId;
 
-    if (cheerIdFromBody !== undefined && (typeof cheerIdFromBody !== 'string' || !cheerIdFromBody.trim())) {
+    if (cheerIdFromPathRaw !== undefined && (typeof cheerIdFromPathRaw !== 'string' || !cheerIdFromPathRaw.trim())) {
+      return response(400, {
+        error: 'INVALID_CHEER_ID',
+        message: '경로 cheerId는 비어있지 않은 문자열이어야 합니다'
+      });
+    }
+
+    if (cheerIdFromBodyRaw !== undefined && (typeof cheerIdFromBodyRaw !== 'string' || !cheerIdFromBodyRaw.trim())) {
       return response(400, {
         error: 'INVALID_CHEER_ID',
         message: 'body.cheerId는 비어있지 않은 문자열이어야 합니다'
       });
     }
+
+    const cheerIdFromPath = typeof cheerIdFromPathRaw === 'string' ? cheerIdFromPathRaw.trim() : undefined;
+    const cheerIdFromBody = typeof cheerIdFromBodyRaw === 'string' ? cheerIdFromBodyRaw.trim() : undefined;
 
     if (cheerIdFromPath && cheerIdFromBody && cheerIdFromPath !== cheerIdFromBody) {
       return response(400, {

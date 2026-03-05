@@ -17,6 +17,9 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('cheerIdFromBody');
     expect(src).toContain('INVALID_CHEER_ID');
     expect(src).toContain('JSON 객체여야 합니다');
+    expect(src).toContain('cheerIdFromPathRaw');
+    expect(src).toContain('cheerIdFromBodyRaw');
+    expect(src).toContain('.trim()');
   });
 
   test('use-ticket handler has claim/finalize and state-aware recovery', () => {
