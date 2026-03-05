@@ -16,6 +16,8 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('cheerIdFromPath');
     expect(src).toContain('cheerIdFromBody');
     expect(src).toContain('INVALID_CHEER_ID');
+    expect(src).toContain('INVALID_CHEER_ID_FORMAT');
+    expect(src).toContain('UUID_V4_REGEX');
     expect(src).toContain('JSON 객체여야 합니다');
     expect(src).toContain('cheerIdFromPathRaw');
     expect(src).toContain('cheerIdFromBodyRaw');
@@ -30,6 +32,7 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain("ConditionExpression: '#status = :available AND userId = :userId'");
     expect(src).toContain('createdCheerCount');
     expect(src).toContain('INVALID_TICKET_EXPIRY');
+    expect(src).toContain('message: z.string().trim().min(1).max(200)');
     expect(src).toContain('USE_TICKET_POST_CLAIM_PARTIAL_FAILURE');
     expect(src).toContain("UpdateExpression: 'SET #status = :available REMOVE processingAt, processingToken'");
     expect(src).toContain('ConditionalCheckFailedException');

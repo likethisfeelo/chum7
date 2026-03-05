@@ -10,7 +10,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const useTicketSchema = z.object({
   ticketId: z.string().uuid(),
-  message: z.string().min(1).max(200),
+  message: z.string().trim().min(1).max(200),
 });
 
 type UseTicketInput = z.infer<typeof useTicketSchema>;

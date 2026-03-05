@@ -8,6 +8,8 @@ const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const snsClient = new SNSClient({});
 
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
     statusCode,
@@ -86,6 +88,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const cheerIdFromPath = typeof cheerIdFromPathRaw === 'string' ? cheerIdFromPathRaw.trim() : undefined;
     const cheerIdFromBody = typeof cheerIdFromBodyRaw === 'string' ? cheerIdFromBodyRaw.trim() : undefined;
+
+    if (cheerIdFromPath && !UUID_V4_REGEX.test(cheerIdFromPath)) {
+      return response(400, {
+        error: 'INVALID_CHEER_ID_FORMAT',
+        message: '경로 cheerId 형식이 올바르지 않습니다'
+      });
+    }
+
+    if (cheerIdFromBody && !UUID_V4_REGEX.test(cheerIdFromBody)) {
+      return response(400, {
+        error: 'INVALID_CHEER_ID_FORMAT',
+        message: 'body.cheerId 형식이 올바르지 않습니다'
+      });
+    }
 
     if (cheerIdFromPath && cheerIdFromBody && cheerIdFromPath !== cheerIdFromBody) {
       return response(400, {
