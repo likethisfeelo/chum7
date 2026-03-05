@@ -1,7 +1,7 @@
 // backend/services/cheer/get-my-cheers/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -30,8 +30,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const params = event.queryStringParameters || {};
-    const type = params.type || 'received'; // 'received' or 'sent'
-    const limit = parseInt(params.limit || '20');
+    const rawType = params.type || 'received';
+    const type = rawType === 'sent' ? 'sent' : 'received';
+
+    const parsedLimit = Number.parseInt(params.limit || '20', 10);
+    const limit = Number.isFinite(parsedLimit)
+      ? Math.min(100, Math.max(1, parsedLimit))
+      : 20;
 
     let result;
 
@@ -62,6 +67,36 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const cheers = result.Items || [];
+
+    // 받은 응원 조회 시 unread를 읽음 처리
+    if (type === 'received') {
+      const unreadCheers = cheers.filter((c: any) => !c.isRead);
+      const readAt = new Date().toISOString();
+
+      const readResults = await Promise.allSettled(unreadCheers.map((cheer: any) =>
+        docClient.send(new UpdateCommand({
+          TableName: process.env.CHEERS_TABLE!,
+          Key: { cheerId: cheer.cheerId },
+          UpdateExpression: 'SET isRead = :true, readAt = :readAt',
+          ConditionExpression: 'attribute_exists(cheerId) AND receiverId = :receiverId AND (attribute_not_exists(isRead) OR isRead = :false)',
+          ExpressionAttributeValues: {
+            ':true': true,
+            ':false': false,
+            ':receiverId': userId,
+            ':readAt': readAt
+          }
+        }))
+      ));
+
+      unreadCheers.forEach((cheer: any, index: number) => {
+        if (readResults[index].status === 'fulfilled') {
+          cheer.isRead = true;
+          return;
+        }
+
+        console.warn(`Failed to mark cheer as read: ${cheer.cheerId}`);
+      });
+    }
 
     // 통계 계산
     const stats = {
