@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 
 const NAV_ITEMS = [
   { path: '/challenges', icon: '🎯', label: '챌린지' },
-  { path: '/earth', icon: '🌍', label: '어스' },
+  { path: '/outer-space', icon: '🚀', label: '마당' },
   { path: '/me', icon: null, label: 'ME', isME: true },
   { path: '/today', icon: '📊', label: '투데이' },
   { path: '/assets', icon: '💎', label: '애셋' },

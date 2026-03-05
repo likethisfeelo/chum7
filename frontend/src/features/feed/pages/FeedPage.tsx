@@ -1,186 +1,527 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useInfiniteQuery, useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
-import { apiClient } from '@/lib/api-client';
 import { motion } from 'framer-motion';
-import { FiHeart } from 'react-icons/fi';
-import { format } from 'date-fns';
+import { format, nextMonday } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Loading } from '@/shared/components/Loading';
-import { EmptyState } from '@/shared/components/EmptyState';
-import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
-import toast from 'react-hot-toast';
 
-const FILTER_GUIDE_TEXT: Record<'all' | 'extra', string> = {
-  all: '오늘의 핵심 인증과 공개된 추가 기록을 함께 볼 수 있어요.',
-  extra: '추가 기록만 모아보며 복기/회고 흐름을 확인할 수 있어요.',
-};
+import { EmptyState } from '@/shared/components/EmptyState';
+import { Loading } from '@/shared/components/Loading';
+import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
+import {
+  createPlazaComment,
+  dismissRecommendation,
+  fetchPlazaCommentsPage,
+  fetchPlazaFeed,
+  fetchPlazaRecommendations,
+  PlazaComment,
+  PlazaPost,
+  reactPlazaPost,
+} from '@/features/feed/api/plazaApi';
+
+type PlazaFilter = 'all' | 'recruiting' | 'ongoing' | 'records';
+
+interface Recommendation {
+  id: string;
+  title: string;
+  reason: string;
+  challengeId?: string;
+}
+
+const ANONYMITY_STORAGE_KEY = 'outer-space-anonymous-mode';
+const RECOMMENDATION_DISMISS_KEY = 'outer-space-recommend-dismiss';
+const MAX_RECOMMENDATION_EXPOSURE_PER_SESSION = 2;
+const RECOMMENDATION_SUPPRESS_HOURS = 48;
+
+const ANONYMOUS_NAMES = ['새벽의 곰', '조용한 호랑이', '집중하는 올빼미', '묵묵한 이무기'];
+
+const FILTER_TABS: Array<{ key: PlazaFilter; label: string }> = [
+  { key: 'all', label: '전체' },
+  { key: 'recruiting', label: '모집 중' },
+  { key: 'ongoing', label: '진행 중' },
+  { key: 'records', label: '완주 기록' },
+];
+
+function mapFilterToApi(filter: PlazaFilter): 'all' | 'recruiting' | 'in_progress' | 'completed' {
+  if (filter === 'recruiting') return 'recruiting';
+  if (filter === 'ongoing') return 'in_progress';
+  if (filter === 'records') return 'completed';
+  return 'all';
+}
 
 function isVideoUrl(url: string): boolean {
   const lower = url.toLowerCase();
   return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.mov') || lower.includes('.m4v');
 }
 
+function getDismissMap(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(RECOMMENDATION_DISMISS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function setDismissMap(map: Record<string, string>) {
+  localStorage.setItem(RECOMMENDATION_DISMISS_KEY, JSON.stringify(map));
+}
+
+function isSuppressed(challengeId?: string): boolean {
+  if (!challengeId) return false;
+  const map = getDismissMap();
+  const until = map[challengeId];
+  if (!until) return false;
+  const untilDate = new Date(until);
+  if (Number.isNaN(untilDate.getTime()) || untilDate.getTime() < Date.now()) {
+    delete map[challengeId];
+    setDismissMap(map);
+    return false;
+  }
+  return true;
+}
+
 export const FeedPage = () => {
-  const [feedFilter, setFeedFilter] = useState<'all' | 'extra'>('all');
+  const [plazaFilter, setPlazaFilter] = useState<PlazaFilter>('all');
+  const [isAnonymousMode, setIsAnonymousMode] = useState(false);
+  const [reactionCountMap, setReactionCountMap] = useState<Record<string, number>>({});
+  const [selectedRecommendations, setSelectedRecommendations] = useState<Recommendation[] | null>(null);
+  const [reactingIds, setReactingIds] = useState<Record<string, boolean>>({});
+  const [recommendExposeCount, setRecommendExposeCount] = useState(0);
+  const [commentOpenMap, setCommentOpenMap] = useState<Record<string, boolean>>({});
+  const [commentLoadingMap, setCommentLoadingMap] = useState<Record<string, boolean>>({});
+  const [commentSubmittingMap, setCommentSubmittingMap] = useState<Record<string, boolean>>({});
+  const [commentInputMap, setCommentInputMap] = useState<Record<string, string>>({});
+  const [commentsByPostId, setCommentsByPostId] = useState<Record<string, PlazaComment[]>>({});
+  const [commentCountMap, setCommentCountMap] = useState<Record<string, number>>({});
+  const [commentNextCursorMap, setCommentNextCursorMap] = useState<Record<string, string | null>>({});
+  const [commentHasMoreMap, setCommentHasMoreMap] = useState<Record<string, boolean>>({});
+  const [commentFetchingMoreMap, setCommentFetchingMoreMap] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const saved = localStorage.getItem(ANONYMITY_STORAGE_KEY);
+    setIsAnonymousMode(saved === 'true');
+  }, []);
 
   const {
-    data: publicFeedPages,
+    data,
     isLoading,
+    isError,
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ['verifications', 'public', feedFilter],
+    queryKey: ['plaza-feed', plazaFilter],
     initialPageParam: null as string | null,
-    queryFn: async ({ pageParam }) => {
-      const nextTokenQuery = pageParam ? `&nextToken=${encodeURIComponent(pageParam)}` : '';
-      const extraFilterQuery = feedFilter === 'extra' ? '&isExtra=true' : '';
-      const response = await apiClient.get(`/verifications?isPublic=true&limit=20${extraFilterQuery}${nextTokenQuery}`);
-      return response.data.data;
-    },
-    getNextPageParam: (lastPage) => lastPage?.nextToken || undefined,
+    queryFn: async ({ pageParam }) => fetchPlazaFeed({
+      filter: mapFilterToApi(plazaFilter),
+      cursor: pageParam,
+      limit: 20,
+    }),
+    getNextPageParam: (lastPage) => lastPage?.nextCursor || undefined,
   });
 
-  const publicFeed = publicFeedPages?.pages?.flatMap((p: any) => p.verifications || []) || [];
+  const posts: PlazaPost[] = useMemo(
+    () => data?.pages?.flatMap((page) => page.posts || []) || [],
+    [data],
+  );
 
-  const cheerMutation = useMutation({
-    mutationFn: async ({ receiverId, verificationId }: { receiverId: string; verificationId: string }) => {
-      const response = await apiClient.post('/cheer/send-immediate', {
-        receiverId,
-        verificationId,
-        message: '오늘도 수고했어요! 응원해요 💪',
+  useEffect(() => {
+    setReactionCountMap((prev) => {
+      const next = { ...prev };
+      posts.forEach((post) => {
+        if (next[post.plazaPostId] === undefined) {
+          next[post.plazaPostId] = Number(post.likeCount || 0);
+        }
       });
-      return response.data;
-    },
-    onSuccess: () => {
-      toast.success('응원을 보냈어요 💖');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || '응원 발송에 실패했습니다');
-    },
+      return next;
+    });
+  }, [posts]);
+
+  useEffect(() => {
+    setCommentCountMap((prev) => {
+      const next = { ...prev };
+      posts.forEach((post) => {
+        if (next[post.plazaPostId] === undefined) {
+          next[post.plazaPostId] = Number(post.commentCount || 0);
+        }
+      });
+      return next;
+    });
+  }, [posts]);
+
+  const currentAlias = useMemo(() => ANONYMOUS_NAMES[new Date().getMonth() % ANONYMOUS_NAMES.length], []);
+  const nextApplyDate = useMemo(() => format(nextMonday(new Date()), 'M월 d일(E)', { locale: ko }), []);
+
+  const reactMutation = useMutation({
+    mutationFn: async (post: PlazaPost) => reactPlazaPost({
+      plazaPostId: post.plazaPostId,
+    }),
   });
+
+  const recommendMutation = useMutation({
+    mutationFn: async (post: PlazaPost) => fetchPlazaRecommendations({ plazaPostId: post.plazaPostId }),
+  });
+
+  const reactToPost = async (post: PlazaPost) => {
+    setReactingIds((prev) => ({ ...prev, [post.plazaPostId]: true }));
+    setReactionCountMap((prev) => ({ ...prev, [post.plazaPostId]: (prev[post.plazaPostId] ?? 0) + 1 }));
+
+    let reactResponse: any = null;
+    try {
+      reactResponse = await reactMutation.mutateAsync(post);
+      if (typeof reactResponse?.likeCount === 'number') {
+        setReactionCountMap((prev) => ({ ...prev, [post.plazaPostId]: reactResponse.likeCount }));
+      }
+    } catch {
+      // optimistic value fallback
+    }
+
+    if (recommendExposeCount >= MAX_RECOMMENDATION_EXPOSURE_PER_SESSION) {
+      setReactingIds((prev) => ({ ...prev, [post.plazaPostId]: false }));
+      return;
+    }
+
+    const inline = reactResponse?.recommendation;
+    if (inline && !isSuppressed(inline.challengeId)) {
+      setSelectedRecommendations([{
+        id: String(inline.recommendationId || `rec-inline-${post.plazaPostId}`),
+        title: inline.challengeTitle || post.challengeTitle || '추천 챌린지',
+        reason: inline.message || '방금 공감한 기록과 연관된 챌린지예요.',
+        challengeId: inline.challengeId,
+      }]);
+      setRecommendExposeCount((prev) => prev + 1);
+      setReactingIds((prev) => ({ ...prev, [post.plazaPostId]: false }));
+      return;
+    }
+
+    try {
+      const recommended = await recommendMutation.mutateAsync(post);
+      const normalized = (recommended || [])
+        .map((item: any, idx: number) => ({
+          id: String(item.id || `rec-${idx + 1}`),
+          title: item.title || item.challengeTitle || '추천 챌린지',
+          reason: item.reason || '관심 반응 기반 추천',
+          challengeId: item.challengeId,
+        }))
+        .filter((item: Recommendation) => !isSuppressed(item.challengeId));
+
+      if (normalized.length > 0) {
+        setSelectedRecommendations(normalized);
+        setRecommendExposeCount((prev) => prev + 1);
+      }
+    } finally {
+      setReactingIds((prev) => ({ ...prev, [post.plazaPostId]: false }));
+    }
+  };
+
+
+  const toggleComments = async (postId: string) => {
+    const isOpen = Boolean(commentOpenMap[postId]);
+    if (isOpen) {
+      setCommentOpenMap((prev) => ({ ...prev, [postId]: false }));
+      return;
+    }
+
+    setCommentOpenMap((prev) => ({ ...prev, [postId]: true }));
+    if (commentsByPostId[postId]) return;
+
+    setCommentLoadingMap((prev) => ({ ...prev, [postId]: true }));
+    try {
+      const page = await fetchPlazaCommentsPage({ plazaPostId: postId, limit: 30 });
+      const comments = page.comments || [];
+      setCommentsByPostId((prev) => ({ ...prev, [postId]: comments }));
+      setCommentCountMap((prev) => ({ ...prev, [postId]: comments.length }));
+      setCommentHasMoreMap((prev) => ({ ...prev, [postId]: Boolean(page.hasMore) }));
+      setCommentNextCursorMap((prev) => ({ ...prev, [postId]: page.nextCursor || null }));
+    } finally {
+      setCommentLoadingMap((prev) => ({ ...prev, [postId]: false }));
+    }
+  };
+
+  const submitComment = async (postId: string) => {
+    const content = (commentInputMap[postId] || '').trim();
+    if (!content) return;
+
+    setCommentSubmittingMap((prev) => ({ ...prev, [postId]: true }));
+    try {
+      const created = await createPlazaComment(postId, content);
+      if (created) {
+        setCommentsByPostId((prev) => ({ ...prev, [postId]: [created, ...(prev[postId] || [])] }));
+        setCommentCountMap((prev) => ({ ...prev, [postId]: (prev[postId] ?? 0) + 1 }));
+        setCommentInputMap((prev) => ({ ...prev, [postId]: '' }));
+      }
+    } finally {
+      setCommentSubmittingMap((prev) => ({ ...prev, [postId]: false }));
+    }
+  };
+
+
+  const loadMoreComments = async (postId: string) => {
+    if (!commentHasMoreMap[postId]) return;
+    if (commentFetchingMoreMap[postId]) return;
+
+    setCommentFetchingMoreMap((prev) => ({ ...prev, [postId]: true }));
+    try {
+      const page = await fetchPlazaCommentsPage({
+        plazaPostId: postId,
+        cursor: commentNextCursorMap[postId] || undefined,
+        limit: 30,
+      });
+      const comments = page.comments || [];
+      setCommentsByPostId((prev) => ({ ...prev, [postId]: [...(prev[postId] || []), ...comments] }));
+      setCommentCountMap((prev) => ({ ...prev, [postId]: Math.max(prev[postId] ?? 0, (prev[postId] || 0) + comments.length) }));
+      setCommentHasMoreMap((prev) => ({ ...prev, [postId]: Boolean(page.hasMore) }));
+      setCommentNextCursorMap((prev) => ({ ...prev, [postId]: page.nextCursor || null }));
+    } finally {
+      setCommentFetchingMoreMap((prev) => ({ ...prev, [postId]: false }));
+    }
+  };
+
+  const dismissRecommendationItem = async (item: Recommendation) => {
+    if (!item.challengeId) return;
+
+    const fallbackSuppressUntil = new Date(Date.now() + RECOMMENDATION_SUPPRESS_HOURS * 60 * 60 * 1000).toISOString();
+    const dismissResult = await dismissRecommendation(item.id);
+    const suppressUntil = dismissResult?.suppressUntil || fallbackSuppressUntil;
+
+    const map = getDismissMap();
+    map[item.challengeId] = suppressUntil;
+    setDismissMap(map);
+
+    setSelectedRecommendations((prev) => (prev ? prev.filter((r) => r.challengeId !== item.challengeId) : prev));
+  };
+
+  const toggleAnonymousMode = () => {
+    setIsAnonymousMode((prev) => {
+      const next = !prev;
+      localStorage.setItem(ANONYMITY_STORAGE_KEY, String(next));
+      return next;
+    });
+  };
+
+  const filterCountMap: Record<PlazaFilter, number> = {
+    all: posts.length,
+    recruiting: posts.filter((p) => p.postType === 'recruitment').length,
+    ongoing: posts.filter((p) => p.postType === 'progress_update').length,
+    records: posts.filter((p) => p.postType === 'badge_review' || p.postType === 'courtyard').length,
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 헤더 */}
       <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
-        <h1 className="text-2xl font-bold text-gray-900">어스 🌍</h1>
-        <p className="text-sm text-gray-500">전 세계의 챌린저들과 함께해요</p>
-
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            onClick={() => setFeedFilter('all')}
-            className={`px-3 py-1.5 text-xs rounded-full border ${feedFilter === 'all' ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-200'}`}
-          >
-            전체
-          </button>
-          <button
-            type="button"
-            onClick={() => setFeedFilter('extra')}
-            className={`px-3 py-1.5 text-xs rounded-full border ${feedFilter === 'extra' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-600 border-gray-200'}`}
-          >
-            📝 추가 기록만
-          </button>
-        </div>
-
-        <p className="mt-3 text-xs text-gray-500">💡 {FILTER_GUIDE_TEXT[feedFilter]}</p>
+        <h1 className="text-2xl font-bold text-gray-900">마당 (Outer Space)</h1>
+        <p className="text-sm text-gray-600 mt-1">광장 피드 · 반익명 커뮤니티</p>
       </div>
 
-      <div className="px-6 py-6 space-y-4">
+      <div className="px-6 py-5 max-w-3xl mx-auto space-y-5">
         <section className="bg-white border border-gray-200 rounded-2xl p-4">
-          <h2 className="text-sm font-bold text-gray-900 mb-2">인증 흐름 안내</h2>
-          <ul className="text-xs text-gray-600 space-y-1">
-            <li>• 일반 인증: 오늘의 핵심 실천 기록</li>
-            <li>• 추가 기록: 같은 날 추가 실천(기본 나만보기 → 공개 전환 가능)</li>
-            <li>• Day6 보완: 실패 Day를 다시 연결하는 회복 루트</li>
-          </ul>
-        </section>
-        {isLoading ? (
-          <Loading />
-        ) : !publicFeed || publicFeed.length === 0 ? (
-          <EmptyState
-            icon="🌍"
-            title={feedFilter === 'extra' ? '아직 공개된 추가 기록이 없어요' : '아직 공개된 인증이 없어요'}
-            description={feedFilter === 'extra' ? '추가 인증을 공개 전환하면 여기에 표시돼요.' : '첫 번째로 인증을 올려보세요!'}
-          />
-) : (
-          <>
-          {publicFeed.map((verification: any, index: number) => (
-            <motion.div
-              key={verification.verificationId}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center text-xl">
-                  🐰
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-900">
-                    {verification.isAnonymous ? '익명의 챌린저' : verification.userName}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Day {verification.day} · {format(new Date(verification.practiceAt || verification.performedAt || verification.createdAt), 'M월 d일 · HH:mm 실천', { locale: ko })}
-                  </p>
-                  {verification.isExtra && (
-                    <span className="inline-flex items-center mt-1 px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">
-                      📝 추가 기록
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {verification.imageUrl && (
-                isVideoUrl(verification.imageUrl) ? (
-                  <video
-                    src={resolveMediaUrl(verification.imageUrl)}
-                    controls
-                    className="w-full h-56 object-cover rounded-2xl mb-4 bg-black"
-                  />
-                ) : (
-                  <img
-                    src={resolveMediaUrl(verification.imageUrl)}
-                    alt="Verification"
-                    className="w-full h-56 object-cover rounded-2xl mb-4"
-                  />
-                )
-              )}
-
-              {verification.todayNote && (
-                <p className="text-gray-800 mb-4 leading-relaxed">{verification.todayNote}</p>
-              )}
-
-              <div className="flex items-center gap-4 text-sm text-gray-500">
-                <motion.button
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => cheerMutation.mutate({
-                    receiverId: verification.userId,
-                    verificationId: verification.verificationId,
-                  })}
-                  disabled={cheerMutation.isPending}
-                  className="flex items-center gap-1.5 hover:text-primary-500 transition-colors disabled:opacity-50"
-                >
-                  <FiHeart className="w-4 h-4" />
-                  <span>{verification.cheerCount || 0}</span>
-                </motion.button>
-              </div>
-            </motion.div>
-          ))}
-
-          {hasNextPage && (
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">익명 활동명</h2>
+              <p className="text-xs text-gray-500 mt-1">다음 적용일: {nextApplyDate} · 현재 활동명: {currentAlias}</p>
+            </div>
             <button
               type="button"
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="w-full py-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 disabled:opacity-50"
+              onClick={toggleAnonymousMode}
+              className={`px-3 py-1.5 text-xs rounded-xl border ${isAnonymousMode ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-700 border-gray-300'}`}
             >
-              {isFetchingNextPage ? '불러오는 중...' : '피드 더보기'}
+              익명 활동 {isAnonymousMode ? 'ON' : 'OFF'}
             </button>
-          )}
-          </>
+          </div>
+        </section>
+
+        <section className="bg-white border border-gray-200 rounded-2xl p-4">
+          <div className="grid grid-cols-4 gap-2">
+            {FILTER_TABS.map((tab) => {
+              const active = plazaFilter === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setPlazaFilter(tab.key)}
+                  className={`rounded-xl py-2 text-xs border ${active ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-700 border-gray-200'}`}
+                >
+                  {tab.label} ({filterCountMap[tab.key]})
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {isLoading ? (
+              <Loading />
+            ) : isError ? (
+              <EmptyState icon="⚠️" title="광장 피드를 불러오지 못했어요" description="잠시 후 다시 시도해주세요." />
+            ) : posts.length === 0 ? (
+              <EmptyState icon="🌌" title="아직 게시물이 없어요" description="곧 마당 게시물이 여기에 표시됩니다." />
+            ) : posts.map((post) => (
+              <motion.article
+                key={post.plazaPostId}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="border border-gray-200 rounded-2xl p-4 bg-white"
+              >
+                <p className="text-[11px] font-semibold text-primary-700">
+                  {post.postType === 'recruitment' && '카드 A · 챌린지 모집 공고'}
+                  {post.postType === 'progress_update' && '카드 B · 진행 중 업데이트'}
+                  {(post.postType === 'courtyard' || post.postType === 'badge_review') && '카드 C · 마당 게시물(익명)'}
+                </p>
+
+                <h3 className="mt-1 text-sm font-semibold text-gray-900">{post.challengeTitle || '챌린지'}</h3>
+                <p className="mt-1 text-xs text-gray-500">{format(new Date(post.createdAt), 'M월 d일 HH:mm', { locale: ko })}</p>
+
+                {post.leaderName && <p className="mt-1 text-xs text-gray-600">리더: {post.leaderName}</p>}
+                {post.recruitMessage && <p className="mt-2 text-sm text-gray-700">{post.recruitMessage}</p>}
+                {post.leaderMessage && <p className="mt-2 text-sm text-gray-700">{post.leaderMessage}</p>}
+                {post.content && <p className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{post.content}</p>}
+
+                {post.imageUrl && (
+                  isVideoUrl(post.imageUrl)
+                    ? <video src={resolveMediaUrl(post.imageUrl)} controls className="w-full h-44 object-cover rounded-xl mt-3 bg-black" />
+                    : <img src={resolveMediaUrl(post.imageUrl)} alt="마당 인증" className="w-full h-44 object-cover rounded-xl mt-3" />
+                )}
+
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void reactToPost(post);
+                    }}
+                    disabled={Boolean(reactingIds[post.plazaPostId])}
+                    className="px-2.5 py-1 text-xs rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 disabled:opacity-50"
+                  >
+                    {reactingIds[post.plazaPostId] ? '저장 중...' : `❤️ ${reactionCountMap[post.plazaPostId] ?? post.likeCount ?? 0}`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void toggleComments(post.plazaPostId);
+                    }}
+                    className="px-2.5 py-1 text-xs rounded-lg border border-gray-200 bg-white text-gray-700"
+                  >
+                    💬 댓글 {commentCountMap[post.plazaPostId] ?? commentsByPostId[post.plazaPostId]?.length ?? post.commentCount ?? 0}
+                  </button>
+                  {post.challengeCategory && (
+                    <span className="text-[11px] text-gray-500">#{post.challengeCategory}</span>
+                  )}
+                </div>
+
+                {commentOpenMap[post.plazaPostId] && (
+                  <div className="mt-3 rounded-xl border border-gray-200 p-3 bg-gray-50">
+                    {commentLoadingMap[post.plazaPostId] ? (
+                      <p className="text-xs text-gray-500">댓글 불러오는 중...</p>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          {(commentsByPostId[post.plazaPostId] || []).length === 0 ? (
+                            <p className="text-xs text-gray-500">아직 댓글이 없어요.</p>
+                          ) : (
+                            (commentsByPostId[post.plazaPostId] || []).map((comment) => (
+                              <div key={comment.commentId} className="text-xs text-gray-700">
+                                <span className="font-medium mr-1">{comment.animalIcon} 익명</span>
+                                <span>{comment.content}</span>
+                                {comment.isMine && <span className="ml-1 text-primary-700">(내 댓글)</span>}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                        {commentHasMoreMap[post.plazaPostId] && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void loadMoreComments(post.plazaPostId);
+                            }}
+                            disabled={Boolean(commentFetchingMoreMap[post.plazaPostId])}
+                            className="mt-2 text-xs text-gray-600 underline disabled:opacity-50"
+                          >
+                            {commentFetchingMoreMap[post.plazaPostId] ? '댓글 불러오는 중...' : '댓글 더보기'}
+                          </button>
+                        )}
+                        <div className="mt-3 flex items-center gap-2">
+                          <input
+                            value={commentInputMap[post.plazaPostId] || ''}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setCommentInputMap((prev) => ({ ...prev, [post.plazaPostId]: value }));
+                            }}
+                            placeholder="댓글 달기..."
+                            className="flex-1 px-2 py-1.5 text-xs rounded-lg border border-gray-200 bg-white"
+                            maxLength={300}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void submitComment(post.plazaPostId);
+                            }}
+                            disabled={Boolean(commentSubmittingMap[post.plazaPostId])}
+                            className="px-2.5 py-1.5 text-xs rounded-lg border border-primary-200 bg-primary-50 text-primary-700 disabled:opacity-50"
+                          >
+                            {commentSubmittingMap[post.plazaPostId] ? '등록 중...' : '등록'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {(post.remainingSlots !== undefined || post.totalSlots !== undefined) && (
+                  <p className="mt-2 text-xs text-gray-500">잔여 자리: {post.remainingSlots ?? 0} / {post.totalSlots ?? 0}</p>
+                )}
+
+                {post.challengeTitle && (
+                  <Link to={post.challengeId ? `/challenges/${post.challengeId}` : "/challenges"} className="mt-2 inline-block text-xs text-primary-700 underline">
+                    챌린지 보러가기
+                  </Link>
+                )}
+              </motion.article>
+            ))}
+
+            {hasNextPage && (
+              <button
+                type="button"
+                onClick={() => {
+                  void fetchNextPage();
+                }}
+                disabled={isFetchingNextPage}
+                className="w-full py-2 text-sm rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50"
+              >
+                {isFetchingNextPage ? '불러오는 중...' : '게시물 더보기'}
+              </button>
+            )}
+          </div>
+        </section>
+
+        {selectedRecommendations && selectedRecommendations.length > 0 && (
+          <section className="bg-white border border-primary-200 rounded-2xl p-4">
+            <h2 className="text-sm font-bold text-primary-700">관심 가질 만한 챌린지</h2>
+            <div className="mt-2 space-y-2">
+              {selectedRecommendations.map((item) => (
+                <article key={item.id} className="rounded-xl border border-primary-100 bg-primary-50 px-3 py-2">
+                  <p className="text-sm font-semibold text-gray-900">{item.title}</p>
+                  <p className="text-xs text-gray-600 mt-1">{item.reason}</p>
+                  <div className="mt-2 flex items-center gap-3">
+                    {item.challengeId && (
+                      <Link to={`/challenges/${item.challengeId}`} className="text-xs text-primary-700 underline">
+                        챌린지 보기
+                      </Link>
+                    )}
+                    <button
+                      type="button"
+                      className="text-xs text-gray-500 underline"
+                      onClick={() => {
+                        void dismissRecommendationItem(item);
+                      }}
+                    >
+                      닫기
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </div>
