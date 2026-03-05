@@ -117,6 +117,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     if (CHEER_API_V2_CONTRACT && !cheerIdFromPath) {
+      console.warn('Blocked legacy thank request because CHEER_API_V2_CONTRACT is enabled', {
+        userId,
+        hasPathCheerId: !!cheerIdFromPath,
+        hasBodyCheerId: !!cheerIdFromBody
+      });
+
       return response(400, {
         error: 'LEGACY_THANK_ROUTE_DISABLED',
         message: '신규 감사 API 경로(/cheers/{cheerId}/thank)를 사용해 주세요'
