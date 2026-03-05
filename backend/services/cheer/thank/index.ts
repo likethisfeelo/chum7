@@ -122,10 +122,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       TableName: process.env.CHEERS_TABLE!,
       Key: { cheerId },
       UpdateExpression: 'SET isThanked = :true, thankedAt = :now',
-      ConditionExpression: 'attribute_not_exists(isThanked) OR isThanked = :false',
+      ConditionExpression: '(attribute_not_exists(isThanked) OR isThanked = :false) AND receiverId = :receiverId',
       ExpressionAttributeValues: {
         ':true': true,
         ':false': false,
+        ':receiverId': userId,
         ':now': now
       }
     }));
