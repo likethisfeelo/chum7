@@ -35,10 +35,13 @@ function randomAlias(): string {
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   let processingToken: string | null = null;
   let ticketClaimed = false;
+  let createdCheerCount = 0;
+  let inputTicketId: string | null = null;
 
   try {
     const body = JSON.parse(event.body || '{}');
     const input: UseTicketInput = useTicketSchema.parse(body);
+    inputTicketId = input.ticketId;
 
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
     if (!userId) {
@@ -189,6 +192,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       createdCheers.push({ cheerId, receiverId: target.userId });
     }
 
+    createdCheerCount = createdCheers.length;
+
     await docClient.send(new UpdateCommand({
       TableName: process.env.USER_CHEER_TICKETS_TABLE!,
       Key: { ticketId: input.ticketId },
@@ -222,26 +227,44 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   } catch (error: any) {
     console.error('Use ticket error:', error);
 
-    if (ticketClaimed && processingToken) {
+    if (ticketClaimed && processingToken && inputTicketId) {
       try {
-        const parsedBody = JSON.parse(event.body || '{}');
-        await docClient.send(new UpdateCommand({
-          TableName: process.env.USER_CHEER_TICKETS_TABLE!,
-          Key: { ticketId: parsedBody?.ticketId },
-          UpdateExpression: 'SET #status = :used, usedAt = :usedAt, recoveryRequired = :recoveryRequired, recoveryReason = :recoveryReason, failedAt = :failedAt REMOVE processingAt, processingToken',
-          ConditionExpression: '#status = :processing AND processingToken = :processingToken',
-          ExpressionAttributeNames: {
-            '#status': 'status'
-          },
-          ExpressionAttributeValues: {
-            ':used': 'used',
-            ':usedAt': new Date().toISOString(),
-            ':recoveryRequired': true,
-            ':recoveryReason': 'USE_TICKET_POST_CLAIM_FAILURE',
-            ':failedAt': new Date().toISOString(),
-            ':processingToken': processingToken
-          }
-        }));
+        const nowIso = new Date().toISOString();
+
+        if (createdCheerCount === 0) {
+          await docClient.send(new UpdateCommand({
+            TableName: process.env.USER_CHEER_TICKETS_TABLE!,
+            Key: { ticketId: inputTicketId },
+            UpdateExpression: 'SET #status = :available REMOVE processingAt, processingToken',
+            ConditionExpression: '#status = :processing AND processingToken = :processingToken',
+            ExpressionAttributeNames: {
+              '#status': 'status'
+            },
+            ExpressionAttributeValues: {
+              ':available': 'available',
+              ':processing': 'processing',
+              ':processingToken': processingToken
+            }
+          }));
+        } else {
+          await docClient.send(new UpdateCommand({
+            TableName: process.env.USER_CHEER_TICKETS_TABLE!,
+            Key: { ticketId: inputTicketId },
+            UpdateExpression: 'SET #status = :used, usedAt = :usedAt, recoveryRequired = :recoveryRequired, recoveryReason = :recoveryReason, failedAt = :failedAt REMOVE processingAt, processingToken',
+            ConditionExpression: '#status = :processing AND processingToken = :processingToken',
+            ExpressionAttributeNames: {
+              '#status': 'status'
+            },
+            ExpressionAttributeValues: {
+              ':used': 'used',
+              ':usedAt': nowIso,
+              ':recoveryRequired': true,
+              ':recoveryReason': 'USE_TICKET_POST_CLAIM_PARTIAL_FAILURE',
+              ':failedAt': nowIso,
+              ':processingToken': processingToken
+            }
+          }));
+        }
       } catch (recoveryError) {
         console.error('Use ticket recovery error:', recoveryError);
       }
