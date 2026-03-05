@@ -54,6 +54,7 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('lastEvaluatedKey');
     expect(src).toContain('totalCount += ticketResult.Count || 0');
     expect(src).toContain('fallback to user.cheerTickets');
+    expect(src).toContain('Number.isFinite(fallbackCheerTickets)');
   });
 
   test('infra keeps new thank route and legacy compatibility route', () => {
