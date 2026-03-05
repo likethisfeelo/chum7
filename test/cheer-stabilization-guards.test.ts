@@ -39,7 +39,9 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('Invalid CHEER_API_V2_SUNSET_AT, fallback to default');
     expect(src).toContain('successor-version');
     expect(src).toContain('buildThankMigrationHeaders');
+    expect(src).toContain('}, buildThankMigrationHeaders());');
     expect(src).toContain('const migrationHeaders = legacyBodyRouteUsed ? buildThankMigrationHeaders() : {};');
+    expect(src).toContain('const legacyAwareBadRequest = (body: Record<string, string>) => response(400, body, migrationHeaders);');
     expect(src).toContain('LEGACY_THANK_WARNING_HEADER');
   });
 
@@ -86,7 +88,6 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('lastEvaluatedKey');
     expect(src).toContain('const pageCount = Number(ticketResult.Count || 0)');
     expect(src).toContain('totalCount += Number.isFinite(pageCount) ? Math.max(0, Math.floor(pageCount)) : 0');
-    expect(src).toContain('totalCount += ticketResult.Count || 0');
     expect(src).toContain('fallback to user.cheerTickets');
     expect(src).toContain('Number.isFinite(fallbackCheerTickets)');
     expect(src).toContain('Math.max(0, Math.floor(fallbackCheerTickets))');
