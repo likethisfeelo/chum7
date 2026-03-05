@@ -10,6 +10,8 @@ describe('cheer stabilization guards', () => {
     const src = read('backend/services/cheer/thank/index.ts');
     expect(src).toContain('INVALID_JSON_BODY');
     expect(src).toContain('CHEER_ID_MISMATCH');
+    expect(src).toContain("ConditionExpression: 'attribute_not_exists(isThanked) OR isThanked = :false'");
+    expect(src).toContain('ConditionalCheckFailedException');
     expect(src).toContain('cheerIdFromPath');
     expect(src).toContain('cheerIdFromBody');
   });

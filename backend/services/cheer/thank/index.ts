@@ -122,8 +122,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       TableName: process.env.CHEERS_TABLE!,
       Key: { cheerId },
       UpdateExpression: 'SET isThanked = :true, thankedAt = :now',
+      ConditionExpression: 'attribute_not_exists(isThanked) OR isThanked = :false',
       ExpressionAttributeValues: {
         ':true': true,
+        ':false': false,
         ':now': now
       }
     }));
@@ -138,6 +140,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error: any) {
     console.error('Thank cheer error:', error);
+
+    if (error?.name === 'ConditionalCheckFailedException') {
+      return response(409, {
+        error: 'ALREADY_THANKED',
+        message: '이미 감사를 표한 응원입니다'
+      });
+    }
+
     return response(500, {
       error: 'INTERNAL_SERVER_ERROR',
       message: '서버 오류가 발생했습니다'
