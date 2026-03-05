@@ -45,7 +45,30 @@ async function sendThankNotification(senderId: string, receiverIcon: string): Pr
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
-    const cheerId = event.pathParameters?.cheerId;
+
+    let body: any = {};
+    if (event.body) {
+      try {
+        body = JSON.parse(event.body);
+      } catch {
+        return response(400, {
+          error: 'INVALID_JSON_BODY',
+          message: '요청 본문 JSON 형식이 올바르지 않습니다'
+        });
+      }
+    }
+
+    const cheerIdFromPath = event.pathParameters?.cheerId;
+    const cheerIdFromBody = body?.cheerId;
+
+    if (cheerIdFromPath && cheerIdFromBody && cheerIdFromPath !== cheerIdFromBody) {
+      return response(400, {
+        error: 'CHEER_ID_MISMATCH',
+        message: '요청 경로의 cheerId와 body의 cheerId가 일치하지 않습니다'
+      });
+    }
+
+    const cheerId = cheerIdFromPath || cheerIdFromBody;
 
     if (!userId) {
       return response(401, {
