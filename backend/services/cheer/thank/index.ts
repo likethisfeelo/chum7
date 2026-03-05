@@ -11,13 +11,14 @@ const snsClient = new SNSClient({});
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CHEER_API_V2_CONTRACT = process.env.CHEER_API_V2_CONTRACT === 'true';
 
-function response(statusCode: number, body: any): APIGatewayProxyResult {
+function response(statusCode: number, body: any, extraHeaders: Record<string, string> = {}): APIGatewayProxyResult {
   return {
     statusCode,
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Credentials': true
+      'Access-Control-Allow-Credentials': true,
+      ...extraHeaders
     },
     body: JSON.stringify(body)
   };
@@ -89,6 +90,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const cheerIdFromPath = typeof cheerIdFromPathRaw === 'string' ? cheerIdFromPathRaw.trim() : undefined;
     const cheerIdFromBody = typeof cheerIdFromBodyRaw === 'string' ? cheerIdFromBodyRaw.trim() : undefined;
+    const legacyBodyRouteUsed = !cheerIdFromPath && !!cheerIdFromBody;
+
+    if (!CHEER_API_V2_CONTRACT && legacyBodyRouteUsed) {
+      console.warn('legacy thank route is deprecated; migrate to /cheers/{cheerId}/thank', {
+        userId
+      });
+    }
 
     if (CHEER_API_V2_CONTRACT && !cheerIdFromPath) {
       return response(400, {
@@ -188,7 +196,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return response(200, {
       success: true,
       message: '감사를 전달했어요!'
-    });
+    }, legacyBodyRouteUsed ? {
+      Warning: '299 - Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank'
+    } : {});
 
   } catch (error: any) {
     console.error('Thank cheer error:', error);
