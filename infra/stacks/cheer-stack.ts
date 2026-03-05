@@ -37,6 +37,8 @@ export class CheerStack extends Stack {
       CHALLENGES_TABLE: challengesTable.tableName,
       SNS_TOPIC_ARN: snsTopic.topicArn,
       EVENT_BUS_NAME: eventBus.eventBusName,
+      CHEER_API_V2_CONTRACT: process.env.CHEER_API_V2_CONTRACT ?? 'false',
+      CHEER_API_V2_SUNSET_AT: process.env.CHEER_API_V2_SUNSET_AT ?? '2026-06-30T00:00:00.000Z',
     };
 
     const commonProps = {
@@ -132,9 +134,16 @@ export class CheerStack extends Stack {
     });
     cheersTable.grantReadWriteData(thankFn);
     apiGateway.addRoutes({
+      path: '/cheers/{cheerId}/thank',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('ThankByIdIntegration', thankFn),
+      authorizer,
+    });
+    // 하위 호환: 구형 클라이언트(body cheerId) 지원
+    apiGateway.addRoutes({
       path: '/cheer/thank',
       methods: [HttpMethod.POST],
-      integration: new HttpLambdaIntegration('ThankIntegration', thankFn),
+      integration: new HttpLambdaIntegration('ThankLegacyIntegration', thankFn),
       authorizer,
     });
 
@@ -146,7 +155,7 @@ export class CheerStack extends Stack {
       handler: 'handler',
       environment: commonEnv,
     });
-    cheersTable.grantReadData(getMyCheers);
+    cheersTable.grantReadWriteData(getMyCheers);
     apiGateway.addRoutes({
       path: '/cheer/my-cheers',
       methods: [HttpMethod.GET],
