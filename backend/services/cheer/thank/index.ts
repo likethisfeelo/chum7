@@ -200,7 +200,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }, legacyBodyRouteUsed ? {
       Warning: '299 - Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank',
       Deprecation: 'true',
-      Sunset: CHEER_API_V2_SUNSET_AT
+      Sunset: CHEER_API_V2_SUNSET_AT,
+      Link: '</cheers/{cheerId}/thank>; rel="successor-version"'
     } : {});
 
   } catch (error: any) {
