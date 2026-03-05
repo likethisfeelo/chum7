@@ -55,6 +55,10 @@ export class CoreStack extends Stack {
   public readonly challengeCommentsTable: Table;
   public readonly challengePreviewsTable: Table;
   public readonly payoutAuditLogsTable: Table;
+  public readonly plazaPostsTable: Table;
+  public readonly plazaCommentsTable: Table;
+  public readonly plazaReactionsTable: Table;
+  public readonly plazaRecommendationsTable: Table;
 
   public readonly uploadsBucket: IBucket;
   public readonly snsTopic: Topic;
@@ -433,6 +437,81 @@ export class CoreStack extends Stack {
     this.payoutAuditLogsTable.addGlobalSecondaryIndex({
       indexName: 'challengeId-createdAt-index',
       partitionKey: { name: 'challengeId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    this.plazaPostsTable = new Table(this, 'PlazaPostsTable', {
+      tableName: `chme-${stage}-plaza-posts`,
+      partitionKey: { name: 'plazaPostId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    this.plazaPostsTable.addGlobalSecondaryIndex({
+      indexName: 'postType-createdAt-index',
+      partitionKey: { name: 'postType', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    this.plazaPostsTable.addGlobalSecondaryIndex({
+      indexName: 'challengeId-index',
+      partitionKey: { name: 'sourceChallengeId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    this.plazaPostsTable.addGlobalSecondaryIndex({
+      indexName: 'leaderId-index',
+      partitionKey: { name: 'sourceLeaderId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    this.plazaCommentsTable = new Table(this, 'PlazaCommentsTable', {
+      tableName: `chme-${stage}-plaza-comments`,
+      partitionKey: { name: 'commentId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    this.plazaCommentsTable.addGlobalSecondaryIndex({
+      indexName: 'plazaPostId-createdAt-index',
+      partitionKey: { name: 'plazaPostId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    this.plazaReactionsTable = new Table(this, 'PlazaReactionsTable', {
+      tableName: `chme-${stage}-plaza-reactions`,
+      partitionKey: { name: 'reactionId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    this.plazaReactionsTable.addGlobalSecondaryIndex({
+      indexName: 'plazaPostId-index',
+      partitionKey: { name: 'plazaPostId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    this.plazaReactionsTable.addGlobalSecondaryIndex({
+      indexName: 'userId-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    this.plazaRecommendationsTable = new Table(this, 'PlazaRecommendationsTable', {
+      tableName: `chme-${stage}-plaza-recommendations`,
+      partitionKey: { name: 'recommendationId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+      timeToLiveAttribute: 'expiresAtTimestamp',
+    });
+    this.plazaRecommendationsTable.addGlobalSecondaryIndex({
+      indexName: 'userId-createdAt-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
       sortKey: { name: 'createdAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });

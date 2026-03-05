@@ -26,6 +26,8 @@ const env = {
   region: config.region,
 };
 
+const plazaConvertFailureAlertEmail = app.node.tryGetContext('plazaConvertFailureAlertEmail');
+
 // CoreStack을 먼저 생성 (ApiStack에 Cognito 정보 전달 필요)
 const coreStack = new CoreStack(app, `chme-${stage}-core`, {
   env,
@@ -71,6 +73,12 @@ new VerificationStack(app, `chme-${stage}-verification`, {
   verificationsTable: coreStack.verificationsTable,
   userChallengesTable: coreStack.userChallengesTable,
   uploadsBucket: coreStack.uploadsBucket,
+  challengesTable: coreStack.challengesTable,
+  plazaPostsTable: coreStack.plazaPostsTable,
+  plazaCommentsTable: coreStack.plazaCommentsTable,
+  plazaReactionsTable: coreStack.plazaReactionsTable,
+  plazaRecommendationsTable: coreStack.plazaRecommendationsTable,
+  plazaConvertFailureAlertEmail,
 });
 
 new CheerStack(app, `chme-${stage}-cheer`, {
