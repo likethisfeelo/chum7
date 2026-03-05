@@ -89,6 +89,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const now = new Date();
     const nowISO = now.toISOString();
     const expiresAt = new Date(ticket.expiresAt);
+
+    if (Number.isNaN(expiresAt.getTime())) {
+      return response(400, {
+        error: 'INVALID_TICKET_EXPIRY',
+        message: '응원권 만료일 형식이 올바르지 않습니다'
+      });
+    }
+
     if (now > expiresAt) {
       return response(410, {
         error: 'TICKET_EXPIRED',
