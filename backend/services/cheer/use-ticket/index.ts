@@ -10,7 +10,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const useTicketSchema = z.object({
   ticketId: z.string().uuid(),
-  message: z.string().min(1).max(200),
+  message: z.string().trim().min(1).max(200),
 });
 
 type UseTicketInput = z.infer<typeof useTicketSchema>;
@@ -33,14 +33,30 @@ function randomAlias(): string {
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  let processingToken: string | null = null;
+  let ticketClaimed = false;
+  let createdCheerCount = 0;
+  let inputTicketId: string | null = null;
+
   try {
-    const body = JSON.parse(event.body || '{}');
+    let body: any = {};
+    try {
+      body = JSON.parse(event.body || '{}');
+    } catch {
+      return response(400, {
+        error: 'INVALID_JSON_BODY',
+        message: '요청 본문 JSON 형식이 올바르지 않습니다'
+      });
+    }
+
     const input: UseTicketInput = useTicketSchema.parse(body);
+    inputTicketId = input.ticketId;
 
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
     if (!userId) {
       return response(401, { error: 'UNAUTHORIZED', message: '인증이 필요합니다' });
     }
+
 
     const ticketResult = await docClient.send(new GetCommand({
       TableName: process.env.USER_CHEER_TICKETS_TABLE!,
@@ -73,6 +89,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const now = new Date();
     const nowISO = now.toISOString();
     const expiresAt = new Date(ticket.expiresAt);
+
+    if (Number.isNaN(expiresAt.getTime())) {
+      return response(400, {
+        error: 'INVALID_TICKET_EXPIRY',
+        message: '응원권 만료일 형식이 올바르지 않습니다'
+      });
+    }
+
     if (now > expiresAt) {
       return response(410, {
         error: 'TICKET_EXPIRED',
@@ -84,6 +108,42 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(400, {
         error: 'MISSING_CHALLENGE_ID',
         message: '응원권에 challengeId가 없습니다'
+      });
+    }
+
+    // 1) 응원권 선점(중복 사용 방지)
+    // status를 available -> processing으로 먼저 전환해서 동시 요청에서 1건만 통과시킵니다.
+    processingToken = uuidv4();
+    try {
+      await docClient.send(new UpdateCommand({
+        TableName: process.env.USER_CHEER_TICKETS_TABLE!,
+        Key: { ticketId: input.ticketId },
+        UpdateExpression: 'SET #status = :processing, processingAt = :processingAt, processingToken = :processingToken',
+        ConditionExpression: '#status = :available AND userId = :userId',
+        ExpressionAttributeNames: {
+          '#status': 'status'
+        },
+        ExpressionAttributeValues: {
+          ':available': 'available',
+          ':processing': 'processing',
+          ':processingAt': nowISO,
+          ':processingToken': processingToken,
+          ':userId': userId
+        }
+      }));
+      ticketClaimed = true;
+    } catch (claimError: any) {
+      if (claimError?.name === 'ConditionalCheckFailedException') {
+        return response(409, {
+          error: 'TICKET_NOT_AVAILABLE',
+          message: '이미 사용 중이거나 사용된 응원권입니다'
+        });
+      }
+
+      console.error('Ticket claim update failed:', claimError);
+      return response(500, {
+        error: 'TICKET_CLAIM_FAILED',
+        message: '응원권 선점 중 오류가 발생했습니다'
       });
     }
 
@@ -106,6 +166,29 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     });
 
     if (targets.length === 0) {
+      try {
+        await docClient.send(new UpdateCommand({
+          TableName: process.env.USER_CHEER_TICKETS_TABLE!,
+          Key: { ticketId: input.ticketId },
+          UpdateExpression: 'SET #status = :available REMOVE processingAt, processingToken',
+          ConditionExpression: '#status = :processing AND processingToken = :processingToken',
+          ExpressionAttributeNames: {
+            '#status': 'status'
+          },
+          ExpressionAttributeValues: {
+            ':available': 'available',
+            ':processing': 'processing',
+            ':processingToken': processingToken
+          }
+        }));
+      } catch (releaseError) {
+        console.error('Ticket release failed after NO_TARGETS:', releaseError);
+        return response(500, {
+          error: 'TICKET_RELEASE_FAILED',
+          message: '대상 없음 처리 중 응원권 상태 복원에 실패했습니다'
+        });
+      }
+
       return response(409, {
         error: 'NO_TARGETS',
         message: '응원 가능한 미완료 참여자가 없습니다'
@@ -142,16 +225,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       createdCheers.push({ cheerId, receiverId: target.userId });
     }
 
+    createdCheerCount = createdCheers.length;
+
     await docClient.send(new UpdateCommand({
       TableName: process.env.USER_CHEER_TICKETS_TABLE!,
       Key: { ticketId: input.ticketId },
-      UpdateExpression: 'SET #status = :status, usedAt = :usedAt, usedForCheerId = :cheerId',
+      UpdateExpression: 'SET #status = :status, usedAt = :usedAt, usedForCheerId = :cheerId, processedAt = :processedAt REMOVE processingAt, processingToken',
+      ConditionExpression: '#status = :processing AND processingToken = :processingToken',
       ExpressionAttributeNames: {
         '#status': 'status'
       },
       ExpressionAttributeValues: {
         ':status': 'used',
+        ':processing': 'processing',
+        ':processingToken': processingToken,
         ':usedAt': nowISO,
+        ':processedAt': nowISO,
         ':cheerId': createdCheers[0].cheerId
       }
     }));
@@ -170,6 +259,49 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error: any) {
     console.error('Use ticket error:', error);
+
+    if (ticketClaimed && processingToken && inputTicketId) {
+      try {
+        const nowIso = new Date().toISOString();
+
+        if (createdCheerCount === 0) {
+          await docClient.send(new UpdateCommand({
+            TableName: process.env.USER_CHEER_TICKETS_TABLE!,
+            Key: { ticketId: inputTicketId },
+            UpdateExpression: 'SET #status = :available REMOVE processingAt, processingToken',
+            ConditionExpression: '#status = :processing AND processingToken = :processingToken',
+            ExpressionAttributeNames: {
+              '#status': 'status'
+            },
+            ExpressionAttributeValues: {
+              ':available': 'available',
+              ':processing': 'processing',
+              ':processingToken': processingToken
+            }
+          }));
+        } else {
+          await docClient.send(new UpdateCommand({
+            TableName: process.env.USER_CHEER_TICKETS_TABLE!,
+            Key: { ticketId: inputTicketId },
+            UpdateExpression: 'SET #status = :used, usedAt = :usedAt, recoveryRequired = :recoveryRequired, recoveryReason = :recoveryReason, failedAt = :failedAt REMOVE processingAt, processingToken',
+            ConditionExpression: '#status = :processing AND processingToken = :processingToken',
+            ExpressionAttributeNames: {
+              '#status': 'status'
+            },
+            ExpressionAttributeValues: {
+              ':used': 'used',
+              ':usedAt': nowIso,
+              ':recoveryRequired': true,
+              ':recoveryReason': 'USE_TICKET_POST_CLAIM_PARTIAL_FAILURE',
+              ':failedAt': nowIso,
+              ':processingToken': processingToken
+            }
+          }));
+        }
+      } catch (recoveryError) {
+        console.error('Use ticket recovery error:', recoveryError);
+      }
+    }
 
     if (error instanceof z.ZodError) {
       return response(400, {
