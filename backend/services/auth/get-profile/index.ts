@@ -45,20 +45,30 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     let availableCheerTickets = Number(user.cheerTickets || 0);
     if (process.env.USER_CHEER_TICKETS_TABLE) {
-      const ticketResult = await docClient.send(new QueryCommand({
-        TableName: process.env.USER_CHEER_TICKETS_TABLE,
-        IndexName: 'userId-status-index',
-        KeyConditionExpression: 'userId = :userId AND #status = :status',
-        ExpressionAttributeNames: {
-          '#status': 'status'
-        },
-        ExpressionAttributeValues: {
-          ':userId': userId,
-          ':status': 'available'
-        },
-        Select: 'COUNT'
-      }));
-      availableCheerTickets = ticketResult.Count || 0;
+      let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+      let totalCount = 0;
+
+      do {
+        const ticketResult = await docClient.send(new QueryCommand({
+          TableName: process.env.USER_CHEER_TICKETS_TABLE,
+          IndexName: 'userId-status-index',
+          KeyConditionExpression: 'userId = :userId AND #status = :status',
+          ExpressionAttributeNames: {
+            '#status': 'status'
+          },
+          ExpressionAttributeValues: {
+            ':userId': userId,
+            ':status': 'available'
+          },
+          Select: 'COUNT',
+          ExclusiveStartKey: lastEvaluatedKey
+        }));
+
+        totalCount += ticketResult.Count || 0;
+        lastEvaluatedKey = ticketResult.LastEvaluatedKey;
+      } while (lastEvaluatedKey);
+
+      availableCheerTickets = totalCount;
     }
 
     return response(200, {
