@@ -68,7 +68,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             ExclusiveStartKey: lastEvaluatedKey
           }));
 
-          totalCount += ticketResult.Count || 0;
+          const pageCount = Number(ticketResult.Count || 0);
+          totalCount += Number.isFinite(pageCount) ? Math.max(0, Math.floor(pageCount)) : 0;
           lastEvaluatedKey = ticketResult.LastEvaluatedKey;
         } while (lastEvaluatedKey);
 
