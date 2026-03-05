@@ -128,7 +128,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     if (!CHEER_API_V2_CONTRACT && legacyBodyRouteAttempted) {
       console.warn('legacy thank route is deprecated; migrate to /cheers/{cheerId}/thank', {
-        userId
+        userId,
+        hasBodyCheerIdField,
+        hasBodyCheerIdValue: cheerIdFromBodyRaw !== undefined
       });
     }
 

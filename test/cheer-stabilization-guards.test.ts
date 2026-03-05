@@ -32,6 +32,7 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('LEGACY_THANK_WARNING_HEADER');
     expect(src).toContain('if (!CHEER_API_V2_CONTRACT && legacyBodyRouteAttempted) {');
     expect(src).toContain('legacy thank route is deprecated; migrate to /cheers/{cheerId}/thank');
+    expect(src).toContain('hasBodyCheerIdValue: cheerIdFromBodyRaw !== undefined');
     expect(src).toContain('Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank');
     expect(src).toContain('Deprecation');
     expect(src).toContain('Sunset');
