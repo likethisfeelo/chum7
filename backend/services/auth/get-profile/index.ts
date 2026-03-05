@@ -45,30 +45,37 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     let availableCheerTickets = Number(user.cheerTickets || 0);
     if (process.env.USER_CHEER_TICKETS_TABLE) {
-      let lastEvaluatedKey: Record<string, any> | undefined = undefined;
-      let totalCount = 0;
+      try {
+        let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+        let totalCount = 0;
 
-      do {
-        const ticketResult = await docClient.send(new QueryCommand({
-          TableName: process.env.USER_CHEER_TICKETS_TABLE,
-          IndexName: 'userId-status-index',
-          KeyConditionExpression: 'userId = :userId AND #status = :status',
-          ExpressionAttributeNames: {
-            '#status': 'status'
-          },
-          ExpressionAttributeValues: {
-            ':userId': userId,
-            ':status': 'available'
-          },
-          Select: 'COUNT',
-          ExclusiveStartKey: lastEvaluatedKey
-        }));
+        do {
+          const ticketResult = await docClient.send(new QueryCommand({
+            TableName: process.env.USER_CHEER_TICKETS_TABLE,
+            IndexName: 'userId-status-index',
+            KeyConditionExpression: 'userId = :userId AND #status = :status',
+            ExpressionAttributeNames: {
+              '#status': 'status'
+            },
+            ExpressionAttributeValues: {
+              ':userId': userId,
+              ':status': 'available'
+            },
+            Select: 'COUNT',
+            ExclusiveStartKey: lastEvaluatedKey
+          }));
 
-        totalCount += ticketResult.Count || 0;
-        lastEvaluatedKey = ticketResult.LastEvaluatedKey;
-      } while (lastEvaluatedKey);
+          totalCount += ticketResult.Count || 0;
+          lastEvaluatedKey = ticketResult.LastEvaluatedKey;
+        } while (lastEvaluatedKey);
 
-      availableCheerTickets = totalCount;
+        availableCheerTickets = totalCount;
+      } catch (ticketCountError) {
+        console.error('Failed to compute ticket count from USER_CHEER_TICKETS_TABLE, fallback to user.cheerTickets', {
+          userId,
+          ticketCountError
+        });
+      }
     }
 
     return response(200, {

@@ -52,6 +52,7 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain("IndexName: 'userId-status-index'");
     expect(src).toContain('lastEvaluatedKey');
     expect(src).toContain('totalCount += ticketResult.Count || 0');
+    expect(src).toContain('fallback to user.cheerTickets');
   });
 
   test('infra keeps new thank route and legacy compatibility route', () => {
