@@ -33,6 +33,9 @@ function randomAlias(): string {
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  let processingToken: string | null = null;
+  let ticketClaimed = false;
+
   try {
     const body = JSON.parse(event.body || '{}');
     const input: UseTicketInput = useTicketSchema.parse(body);
@@ -41,6 +44,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (!userId) {
       return response(401, { error: 'UNAUTHORIZED', message: '인증이 필요합니다' });
     }
+
 
     const ticketResult = await docClient.send(new GetCommand({
       TableName: process.env.USER_CHEER_TICKETS_TABLE!,
@@ -87,6 +91,34 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
+    // 1) 응원권 선점(중복 사용 방지)
+    // status를 available -> processing으로 먼저 전환해서 동시 요청에서 1건만 통과시킵니다.
+    processingToken = uuidv4();
+    try {
+      await docClient.send(new UpdateCommand({
+        TableName: process.env.USER_CHEER_TICKETS_TABLE!,
+        Key: { ticketId: input.ticketId },
+        UpdateExpression: 'SET #status = :processing, processingAt = :processingAt, processingToken = :processingToken',
+        ConditionExpression: '#status = :available AND userId = :userId',
+        ExpressionAttributeNames: {
+          '#status': 'status'
+        },
+        ExpressionAttributeValues: {
+          ':available': 'available',
+          ':processing': 'processing',
+          ':processingAt': nowISO,
+          ':processingToken': processingToken,
+          ':userId': userId
+        }
+      }));
+      ticketClaimed = true;
+    } catch (claimError: any) {
+      return response(409, {
+        error: 'TICKET_NOT_AVAILABLE',
+        message: '이미 사용 중이거나 사용된 응원권입니다'
+      });
+    }
+
     const participantsResult = await docClient.send(new QueryCommand({
       TableName: process.env.USER_CHALLENGES_TABLE!,
       IndexName: 'challengeId-index',
@@ -106,6 +138,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     });
 
     if (targets.length === 0) {
+      await docClient.send(new UpdateCommand({
+        TableName: process.env.USER_CHEER_TICKETS_TABLE!,
+        Key: { ticketId: input.ticketId },
+        UpdateExpression: 'SET #status = :available REMOVE processingAt, processingToken',
+        ConditionExpression: '#status = :processing AND processingToken = :processingToken',
+        ExpressionAttributeNames: {
+          '#status': 'status'
+        },
+        ExpressionAttributeValues: {
+          ':available': 'available',
+          ':processing': 'processing',
+          ':processingToken': processingToken
+        }
+      }));
+
       return response(409, {
         error: 'NO_TARGETS',
         message: '응원 가능한 미완료 참여자가 없습니다'
@@ -145,13 +192,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     await docClient.send(new UpdateCommand({
       TableName: process.env.USER_CHEER_TICKETS_TABLE!,
       Key: { ticketId: input.ticketId },
-      UpdateExpression: 'SET #status = :status, usedAt = :usedAt, usedForCheerId = :cheerId',
+      UpdateExpression: 'SET #status = :status, usedAt = :usedAt, usedForCheerId = :cheerId, processedAt = :processedAt REMOVE processingAt, processingToken',
+      ConditionExpression: '#status = :processing AND processingToken = :processingToken',
       ExpressionAttributeNames: {
         '#status': 'status'
       },
       ExpressionAttributeValues: {
         ':status': 'used',
+        ':processing': 'processing',
+        ':processingToken': processingToken,
         ':usedAt': nowISO,
+        ':processedAt': nowISO,
         ':cheerId': createdCheers[0].cheerId
       }
     }));
@@ -170,6 +221,29 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error: any) {
     console.error('Use ticket error:', error);
+
+    if (ticketClaimed && processingToken) {
+      try {
+        const parsedBody = JSON.parse(event.body || '{}');
+        await docClient.send(new UpdateCommand({
+          TableName: process.env.USER_CHEER_TICKETS_TABLE!,
+          Key: { ticketId: parsedBody?.ticketId },
+          UpdateExpression: 'SET #status = :failed, failedAt = :failedAt REMOVE processingAt, processingToken',
+          ConditionExpression: '#status = :processing AND processingToken = :processingToken',
+          ExpressionAttributeNames: {
+            '#status': 'status'
+          },
+          ExpressionAttributeValues: {
+            ':failed': 'failed_processing',
+            ':failedAt': new Date().toISOString(),
+            ':processing': 'processing',
+            ':processingToken': processingToken
+          }
+        }));
+      } catch (recoveryError) {
+        console.error('Use ticket recovery error:', recoveryError);
+      }
+    }
 
     if (error instanceof z.ZodError) {
       return response(400, {
