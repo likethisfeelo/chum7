@@ -33,6 +33,8 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('createdCheerCount');
     expect(src).toContain('INVALID_TICKET_EXPIRY');
     expect(src).toContain('INVALID_TICKET_DELTA');
+    expect(src).toContain('Number.isInteger(parsedDelta)');
+    expect(src).toContain('0 이상의 정수여야 합니다');
     expect(src).toContain("const challengeId = typeof ticket.challengeId === 'string' ? ticket.challengeId.trim() : ''");
     expect(src).toContain('message: z.string().trim().min(1).max(200)');
     expect(src).toContain('USE_TICKET_POST_CLAIM_PARTIAL_FAILURE');
@@ -47,7 +49,6 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain("const rawType = (params.type || 'received').trim().toLowerCase();");
     expect(src).toContain("const type = rawType === 'sent' ? 'sent' : 'received'");
     expect(src).toContain('/^\\d+$/');
-    expect(src).toContain("const type = rawType === 'sent' ? 'sent' : 'received'");
     expect(src).toContain('Math.min(100, Math.max(1, parsedLimit))');
     expect(src).toContain('Promise.allSettled');
     expect(src).toContain('receiverId = :receiverId');

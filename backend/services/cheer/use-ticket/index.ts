@@ -113,10 +113,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const parsedDelta = Number(ticket.delta);
-    if (!Number.isFinite(parsedDelta)) {
+    if (!Number.isFinite(parsedDelta) || !Number.isInteger(parsedDelta) || parsedDelta < 0) {
       return response(400, {
         error: 'INVALID_TICKET_DELTA',
-        message: '응원권 delta 값이 올바르지 않습니다'
+        message: '응원권 delta 값은 0 이상의 정수여야 합니다'
       });
     }
 
