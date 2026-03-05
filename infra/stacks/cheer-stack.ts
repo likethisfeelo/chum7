@@ -132,9 +132,16 @@ export class CheerStack extends Stack {
     });
     cheersTable.grantReadWriteData(thankFn);
     apiGateway.addRoutes({
+      path: '/cheers/{cheerId}/thank',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('ThankByIdIntegration', thankFn),
+      authorizer,
+    });
+    // 하위 호환: 구형 클라이언트(body cheerId) 지원
+    apiGateway.addRoutes({
       path: '/cheer/thank',
       methods: [HttpMethod.POST],
-      integration: new HttpLambdaIntegration('ThankIntegration', thankFn),
+      integration: new HttpLambdaIntegration('ThankLegacyIntegration', thankFn),
       authorizer,
     });
 
