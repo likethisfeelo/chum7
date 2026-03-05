@@ -50,6 +50,7 @@ new AuthStack(app, `chme-${stage}-auth`, {
   userPool: coreStack.userPool,
   userPoolClient: coreStack.userPoolClient,
   usersTable: coreStack.usersTable,
+  userCheerTicketsTable: coreStack.userCheerTicketsTable,
 });
 
 new ChallengeStack(app, `chme-${stage}-challenge`, {
