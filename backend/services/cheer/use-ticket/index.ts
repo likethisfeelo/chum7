@@ -104,7 +104,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    if (!ticket.challengeId) {
+    const challengeId = typeof ticket.challengeId === 'string' ? ticket.challengeId.trim() : '';
+    if (!challengeId) {
       return response(400, {
         error: 'MISSING_CHALLENGE_ID',
         message: '응원권에 challengeId가 없습니다'
@@ -160,7 +161,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       IndexName: 'challengeId-index',
       KeyConditionExpression: 'challengeId = :challengeId',
       ExpressionAttributeValues: {
-        ':challengeId': ticket.challengeId
+        ':challengeId': challengeId
       }
     }));
 
@@ -258,7 +259,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       message: `${createdCheers.length}명에게 익명 응원을 보냈어요!`,
       data: {
         ticketUsed: true,
-        challengeId: ticket.challengeId,
+        challengeId,
         sentCount: createdCheers.length,
         delta: parsedDelta,
         cheers: createdCheers
