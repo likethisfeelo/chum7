@@ -228,15 +228,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         await docClient.send(new UpdateCommand({
           TableName: process.env.USER_CHEER_TICKETS_TABLE!,
           Key: { ticketId: parsedBody?.ticketId },
-          UpdateExpression: 'SET #status = :failed, failedAt = :failedAt REMOVE processingAt, processingToken',
+          UpdateExpression: 'SET #status = :used, usedAt = :usedAt, recoveryRequired = :recoveryRequired, recoveryReason = :recoveryReason, failedAt = :failedAt REMOVE processingAt, processingToken',
           ConditionExpression: '#status = :processing AND processingToken = :processingToken',
           ExpressionAttributeNames: {
             '#status': 'status'
           },
           ExpressionAttributeValues: {
-            ':failed': 'failed_processing',
+            ':used': 'used',
+            ':usedAt': new Date().toISOString(),
+            ':recoveryRequired': true,
+            ':recoveryReason': 'USE_TICKET_POST_CLAIM_FAILURE',
             ':failedAt': new Date().toISOString(),
-            ':processing': 'processing',
             ':processingToken': processingToken
           }
         }));

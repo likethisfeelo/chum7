@@ -68,7 +68,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       const unreadCheers = cheers.filter((c: any) => !c.isRead);
       const readAt = new Date().toISOString();
 
-      await Promise.all(unreadCheers.map((cheer: any) =>
+      const readResults = await Promise.allSettled(unreadCheers.map((cheer: any) =>
         docClient.send(new UpdateCommand({
           TableName: process.env.CHEERS_TABLE!,
           Key: { cheerId: cheer.cheerId },
@@ -81,8 +81,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         }))
       ));
 
-      unreadCheers.forEach((cheer: any) => {
-        cheer.isRead = true;
+      unreadCheers.forEach((cheer: any, index: number) => {
+        if (readResults[index].status === 'fulfilled') {
+          cheer.isRead = true;
+          return;
+        }
+
+        console.warn(`Failed to mark cheer as read: ${cheer.cheerId}`);
       });
     }
 
