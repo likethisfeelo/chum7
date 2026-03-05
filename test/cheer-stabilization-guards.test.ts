@@ -42,6 +42,8 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('cheer.readAt = readAt');
     expect(src).toContain('readAt: cheer.readAt ?? null');
     expect(src).toContain('Failed to mark cheer as read');
+    expect(src).toContain('PromiseRejectedResult');
+    expect(src).toContain('reason');
   });
 
   test('get-profile computes available tickets with paginated query count', () => {

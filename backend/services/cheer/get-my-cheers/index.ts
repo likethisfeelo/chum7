@@ -95,7 +95,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           return;
         }
 
-        console.warn(`Failed to mark cheer as read: ${cheer.cheerId}`);
+        const reason = (readResults[index] as PromiseRejectedResult).reason;
+        console.warn('Failed to mark cheer as read', {
+          cheerId: cheer.cheerId,
+          reason
+        });
       });
     }
 
