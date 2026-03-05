@@ -20,6 +20,7 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('UUID_V4_REGEX');
     expect(src).toContain('JSON 객체여야 합니다');
     expect(src).toContain('cheerIdFromPathRaw');
+    expect(src).toContain('hasBodyCheerIdField');
     expect(src).toContain('cheerIdFromBodyRaw');
     expect(src).toContain('.trim()');
     expect(src).toContain('conditional failure recheck error');
@@ -40,7 +41,8 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('successor-version');
     expect(src).toContain('buildThankMigrationHeaders');
     expect(src).toContain('}, buildThankMigrationHeaders());');
-    expect(src).toContain('const migrationHeaders = legacyBodyRouteUsed ? buildThankMigrationHeaders() : {};');
+    expect(src).toContain('const legacyBodyRouteAttempted = cheerIdFromPathRaw === undefined && hasBodyCheerIdField;');
+    expect(src).toContain('const migrationHeaders = legacyBodyRouteAttempted ? buildThankMigrationHeaders() : {};');
     expect(src).toContain('const legacyAwareBadRequest = (body: Record<string, string>) => response(400, body, migrationHeaders);');
     expect(src).toContain('LEGACY_THANK_WARNING_HEADER');
   });

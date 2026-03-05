@@ -101,7 +101,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const cheerIdFromPathRaw = event.pathParameters?.cheerId;
-    const cheerIdFromBodyRaw = body?.cheerId;
+    const hasBodyCheerIdField = Object.prototype.hasOwnProperty.call(body, 'cheerId');
+    const cheerIdFromBodyRaw = hasBodyCheerIdField ? body.cheerId : undefined;
 
     if (cheerIdFromPathRaw !== undefined && (typeof cheerIdFromPathRaw !== 'string' || !cheerIdFromPathRaw.trim())) {
       return response(400, {
@@ -110,8 +111,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
+    const legacyBodyRouteAttempted = cheerIdFromPathRaw === undefined && hasBodyCheerIdField;
+    const migrationHeaders = legacyBodyRouteAttempted ? buildThankMigrationHeaders() : {};
+    const legacyAwareBadRequest = (body: Record<string, string>) => response(400, body, migrationHeaders);
+
     if (cheerIdFromBodyRaw !== undefined && (typeof cheerIdFromBodyRaw !== 'string' || !cheerIdFromBodyRaw.trim())) {
-      return response(400, {
+      return legacyAwareBadRequest({
         error: 'INVALID_CHEER_ID',
         message: 'body.cheerId는 비어있지 않은 문자열이어야 합니다'
       });
@@ -120,8 +125,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const cheerIdFromPath = typeof cheerIdFromPathRaw === 'string' ? cheerIdFromPathRaw.trim() : undefined;
     const cheerIdFromBody = typeof cheerIdFromBodyRaw === 'string' ? cheerIdFromBodyRaw.trim() : undefined;
     const legacyBodyRouteUsed = !cheerIdFromPath && !!cheerIdFromBody;
-    const migrationHeaders = legacyBodyRouteUsed ? buildThankMigrationHeaders() : {};
-    const legacyAwareBadRequest = (body: Record<string, string>) => response(400, body, migrationHeaders);
 
     if (!CHEER_API_V2_CONTRACT && legacyBodyRouteUsed) {
       console.warn('legacy thank route is deprecated; migrate to /cheers/{cheerId}/thank', {
