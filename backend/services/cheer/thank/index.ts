@@ -10,6 +10,7 @@ const snsClient = new SNSClient({});
 
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CHEER_API_V2_CONTRACT = process.env.CHEER_API_V2_CONTRACT === 'true';
+const CHEER_API_V2_SUNSET_AT = process.env.CHEER_API_V2_SUNSET_AT || '2026-06-30T00:00:00.000Z';
 
 function response(statusCode: number, body: any, extraHeaders: Record<string, string> = {}): APIGatewayProxyResult {
   return {
@@ -197,7 +198,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       success: true,
       message: '감사를 전달했어요!'
     }, legacyBodyRouteUsed ? {
-      Warning: '299 - Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank'
+      Warning: '299 - Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank',
+      Deprecation: 'true',
+      Sunset: CHEER_API_V2_SUNSET_AT
     } : {});
 
   } catch (error: any) {

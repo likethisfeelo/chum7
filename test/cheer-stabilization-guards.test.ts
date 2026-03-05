@@ -28,6 +28,9 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('LEGACY_THANK_ROUTE_DISABLED');
     expect(src).toContain('legacy thank route is deprecated; migrate to /cheers/{cheerId}/thank');
     expect(src).toContain('Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank');
+    expect(src).toContain('Deprecation');
+    expect(src).toContain('Sunset');
+    expect(src).toContain('CHEER_API_V2_SUNSET_AT');
   });
 
   test('use-ticket handler has claim/finalize and state-aware recovery', () => {
@@ -84,5 +87,6 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain("path: '/cheers/{cheerId}/thank'");
     expect(stack).toContain("path: '/cheer/thank'");
     expect(stack).toContain('CHEER_API_V2_CONTRACT');
+    expect(stack).toContain('CHEER_API_V2_SUNSET_AT');
   });
 });

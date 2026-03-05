@@ -38,6 +38,7 @@ export class CheerStack extends Stack {
       SNS_TOPIC_ARN: snsTopic.topicArn,
       EVENT_BUS_NAME: eventBus.eventBusName,
       CHEER_API_V2_CONTRACT: process.env.CHEER_API_V2_CONTRACT ?? 'false',
+      CHEER_API_V2_SUNSET_AT: process.env.CHEER_API_V2_SUNSET_AT ?? '2026-06-30T00:00:00.000Z',
     };
 
     const commonProps = {
