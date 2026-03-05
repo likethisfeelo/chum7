@@ -70,9 +70,6 @@ export async function fetchPlazaFeed(params: {
 export async function reactPlazaPost(params: {
   plazaPostId: string;
   verificationId?: string;
-export async function reactPlazaPost(params: {
-  plazaPostId: string;
-  verificationId: string;
   challengeId?: string;
 }): Promise<PlazaReactionResponse | null> {
   try {
@@ -147,17 +144,4 @@ export async function fetchPlazaComments(plazaPostId: string): Promise<PlazaComm
 export async function createPlazaComment(plazaPostId: string, content: string): Promise<PlazaComment | null> {
   const response = await apiClient.post(`/plaza/${encodeURIComponent(plazaPostId)}/comments`, { content });
   return response.data?.data ?? null;
-}
-export async function fetchPlazaRecommendations(verificationId: string): Promise<PlazaRecommendation[]> {
-  const response = await apiClient.get(`/plaza/recommendations?verificationId=${encodeURIComponent(verificationId)}&limit=3`);
-  return response.data?.data?.recommendations || [];
-}
-
-export async function dismissRecommendation(recommendationId?: string): Promise<void> {
-  if (!recommendationId) return;
-  try {
-    await apiClient.post(`/recommendations/${encodeURIComponent(recommendationId)}/dismiss`);
-  } catch {
-    // backward compatibility: ignore if endpoint is not ready yet
-  }
 }
