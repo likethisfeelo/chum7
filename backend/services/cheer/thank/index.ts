@@ -120,6 +120,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const cheerIdFromPath = typeof cheerIdFromPathRaw === 'string' ? cheerIdFromPathRaw.trim() : undefined;
     const cheerIdFromBody = typeof cheerIdFromBodyRaw === 'string' ? cheerIdFromBodyRaw.trim() : undefined;
     const legacyBodyRouteUsed = !cheerIdFromPath && !!cheerIdFromBody;
+    const migrationHeaders = legacyBodyRouteUsed ? buildThankMigrationHeaders() : {};
 
     if (!CHEER_API_V2_CONTRACT && legacyBodyRouteUsed) {
       console.warn('legacy thank route is deprecated; migrate to /cheers/{cheerId}/thank', {
@@ -137,7 +138,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(400, {
         error: 'LEGACY_THANK_ROUTE_DISABLED',
         message: '신규 감사 API 경로(/cheers/{cheerId}/thank)를 사용해 주세요'
-      }, buildThankMigrationHeaders());
+      }, migrationHeaders);
     }
 
     if (cheerIdFromPath && !UUID_V4_REGEX.test(cheerIdFromPath)) {
@@ -151,7 +152,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(400, {
         error: 'INVALID_CHEER_ID_FORMAT',
         message: 'body.cheerId 형식이 올바르지 않습니다'
-      });
+      }, migrationHeaders);
     }
 
     if (cheerIdFromPath && cheerIdFromBody && cheerIdFromPath !== cheerIdFromBody) {
@@ -231,7 +232,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return response(200, {
       success: true,
       message: '감사를 전달했어요!'
-    }, legacyBodyRouteUsed ? buildThankMigrationHeaders() : {});
+    }, migrationHeaders);
 
   } catch (error: any) {
     console.error('Thank cheer error:', error);

@@ -39,6 +39,7 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('Invalid CHEER_API_V2_SUNSET_AT, fallback to default');
     expect(src).toContain('successor-version');
     expect(src).toContain('buildThankMigrationHeaders');
+    expect(src).toContain('const migrationHeaders = legacyBodyRouteUsed ? buildThankMigrationHeaders() : {};');
     expect(src).toContain('LEGACY_THANK_WARNING_HEADER');
   });
 
