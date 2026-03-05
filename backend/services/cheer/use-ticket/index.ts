@@ -166,20 +166,28 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     });
 
     if (targets.length === 0) {
-      await docClient.send(new UpdateCommand({
-        TableName: process.env.USER_CHEER_TICKETS_TABLE!,
-        Key: { ticketId: input.ticketId },
-        UpdateExpression: 'SET #status = :available REMOVE processingAt, processingToken',
-        ConditionExpression: '#status = :processing AND processingToken = :processingToken',
-        ExpressionAttributeNames: {
-          '#status': 'status'
-        },
-        ExpressionAttributeValues: {
-          ':available': 'available',
-          ':processing': 'processing',
-          ':processingToken': processingToken
-        }
-      }));
+      try {
+        await docClient.send(new UpdateCommand({
+          TableName: process.env.USER_CHEER_TICKETS_TABLE!,
+          Key: { ticketId: input.ticketId },
+          UpdateExpression: 'SET #status = :available REMOVE processingAt, processingToken',
+          ConditionExpression: '#status = :processing AND processingToken = :processingToken',
+          ExpressionAttributeNames: {
+            '#status': 'status'
+          },
+          ExpressionAttributeValues: {
+            ':available': 'available',
+            ':processing': 'processing',
+            ':processingToken': processingToken
+          }
+        }));
+      } catch (releaseError) {
+        console.error('Ticket release failed after NO_TARGETS:', releaseError);
+        return response(500, {
+          error: 'TICKET_RELEASE_FAILED',
+          message: '대상 없음 처리 중 응원권 상태 복원에 실패했습니다'
+        });
+      }
 
       return response(409, {
         error: 'NO_TARGETS',
