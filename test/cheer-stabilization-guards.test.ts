@@ -45,6 +45,7 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain("const rawType = (params.type || 'received').trim().toLowerCase();");
     expect(src).toContain("const type = rawType === 'sent' ? 'sent' : 'received'");
     expect(src).toContain('/^\\d+$/');
+    expect(src).toContain("const type = rawType === 'sent' ? 'sent' : 'received'");
     expect(src).toContain('Math.min(100, Math.max(1, parsedLimit))');
     expect(src).toContain('Promise.allSettled');
     expect(src).toContain('receiverId = :receiverId');
