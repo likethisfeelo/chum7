@@ -32,6 +32,7 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain("ConditionExpression: '#status = :available AND userId = :userId'");
     expect(src).toContain('createdCheerCount');
     expect(src).toContain('INVALID_TICKET_EXPIRY');
+    expect(src).toContain('INVALID_TICKET_DELTA');
     expect(src).toContain('message: z.string().trim().min(1).max(200)');
     expect(src).toContain('USE_TICKET_POST_CLAIM_PARTIAL_FAILURE');
     expect(src).toContain("UpdateExpression: 'SET #status = :available REMOVE processingAt, processingToken'");

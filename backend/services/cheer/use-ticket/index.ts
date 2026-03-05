@@ -111,6 +111,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
+    const parsedDelta = Number(ticket.delta);
+    if (!Number.isFinite(parsedDelta)) {
+      return response(400, {
+        error: 'INVALID_TICKET_DELTA',
+        message: '응원권 delta 값이 올바르지 않습니다'
+      });
+    }
+
     // 1) 응원권 선점(중복 사용 방지)
     // status를 available -> processing으로 먼저 전환해서 동시 요청에서 1건만 통과시킵니다.
     processingToken = uuidv4();
@@ -206,7 +214,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         verificationId: null,
         cheerType: 'immediate',
         message: input.message,
-        senderDelta: ticket.delta,
+        senderDelta: parsedDelta,
         senderAlias: randomAlias(),
         scheduledTime: null,
         status: 'sent',
@@ -252,7 +260,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         ticketUsed: true,
         challengeId: ticket.challengeId,
         sentCount: createdCheers.length,
-        delta: ticket.delta,
+        delta: parsedDelta,
         cheers: createdCheers
       }
     });
