@@ -49,6 +49,69 @@ function mapFilterToApi(filter: PlazaFilter): 'all' | 'recruiting' | 'in_progres
   return 'all';
 }
 
+
+type MixedPlazaItem = {
+  id: string;
+  type: 'recruiting' | 'ongoing' | 'record';
+  score: number;
+  createdAtTs: number;
+  payload: ChallengeCard | VerificationRecord;
+};
+
+interface Recommendation {
+  id: string;
+  title: string;
+  reason: string;
+  challengeId?: string;
+}
+
+interface ReactionInput {
+  verificationId: string;
+  challengeId?: string;
+  challengeTitle?: string;
+}
+
+interface ChallengeSummary {
+  challengeId: string;
+  title: string;
+  description?: string;
+  leaderName?: string;
+  ownerName?: string;
+  startDate?: string;
+  schedule?: { startDate?: string };
+  recruitEndAt?: string;
+  lifecycle?: string;
+  maxParticipants?: number;
+  capacity?: number;
+  stats?: {
+    totalParticipants?: number;
+    completionRate?: number;
+  };
+}
+
+interface VerificationRecord {
+  verificationId: string;
+  challengeId?: string;
+  challengeTitle?: string;
+  createdAt: string;
+  imageUrl?: string;
+  todayNote?: string;
+}
+
+const ANONYMITY_STORAGE_KEY = 'outer-space-anonymous-mode';
+const RECOMMENDATION_DISMISS_KEY = 'outer-space-recommend-dismiss';
+const MAX_RECOMMENDATION_EXPOSURE_PER_SESSION = 2;
+const RECOMMENDATION_SUPPRESS_HOURS = 48;
+
+const ANONYMOUS_NAMES = ['새벽의 곰', '조용한 호랑이', '집중하는 올빼미', '묵묵한 이무기'];
+
+const FILTER_TABS: Array<{ key: PlazaFilter; label: string }> = [
+  { key: 'all', label: '전체' },
+  { key: 'recruiting', label: '모집 중' },
+  { key: 'ongoing', label: '진행 중' },
+  { key: 'records', label: '완주 기록' },
+];
+
 function isVideoUrl(url: string): boolean {
   const lower = url.toLowerCase();
   return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.mov') || lower.includes('.m4v');
