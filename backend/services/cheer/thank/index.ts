@@ -43,6 +43,8 @@ async function sendThankNotification(senderId: string, receiverIcon: string): Pr
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  let resolvedCheerId: string | undefined;
+
   try {
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
 
@@ -93,6 +95,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const cheerId = cheerIdFromPath || cheerIdFromBody;
+    resolvedCheerId = cheerId;
 
     if (!userId) {
       return response(401, {
@@ -167,6 +170,39 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     console.error('Thank cheer error:', error);
 
     if (error?.name === 'ConditionalCheckFailedException') {
+      if (resolvedCheerId) {
+        try {
+          const latest = await docClient.send(new GetCommand({
+            TableName: process.env.CHEERS_TABLE!,
+            Key: { cheerId: resolvedCheerId }
+          }));
+
+          if (!latest.Item) {
+            return response(404, {
+              error: 'CHEER_NOT_FOUND',
+              message: '응원을 찾을 수 없습니다'
+            });
+          }
+
+          const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
+          if (latest.Item.receiverId !== userId) {
+            return response(403, {
+              error: 'FORBIDDEN',
+              message: '본인이 받은 응원에만 감사를 표할 수 있습니다'
+            });
+          }
+
+          if (latest.Item.isThanked) {
+            return response(409, {
+              error: 'ALREADY_THANKED',
+              message: '이미 감사를 표한 응원입니다'
+            });
+          }
+        } catch (recheckError) {
+          console.error('Thank cheer conditional failure recheck error:', recheckError);
+        }
+      }
+
       return response(409, {
         error: 'ALREADY_THANKED',
         message: '이미 감사를 표한 응원입니다'
