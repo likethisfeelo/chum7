@@ -56,10 +56,24 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           message: '요청 본문 JSON 형식이 올바르지 않습니다'
         });
       }
+
+      if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+        return response(400, {
+          error: 'INVALID_JSON_BODY',
+          message: '요청 본문은 JSON 객체여야 합니다'
+        });
+      }
     }
 
     const cheerIdFromPath = event.pathParameters?.cheerId;
     const cheerIdFromBody = body?.cheerId;
+
+    if (cheerIdFromBody !== undefined && (typeof cheerIdFromBody !== 'string' || !cheerIdFromBody.trim())) {
+      return response(400, {
+        error: 'INVALID_CHEER_ID',
+        message: 'body.cheerId는 비어있지 않은 문자열이어야 합니다'
+      });
+    }
 
     if (cheerIdFromPath && cheerIdFromBody && cheerIdFromPath !== cheerIdFromBody) {
       return response(400, {
