@@ -126,7 +126,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const cheerIdFromBody = typeof cheerIdFromBodyRaw === 'string' ? cheerIdFromBodyRaw.trim() : undefined;
     const legacyBodyRouteUsed = !cheerIdFromPath && !!cheerIdFromBody;
 
-    if (!CHEER_API_V2_CONTRACT && legacyBodyRouteUsed) {
+    if (!CHEER_API_V2_CONTRACT && legacyBodyRouteAttempted) {
       console.warn('legacy thank route is deprecated; migrate to /cheers/{cheerId}/thank', {
         userId
       });
@@ -136,7 +136,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       console.warn('Blocked legacy thank request because CHEER_API_V2_CONTRACT is enabled', {
         userId,
         hasPathCheerId: !!cheerIdFromPath,
-        hasBodyCheerId: !!cheerIdFromBody
+        hasBodyCheerId: hasBodyCheerIdField
       });
 
       return response(400, {
