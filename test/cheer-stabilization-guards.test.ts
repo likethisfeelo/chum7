@@ -49,6 +49,9 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('readAt: cheer.readAt ?? null');
     expect(src).toContain('Failed to mark cheer as read');
     expect(src).toContain('PromiseRejectedResult');
+    expect(src).toContain('ConditionalCheckFailedException');
+    expect(src).toContain('Cheer already marked as read by concurrent request');
+    expect(src).toContain('cheer.readAt = cheer.readAt ?? readAt');
     expect(src).toContain('reason');
   });
 

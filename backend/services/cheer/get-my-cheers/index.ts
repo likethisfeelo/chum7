@@ -96,6 +96,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         }
 
         const reason = (readResults[index] as PromiseRejectedResult).reason;
+        if (reason?.name === 'ConditionalCheckFailedException') {
+          // 동시 요청에서 이미 읽음 처리된 케이스는 성공으로 간주해 응답 일관성을 맞춥니다.
+          cheer.isRead = true;
+          cheer.readAt = cheer.readAt ?? readAt;
+
+          console.info('Cheer already marked as read by concurrent request', {
+            cheerId: cheer.cheerId
+          });
+          return;
+        }
+
         console.warn('Failed to mark cheer as read', {
           cheerId: cheer.cheerId,
           reason
