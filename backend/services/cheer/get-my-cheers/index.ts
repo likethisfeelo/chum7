@@ -30,10 +30,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const params = event.queryStringParameters || {};
-    const rawType = params.type || 'received';
+    const rawType = (params.type || 'received').trim().toLowerCase();
     const type = rawType === 'sent' ? 'sent' : 'received';
 
-    const parsedLimit = Number.parseInt(params.limit || '20', 10);
+    const rawLimit = (params.limit || '20').trim();
+    const parsedLimit = /^\d+$/.test(rawLimit) ? Number(rawLimit) : Number.NaN;
     const limit = Number.isFinite(parsedLimit)
       ? Math.min(100, Math.max(1, parsedLimit))
       : 20;

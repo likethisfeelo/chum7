@@ -44,7 +44,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const user = result.Item;
 
     const fallbackCheerTickets = Number(user.cheerTickets || 0);
-    let availableCheerTickets = Number.isFinite(fallbackCheerTickets) ? fallbackCheerTickets : 0;
+    let availableCheerTickets = Number.isFinite(fallbackCheerTickets)
+      ? Math.max(0, Math.floor(fallbackCheerTickets))
+      : 0;
     if (process.env.USER_CHEER_TICKETS_TABLE) {
       try {
         let lastEvaluatedKey: Record<string, any> | undefined = undefined;
