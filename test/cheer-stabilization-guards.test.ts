@@ -39,6 +39,8 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('Math.min(100, Math.max(1, parsedLimit))');
     expect(src).toContain('Promise.allSettled');
     expect(src).toContain('receiverId = :receiverId');
+    expect(src).toContain('cheer.readAt = readAt');
+    expect(src).toContain('readAt: cheer.readAt ?? null');
     expect(src).toContain('Failed to mark cheer as read');
   });
 

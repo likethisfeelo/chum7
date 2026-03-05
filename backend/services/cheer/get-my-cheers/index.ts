@@ -91,6 +91,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       unreadCheers.forEach((cheer: any, index: number) => {
         if (readResults[index].status === 'fulfilled') {
           cheer.isRead = true;
+          cheer.readAt = readAt;
           return;
         }
 
@@ -118,6 +119,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           scheduledTime: cheer.scheduledTime,
           status: cheer.status,
           isRead: cheer.isRead,
+          readAt: cheer.readAt ?? null,
           isThanked: cheer.isThanked,
           createdAt: cheer.createdAt,
           sentAt: cheer.sentAt
