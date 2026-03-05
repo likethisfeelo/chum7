@@ -22,7 +22,7 @@ export const TodayPage = () => {
 
   const thankMutation = useMutation({
     mutationFn: async (cheerId: string) => {
-      const response = await apiClient.post('/cheer/thank', { cheerId });
+      const response = await apiClient.post(`/cheers/${cheerId}/thank`);
       return response.data;
     },
     onSuccess: () => {
