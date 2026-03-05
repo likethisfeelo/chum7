@@ -211,11 +211,10 @@ export class VerificationStack extends Stack {
     });
 
     // 8-1. Observability for conversion job
-    const plazaConvertLogGroup = logs.LogGroup.fromLogGroupName(
-      this,
-      'PlazaConvertLogGroup',
-      `/aws/lambda/${plazaConvertFn.functionName}`,
-    );
+    const plazaConvertLogGroup = new logs.LogGroup(this, 'PlazaConvertLogGroup', {
+      logGroupName: `/aws/lambda/${plazaConvertFn.functionName}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+    });
 
     new logs.MetricFilter(this, 'PlazaConvertConvertedMetricFilter', {
       logGroup: plazaConvertLogGroup,
