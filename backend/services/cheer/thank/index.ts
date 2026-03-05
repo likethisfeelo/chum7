@@ -127,6 +127,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         error: 'LEGACY_THANK_ROUTE_DISABLED',
         message: '신규 감사 API 경로(/cheers/{cheerId}/thank)를 사용해 주세요'
       }, {
+        Warning: '299 - Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank',
         Deprecation: 'true',
         Sunset: CHEER_API_V2_SUNSET_AT,
         Link: '</cheers/{cheerId}/thank>; rel="successor-version"'
