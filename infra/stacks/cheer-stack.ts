@@ -37,6 +37,7 @@ export class CheerStack extends Stack {
       CHALLENGES_TABLE: challengesTable.tableName,
       SNS_TOPIC_ARN: snsTopic.topicArn,
       EVENT_BUS_NAME: eventBus.eventBusName,
+      CHEER_API_V2_CONTRACT: process.env.CHEER_API_V2_CONTRACT ?? 'false',
     };
 
     const commonProps = {

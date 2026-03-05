@@ -24,6 +24,8 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('.trim()');
     expect(src).toContain('conditional failure recheck error');
     expect(src).toContain('resolvedCheerId');
+    expect(src).toContain('CHEER_API_V2_CONTRACT');
+    expect(src).toContain('LEGACY_THANK_ROUTE_DISABLED');
   });
 
   test('use-ticket handler has claim/finalize and state-aware recovery', () => {
@@ -79,5 +81,6 @@ describe('cheer stabilization guards', () => {
     const stack = read('infra/stacks/cheer-stack.ts');
     expect(stack).toContain("path: '/cheers/{cheerId}/thank'");
     expect(stack).toContain("path: '/cheer/thank'");
+    expect(stack).toContain('CHEER_API_V2_CONTRACT');
   });
 });

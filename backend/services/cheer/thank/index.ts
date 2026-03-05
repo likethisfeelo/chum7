@@ -9,6 +9,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const snsClient = new SNSClient({});
 
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CHEER_API_V2_CONTRACT = process.env.CHEER_API_V2_CONTRACT === 'true';
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
@@ -88,6 +89,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const cheerIdFromPath = typeof cheerIdFromPathRaw === 'string' ? cheerIdFromPathRaw.trim() : undefined;
     const cheerIdFromBody = typeof cheerIdFromBodyRaw === 'string' ? cheerIdFromBodyRaw.trim() : undefined;
+
+    if (CHEER_API_V2_CONTRACT && !cheerIdFromPath) {
+      return response(400, {
+        error: 'LEGACY_THANK_ROUTE_DISABLED',
+        message: '신규 감사 API 경로(/cheers/{cheerId}/thank)를 사용해 주세요'
+      });
+    }
 
     if (cheerIdFromPath && !UUID_V4_REGEX.test(cheerIdFromPath)) {
       return response(400, {
