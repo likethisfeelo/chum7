@@ -45,7 +45,8 @@ async function sendThankNotification(senderId: string, receiverIcon: string): Pr
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
-    const cheerId = event.pathParameters?.cheerId;
+    const body = event.body ? JSON.parse(event.body) : {};
+    const cheerId = event.pathParameters?.cheerId || body?.cheerId;
 
     if (!userId) {
       return response(401, {
