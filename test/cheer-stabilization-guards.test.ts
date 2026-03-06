@@ -29,11 +29,11 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('LEGACY_THANK_ROUTE_DISABLED');
     expect(src).toContain('Blocked legacy thank request because CHEER_API_V2_CONTRACT is enabled');
     expect(src).toContain('hasBodyCheerId: hasBodyCheerIdField');
-    expect(src).toContain('hasBodyCheerIdValue: cheerIdFromBodyRaw !== undefined');
+    expect(src).toContain('const hasBodyCheerIdValue = cheerIdFromBodyRaw !== undefined');
     expect(src).toContain('LEGACY_THANK_WARNING_HEADER');
     expect(src).toContain('if (!CHEER_API_V2_CONTRACT && legacyBodyRouteAttempted) {');
     expect(src).toContain('legacy thank route is deprecated; migrate to /cheers/{cheerId}/thank');
-    expect(src).toContain('hasBodyCheerIdValue: cheerIdFromBodyRaw !== undefined');
+    expect(src).toContain('hasBodyCheerIdValue');
     expect(src).toContain('Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank');
     expect(src).toContain('Deprecation');
     expect(src).toContain('Sunset');

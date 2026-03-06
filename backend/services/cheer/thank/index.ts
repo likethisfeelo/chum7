@@ -103,6 +103,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const cheerIdFromPathRaw = event.pathParameters?.cheerId;
     const hasBodyCheerIdField = Object.prototype.hasOwnProperty.call(body, 'cheerId');
     const cheerIdFromBodyRaw = hasBodyCheerIdField ? body.cheerId : undefined;
+    const hasBodyCheerIdValue = cheerIdFromBodyRaw !== undefined;
 
     if (cheerIdFromPathRaw !== undefined && (typeof cheerIdFromPathRaw !== 'string' || !cheerIdFromPathRaw.trim())) {
       return response(400, {
@@ -129,7 +130,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       console.warn('legacy thank route is deprecated; migrate to /cheers/{cheerId}/thank', {
         userId,
         hasBodyCheerIdField,
-        hasBodyCheerIdValue: cheerIdFromBodyRaw !== undefined
+        hasBodyCheerIdValue
       });
     }
 
@@ -138,7 +139,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         userId,
         hasPathCheerId: !!cheerIdFromPath,
         hasBodyCheerId: hasBodyCheerIdField,
-        hasBodyCheerIdValue: cheerIdFromBodyRaw !== undefined
+        hasBodyCheerIdValue
       });
 
       return response(400, {
