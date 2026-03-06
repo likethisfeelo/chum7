@@ -43,9 +43,15 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('Invalid CHEER_API_V2_SUNSET_AT, fallback to default');
     expect(src).toContain('successor-version');
     expect(src).toContain('buildThankMigrationHeaders');
-    expect(src).toContain('}, buildThankMigrationHeaders());');
+    expect(src).toContain('THANK_ROUTE_MODE_HEADER');
+    expect(src).toContain("type ThankRouteMode = 'canonical' | 'legacy'");
+    expect(src).toContain('withThankRouteMode');
+    expect(src).toContain("withThankRouteMode(buildThankMigrationHeaders(), 'legacy')");
+    expect(src).toContain('? withThankRouteMode(buildThankMigrationHeaders(), thankRouteMode)');
+    expect(src).toContain(': withThankRouteMode({}, thankRouteMode);');
+    expect(src).toContain("}, withThankRouteMode(buildThankMigrationHeaders(), 'legacy'));");
     expect(src).toContain('const legacyBodyRouteAttempted = cheerIdFromPathRaw === undefined && hasBodyCheerIdField;');
-    expect(src).toContain('const migrationHeaders = legacyBodyRouteAttempted ? buildThankMigrationHeaders() : {};');
+    expect(src).toContain("const thankRouteMode: ThankRouteMode = legacyBodyRouteAttempted ? 'legacy' : 'canonical';");
     expect(src).toContain('const legacyAwareBadRequest = (body: Record<string, string>) => response(400, body, migrationHeaders);');
     expect(src).toContain('LEGACY_THANK_WARNING_HEADER');
   });

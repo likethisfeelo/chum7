@@ -29,7 +29,18 @@ function resolveCheerApiV2SunsetAt(): string {
 
 const CHEER_API_V2_SUNSET_AT = resolveCheerApiV2SunsetAt();
 
+
 const LEGACY_THANK_WARNING_HEADER = '299 - Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank';
+const THANK_ROUTE_MODE_HEADER = 'X-Cheer-Thank-Route-Mode';
+
+type ThankRouteMode = 'canonical' | 'legacy';
+
+function withThankRouteMode(headers: Record<string, string>, routeMode: ThankRouteMode): Record<string, string> {
+  return {
+    ...headers,
+    [THANK_ROUTE_MODE_HEADER]: routeMode
+  };
+}
 
 function buildThankMigrationHeaders(): Record<string, string> {
   return {
@@ -113,7 +124,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const legacyBodyRouteAttempted = cheerIdFromPathRaw === undefined && hasBodyCheerIdField;
-    const migrationHeaders = legacyBodyRouteAttempted ? buildThankMigrationHeaders() : {};
+    const thankRouteMode: ThankRouteMode = legacyBodyRouteAttempted ? 'legacy' : 'canonical';
+    const migrationHeaders = legacyBodyRouteAttempted
+      ? withThankRouteMode(buildThankMigrationHeaders(), thankRouteMode)
+      : withThankRouteMode({}, thankRouteMode);
     const legacyAwareBadRequest = (body: Record<string, string>) => response(400, body, migrationHeaders);
 
     if (cheerIdFromBodyRaw !== undefined && (typeof cheerIdFromBodyRaw !== 'string' || !cheerIdFromBodyRaw.trim())) {
@@ -145,7 +159,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(400, {
         error: 'LEGACY_THANK_ROUTE_DISABLED',
         message: '신규 감사 API 경로(/cheers/{cheerId}/thank)를 사용해 주세요'
-      }, buildThankMigrationHeaders());
+      }, withThankRouteMode(buildThankMigrationHeaders(), 'legacy'));
     }
 
     if (cheerIdFromPath && !UUID_V4_REGEX.test(cheerIdFromPath)) {
