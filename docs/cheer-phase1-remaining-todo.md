@@ -9,6 +9,7 @@
 - CheerStats 하이브리드 조회: bucket 우선 + 실시간 fallback(`source` 필드 제공)
 - CheerStats 적재 파이프라인 1차: 배치 materializer Lambda + 1시간 스케줄 트리거
 - materializer 실패 재처리 기반: UnprocessedItems 재시도/백오프 + dry-run + 범위 백필(fromIso/toIso)
+- materializer 실행 제어 2차: scan segmentation(totalSegments/segmentIndex) + maxScanPages/scanPageSize
 - CloudWatch 에러 알람 베이스라인: reply/react/stats 에러 로그 메트릭 필터+알람
 - CloudWatch 운영 대시보드 1차: 에러카운트/latency p95/source mix/materializer invocations·errors 위젯
 - CheerStats 운영 런북/백필 스크립트 표준화(`scripts/cheer-stats-backfill.*`, runbook 문서)
@@ -18,7 +19,7 @@
 ## 남은 TODO
 
 ### P0 (바로 다음)
-1. materializer 장기운영 튜닝(스케줄 주기/범위 분할/timeout 기준)
+1. materializer 장기운영 튜닝(스케줄 주기 자동화/세그먼트 병렬 오케스트레이션)
 2. 대시보드 위젯 2차 확장(요청수/4xx/5xx 분리, stage별 대시보드 템플릿화)
 3. 레이트 리밋 4차(토큰 버킷/분산 Lua·Redis 옵션 검토)
 

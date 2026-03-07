@@ -223,6 +223,10 @@ describe('cheer stabilization guards', () => {
     expect(runbook).toContain('toIso');
     expect(runbook).toContain('dryRun');
     expect(runbook).toContain('maxRetries');
+    expect(runbook).toContain('totalSegments');
+    expect(runbook).toContain('segmentIndex');
+    expect(runbook).toContain('maxScanPages');
+    expect(runbook).toContain('scanPageSize');
     expect(runbook).toContain('scripts/cheer-stats-backfill.sh');
     expect(runbook).toContain('scripts/cheer-stats-backfill.ps1');
 
@@ -231,12 +235,20 @@ describe('cheer stabilization guards', () => {
     expect(sh).toContain('--dry-run');
     expect(sh).toContain('--from');
     expect(sh).toContain('--to');
+    expect(sh).toContain('--total-segments');
+    expect(sh).toContain('--segment-index');
+    expect(sh).toContain('--max-scan-pages');
+    expect(sh).toContain('--scan-page-size');
 
     const ps1 = read('scripts/cheer-stats-backfill.ps1');
     expect(ps1).toContain('$Stage');
     expect(ps1).toContain('$DryRun');
     expect(ps1).toContain('$FromIso');
     expect(ps1).toContain('$ToIso');
+    expect(ps1).toContain('$TotalSegments');
+    expect(ps1).toContain('$SegmentIndex');
+    expect(ps1).toContain('$MaxScanPages');
+    expect(ps1).toContain('$ScanPageSize');
   });
 
   test('stats materializer scans cheers and writes bucketed summaries', () => {
@@ -254,6 +266,13 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('dryRun');
     expect(src).toContain('fromIso');
     expect(src).toContain('toIso');
+    expect(src).toContain('resolveScanOptions');
+    expect(src).toContain('totalSegments');
+    expect(src).toContain('segmentIndex');
+    expect(src).toContain('maxScanPages');
+    expect(src).toContain('scanPageSize');
+    expect(src).toContain('scannedPages');
+    expect(src).toContain('truncated');
     expect(src).toContain('Cheer stats materializer retrying unprocessed items');
   });
 

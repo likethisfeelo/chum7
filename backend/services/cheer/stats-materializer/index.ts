@@ -32,11 +32,24 @@ type MaterializerEvent = {
   toIso?: string;
   dryRun?: boolean;
   maxRetries?: number;
+  totalSegments?: number;
+  segmentIndex?: number;
+  maxScanPages?: number;
+  scanPageSize?: number;
+};
+
+type ScanOptions = {
+  totalSegments?: number;
+  segment?: number;
+  maxScanPages?: number;
+  scanPageSize?: number;
 };
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const DEFAULT_MAX_RETRIES = 5;
+const DEFAULT_SCAN_PAGE_SIZE = 500;
+const MAX_SCAN_PAGE_SIZE = 1000;
 
 function createEmptyStats(): StatsRecord {
   return {
@@ -152,21 +165,70 @@ function resolveMaxRetries(event: MaterializerEvent | undefined): number {
   return Math.floor(candidate);
 }
 
-async function scanAllCheers(): Promise<CheerItem[]> {
+function resolveScanOptions(event: MaterializerEvent | undefined): ScanOptions {
+  const parsedTotalSegments = Number(event?.totalSegments);
+  const parsedSegmentIndex = Number(event?.segmentIndex);
+  const parsedMaxScanPages = Number(event?.maxScanPages);
+  const parsedScanPageSize = Number(event?.scanPageSize);
+
+  const hasValidSegmentation =
+    Number.isFinite(parsedTotalSegments)
+    && Number.isFinite(parsedSegmentIndex)
+    && parsedTotalSegments > 0
+    && parsedSegmentIndex >= 0
+    && parsedSegmentIndex < parsedTotalSegments;
+
+  const totalSegments = hasValidSegmentation ? Math.floor(parsedTotalSegments) : undefined;
+  const segment = hasValidSegmentation ? Math.floor(parsedSegmentIndex) : undefined;
+
+  const maxScanPages = Number.isFinite(parsedMaxScanPages) && parsedMaxScanPages > 0
+    ? Math.floor(parsedMaxScanPages)
+    : undefined;
+
+  const scanPageSize = Number.isFinite(parsedScanPageSize) && parsedScanPageSize > 0
+    ? Math.min(MAX_SCAN_PAGE_SIZE, Math.floor(parsedScanPageSize))
+    : DEFAULT_SCAN_PAGE_SIZE;
+
+  return {
+    totalSegments,
+    segment,
+    maxScanPages,
+    scanPageSize
+  };
+}
+
+async function scanAllCheers(options: ScanOptions): Promise<{ items: CheerItem[]; scannedPages: number; truncated: boolean }> {
   const items: CheerItem[] = [];
   let lastEvaluatedKey: Record<string, unknown> | undefined;
+  let scannedPages = 0;
 
   do {
+    if (options.maxScanPages && scannedPages >= options.maxScanPages) {
+      return {
+        items,
+        scannedPages,
+        truncated: true
+      };
+    }
+
     const page = await docClient.send(new ScanCommand({
       TableName: process.env.CHEERS_TABLE!,
-      ExclusiveStartKey: lastEvaluatedKey
+      ExclusiveStartKey: lastEvaluatedKey,
+      Segment: options.segment,
+      TotalSegments: options.totalSegments,
+      Limit: options.scanPageSize
     }));
 
+    scannedPages += 1;
     items.push(...((page.Items || []) as CheerItem[]));
     lastEvaluatedKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
   } while (lastEvaluatedKey);
 
-  return items;
+  return {
+    items,
+    scannedPages,
+    truncated: false
+  };
 }
 
 function buildStatsDocuments(cheers: CheerItem[]): Array<Record<string, unknown>> {
@@ -280,7 +342,7 @@ async function batchWriteStats(items: Array<Record<string, unknown>>, maxRetries
   };
 }
 
-export const handler = async (event?: MaterializerEvent): Promise<{ success: boolean; scanned: number; filtered: number; written: number; failed: number; dryRun: boolean }> => {
+export const handler = async (event?: MaterializerEvent): Promise<{ success: boolean; scanned: number; filtered: number; written: number; failed: number; dryRun: boolean; scannedPages: number; truncated: boolean }> => {
   const startedAt = Date.now();
 
   console.info('Cheer stats materializer started', { event: event || {} });
@@ -288,9 +350,10 @@ export const handler = async (event?: MaterializerEvent): Promise<{ success: boo
   const { fromIso, toIso } = resolveEventRange(event);
   const dryRun = Boolean(event?.dryRun);
   const maxRetries = resolveMaxRetries(event);
+  const scanOptions = resolveScanOptions(event);
 
-  const cheers = await scanAllCheers();
-  const filteredCheers = cheers.filter((item) => isInEventRange(item, fromIso, toIso));
+  const scanResult = await scanAllCheers(scanOptions);
+  const filteredCheers = scanResult.items.filter((item) => isInEventRange(item, fromIso, toIso));
   const docs = buildStatsDocuments(filteredCheers);
 
   let failed = 0;
@@ -301,7 +364,9 @@ export const handler = async (event?: MaterializerEvent): Promise<{ success: boo
 
   const latencyMs = Date.now() - startedAt;
   console.info('Cheer stats materializer finished', {
-    scanned: cheers.length,
+    scanned: scanResult.items.length,
+    scannedPages: scanResult.scannedPages,
+    truncated: scanResult.truncated,
     filtered: filteredCheers.length,
     written: docs.length,
     failed,
@@ -309,12 +374,18 @@ export const handler = async (event?: MaterializerEvent): Promise<{ success: boo
     fromIso: fromIso ?? null,
     toIso: toIso ?? null,
     maxRetries,
+    totalSegments: scanOptions.totalSegments ?? null,
+    segment: scanOptions.segment ?? null,
+    maxScanPages: scanOptions.maxScanPages ?? null,
+    scanPageSize: scanOptions.scanPageSize ?? null,
     latencyMs
   });
 
   return {
     success: failed === 0,
-    scanned: cheers.length,
+    scanned: scanResult.items.length,
+    scannedPages: scanResult.scannedPages,
+    truncated: scanResult.truncated,
     filtered: filteredCheers.length,
     written: docs.length,
     failed,

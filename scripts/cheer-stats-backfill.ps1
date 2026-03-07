@@ -8,7 +8,12 @@ param(
 
   [switch]$DryRun,
 
-  [int]$MaxRetries
+  [int]$MaxRetries,
+
+  [int]$TotalSegments,
+  [int]$SegmentIndex,
+  [int]$MaxScanPages,
+  [int]$ScanPageSize
 )
 
 $functionName = "chme-$Stage-cheer-stats-materializer"
@@ -18,6 +23,10 @@ if ($FromIso) { $payload.fromIso = $FromIso }
 if ($ToIso) { $payload.toIso = $ToIso }
 $payload.dryRun = [bool]$DryRun
 if ($PSBoundParameters.ContainsKey('MaxRetries')) { $payload.maxRetries = $MaxRetries }
+if ($PSBoundParameters.ContainsKey('TotalSegments')) { $payload.totalSegments = $TotalSegments }
+if ($PSBoundParameters.ContainsKey('SegmentIndex')) { $payload.segmentIndex = $SegmentIndex }
+if ($PSBoundParameters.ContainsKey('MaxScanPages')) { $payload.maxScanPages = $MaxScanPages }
+if ($PSBoundParameters.ContainsKey('ScanPageSize')) { $payload.scanPageSize = $ScanPageSize }
 
 $payloadJson = $payload | ConvertTo-Json -Compress
 Write-Host "Invoking $functionName with payload: $payloadJson"

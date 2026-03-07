@@ -10,6 +10,10 @@ FROM_ISO=""
 TO_ISO=""
 DRY_RUN="false"
 MAX_RETRIES=""
+TOTAL_SEGMENTS=""
+SEGMENT_INDEX=""
+MAX_SCAN_PAGES=""
+SCAN_PAGE_SIZE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -31,6 +35,22 @@ while [[ $# -gt 0 ]]; do
       ;;
     --max-retries)
       MAX_RETRIES="${2:-}"
+      shift 2
+      ;;
+    --total-segments)
+      TOTAL_SEGMENTS="${2:-}"
+      shift 2
+      ;;
+    --segment-index)
+      SEGMENT_INDEX="${2:-}"
+      shift 2
+      ;;
+    --max-scan-pages)
+      MAX_SCAN_PAGES="${2:-}"
+      shift 2
+      ;;
+    --scan-page-size)
+      SCAN_PAGE_SIZE="${2:-}"
       shift 2
       ;;
     *)
@@ -57,6 +77,14 @@ if "${TO_ISO}":
 payload["dryRun"] = ${DRY_RUN}
 if "${MAX_RETRIES}":
     payload["maxRetries"] = int("${MAX_RETRIES}")
+if "${TOTAL_SEGMENTS}":
+    payload["totalSegments"] = int("${TOTAL_SEGMENTS}")
+if "${SEGMENT_INDEX}":
+    payload["segmentIndex"] = int("${SEGMENT_INDEX}")
+if "${MAX_SCAN_PAGES}":
+    payload["maxScanPages"] = int("${MAX_SCAN_PAGES}")
+if "${SCAN_PAGE_SIZE}":
+    payload["scanPageSize"] = int("${SCAN_PAGE_SIZE}")
 print(json.dumps(payload))
 PY
 )
