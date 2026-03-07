@@ -9,7 +9,7 @@ import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { EventBus, Rule, Schedule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
-import { Alarm, ComparisonOperator, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
+import { Alarm, ComparisonOperator, Dashboard, GraphWidget, Metric, SingleValueWidget, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
 import { FilterPattern, LogGroup, MetricFilter } from 'aws-cdk-lib/aws-logs';
 import * as path from 'path';
 
@@ -58,26 +58,32 @@ export class CheerStack extends Stack {
     };
 
     const createErrorAlarm = (id: string, fnName: string, errorToken: string) => {
-      const logGroup = LogGroup.fromLogGroupName(this, `${id}LogGroup`, `/aws/lambda/${fnName}`);
-
-      const metricFilter = new MetricFilter(this, `${id}MetricFilter`, {
-        logGroup,
-        filterPattern: FilterPattern.literal(errorToken),
-        metricNamespace: `chme-${stage}-cheer`,
-        metricName: `${id}Count`,
-        metricValue: '1'
-      });
+      const metric = createLogCountMetric(id, fnName, errorToken);
 
       new Alarm(this, `${id}Alarm`, {
-        metric: metricFilter.metric({
-          statistic: 'Sum',
-          period: Duration.minutes(5)
-        }),
+        metric,
         threshold: 1,
         evaluationPeriods: 1,
         comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         treatMissingData: TreatMissingData.NOT_BREACHING,
         alarmDescription: `${id} error detected for ${fnName}`
+      });
+    };
+
+
+    const createLogCountMetric = (id: string, fnName: string, token: string) => {
+      const logGroup = LogGroup.fromLogGroupName(this, `${id}LogGroup`, `/aws/lambda/${fnName}`);
+      const metricFilter = new MetricFilter(this, `${id}MetricFilter`, {
+        logGroup,
+        filterPattern: FilterPattern.literal(token),
+        metricNamespace: `chme-${stage}-cheer`,
+        metricName: `${id}Count`,
+        metricValue: '1'
+      });
+
+      return metricFilter.metric({
+        statistic: 'Sum',
+        period: Duration.minutes(5)
       });
     };
 
@@ -289,5 +295,64 @@ export class CheerStack extends Stack {
     createErrorAlarm('CheerReplyError', cheerReplyFn.functionName, 'Reply cheer error');
     createErrorAlarm('CheerReactError', cheerReactFn.functionName, 'React cheer error');
     createErrorAlarm('CheerStatsError', cheerStatsFn.functionName, 'Get cheer stats error');
+
+    const replyErrorMetric = new Metric({
+      namespace: `chme-${stage}-cheer`,
+      metricName: 'CheerReplyErrorCount',
+      statistic: 'Sum',
+      period: Duration.minutes(5)
+    });
+    const reactErrorMetric = new Metric({
+      namespace: `chme-${stage}-cheer`,
+      metricName: 'CheerReactErrorCount',
+      statistic: 'Sum',
+      period: Duration.minutes(5)
+    });
+    const statsErrorMetric = new Metric({
+      namespace: `chme-${stage}-cheer`,
+      metricName: 'CheerStatsErrorCount',
+      statistic: 'Sum',
+      period: Duration.minutes(5)
+    });
+
+    const statsBucketedMetric = createLogCountMetric('CheerStatsBucketedSource', cheerStatsFn.functionName, "source: 'bucketed'");
+    const statsRealtimeFallbackMetric = createLogCountMetric('CheerStatsRealtimeFallbackSource', cheerStatsFn.functionName, "source: 'realtime_fallback'");
+
+    const cheerDashboard = new Dashboard(this, 'CheerOpsDashboard', {
+      dashboardName: `chme-${stage}-cheer-ops`
+    });
+
+    cheerDashboard.addWidgets(
+      new SingleValueWidget({
+        title: 'Cheer Error Count (5m)',
+        metrics: [replyErrorMetric, reactErrorMetric, statsErrorMetric],
+        width: 8
+      }),
+      new GraphWidget({
+        title: 'Cheer Handler Latency p95',
+        left: [
+          cheerReplyFn.metricDuration({ statistic: 'p95', period: Duration.minutes(5) }),
+          cheerReactFn.metricDuration({ statistic: 'p95', period: Duration.minutes(5) }),
+          cheerStatsFn.metricDuration({ statistic: 'p95', period: Duration.minutes(5) })
+        ],
+        width: 16
+      })
+    );
+
+    cheerDashboard.addWidgets(
+      new GraphWidget({
+        title: 'Cheer Stats Source Mix (5m)',
+        left: [statsBucketedMetric, statsRealtimeFallbackMetric],
+        width: 12
+      }),
+      new GraphWidget({
+        title: 'Materializer Invocations/Errors',
+        left: [
+          statsMaterializerFn.metricInvocations({ period: Duration.minutes(5) }),
+          statsMaterializerFn.metricErrors({ period: Duration.minutes(5) })
+        ],
+        width: 12
+      })
+    );
   }
 }

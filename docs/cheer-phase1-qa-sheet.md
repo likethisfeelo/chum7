@@ -50,6 +50,7 @@
 
 ## 4. 운영 체크
 - [x] CloudWatch에서 `Reply cheer error`, `React cheer error`, `Get cheer stats error` 알림 규칙 등록(베이스라인)
-- [ ] 구조화 로그 키(`path`, `userId`, `cheerId/reactionType`, `period/challengeId`, `latencyMs`) 대시보드 매핑
-- [ ] 응답 지연 p95 모니터링(초기 기준선 수립)
+- [x] 구조화 로그 키(`path`, `userId`, `cheerId/reactionType`, `period/challengeId`, `latencyMs`) 대시보드 매핑
+- [x] 응답 지연 p95 모니터링(초기 기준선 수립)
+- [x] Cheer Ops Dashboard 위젯 생성(에러 카운트, Handler latency p95, Stats source mix, Materializer invocations/errors)
 - [ ] 배포 직후 1시간/24시간 오류율 추적

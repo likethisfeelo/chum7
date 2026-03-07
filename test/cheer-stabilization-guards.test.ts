@@ -180,6 +180,15 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('Reply cheer error');
     expect(stack).toContain('React cheer error');
     expect(stack).toContain('Get cheer stats error');
+    expect(stack).toContain('CheerOpsDashboard');
+    expect(stack).toContain('Dashboard');
+    expect(stack).toContain('Cheer Handler Latency p95');
+    expect(stack).toContain('Cheer Stats Source Mix (5m)');
+    expect(stack).toContain('Materializer Invocations/Errors');
+    expect(stack).toContain('CheerStatsBucketedSource');
+    expect(stack).toContain('CheerStatsRealtimeFallbackSource');
+    expect(stack).toContain("source: 'bucketed'");
+    expect(stack).toContain("source: 'realtime_fallback'");
   });
 
   test('stats handler supports period/day/week/month/challenge filters', () => {
