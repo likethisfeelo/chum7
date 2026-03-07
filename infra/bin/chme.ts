@@ -102,6 +102,8 @@ new AdminStack(app, `chme-${stage}-admin`, {
   apiGateway: apiStack.apiGateway,
   authorizer: apiStack.cognitoAuthorizer,
   usersTable: coreStack.usersTable,
+  cheersTable: coreStack.cheersTable,
+  cheerDeadLettersTable: coreStack.cheerDeadLettersTable,
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
   questSubmissionsTable: coreStack.questSubmissionsTable,
