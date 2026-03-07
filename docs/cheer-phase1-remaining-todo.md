@@ -18,6 +18,7 @@
 - CloudWatch 운영 대시보드 1차: 에러카운트/latency p95/source mix/materializer invocations·errors 위젯
 - CloudWatch 운영 대시보드 2차: reply/react/stats 요청·성공·에러유형(429/5xx) 분리 위젯
 - CloudWatch 운영 대시보드 3차: stage별 공통 위젯 템플릿 함수(buildCheerOpsWidgetRows) 적용
+- CloudWatch 운영 대시보드 4차: 위젯 템플릿 외부 모듈(`infra/stacks/observability/cheer-dashboard-widgets.ts`) 분리
 - CheerStats 운영 런북/백필 스크립트 표준화(`scripts/cheer-stats-backfill.*`, runbook 문서)
 - `period=challenge` 검증 강화: challenge 존재 + 참여자 접근 검증
 - 투데이 페이지 UX 확장: 리액션/답장 UI + 기간 필터 통계 카드
@@ -26,8 +27,8 @@
 
 ### P0 (바로 다음)
 1. 레이트 리밋 5차(분산 Lua·Redis/멀티리전 옵션 검토)
-2. 대시보드 위젯 라이브러리 외부 모듈화(스택 간 재사용)
-3. materializer 워크플로우 운영자동화(실패 세그먼트 재실행/알림 연동)
+2. materializer 워크플로우 운영자동화(실패 세그먼트 재실행/알림 연동)
+3. 대시보드 위젯 카탈로그 문서화(서비스별 공통 규칙 정리)
 
 ### P1 (이번 스프린트 내)
 1. 프론트에서 period 입력 UX 개선(week picker, month picker)

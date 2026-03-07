@@ -183,7 +183,6 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('addRetry');
     expect(stack).toContain('CheerStatsMaterializerOrchestratorFailedAlarm');
     expect(stack).toContain('materializerStateMachine.metricFailed');
-    expect(stack).toContain('Materializer Orchestrator (started/succeeded/failed)');
     expect(stack).toContain('RuleTargetInput.fromObject');
     expect(stack).toContain('segmentIndex');
     expect(stack).toContain('totalSegments');
@@ -198,12 +197,9 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('React cheer error');
     expect(stack).toContain('Get cheer stats error');
     expect(stack).toContain('CheerOpsDashboard');
+    expect(stack).toContain('Dashboard');
     expect(stack).toContain('buildCheerOpsWidgetRows');
     expect(stack).toContain('dashboardRows.forEach');
-    expect(stack).toContain('Dashboard');
-    expect(stack).toContain('Cheer Handler Latency p95');
-    expect(stack).toContain('Cheer Stats Source Mix (5m)');
-    expect(stack).toContain('Materializer Invocations/Errors');
     expect(stack).toContain('CheerStatsBucketedSource');
     expect(stack).toContain('CheerStatsRealtimeFallbackSource');
     expect(stack).toContain('CheerReplyRequest');
@@ -214,11 +210,22 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('CheerReactClientError');
     expect(stack).toContain('CheerStatsRequest');
     expect(stack).toContain('CheerStatsSuccess');
-    expect(stack).toContain('Reply Traffic Split (req/success/429)');
-    expect(stack).toContain('React Traffic Split (req/success/429)');
-    expect(stack).toContain('Stats Traffic Split (req/success/5xx)');
     expect(stack).toContain("source: 'bucketed'");
     expect(stack).toContain("source: 'realtime_fallback'");
+  });
+
+
+  test('dashboard widget template module keeps cheer ops widget definitions', () => {
+    const src = read('infra/stacks/observability/cheer-dashboard-widgets.ts');
+    expect(src).toContain('buildCheerOpsWidgetRows');
+    expect(src).toContain('Cheer Error Count (5m)');
+    expect(src).toContain('Cheer Handler Latency p95');
+    expect(src).toContain('Cheer Stats Source Mix (5m)');
+    expect(src).toContain('Materializer Invocations/Errors');
+    expect(src).toContain('Materializer Orchestrator (started/succeeded/failed)');
+    expect(src).toContain('Reply Traffic Split (req/success/429)');
+    expect(src).toContain('React Traffic Split (req/success/429)');
+    expect(src).toContain('Stats Traffic Split (req/success/5xx)');
   });
 
   test('stats handler supports period/day/week/month/challenge filters', () => {
