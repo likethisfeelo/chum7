@@ -173,6 +173,13 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('CHEER_RATE_LIMITS_TABLE');
     expect(stack).toContain('CheerRateLimitsTableRef');
     expect(stack).toContain('CheerRateLimitsTableRefForReact');
+    expect(stack).toContain('createErrorAlarm');
+    expect(stack).toContain('CheerReplyError');
+    expect(stack).toContain('CheerReactError');
+    expect(stack).toContain('CheerStatsError');
+    expect(stack).toContain('Reply cheer error');
+    expect(stack).toContain('React cheer error');
+    expect(stack).toContain('Get cheer stats error');
   });
 
   test('stats handler supports period/day/week/month/challenge filters', () => {

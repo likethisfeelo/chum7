@@ -8,6 +8,7 @@
 - CheerStats 하이브리드 조회: bucket 우선 + 실시간 fallback(`source` 필드 제공)
 - CheerStats 적재 파이프라인 1차: 배치 materializer Lambda + 1시간 스케줄 트리거
 - materializer 실패 재처리 기반: UnprocessedItems 재시도/백오프 + dry-run + 범위 백필(fromIso/toIso)
+- CloudWatch 에러 알람 베이스라인: reply/react/stats 에러 로그 메트릭 필터+알람
 - CheerStats 운영 런북/백필 스크립트 표준화(`scripts/cheer-stats-backfill.*`, runbook 문서)
 - `period=challenge` 검증 강화: challenge 존재 + 참여자 접근 검증
 - 투데이 페이지 UX 확장: 리액션/답장 UI + 기간 필터 통계 카드
@@ -15,7 +16,7 @@
 ## 남은 TODO
 
 ### P0 (바로 다음)
-1. 인터랙션/통계 구조화 로그 대시보드 연동(요청수, 4xx, 5xx, latency p95)
+1. 인터랙션/통계 대시보드 위젯 구성(요청수, 4xx, 5xx, latency p95, source 비율)
 2. 레이트 리밋 고도화(고정 윈도우 → 토큰 버킷/슬라이딩 윈도우)
 3. materializer 장기운영 튜닝(스케줄 주기/범위 분할/timeout 기준)
 

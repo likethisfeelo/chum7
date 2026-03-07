@@ -9,6 +9,8 @@ import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { EventBus, Rule, Schedule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
+import { Alarm, ComparisonOperator, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
+import { FilterPattern, LogGroup, MetricFilter } from 'aws-cdk-lib/aws-logs';
 import * as path from 'path';
 
 interface CheerStackProps extends StackProps {
@@ -53,6 +55,30 @@ export class CheerStack extends Stack {
         sourceMap: stage === 'dev',
         externalModules: ['@aws-sdk/*'],
       },
+    };
+
+    const createErrorAlarm = (id: string, fnName: string, errorToken: string) => {
+      const logGroup = LogGroup.fromLogGroupName(this, `${id}LogGroup`, `/aws/lambda/${fnName}`);
+
+      const metricFilter = new MetricFilter(this, `${id}MetricFilter`, {
+        logGroup,
+        filterPattern: FilterPattern.literal(errorToken),
+        metricNamespace: `chme-${stage}-cheer`,
+        metricName: `${id}Count`,
+        metricValue: '1'
+      });
+
+      new Alarm(this, `${id}Alarm`, {
+        metric: metricFilter.metric({
+          statistic: 'Sum',
+          period: Duration.minutes(5)
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: TreatMissingData.NOT_BREACHING,
+        alarmDescription: `${id} error detected for ${fnName}`
+      });
     };
 
     // 1. Send Immediate Cheer
@@ -258,5 +284,10 @@ export class CheerStack extends Stack {
       schedule: Schedule.rate(Duration.hours(1)),
       targets: [new LambdaFunction(statsMaterializerFn)],
     });
+
+    // 11. Observability baseline alarms (reply/react/stats)
+    createErrorAlarm('CheerReplyError', cheerReplyFn.functionName, 'Reply cheer error');
+    createErrorAlarm('CheerReactError', cheerReactFn.functionName, 'React cheer error');
+    createErrorAlarm('CheerStatsError', cheerStatsFn.functionName, 'Get cheer stats error');
   }
 }
