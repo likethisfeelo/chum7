@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 
 const dynamoClient = new DynamoDBClient({});
@@ -9,6 +9,8 @@ const snsClient = new SNSClient({});
 
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ALLOWED_REACTIONS = ['❤️', '🔥', '👏', '🙌', '😊'] as const;
+const DEFAULT_REACTION_RATE_LIMIT_PER_MINUTE = 20;
+const DEFAULT_REACTION_RATE_LIMIT_WINDOW_SECONDS = 60;
 type ReactionType = (typeof ALLOWED_REACTIONS)[number];
 
 function response(statusCode: number, body: unknown): APIGatewayProxyResult {
@@ -20,6 +22,52 @@ function response(statusCode: number, body: unknown): APIGatewayProxyResult {
       'Access-Control-Allow-Credentials': true
     },
     body: JSON.stringify(body)
+  };
+}
+
+function resolveRateLimitPerMinute(): number {
+  const raw = Number(process.env.CHEER_REACTION_RATE_LIMIT_PER_MINUTE ?? DEFAULT_REACTION_RATE_LIMIT_PER_MINUTE);
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return DEFAULT_REACTION_RATE_LIMIT_PER_MINUTE;
+  }
+
+  return Math.floor(raw);
+}
+
+function resolveRateLimitWindowSeconds(): number {
+  const raw = Number(process.env.CHEER_REACTION_RATE_LIMIT_WINDOW_SECONDS ?? DEFAULT_REACTION_RATE_LIMIT_WINDOW_SECONDS);
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return DEFAULT_REACTION_RATE_LIMIT_WINDOW_SECONDS;
+  }
+
+  return Math.floor(raw);
+}
+
+async function checkReactionRateLimit(receiverId: string): Promise<{ allowed: boolean; limit: number; current: number; windowSeconds: number }> {
+  const limit = resolveRateLimitPerMinute();
+  const windowSeconds = resolveRateLimitWindowSeconds();
+  const threshold = new Date(Date.now() - (windowSeconds * 1000)).toISOString();
+
+  const query = await docClient.send(new QueryCommand({
+    TableName: process.env.CHEERS_TABLE!,
+    IndexName: 'receiverId-index',
+    KeyConditionExpression: 'receiverId = :receiverId',
+    ExpressionAttributeValues: {
+      ':receiverId': receiverId
+    },
+    ScanIndexForward: false,
+    Limit: 100
+  }));
+
+  const current = (query.Items || []).filter((item: any) =>
+    typeof item.reactedAt === 'string' && item.reactedAt >= threshold
+  ).length;
+
+  return {
+    allowed: current < limit,
+    limit,
+    current,
+    windowSeconds
   };
 }
 
@@ -73,6 +121,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     if (!reactionType) {
       return response(400, { error: 'INVALID_REACTION_TYPE', message: `reactionType은 ${ALLOWED_REACTIONS.join(', ')} 중 하나여야 합니다` });
+    }
+
+    const rateLimit = await checkReactionRateLimit(userId);
+    if (!rateLimit.allowed) {
+      return response(429, {
+        error: 'REACTION_RATE_LIMIT_EXCEEDED',
+        message: '짧은 시간 내 리액션 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요',
+        limit: rateLimit.limit,
+        current: rateLimit.current,
+        windowSeconds: rateLimit.windowSeconds
+      });
     }
 
     const found = await docClient.send(new GetCommand({

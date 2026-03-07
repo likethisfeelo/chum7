@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 
 const dynamoClient = new DynamoDBClient({});
@@ -8,6 +8,8 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const snsClient = new SNSClient({});
 
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const DEFAULT_REPLY_RATE_LIMIT_PER_MINUTE = 10;
+const DEFAULT_REPLY_RATE_LIMIT_WINDOW_SECONDS = 60;
 
 function response(statusCode: number, body: unknown): APIGatewayProxyResult {
   return {
@@ -21,6 +23,53 @@ function response(statusCode: number, body: unknown): APIGatewayProxyResult {
   };
 }
 
+function resolveRateLimitPerMinute(): number {
+  const raw = Number(process.env.CHEER_REPLY_RATE_LIMIT_PER_MINUTE ?? DEFAULT_REPLY_RATE_LIMIT_PER_MINUTE);
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return DEFAULT_REPLY_RATE_LIMIT_PER_MINUTE;
+  }
+
+  return Math.floor(raw);
+}
+
+function resolveRateLimitWindowSeconds(): number {
+  const raw = Number(process.env.CHEER_REPLY_RATE_LIMIT_WINDOW_SECONDS ?? DEFAULT_REPLY_RATE_LIMIT_WINDOW_SECONDS);
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return DEFAULT_REPLY_RATE_LIMIT_WINDOW_SECONDS;
+  }
+
+  return Math.floor(raw);
+}
+
+async function checkReplyRateLimit(receiverId: string): Promise<{ allowed: boolean; limit: number; current: number; windowSeconds: number }> {
+  const limit = resolveRateLimitPerMinute();
+  const windowSeconds = resolveRateLimitWindowSeconds();
+  const threshold = new Date(Date.now() - (windowSeconds * 1000)).toISOString();
+
+  const query = await docClient.send(new QueryCommand({
+    TableName: process.env.CHEERS_TABLE!,
+    IndexName: 'receiverId-index',
+    KeyConditionExpression: 'receiverId = :receiverId',
+    ExpressionAttributeValues: {
+      ':receiverId': receiverId
+    },
+    ScanIndexForward: false,
+    Limit: 100
+  }));
+
+  const current = (query.Items || []).filter((item: any) =>
+    typeof item.repliedAt === 'string' && item.repliedAt >= threshold
+  ).length;
+
+  return {
+    allowed: current < limit,
+    limit,
+    current,
+    windowSeconds
+  };
+}
+
+// 발신자에게 답장 알림 발송
 async function sendReplyNotification(senderId: string, message: string): Promise<void> {
   try {
     await snsClient.send(new PublishCommand({
@@ -68,6 +117,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     if (!message || message.length > 200) {
       return response(400, { error: 'INVALID_REPLY_MESSAGE', message: '답장은 1~200자 문자열이어야 합니다' });
+    }
+
+    const rateLimit = await checkReplyRateLimit(userId);
+    if (!rateLimit.allowed) {
+      return response(429, {
+        error: 'REPLY_RATE_LIMIT_EXCEEDED',
+        message: '짧은 시간 내 답장 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요',
+        limit: rateLimit.limit,
+        current: rateLimit.current,
+        windowSeconds: rateLimit.windowSeconds
+      });
     }
 
     const found = await docClient.send(new GetCommand({

@@ -188,6 +188,8 @@ export class CheerStack extends Stack {
       environment: commonEnv,
     });
     cheersTable.grantReadData(cheerStatsFn);
+    challengesTable.grantReadData(cheerStatsFn);
+    userChallengesTable.grantReadData(cheerStatsFn);
     apiGateway.addRoutes({
       path: '/cheers/stats',
       methods: [HttpMethod.GET],

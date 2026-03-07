@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 type CheerItem = {
   cheerId: string;
@@ -121,6 +121,44 @@ async function collectByIndex(indexName: string, keyExpression: string, expressi
   return result;
 }
 
+async function validateChallengeAccess(userId: string, challengeId: string): Promise<{ ok: boolean; statusCode?: number; error?: string; message?: string }> {
+  const challenge = await docClient.send(new GetCommand({
+    TableName: process.env.CHALLENGES_TABLE!,
+    Key: { challengeId }
+  }));
+
+  if (!challenge.Item) {
+    return {
+      ok: false,
+      statusCode: 404,
+      error: 'CHALLENGE_NOT_FOUND',
+      message: '챌린지를 찾을 수 없습니다'
+    };
+  }
+
+  const participants = await docClient.send(new QueryCommand({
+    TableName: process.env.USER_CHALLENGES_TABLE!,
+    IndexName: 'challengeId-index',
+    KeyConditionExpression: 'challengeId = :challengeId',
+    ExpressionAttributeValues: {
+      ':challengeId': challengeId
+    },
+    Limit: 200
+  }));
+
+  const isParticipant = (participants.Items || []).some((item: any) => item.userId === userId);
+  if (!isParticipant) {
+    return {
+      ok: false,
+      statusCode: 403,
+      error: 'CHALLENGE_ACCESS_DENIED',
+      message: '해당 챌린지 통계를 조회할 권한이 없습니다'
+    };
+  }
+
+  return { ok: true };
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string | undefined;
@@ -134,6 +172,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     if (period === 'challenge' && !challengeId) {
       return response(400, { error: 'MISSING_CHALLENGE_ID', message: 'period=challenge 인 경우 challengeId가 필요합니다' });
+    }
+
+    if (period === 'challenge' && challengeId) {
+      const challengeValidation = await validateChallengeAccess(userId, challengeId);
+      if (!challengeValidation.ok) {
+        return response(challengeValidation.statusCode || 400, {
+          error: challengeValidation.error,
+          message: challengeValidation.message
+        });
+      }
     }
 
     const { start, end, label } = toIsoRange(period, params.day?.trim(), params.week?.trim(), params.month?.trim());

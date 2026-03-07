@@ -2,16 +2,17 @@
 
 ## 완료 범위(이번 반영)
 - 공개 인터랙션 1차: `POST /cheers/{cheerId}/reply`, `POST /cheers/{cheerId}/reaction`
+- 인터랙션 레이트 리밋 1차: reply/reaction 분당 요청 제한(환경변수 기반)
 - 통계 API 확장: `GET /cheers/stats` with `period=all|day|week|month|challenge`
+- `period=challenge` 검증 강화: challenge 존재 + 참여자 접근 검증
 - 투데이 페이지 UX 확장: 리액션/답장 UI + 기간 필터 통계 카드
 
 ## 남은 TODO
 
 ### P0 (바로 다음)
-1. 리액션/답장에 대한 레이트 리밋 및 abuse 방지 정책 추가
-2. `period=challenge` 검증 시 challengeId 존재/권한 검증 강화
-3. 통계 API 대량 사용자 대응을 위한 기간 쿼리 최적화(집계 테이블 연동)
-4. 인터랙션 이벤트(`cheer_replied`, `cheer_reacted`) 운영 로그 대시보드 추가
+1. 통계 API 대량 사용자 대응을 위한 기간 쿼리 최적화(집계 테이블 연동)
+2. 인터랙션 이벤트(`cheer_replied`, `cheer_reacted`) 운영 로그 대시보드 추가
+3. 레이트 리밋 우회/분산 요청 대응(고정 윈도우 → 토큰 버킷 등)
 
 ### P1 (이번 스프린트 내)
 1. 프론트에서 period 입력 UX 개선(week picker, month picker)

@@ -7,6 +7,7 @@
 - [ ] 비로그인 요청 시 401
 - [ ] 타인 cheerId로 요청 시 403
 - [ ] 동일 cheer 2회 답장 시 409(ALREADY_REPLIED)
+- [ ] 단시간 다건 요청 시 429(REPLY_RATE_LIMIT_EXCEEDED)
 - [ ] 잘못된 UUID 형식 400
 - [ ] malformed JSON 400
 
@@ -15,6 +16,7 @@
 - [ ] 비허용 reactionType 400
 - [ ] 타인 cheerId로 요청 시 403
 - [ ] 동일 cheer 2회 리액션 시 409(ALREADY_REACTED)
+- [ ] 단시간 다건 요청 시 429(REACTION_RATE_LIMIT_EXCEEDED)
 
 ### 1-3) Stats API
 - [ ] `GET /cheers/stats?period=all` 성공
@@ -22,6 +24,8 @@
 - [ ] `period=week&week=YYYY-Www` 성공/기본값 동작
 - [ ] `period=month&month=YYYY-MM` 성공/기본값 동작
 - [ ] `period=challenge` + challengeId 누락 시 400
+- [ ] 존재하지 않는 challengeId 요청 시 404
+- [ ] 비참여자 challengeId 요청 시 403
 - [ ] 응답에 sent/received/thanked/replied/reaction count 포함
 
 ## 2. 프론트 QA (Today)

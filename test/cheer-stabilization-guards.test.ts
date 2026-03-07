@@ -163,6 +163,8 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('CheerStatsFn');
     expect(stack).toContain('CheerReplyFn');
     expect(stack).toContain('CheerReactFn');
+    expect(stack).toContain('challengesTable.grantReadData(cheerStatsFn)');
+    expect(stack).toContain('userChallengesTable.grantReadData(cheerStatsFn)');
   });
 
   test('stats handler supports period/day/week/month/challenge filters', () => {
@@ -174,6 +176,11 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain("collectByIndex('receiverId-index'");
     expect(src).toContain('repliedCount');
     expect(src).toContain('reactionCount');
+    expect(src).toContain('validateChallengeAccess');
+    expect(src).toContain('CHALLENGE_NOT_FOUND');
+    expect(src).toContain('CHALLENGE_ACCESS_DENIED');
+    expect(src).toContain('TableName: process.env.CHALLENGES_TABLE!');
+    expect(src).toContain('TableName: process.env.USER_CHALLENGES_TABLE!');
   });
 
   test('reply and react handlers enforce receiver-only interaction and idempotency', () => {
@@ -181,11 +188,15 @@ describe('cheer stabilization guards', () => {
     expect(replySrc).toContain('replyMessage');
     expect(replySrc).toContain('attribute_not_exists(replyMessage) AND receiverId = :receiverId');
     expect(replySrc).toContain('ALREADY_REPLIED');
+    expect(replySrc).toContain('checkReplyRateLimit');
+    expect(replySrc).toContain('REPLY_RATE_LIMIT_EXCEEDED');
 
     const reactSrc = read('backend/services/cheer/react/index.ts');
     expect(reactSrc).toContain('ALLOWED_REACTIONS');
     expect(reactSrc).toContain('attribute_not_exists(reactionType) AND receiverId = :receiverId');
     expect(reactSrc).toContain('ALREADY_REACTED');
+    expect(reactSrc).toContain('checkReactionRateLimit');
+    expect(reactSrc).toContain('REACTION_RATE_LIMIT_EXCEEDED');
   });
 
 });
