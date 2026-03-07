@@ -32,8 +32,10 @@ const CHEER_API_V2_SUNSET_AT = resolveCheerApiV2SunsetAt();
 
 const LEGACY_THANK_WARNING_HEADER = '299 - Legacy cheer thank contract is deprecated; use /cheers/{cheerId}/thank';
 const THANK_ROUTE_MODE_HEADER = 'X-Cheer-Thank-Route-Mode';
+const CONDITIONAL_CHECK_FAILED_EXCEPTION = 'ConditionalCheckFailedException';
 
 type ThankRouteMode = 'canonical' | 'legacy';
+type JsonObject = Record<string, any>;
 
 function withThankRouteMode(headers: Record<string, string>, routeMode: ThankRouteMode): Record<string, string> {
   return {
@@ -51,7 +53,7 @@ function buildThankMigrationHeaders(): Record<string, string> {
   };
 }
 
-function response(statusCode: number, body: any, extraHeaders: Record<string, string> = {}): APIGatewayProxyResult {
+function response(statusCode: number, body: unknown, extraHeaders: Record<string, string> = {}): APIGatewayProxyResult {
   return {
     statusCode,
     headers: {
@@ -62,6 +64,63 @@ function response(statusCode: number, body: any, extraHeaders: Record<string, st
     },
     body: JSON.stringify(body)
   };
+}
+
+function canonicalRouteResponse(statusCode: number, body: JsonObject): APIGatewayProxyResult {
+  return response(statusCode, body, withThankRouteMode({}, 'canonical'));
+}
+
+
+
+function isUuidV4(value: string): boolean {
+  return UUID_V4_REGEX.test(value);
+}
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isLegacyBodyRouteAttempt(cheerIdFromPathRaw: unknown, hasBodyCheerIdField: boolean): boolean {
+  return cheerIdFromPathRaw === undefined && hasBodyCheerIdField;
+}
+
+function hasOwnKey(target: JsonObject, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(target, key);
+}
+
+function hasDefinedValue(value: unknown): boolean {
+  return value !== undefined;
+}
+
+function shouldWarnLegacyRoute(contractEnabled: boolean, legacyBodyRouteAttempted: boolean): boolean {
+  return !contractEnabled && legacyBodyRouteAttempted;
+}
+
+function shouldBlockLegacyRoute(contractEnabled: boolean, hasPathCheerIdValue: boolean): boolean {
+  return contractEnabled && !hasPathCheerIdValue;
+}
+
+function resolveThankRouteMode(legacyBodyRouteAttempted: boolean): ThankRouteMode {
+  return legacyBodyRouteAttempted ? 'legacy' : 'canonical';
+}
+
+function normalizeString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function hasErrorName(value: unknown, expectedName: string): boolean {
+  return isJsonObject(value)
+    && 'name' in value
+    && value.name === expectedName;
+}
+
+function isConditionalCheckFailed(error: unknown): boolean {
+  return hasErrorName(error, CONDITIONAL_CHECK_FAILED_EXCEPTION);
 }
 
 // 발신자에게 감사 알림 발송
@@ -87,89 +146,105 @@ async function sendThankNotification(senderId: string, receiverIcon: string): Pr
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const requestUserId = event.requestContext.authorizer?.jwt?.claims?.sub as string | undefined;
   let resolvedCheerId: string | undefined;
+  let resolvedThankRouteMode: ThankRouteMode = 'canonical';
+  const resolvedRouteModeHeaders = () => withThankRouteMode({}, resolvedThankRouteMode);
+  const resolvedRouteModeResponse = (statusCode: number, body: JsonObject) =>
+    response(statusCode, body, resolvedRouteModeHeaders());
 
   try {
-    const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
+    const userId = requestUserId;
 
-    let body: any = {};
+    let body: JsonObject = {};
     if (event.body) {
       try {
-        body = JSON.parse(event.body);
+        const parsedBody: unknown = JSON.parse(event.body);
+
+        if (!isJsonObject(parsedBody)) {
+          return canonicalRouteResponse(400, {
+            error: 'INVALID_JSON_BODY',
+            message: '요청 본문은 JSON 객체여야 합니다'
+          });
+        }
+
+        body = parsedBody;
       } catch {
-        return response(400, {
+        return canonicalRouteResponse(400, {
           error: 'INVALID_JSON_BODY',
           message: '요청 본문 JSON 형식이 올바르지 않습니다'
-        });
-      }
-
-      if (body === null || typeof body !== 'object' || Array.isArray(body)) {
-        return response(400, {
-          error: 'INVALID_JSON_BODY',
-          message: '요청 본문은 JSON 객체여야 합니다'
         });
       }
     }
 
     const cheerIdFromPathRaw = event.pathParameters?.cheerId;
-    const hasBodyCheerIdField = Object.prototype.hasOwnProperty.call(body, 'cheerId');
+    const hasBodyCheerIdField = hasOwnKey(body, 'cheerId');
     const cheerIdFromBodyRaw = hasBodyCheerIdField ? body.cheerId : undefined;
-    const hasBodyCheerIdValue = cheerIdFromBodyRaw !== undefined;
+    const hasBodyCheerIdValue = hasDefinedValue(cheerIdFromBodyRaw);
+    const normalizedPathCheerId = normalizeString(cheerIdFromPathRaw);
+    const normalizedBodyCheerId = normalizeString(cheerIdFromBodyRaw);
+    const hasPathCheerIdValue = hasDefinedValue(normalizedPathCheerId);
 
-    if (cheerIdFromPathRaw !== undefined && (typeof cheerIdFromPathRaw !== 'string' || !cheerIdFromPathRaw.trim())) {
-      return response(400, {
+    if (cheerIdFromPathRaw !== undefined && !normalizedPathCheerId) {
+      return canonicalRouteResponse(400, {
         error: 'INVALID_CHEER_ID',
         message: '경로 cheerId는 비어있지 않은 문자열이어야 합니다'
       });
     }
 
-    const legacyBodyRouteAttempted = cheerIdFromPathRaw === undefined && hasBodyCheerIdField;
-    const thankRouteMode: ThankRouteMode = legacyBodyRouteAttempted ? 'legacy' : 'canonical';
+    const legacyBodyRouteAttempted = isLegacyBodyRouteAttempt(cheerIdFromPathRaw, hasBodyCheerIdField);
+    const thankRouteMode = resolveThankRouteMode(legacyBodyRouteAttempted);
+    resolvedThankRouteMode = thankRouteMode;
     const migrationHeaders = legacyBodyRouteAttempted
       ? withThankRouteMode(buildThankMigrationHeaders(), thankRouteMode)
       : withThankRouteMode({}, thankRouteMode);
     const legacyAwareBadRequest = (body: Record<string, string>) => response(400, body, migrationHeaders);
+    const routeAwareResponse = (statusCode: number, body: JsonObject) =>
+      response(statusCode, body, withThankRouteMode({}, thankRouteMode));
+    const blockedLegacyResponse = () => response(400, {
+      error: 'LEGACY_THANK_ROUTE_DISABLED',
+      message: '신규 감사 API 경로(/cheers/{cheerId}/thank)를 사용해 주세요'
+    }, withThankRouteMode(buildThankMigrationHeaders(), 'legacy'));
 
-    if (cheerIdFromBodyRaw !== undefined && (typeof cheerIdFromBodyRaw !== 'string' || !cheerIdFromBodyRaw.trim())) {
+    if (cheerIdFromBodyRaw !== undefined && !normalizedBodyCheerId) {
       return legacyAwareBadRequest({
         error: 'INVALID_CHEER_ID',
         message: 'body.cheerId는 비어있지 않은 문자열이어야 합니다'
       });
     }
 
-    const cheerIdFromPath = typeof cheerIdFromPathRaw === 'string' ? cheerIdFromPathRaw.trim() : undefined;
-    const cheerIdFromBody = typeof cheerIdFromBodyRaw === 'string' ? cheerIdFromBodyRaw.trim() : undefined;
+    const cheerIdFromPath = normalizedPathCheerId;
+    const cheerIdFromBody = normalizedBodyCheerId;
 
-    if (!CHEER_API_V2_CONTRACT && legacyBodyRouteAttempted) {
+    if (shouldWarnLegacyRoute(CHEER_API_V2_CONTRACT, legacyBodyRouteAttempted)) {
       console.warn('legacy thank route is deprecated; migrate to /cheers/{cheerId}/thank', {
         userId,
+        thankRouteMode,
         hasBodyCheerIdField,
         hasBodyCheerIdValue
       });
     }
 
-    if (CHEER_API_V2_CONTRACT && !cheerIdFromPath) {
+    if (shouldBlockLegacyRoute(CHEER_API_V2_CONTRACT, hasPathCheerIdValue)) {
       console.warn('Blocked legacy thank request because CHEER_API_V2_CONTRACT is enabled', {
         userId,
-        hasPathCheerId: !!cheerIdFromPath,
+        thankRouteMode,
+        hasPathCheerId: hasPathCheerIdValue,
         hasBodyCheerId: hasBodyCheerIdField,
         hasBodyCheerIdValue
       });
 
-      return response(400, {
-        error: 'LEGACY_THANK_ROUTE_DISABLED',
-        message: '신규 감사 API 경로(/cheers/{cheerId}/thank)를 사용해 주세요'
-      }, withThankRouteMode(buildThankMigrationHeaders(), 'legacy'));
+      return blockedLegacyResponse();
     }
 
-    if (cheerIdFromPath && !UUID_V4_REGEX.test(cheerIdFromPath)) {
-      return response(400, {
+    if (cheerIdFromPath && !isUuidV4(cheerIdFromPath)) {
+      return routeAwareResponse(400, {
         error: 'INVALID_CHEER_ID_FORMAT',
         message: '경로 cheerId 형식이 올바르지 않습니다'
       });
     }
 
-    if (cheerIdFromBody && !UUID_V4_REGEX.test(cheerIdFromBody)) {
+    if (cheerIdFromBody && !isUuidV4(cheerIdFromBody)) {
       return legacyAwareBadRequest({
         error: 'INVALID_CHEER_ID_FORMAT',
         message: 'body.cheerId 형식이 올바르지 않습니다'
@@ -187,7 +262,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     resolvedCheerId = cheerId;
 
     if (!userId) {
-      return response(401, {
+      return routeAwareResponse(401, {
         error: 'UNAUTHORIZED',
         message: '인증이 필요합니다'
       });
@@ -207,7 +282,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
 
     if (!cheerResult.Item) {
-      return response(404, {
+      return routeAwareResponse(404, {
         error: 'CHEER_NOT_FOUND',
         message: '응원을 찾을 수 없습니다'
       });
@@ -217,7 +292,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // 2. 권한 확인 (수신자만 감사 가능)
     if (cheer.receiverId !== userId) {
-      return response(403, {
+      return routeAwareResponse(403, {
         error: 'FORBIDDEN',
         message: '본인이 받은 응원에만 감사를 표할 수 있습니다'
       });
@@ -225,7 +300,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // 3. 이미 감사했는지 확인
     if (cheer.isThanked) {
-      return response(409, {
+      return routeAwareResponse(409, {
         error: 'ALREADY_THANKED',
         message: '이미 감사를 표한 응원입니다'
       });
@@ -255,10 +330,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       message: '감사를 전달했어요!'
     }, migrationHeaders);
 
-  } catch (error: any) {
-    console.error('Thank cheer error:', error);
+  } catch (error: unknown) {
+    console.error('Thank cheer error:', {
+      error,
+      resolvedCheerId,
+      resolvedThankRouteMode
+    });
 
-    if (error?.name === 'ConditionalCheckFailedException') {
+    if (isConditionalCheckFailed(error)) {
       if (resolvedCheerId) {
         try {
           const latest = await docClient.send(new GetCommand({
@@ -267,22 +346,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           }));
 
           if (!latest.Item) {
-            return response(404, {
+            return resolvedRouteModeResponse(404, {
               error: 'CHEER_NOT_FOUND',
               message: '응원을 찾을 수 없습니다'
             });
           }
 
-          const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
-          if (latest.Item.receiverId !== userId) {
-            return response(403, {
+          if (latest.Item.receiverId !== requestUserId) {
+            return resolvedRouteModeResponse(403, {
               error: 'FORBIDDEN',
               message: '본인이 받은 응원에만 감사를 표할 수 있습니다'
             });
           }
 
           if (latest.Item.isThanked) {
-            return response(409, {
+            return resolvedRouteModeResponse(409, {
               error: 'ALREADY_THANKED',
               message: '이미 감사를 표한 응원입니다'
             });
@@ -292,13 +370,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         }
       }
 
-      return response(409, {
+      return resolvedRouteModeResponse(409, {
         error: 'ALREADY_THANKED',
         message: '이미 감사를 표한 응원입니다'
       });
     }
 
-    return response(500, {
+    return resolvedRouteModeResponse(500, {
       error: 'INTERNAL_SERVER_ERROR',
       message: '서버 오류가 발생했습니다'
     });
