@@ -117,6 +117,9 @@ export class CheerStack extends Stack {
       cheerReactFnRef: NodejsFunction;
       cheerStatsFnRef: NodejsFunction;
       statsMaterializerFnRef: NodejsFunction;
+      materializerStateMachineStartedMetric: Metric;
+      materializerStateMachineSucceededMetric: Metric;
+      materializerStateMachineFailedMetric: Metric;
     }): Array<Array<GraphWidget | SingleValueWidget>> => {
       return [
         [
@@ -145,9 +148,19 @@ export class CheerStack extends Stack {
             title: 'Materializer Invocations/Errors',
             left: [
               input.statsMaterializerFnRef.metricInvocations({ period: Duration.minutes(5) }),
-              input.statsMaterializerFnRef.metricErrors({ period: Duration.minutes(5) })
+              input.statsMaterializerFnRef.metricErrors({ period: Duration.minutes(5) }),
+              input.materializerStateMachineFailedMetric
             ],
-            width: 12
+            width: 8
+          }),
+          new GraphWidget({
+            title: 'Materializer Orchestrator (started/succeeded/failed)',
+            left: [
+              input.materializerStateMachineStartedMetric,
+              input.materializerStateMachineSucceededMetric,
+              input.materializerStateMachineFailedMetric
+            ],
+            width: 4
           })
         ],
         [
@@ -403,6 +416,19 @@ export class CheerStack extends Stack {
       timeout: Duration.minutes(15)
     });
 
+    const materializerStateMachineFailedMetric = materializerStateMachine.metricFailed({
+      statistic: 'Sum',
+      period: Duration.minutes(5)
+    });
+    new Alarm(this, 'CheerStatsMaterializerOrchestratorFailedAlarm', {
+      metric: materializerStateMachineFailedMetric,
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Cheer stats materializer orchestrator failure detected'
+    });
+
     new Rule(this, 'CheerStatsMaterializerSchedule', {
       schedule: Schedule.rate(Duration.minutes(materializerScheduleMinutes)),
       targets: [
@@ -452,6 +478,15 @@ export class CheerStack extends Stack {
     const statsRequestMetric = createLogCountMetric('CheerStatsRequest', cheerStatsFn.functionName, 'Get cheer stats request received');
     const statsSuccessMetric = createLogCountMetric('CheerStatsSuccess', cheerStatsFn.functionName, 'Get cheer stats success');
 
+    const materializerStateMachineStartedMetric = materializerStateMachine.metricStarted({
+      statistic: 'Sum',
+      period: Duration.minutes(5)
+    });
+    const materializerStateMachineSucceededMetric = materializerStateMachine.metricSucceeded({
+      statistic: 'Sum',
+      period: Duration.minutes(5)
+    });
+
     const cheerDashboard = new Dashboard(this, 'CheerOpsDashboard', {
       dashboardName: `chme-${stage}-cheer-ops`
     });
@@ -473,7 +508,10 @@ export class CheerStack extends Stack {
       cheerReplyFnRef: cheerReplyFn,
       cheerReactFnRef: cheerReactFn,
       cheerStatsFnRef: cheerStatsFn,
-      statsMaterializerFnRef: statsMaterializerFn
+      statsMaterializerFnRef: statsMaterializerFn,
+      materializerStateMachineStartedMetric,
+      materializerStateMachineSucceededMetric,
+      materializerStateMachineFailedMetric
     });
 
     dashboardRows.forEach((row) => cheerDashboard.addWidgets(...row));
