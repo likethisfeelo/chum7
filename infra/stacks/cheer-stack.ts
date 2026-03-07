@@ -41,6 +41,7 @@ export class CheerStack extends Stack {
       CHEER_API_V2_SUNSET_AT: process.env.CHEER_API_V2_SUNSET_AT ?? '2026-06-30T00:00:00.000Z',
       CHEER_STATS_TABLE: process.env.CHEER_STATS_TABLE ?? '',
       CHEER_STATS_MATERIALIZER_MAX_RETRIES: process.env.CHEER_STATS_MATERIALIZER_MAX_RETRIES ?? '5',
+      CHEER_RATE_LIMITS_TABLE: process.env.CHEER_RATE_LIMITS_TABLE ?? '',
     };
 
     const commonProps = {
@@ -209,6 +210,9 @@ export class CheerStack extends Stack {
     });
     cheersTable.grantReadWriteData(cheerReplyFn);
     snsTopic.grantPublish(cheerReplyFn);
+    if (process.env.CHEER_RATE_LIMITS_TABLE) {
+      Table.fromTableName(this, 'CheerRateLimitsTableRef', process.env.CHEER_RATE_LIMITS_TABLE).grantReadWriteData(cheerReplyFn);
+    }
     apiGateway.addRoutes({
       path: '/cheers/{cheerId}/reply',
       methods: [HttpMethod.POST],
@@ -225,6 +229,9 @@ export class CheerStack extends Stack {
     });
     cheersTable.grantReadWriteData(cheerReactFn);
     snsTopic.grantPublish(cheerReactFn);
+    if (process.env.CHEER_RATE_LIMITS_TABLE) {
+      Table.fromTableName(this, 'CheerRateLimitsTableRefForReact', process.env.CHEER_RATE_LIMITS_TABLE).grantReadWriteData(cheerReactFn);
+    }
     apiGateway.addRoutes({
       path: '/cheers/{cheerId}/reaction',
       methods: [HttpMethod.POST],

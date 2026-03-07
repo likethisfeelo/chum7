@@ -8,6 +8,7 @@
 - [ ] 타인 cheerId로 요청 시 403
 - [ ] 동일 cheer 2회 답장 시 409(ALREADY_REPLIED)
 - [ ] 단시간 다건 요청 시 429(REPLY_RATE_LIMIT_EXCEEDED)
+- [ ] atomic counter 모드(`CHEER_RATE_LIMITS_TABLE`)에서 429 동작 확인
 - [ ] 잘못된 UUID 형식 400
 - [ ] malformed JSON 400
 
@@ -17,6 +18,7 @@
 - [ ] 타인 cheerId로 요청 시 403
 - [ ] 동일 cheer 2회 리액션 시 409(ALREADY_REACTED)
 - [ ] 단시간 다건 요청 시 429(REACTION_RATE_LIMIT_EXCEEDED)
+- [ ] fallback 모드(scan)와 결과/임계치 일관성 확인
 
 ### 1-3) Stats API
 - [ ] `GET /cheers/stats?period=all` 성공

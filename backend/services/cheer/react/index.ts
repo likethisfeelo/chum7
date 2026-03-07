@@ -1,6 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { acquireRateLimitSlot } from '../rate-limit';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 
 const dynamoClient = new DynamoDBClient({});
@@ -43,7 +44,7 @@ function resolveRateLimitWindowSeconds(): number {
   return Math.floor(raw);
 }
 
-async function checkReactionRateLimit(receiverId: string): Promise<{ allowed: boolean; limit: number; current: number; windowSeconds: number }> {
+async function checkReactionRateLimitFallback(receiverId: string): Promise<{ allowed: boolean; limit: number; current: number; windowSeconds: number; mode: string }> {
   const limit = resolveRateLimitPerMinute();
   const windowSeconds = resolveRateLimitWindowSeconds();
   const threshold = new Date(Date.now() - (windowSeconds * 1000)).toISOString();
@@ -67,8 +68,29 @@ async function checkReactionRateLimit(receiverId: string): Promise<{ allowed: bo
     allowed: current < limit,
     limit,
     current,
-    windowSeconds
+    windowSeconds,
+    mode: "scan_fallback"
   };
+}
+
+async function checkReactionRateLimit(receiverId: string): Promise<{ allowed: boolean; limit: number; current: number; windowSeconds: number; mode: string }> {
+  const limit = resolveRateLimitPerMinute();
+  const windowSeconds = resolveRateLimitWindowSeconds();
+
+  const atomic = await acquireRateLimitSlot({
+    action: 'reaction',
+    userId: receiverId,
+    limit,
+    windowSeconds,
+    docClient,
+    tableName: process.env.CHEER_RATE_LIMITS_TABLE
+  });
+
+  if (atomic.mode === 'atomic_table') {
+    return atomic;
+  }
+
+  return checkReactionRateLimitFallback(receiverId);
 }
 
 async function sendReactionNotification(senderId: string, reactionType: ReactionType): Promise<void> {
@@ -129,7 +151,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const rateLimit = await checkReactionRateLimit(userId);
     if (!rateLimit.allowed) {
-      console.warn('Cheer reaction rate limit exceeded', { path, userId, ...rateLimit });
+      console.warn('Cheer reaction rate limit exceeded', { path, userId, mode: rateLimit.mode, ...rateLimit });
       return response(429, {
         error: 'REACTION_RATE_LIMIT_EXCEEDED',
         message: '짧은 시간 내 리액션 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요',

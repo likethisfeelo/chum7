@@ -170,6 +170,9 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('CheerStatsMaterializerSchedule');
     expect(stack).toContain('stats-materializer/index.ts');
     expect(stack).toContain('CHEER_STATS_MATERIALIZER_MAX_RETRIES');
+    expect(stack).toContain('CHEER_RATE_LIMITS_TABLE');
+    expect(stack).toContain('CheerRateLimitsTableRef');
+    expect(stack).toContain('CheerRateLimitsTableRefForReact');
   });
 
   test('stats handler supports period/day/week/month/challenge filters', () => {
@@ -238,12 +241,25 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('Cheer stats materializer retrying unprocessed items');
   });
 
+  test('shared rate-limit helper supports atomic table window key strategy', () => {
+    const src = read('backend/services/cheer/rate-limit.ts');
+    expect(src).toContain('acquireRateLimitSlot');
+    expect(src).toContain('rateKey');
+    expect(src).toContain('requestCount < :limit');
+    expect(src).toContain("mode: 'atomic_table'");
+    expect(src).toContain("mode: 'disabled'");
+  });
+
   test('reply and react handlers enforce receiver-only interaction and idempotency', () => {
     const replySrc = read('backend/services/cheer/reply/index.ts');
     expect(replySrc).toContain('replyMessage');
     expect(replySrc).toContain('attribute_not_exists(replyMessage) AND receiverId = :receiverId');
     expect(replySrc).toContain('ALREADY_REPLIED');
     expect(replySrc).toContain('checkReplyRateLimit');
+    expect(replySrc).toContain('checkReplyRateLimitFallback');
+    expect(replySrc).toContain('acquireRateLimitSlot');
+    expect(replySrc).toContain('CHEER_RATE_LIMITS_TABLE');
+    expect(replySrc).toContain('scan_fallback');
     expect(replySrc).toContain('REPLY_RATE_LIMIT_EXCEEDED');
     expect(replySrc).toContain('Cheer reply request received');
     expect(replySrc).toContain('Cheer reply success');
@@ -253,6 +269,10 @@ describe('cheer stabilization guards', () => {
     expect(reactSrc).toContain('attribute_not_exists(reactionType) AND receiverId = :receiverId');
     expect(reactSrc).toContain('ALREADY_REACTED');
     expect(reactSrc).toContain('checkReactionRateLimit');
+    expect(reactSrc).toContain('checkReactionRateLimitFallback');
+    expect(reactSrc).toContain('acquireRateLimitSlot');
+    expect(reactSrc).toContain('CHEER_RATE_LIMITS_TABLE');
+    expect(reactSrc).toContain('scan_fallback');
     expect(reactSrc).toContain('REACTION_RATE_LIMIT_EXCEEDED');
     expect(reactSrc).toContain('Cheer reaction request received');
     expect(reactSrc).toContain('Cheer reaction success');
