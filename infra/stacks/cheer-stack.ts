@@ -9,7 +9,7 @@ import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { EventBus, Rule, RuleTargetInput, Schedule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction, SfnStateMachine, SnsTopic } from 'aws-cdk-lib/aws-events-targets';
-import { Alarm, ComparisonOperator, Dashboard, Metric, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
+import { Alarm, ComparisonOperator, Dashboard, GraphWidget, Metric, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import { FilterPattern, LogGroup, MetricFilter } from 'aws-cdk-lib/aws-logs';
@@ -413,6 +413,28 @@ export class CheerStack extends Stack {
       period: Duration.minutes(5)
     });
 
+
+    const scheduledDeadLetterMetric = createLogCountMetric('CheerScheduledDeadLetter', sendScheduledFn.functionName, 'Cheer moved to dead-letter');
+    const scheduledRaceSkippedMetric = createLogCountMetric('CheerScheduledRaceSkipped', sendScheduledFn.functionName, 'skipped due to concurrent state change');
+
+    new Alarm(this, 'CheerScheduledDeadLetterAlarm', {
+      metric: scheduledDeadLetterMetric,
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Scheduled cheer dead-letter events detected'
+    });
+
+    new Alarm(this, 'CheerScheduledRaceSkippedAlarm', {
+      metric: scheduledRaceSkippedMetric,
+      threshold: 5,
+      evaluationPeriods: 1,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Scheduled cheer concurrent race-skip events detected'
+    });
+
     const statsBucketedMetric = createLogCountMetric('CheerStatsBucketedSource', cheerStatsFn.functionName, "source: 'bucketed'");
     const statsRealtimeFallbackMetric = createLogCountMetric('CheerStatsRealtimeFallbackSource', cheerStatsFn.functionName, "source: 'realtime_fallback'");
 
@@ -464,5 +486,15 @@ export class CheerStack extends Stack {
     });
 
     dashboardRows.forEach((row) => cheerDashboard.addWidgets(...row));
+
+    cheerDashboard.addWidgets(
+      new GraphWidget({
+        title: 'Scheduled Cheer DLQ / Race Skip (5m Sum)',
+        left: [scheduledDeadLetterMetric, scheduledRaceSkippedMetric],
+        width: 24,
+        height: 6,
+      })
+    );
+
   }
 }

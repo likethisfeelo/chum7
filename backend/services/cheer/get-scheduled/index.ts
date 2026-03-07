@@ -18,6 +18,20 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
+function parseNextToken(nextToken?: string | null): Record<string, any> | undefined {
+  if (!nextToken) return undefined;
+  try {
+    return JSON.parse(Buffer.from(nextToken, 'base64').toString('utf-8'));
+  } catch {
+    throw new Error('INVALID_NEXT_TOKEN');
+  }
+}
+
+function toNextToken(lastEvaluatedKey?: Record<string, any>) {
+  if (!lastEvaluatedKey) return null;
+  return Buffer.from(JSON.stringify(lastEvaluatedKey), 'utf-8').toString('base64');
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
@@ -29,7 +43,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    // 1. 내가 보낸 예약 응원 조회 (pending 상태만)
+    const query = event.queryStringParameters || {};
+    const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+
+    let startKey: Record<string, any> | undefined;
+    try {
+      startKey = parseNextToken(query.nextToken);
+    } catch {
+      return response(400, {
+        error: 'INVALID_NEXT_TOKEN',
+        message: 'nextToken 형식이 올바르지 않습니다'
+      });
+    }
+
+    // 내가 보낸 예약 응원 조회 (pending 상태만)
     const sentResult = await docClient.send(new QueryCommand({
       TableName: process.env.CHEERS_TABLE!,
       IndexName: 'senderId-index',
@@ -42,18 +69,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         ':senderId': userId,
         ':scheduled': 'scheduled',
         ':pending': 'pending'
-      }
+      },
+      ScanIndexForward: true,
+      Limit: limit,
+      ExclusiveStartKey: startKey
     }));
 
     const scheduledCheers = sentResult.Items || [];
 
-    // 2. 발송 시간순으로 정렬
-    scheduledCheers.sort((a, b) => 
-      new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime()
-    );
-
-    // 3. 포맷팅
-    const formatted = scheduledCheers.map(cheer => {
+    const formatted = scheduledCheers.map((cheer: Record<string, any>) => {
       const scheduledDate = new Date(cheer.scheduledTime);
       const now = new Date();
       const diff = scheduledDate.getTime() - now.getTime();
@@ -81,7 +105,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       success: true,
       data: {
         scheduled: formatted,
-        total: formatted.length
+        total: formatted.length,
+        nextToken: toNextToken(sentResult.LastEvaluatedKey as Record<string, any> | undefined)
       }
     });
 

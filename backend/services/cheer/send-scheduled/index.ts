@@ -230,6 +230,8 @@ export const handler = async (event: EventBridgeEvent<string, any>) => {
       }
     }
 
+    console.log('Scheduled cheer sender summary', summary);
+
     return {
       statusCode: 200,
       body: JSON.stringify({
