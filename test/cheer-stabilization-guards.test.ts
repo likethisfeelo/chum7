@@ -257,6 +257,19 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain("source: 'realtime_fallback'");
   });
 
+
+  test('widget catalog docs are documented', () => {
+    const catalog = read('docs/cheer-observability-widget-catalog.md');
+    expect(catalog).toContain('Cheer Error Count (5m)');
+    expect(catalog).toContain('Cheer Handler Latency p95');
+    expect(catalog).toContain('Materializer Orchestrator (started/succeeded/failed)');
+    expect(catalog).toContain('Reply Traffic Split (req/success/429)');
+    expect(catalog).toContain('infra/stacks/observability/cheer-dashboard-widgets.ts');
+
+    const runbook = read('docs/cheer-stats-materializer-runbook.md');
+    expect(runbook).toContain('cheer-observability-widget-catalog.md');
+  });
+
   test('materializer runbook and backfill scripts are documented', () => {
     const runbook = read('docs/cheer-stats-materializer-runbook.md');
     expect(runbook).toContain('fromIso');

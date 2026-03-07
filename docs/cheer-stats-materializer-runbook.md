@@ -66,6 +66,9 @@
 - `failed > 0`: `maxRetries` 상향 + 범위 분할(`fromIso/toIso`) 재실행
 - Lambda timeout: `maxScanPages`를 낮추고 `segment/totalSegments` 분할 실행으로 나눠서 수행
 
+## 참고 문서
+- `docs/cheer-observability-widget-catalog.md` (대시보드 위젯 운영 표준)
+
 ## 롤백
 - materializer 실행 중단(스케줄 비활성화)
 - stats API는 realtime fallback이 있으므로 서비스 조회 자체는 유지됨
