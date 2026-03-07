@@ -20,6 +20,26 @@ param(
 
 $functionName = "chme-$Stage-cheer-stats-materializer"
 
+if ($script:PSBoundParameters.ContainsKey('FailedSegments') -and $script:PSBoundParameters.ContainsKey('SegmentIndex')) {
+  throw '-FailedSegments and -SegmentIndex cannot be used together.'
+}
+
+if ($OrchestratorArn -and $script:PSBoundParameters.ContainsKey('SegmentIndex')) {
+  throw '-SegmentIndex is not supported with -OrchestratorArn. Use -FailedSegments or -TotalSegments.'
+}
+
+if ($script:PSBoundParameters.ContainsKey('TotalSegments') -and $TotalSegments -lt 1) {
+  throw '-TotalSegments must be >= 1.'
+}
+
+if ($script:PSBoundParameters.ContainsKey('FailedSegments') -and $script:PSBoundParameters.ContainsKey('TotalSegments')) {
+  foreach ($seg in $FailedSegments) {
+    if ($seg -lt 0 -or $seg -ge $TotalSegments) {
+      throw "-FailedSegments value out of range: $seg (total segments: $TotalSegments)"
+    }
+  }
+}
+
 function Invoke-BackfillSegment {
   param(
     [Nullable[int]]$OverrideSegmentIndex

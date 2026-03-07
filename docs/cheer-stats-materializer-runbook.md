@@ -26,6 +26,8 @@
 - `orchestratorArn` (스크립트 옵션): Step Functions 오케스트레이터 직접 실행
 - `maxScanPages` (옵션): 한 번 실행에서 최대 Scan 페이지 수 제한
 - `scanPageSize` (옵션): Scan `Limit` (기본 500, 최대 1000)
+- `segmentIndex`와 `failedSegments`는 동시에 지정할 수 없음
+- `orchestratorArn` 사용 시 `segmentIndex` 단일 지정 대신 `failedSegments` 또는 `totalSegments` 사용
 
 ## 실행 스크립트
 
