@@ -300,8 +300,11 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('rateKey');
     expect(src).toContain('computeSlidingUsage');
     expect(src).toContain('sliding_window_approx');
+    expect(src).toContain('token_bucket_approx');
     expect(src).toContain('BatchGetCommand');
     expect(src).toContain('requestCount = :expectedCurrent');
+    expect(src).toContain('tokenBalance = :expectedTokenBalance');
+    expect(src).toContain('CHEER_RATE_LIMIT_STRATEGY');
     expect(src).toContain("mode: 'atomic_table'");
     expect(src).toContain("mode: 'disabled'");
   });

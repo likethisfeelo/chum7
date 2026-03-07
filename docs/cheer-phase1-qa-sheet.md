@@ -55,4 +55,5 @@
 - [x] Cheer Ops Dashboard 위젯 생성(에러 카운트, Handler latency p95, Stats source mix, Materializer invocations/errors)
 - [x] Cheer Ops Dashboard 2차 위젯 생성(Reply/React/Stats 요청·성공·에러유형 분리)
 - [x] materializer 스케줄 분할 실행 설정(EventBridge + segment fan-out payload)
+- [x] 레이트 리밋 token bucket 전략 검증(`CHEER_RATE_LIMIT_STRATEGY=token_bucket_approx`)
 - [ ] 배포 직후 1시간/24시간 오류율 추적

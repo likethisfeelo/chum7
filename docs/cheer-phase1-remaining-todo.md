@@ -5,6 +5,7 @@
 - 인터랙션 레이트 리밋 1차: reply/reaction 분당 요청 제한(환경변수 기반)
 - 분산 안전 레이트 리밋 2차: `CHEER_RATE_LIMITS_TABLE` atomic counter + fallback
 - 레이트 리밋 3차: atomic table 기반 sliding window 근사치 적용(현재+이전 버킷 가중치)
+- 레이트 리밋 4차: token bucket 근사 전략 추가(`CHEER_RATE_LIMIT_STRATEGY=token_bucket_approx`)
 - 통계 API 확장: `GET /cheers/stats` with `period=all|day|week|month|challenge`
 - CheerStats 하이브리드 조회: bucket 우선 + 실시간 fallback(`source` 필드 제공)
 - CheerStats 적재 파이프라인 1차: 배치 materializer Lambda + 1시간 스케줄 트리거
@@ -21,9 +22,9 @@
 ## 남은 TODO
 
 ### P0 (바로 다음)
-1. 레이트 리밋 4차(토큰 버킷/분산 Lua·Redis 옵션 검토)
-2. 대시보드 템플릿화(stage별 공통 위젯 모듈)
-3. materializer 오케스트레이션 고도화(step-functions 분할/재시도 체계)
+1. 대시보드 템플릿화(stage별 공통 위젯 모듈)
+2. materializer 오케스트레이션 고도화(step-functions 분할/재시도 체계)
+3. 레이트 리밋 5차(분산 Lua·Redis/멀티리전 옵션 검토)
 
 ### P1 (이번 스프린트 내)
 1. 프론트에서 period 입력 UX 개선(week picker, month picker)

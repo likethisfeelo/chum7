@@ -86,6 +86,73 @@ describe('cheer rate-limit helper', () => {
     jest.useRealTimers();
   });
 
+
+  test('allows request in token bucket mode with refilled capacity', async () => {
+    process.env.CHEER_RATE_LIMIT_STRATEGY = 'token_bucket_approx';
+    jest.useFakeTimers().setSystemTime(new Date('2026-01-01T00:01:00.000Z'));
+
+    sendMock
+      .mockResolvedValueOnce({
+        Responses: {
+          limits: [
+            { rateKey: 'reply#u1#token_bucket', tokenBalance: 0.2, lastRefillAt: '2026-01-01T00:00:30.000Z' }
+          ]
+        }
+      })
+      .mockResolvedValueOnce({});
+
+    const { acquireRateLimitSlot } = require('../backend/services/cheer/rate-limit');
+
+    const result = await acquireRateLimitSlot({
+      action: 'reply',
+      userId: 'u1',
+      limit: 10,
+      windowSeconds: 60,
+      docClient,
+      tableName: 'limits'
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(result.strategy).toBe('token_bucket_approx');
+    expect(result.current).toBeGreaterThan(0);
+    expect(updateInputs).toHaveLength(1);
+
+    delete process.env.CHEER_RATE_LIMIT_STRATEGY;
+    jest.useRealTimers();
+  });
+
+  test('rejects request in token bucket mode when tokens are depleted', async () => {
+    process.env.CHEER_RATE_LIMIT_STRATEGY = 'token_bucket_approx';
+    jest.useFakeTimers().setSystemTime(new Date('2026-01-01T00:01:00.000Z'));
+
+    sendMock.mockResolvedValueOnce({
+      Responses: {
+        limits: [
+          { rateKey: 'reply#u1#token_bucket', tokenBalance: 0.1, lastRefillAt: '2026-01-01T00:00:59.900Z' }
+        ]
+      }
+    });
+
+    const { acquireRateLimitSlot } = require('../backend/services/cheer/rate-limit');
+
+    const result = await acquireRateLimitSlot({
+      action: 'reply',
+      userId: 'u1',
+      limit: 10,
+      windowSeconds: 60,
+      docClient,
+      tableName: 'limits'
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.strategy).toBe('token_bucket_approx');
+    expect(result.weightedCurrent).toBeGreaterThanOrEqual(9);
+    expect(updateInputs).toHaveLength(0);
+
+    delete process.env.CHEER_RATE_LIMIT_STRATEGY;
+    jest.useRealTimers();
+  });
+
   test('rejects request when weighted usage exceeds limit', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-01-01T00:00:10.000Z'));
 
