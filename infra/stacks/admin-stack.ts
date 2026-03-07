@@ -270,6 +270,22 @@ export class AdminStack extends Stack {
     });
 
 
+
+    const cheerDeadLetterStatsFn = new NodejsFunction(this, 'CheerDeadLetterStatsFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-cheer-dead-letter-stats`,
+      entry: path.join(__dirname, '../../backend/services/admin/cheer/dead-letter/stats/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheerDeadLettersTable.grantReadData(cheerDeadLetterStatsFn);
+    apiGateway.addRoutes({
+      path: '/admin/cheer/dead-letters/stats',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminCheerDeadLetterStatsIntegration', cheerDeadLetterStatsFn),
+      authorizer,
+    });
+
     const cheerDeadLetterGetFn = new NodejsFunction(this, 'CheerDeadLetterGetFn', {
       ...commonProps,
       functionName: `chme-${stage}-admin-cheer-dead-letter-get`,

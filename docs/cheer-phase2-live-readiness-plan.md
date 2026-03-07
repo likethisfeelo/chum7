@@ -56,6 +56,7 @@
 - Admin Docs에 아래 운영 액션 추가:
   - dead-letter 목록 API: `GET /admin/cheer/dead-letters`
   - dead-letter 상세 API: `GET /admin/cheer/dead-letters/{cheerId}`
+  - dead-letter 지표 API: `GET /admin/cheer/dead-letters/stats`
   - 단건 재처리 API: `POST /admin/cheer/dead-letters/{cheerId}/requeue`
   - 배치 재처리 API: `POST /admin/cheer/dead-letters/requeue-batch` (최대 50건)
   - 재처리 금지 기준(수신자 탈퇴, 정책 만료 등)
