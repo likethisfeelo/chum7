@@ -173,6 +173,7 @@ export const handler = async (event: EventBridgeEvent<string, any>) => {
       retried: 0,
       deadLettered: 0,
       skipped: 0,
+      raceSkipped: 0,
     };
 
     for (const cheer of pendingCheers) {
@@ -199,10 +200,12 @@ export const handler = async (event: EventBridgeEvent<string, any>) => {
           TableName: process.env.CHEERS_TABLE!,
           Key: { cheerId: cheer.cheerId },
           UpdateExpression: 'SET #status = :sent, sentAt = :sentAt REMOVE nextRetryAt, failureCode, deadLetterReason',
+          ConditionExpression: '#status = :pending',
           ExpressionAttributeNames: {
             '#status': 'status'
           },
           ExpressionAttributeValues: {
+            ':pending': 'pending',
             ':sent': 'sent',
             ':sentAt': processNow.toISOString()
           }
@@ -210,7 +213,13 @@ export const handler = async (event: EventBridgeEvent<string, any>) => {
 
         summary.sent += 1;
         console.log(`Cheer ${cheer.cheerId} sent successfully`);
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.name === 'ConditionalCheckFailedException') {
+          summary.raceSkipped += 1;
+          console.info(`Cheer ${cheer.cheerId} skipped due to concurrent state change`);
+          continue;
+        }
+
         console.error(`Error sending cheer ${cheer.cheerId}:`, error);
         const failureOutcome = await handleCheerFailure(cheer, error);
         if (failureOutcome === 'retry') {

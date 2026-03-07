@@ -75,6 +75,8 @@ describe('send-scheduled handler', () => {
 
     const updateCall = ddbSendMock.mock.calls[1][0];
     expect(updateCall.input.UpdateExpression).toContain('#status = :sent');
+    expect(updateCall.input.ConditionExpression).toBe('#status = :pending');
+    expect(updateCall.input.ExpressionAttributeValues[':pending']).toBe('pending');
   });
 
   it('schedules retry when publish fails and retries remain', async () => {
@@ -95,6 +97,26 @@ describe('send-scheduled handler', () => {
     expect(retryUpdate.input.UpdateExpression).toContain('retryCount = :retryCount');
     expect(retryUpdate.input.ExpressionAttributeValues[':retryCount']).toBe(1);
     expect(retryUpdate.input.ExpressionAttributeValues[':failureCode']).toBe('TIMEOUT');
+  });
+
+
+
+  it('skips retry when state already changed by concurrent worker', async () => {
+    const due = new Date(Date.now() - 60_000).toISOString();
+    ddbSendMock
+      .mockResolvedValueOnce({ Items: [{ cheerId: 'c1', receiverId: 'u1', message: 'm', senderDelta: 10, scheduledTime: due, status: 'pending', retryCount: 0 }] })
+      .mockRejectedValueOnce(Object.assign(new Error('conditional fail'), { name: 'ConditionalCheckFailedException' }));
+    snsSendMock.mockResolvedValueOnce({});
+
+    const { handler } = await import('../../backend/services/cheer/send-scheduled/index');
+    const res = await handler(buildEvent());
+
+    expect(res.statusCode).toBe(200);
+    const parsed = JSON.parse(res.body);
+    expect(parsed.raceSkipped).toBe(1);
+    expect(parsed.retried).toBe(0);
+    expect(parsed.deadLettered).toBe(0);
+    expect(ddbSendMock).toHaveBeenCalledTimes(2);
   });
 
   it('moves cheer to dead-letter when retry is exhausted', async () => {
