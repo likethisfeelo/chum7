@@ -88,6 +88,7 @@ new CheerStack(app, `chme-${stage}-cheer`, {
   apiGateway: apiStack.apiGateway,
   authorizer: apiStack.cognitoAuthorizer,
   cheersTable: coreStack.cheersTable,
+  cheerDeadLettersTable: coreStack.cheerDeadLettersTable,
   userCheerTicketsTable: coreStack.userCheerTicketsTable,
   userChallengesTable: coreStack.userChallengesTable,
   challengesTable: coreStack.challengesTable,

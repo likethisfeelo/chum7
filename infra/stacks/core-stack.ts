@@ -37,6 +37,7 @@ export class CoreStack extends Stack {
   public readonly verificationsTable: Table;
   public readonly cheersTable: Table;
   public readonly userCheerTicketsTable: Table;
+  public readonly cheerDeadLettersTable: Table;
 
   // Quest board tables
   public readonly questsTable: Table;
@@ -210,6 +211,22 @@ export class CoreStack extends Stack {
       indexName: 'scheduled-index',
       partitionKey: { name: 'status', type: AttributeType.STRING },
       sortKey: { name: 'scheduledTime', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+
+    this.cheerDeadLettersTable = new Table(this, 'CheerDeadLettersTable', {
+      tableName: `chme-${stage}-cheer-dead-letters`,
+      partitionKey: { name: 'cheerId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+      timeToLiveAttribute: 'ttl',
+    });
+    this.cheerDeadLettersTable.addGlobalSecondaryIndex({
+      indexName: 'failedAt-index',
+      partitionKey: { name: 'status', type: AttributeType.STRING },
+      sortKey: { name: 'failedAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
 

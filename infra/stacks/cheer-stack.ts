@@ -21,6 +21,7 @@ interface CheerStackProps extends StackProps {
   apiGateway: HttpApi;
   authorizer: HttpJwtAuthorizer;
   cheersTable: Table;
+  cheerDeadLettersTable: Table;
   userCheerTicketsTable: Table;
   userChallengesTable: Table;
   challengesTable: Table;
@@ -32,7 +33,7 @@ export class CheerStack extends Stack {
   constructor(scope: Construct, id: string, props: CheerStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, authorizer, cheersTable, userCheerTicketsTable, userChallengesTable, challengesTable, snsTopic, eventBus } = props;
+    const { stage, apiGateway, authorizer, cheersTable, cheerDeadLettersTable, userCheerTicketsTable, userChallengesTable, challengesTable, snsTopic, eventBus } = props;
 
     const commonEnv = {
       STAGE: stage,
@@ -47,6 +48,7 @@ export class CheerStack extends Stack {
       CHEER_STATS_TABLE: process.env.CHEER_STATS_TABLE ?? '',
       CHEER_STATS_MATERIALIZER_MAX_RETRIES: process.env.CHEER_STATS_MATERIALIZER_MAX_RETRIES ?? '5',
       CHEER_RATE_LIMITS_TABLE: process.env.CHEER_RATE_LIMITS_TABLE ?? '',
+      CHEER_DEAD_LETTERS_TABLE: cheerDeadLettersTable.tableName,
     };
 
     const commonProps = {
@@ -146,6 +148,7 @@ export class CheerStack extends Stack {
       timeout: Duration.seconds(60),
     });
     cheersTable.grantReadWriteData(sendScheduledFn);
+    cheerDeadLettersTable.grantReadWriteData(sendScheduledFn);
     snsTopic.grantPublish(sendScheduledFn);
 
     // EventBridge 5분마다 실행
