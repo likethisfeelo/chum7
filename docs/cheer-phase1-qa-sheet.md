@@ -31,6 +31,7 @@
 - [ ] 배치 materializer 실행 후 bucketed source 응답 비율 확인
 - [ ] dry-run 모드 실행 시 write 없이 집계건수 반환 확인
 - [ ] fromIso/toIso 범위 백필 실행 시 대상 기간만 반영되는지 확인
+- [ ] runbook 절차대로 dry-run → 본실행 순서 수행 기록 남기기
 
 ## 2. 프론트 QA (Today)
 - [ ] 받은 응원 카드에서 리액션 버튼 노출

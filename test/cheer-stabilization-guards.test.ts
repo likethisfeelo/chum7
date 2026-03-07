@@ -198,6 +198,28 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain("source: 'realtime_fallback'");
   });
 
+  test('materializer runbook and backfill scripts are documented', () => {
+    const runbook = read('docs/cheer-stats-materializer-runbook.md');
+    expect(runbook).toContain('fromIso');
+    expect(runbook).toContain('toIso');
+    expect(runbook).toContain('dryRun');
+    expect(runbook).toContain('maxRetries');
+    expect(runbook).toContain('scripts/cheer-stats-backfill.sh');
+    expect(runbook).toContain('scripts/cheer-stats-backfill.ps1');
+
+    const sh = read('scripts/cheer-stats-backfill.sh');
+    expect(sh).toContain('--stage');
+    expect(sh).toContain('--dry-run');
+    expect(sh).toContain('--from');
+    expect(sh).toContain('--to');
+
+    const ps1 = read('scripts/cheer-stats-backfill.ps1');
+    expect(ps1).toContain('$Stage');
+    expect(ps1).toContain('$DryRun');
+    expect(ps1).toContain('$FromIso');
+    expect(ps1).toContain('$ToIso');
+  });
+
   test('stats materializer scans cheers and writes bucketed summaries', () => {
     const src = read('backend/services/cheer/stats-materializer/index.ts');
     expect(src).toContain('scanAllCheers');
