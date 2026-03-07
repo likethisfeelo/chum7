@@ -165,6 +165,7 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('CheerReactFn');
     expect(stack).toContain('challengesTable.grantReadData(cheerStatsFn)');
     expect(stack).toContain('userChallengesTable.grantReadData(cheerStatsFn)');
+    expect(stack).toContain('CHEER_STATS_TABLE');
   });
 
   test('stats handler supports period/day/week/month/challenge filters', () => {
@@ -184,6 +185,11 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('Get cheer stats request received');
     expect(src).toContain('Get cheer stats success');
     expect(src).toContain('latencyMs');
+    expect(src).toContain('tryLoadBucketedStats');
+    expect(src).toContain('CHEER_STATS_TABLE');
+    expect(src).toContain("source: 'bucketed'");
+    expect(src).toContain("source: 'realtime_fallback'");
+    expect(src).toContain('resolveStatsBucketSk');
   });
 
   test('reply and react handlers enforce receiver-only interaction and idempotency', () => {

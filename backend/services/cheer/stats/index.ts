@@ -15,6 +15,21 @@ type CheerItem = {
   sentAt?: string;
 };
 
+type CheerStatsSummary = {
+  sentCount: number;
+  receivedCount: number;
+  thankedCount: number;
+  immediateCount: number;
+  scheduledCount: number;
+  repliedCount: number;
+  reactionCount: number;
+};
+
+type BucketedStatsResult = {
+  stats: CheerStatsSummary;
+  source: 'bucketed';
+};
+
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
@@ -98,6 +113,71 @@ function inRange(item: CheerItem, start?: string, end?: string): boolean {
   const ts = resolveTimestamp(item);
   if (!ts) return false;
   return ts >= start && ts <= end;
+}
+
+function toNonNegativeInt(value: unknown): number {
+  const asNumber = Number(value);
+  if (!Number.isFinite(asNumber)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor(asNumber));
+}
+
+function buildStatsSummaryFromItem(item: Record<string, unknown>): CheerStatsSummary {
+  return {
+    sentCount: toNonNegativeInt(item.sentCount),
+    receivedCount: toNonNegativeInt(item.receivedCount),
+    thankedCount: toNonNegativeInt(item.thankedCount),
+    immediateCount: toNonNegativeInt(item.immediateCount),
+    scheduledCount: toNonNegativeInt(item.scheduledCount),
+    repliedCount: toNonNegativeInt(item.repliedCount),
+    reactionCount: toNonNegativeInt(item.reactionCount)
+  };
+}
+
+function resolveStatsBucketSk(period: string, label: string, challengeId?: string): string {
+  if (period === 'day') {
+    return `day#${label}`;
+  }
+
+  if (period === 'week') {
+    return `week#${label}`;
+  }
+
+  if (period === 'month') {
+    return `month#${label}`;
+  }
+
+  if (period === 'challenge' && challengeId) {
+    return `challenge#${challengeId}#all`;
+  }
+
+  return 'all#summary';
+}
+
+async function tryLoadBucketedStats(userId: string, period: string, label: string, challengeId?: string): Promise<BucketedStatsResult | undefined> {
+  if (!process.env.CHEER_STATS_TABLE) {
+    return undefined;
+  }
+
+  const sk = resolveStatsBucketSk(period, label, challengeId);
+  const result = await docClient.send(new GetCommand({
+    TableName: process.env.CHEER_STATS_TABLE,
+    Key: {
+      PK: `owner#${userId}`,
+      SK: sk
+    }
+  }));
+
+  if (!result.Item) {
+    return undefined;
+  }
+
+  return {
+    source: 'bucketed',
+    stats: buildStatsSummaryFromItem(result.Item as Record<string, unknown>)
+  };
 }
 
 async function collectByIndex(indexName: string, keyExpression: string, expressionAttributeValues: Record<string, unknown>): Promise<CheerItem[]> {
@@ -196,6 +276,31 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const { start, end, label } = toIsoRange(period, params.day?.trim(), params.week?.trim(), params.month?.trim());
 
+    const bucketed = await tryLoadBucketedStats(userId, period, label, challengeId);
+    if (bucketed) {
+      const latencyMs = Date.now() - startedAt;
+      console.info('Get cheer stats success', {
+        path,
+        userId,
+        period,
+        challengeId: challengeId ?? null,
+        source: bucketed.source,
+        latencyMs
+      });
+
+      return response(200, {
+        success: true,
+        data: {
+          period,
+          label,
+          challengeId: period === 'challenge' ? challengeId : null,
+          range: { start: start ?? null, end: end ?? null },
+          source: bucketed.source,
+          stats: bucketed.stats
+        }
+      });
+    }
+
     const [sentRaw, receivedRaw] = await Promise.all([
       collectByIndex('senderId-index', 'senderId = :senderId', { ':senderId': userId }),
       collectByIndex('receiverId-index', 'receiverId = :receiverId', { ':receiverId': userId })
@@ -211,7 +316,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const sent = applyFilters(sentRaw);
     const received = applyFilters(receivedRaw);
 
-    const stats = {
+    const stats: CheerStatsSummary = {
       sentCount: sent.length,
       receivedCount: received.length,
       thankedCount: received.filter((item) => item.isThanked).length,
@@ -222,7 +327,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
     const latencyMs = Date.now() - startedAt;
-    console.info('Get cheer stats success', { path, userId, period, challengeId: challengeId ?? null, latencyMs });
+    console.info('Get cheer stats success', {
+      path,
+      userId,
+      period,
+      challengeId: challengeId ?? null,
+      source: 'realtime_fallback',
+      latencyMs
+    });
 
     return response(200, {
       success: true,
@@ -231,6 +343,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         label,
         challengeId: period === 'challenge' ? challengeId : null,
         range: { start: start ?? null, end: end ?? null },
+        source: 'realtime_fallback',
         stats
       }
     });
