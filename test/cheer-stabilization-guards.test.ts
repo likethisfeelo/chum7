@@ -274,6 +274,8 @@ describe('cheer stabilization guards', () => {
     const runbook = read('docs/cheer-stats-materializer-runbook.md');
     expect(runbook).toContain('fromIso');
     expect(runbook).toContain('toIso');
+    expect(runbook).toContain('ISO-8601');
+    expect(runbook).toContain('fromIso <= toIso');
     expect(runbook).toContain('dryRun');
     expect(runbook).toContain('maxRetries');
     expect(runbook).toContain('0 이상');
@@ -295,6 +297,9 @@ describe('cheer stabilization guards', () => {
     expect(sh).toContain('--dry-run');
     expect(sh).toContain('--from');
     expect(sh).toContain('--to');
+    expect(sh).toContain('--from must be an ISO-8601 datetime string');
+    expect(sh).toContain('--to must be an ISO-8601 datetime string');
+    expect(sh).toContain('--from must be less than or equal to --to');
     expect(sh).toContain('--total-segments');
     expect(sh).toContain('--segment-index');
     expect(sh).toContain('--failed-segments');
@@ -314,6 +319,9 @@ describe('cheer stabilization guards', () => {
     expect(ps1).toContain('$DryRun');
     expect(ps1).toContain('$FromIso');
     expect(ps1).toContain('$ToIso');
+    expect(ps1).toContain('-FromIso must be an ISO-8601 datetime string');
+    expect(ps1).toContain('-ToIso must be an ISO-8601 datetime string');
+    expect(ps1).toContain('-FromIso must be less than or equal to -ToIso');
     expect(ps1).toContain('$TotalSegments');
     expect(ps1).toContain('$SegmentIndex');
     expect(ps1).toContain('$FailedSegments');

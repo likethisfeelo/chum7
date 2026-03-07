@@ -18,7 +18,7 @@
 }
 ```
 
-- `fromIso` / `toIso` (옵션): 해당 기간 데이터만 집계
+- `fromIso` / `toIso` (옵션): 해당 기간 데이터만 집계 (ISO-8601), 둘 다 지정 시 `fromIso <= toIso`
 - `dryRun` (옵션): `true`면 write 없이 집계 건수만 계산
 - `maxRetries` (옵션): BatchWrite `UnprocessedItems` 재시도 횟수 오버라이드 (0 이상)
 - `totalSegments` / `segmentIndex` (옵션): Scan 분할 실행(병렬 백필/부분 재실행)

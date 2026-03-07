@@ -97,6 +97,30 @@ if [[ -n "$FAILED_SEGMENTS" && -z "$TOTAL_SEGMENTS" ]]; then
   exit 1
 fi
 
+if [[ -n "$FROM_ISO" && ! "$FROM_ISO" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
+  echo "--from must be an ISO-8601 datetime string" >&2
+  exit 1
+fi
+
+if [[ -n "$TO_ISO" && ! "$TO_ISO" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
+  echo "--to must be an ISO-8601 datetime string" >&2
+  exit 1
+fi
+
+if [[ -n "$FROM_ISO" && -n "$TO_ISO" ]]; then
+  if ! python - <<PYCHK
+from datetime import datetime
+from_val = "${FROM_ISO}".replace('Z', '+00:00')
+to_val = "${TO_ISO}".replace('Z', '+00:00')
+if datetime.fromisoformat(from_val) > datetime.fromisoformat(to_val):
+    raise SystemExit(1)
+PYCHK
+  then
+    echo "--from must be less than or equal to --to" >&2
+    exit 1
+  fi
+fi
+
 if [[ -n "$SEGMENT_INDEX" && ! "$SEGMENT_INDEX" =~ ^[0-9]+$ ]]; then
   echo "--segment-index must be a non-negative integer" >&2
   exit 1

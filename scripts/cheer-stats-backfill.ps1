@@ -28,6 +28,28 @@ if ($OrchestratorArn -and $script:PSBoundParameters.ContainsKey('SegmentIndex'))
   throw '-SegmentIndex is not supported with -OrchestratorArn. Use -FailedSegments or -TotalSegments.'
 }
 
+if ($FromIso -and $FromIso -notmatch '^\d{4}-\d{2}-\d{2}T') {
+  throw '-FromIso must be an ISO-8601 datetime string.'
+}
+
+if ($ToIso -and $ToIso -notmatch '^\d{4}-\d{2}-\d{2}T') {
+  throw '-ToIso must be an ISO-8601 datetime string.'
+}
+
+if ($FromIso -and $ToIso) {
+  try {
+    $fromDt = [DateTimeOffset]::Parse($FromIso)
+    $toDt = [DateTimeOffset]::Parse($ToIso)
+  }
+  catch {
+    throw '-FromIso and -ToIso must be valid ISO-8601 datetime strings.'
+  }
+
+  if ($fromDt -gt $toDt) {
+    throw '-FromIso must be less than or equal to -ToIso.'
+  }
+}
+
 if ($script:PSBoundParameters.ContainsKey('SegmentIndex') -and -not $script:PSBoundParameters.ContainsKey('TotalSegments')) {
   throw '-SegmentIndex requires -TotalSegments.'
 }
