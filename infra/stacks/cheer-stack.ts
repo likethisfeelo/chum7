@@ -12,7 +12,7 @@ import { LambdaFunction, SfnStateMachine, SnsTopic } from 'aws-cdk-lib/aws-event
 import { Alarm, ComparisonOperator, Dashboard, Metric, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
-import { FilterPattern, LogGroup, MetricFilter } from 'aws-cdk-lib/aws-logs';
+import { FilterPattern, LogGroup, LogRetention, MetricFilter, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import * as path from 'path';
 import { buildCheerOpsWidgetRows } from './observability/cheer-dashboard-widgets';
 
@@ -75,6 +75,11 @@ export class CheerStack extends Stack {
 
 
     const createLogCountMetric = (id: string, fnName: string, token: string) => {
+      const logRetention = new LogRetention(this, `${id}LogRetention`, {
+        logGroupName: `/aws/lambda/${fnName}`,
+        retention: RetentionDays.ONE_MONTH,
+      });
+
       const logGroup = LogGroup.fromLogGroupName(this, `${id}LogGroup`, `/aws/lambda/${fnName}`);
       const metricFilter = new MetricFilter(this, `${id}MetricFilter`, {
         logGroup,
@@ -83,6 +88,8 @@ export class CheerStack extends Stack {
         metricName: `${id}Count`,
         metricValue: '1'
       });
+
+      metricFilter.node.addDependency(logRetention);
 
       return metricFilter.metric({
         statistic: 'Sum',
@@ -393,8 +400,8 @@ export class CheerStack extends Stack {
       period: Duration.minutes(5)
     });
 
-    const statsBucketedMetric = createLogCountMetric('CheerStatsBucketedSource', cheerStatsFn.functionName, "source: 'bucketed'");
-    const statsRealtimeFallbackMetric = createLogCountMetric('CheerStatsRealtimeFallbackSource', cheerStatsFn.functionName, "source: 'realtime_fallback'");
+    const statsBucketedMetric = createLogCountMetric('CheerStatsBucketedSource', cheerStatsFn.functionName, 'bucketed');
+    const statsRealtimeFallbackMetric = createLogCountMetric('CheerStatsRealtimeFallbackSource', cheerStatsFn.functionName, 'realtime_fallback');
 
     const replyRequestMetric = createLogCountMetric('CheerReplyRequest', cheerReplyFn.functionName, 'Cheer reply request received');
     const replySuccessMetric = createLogCountMetric('CheerReplySuccess', cheerReplyFn.functionName, 'Cheer reply success');
