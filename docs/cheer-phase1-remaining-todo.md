@@ -25,6 +25,7 @@
 - CheerStats 운영 런북/백필 스크립트 표준화(`scripts/cheer-stats-backfill.*`, runbook 문서)
 - `period=challenge` 검증 강화: challenge 존재 + 참여자 접근 검증
 - 투데이 페이지 UX 확장: 리액션/답장 UI + 기간 필터 통계 카드
+- Admin Docs Hub 1차: 런북/백필 명령/QA 체크리스트를 `/admin/docs`에서 조회 가능
 
 ## 남은 TODO
 

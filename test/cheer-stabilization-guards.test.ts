@@ -370,6 +370,26 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('Cheer stats materializer retrying unprocessed items');
   });
 
+
+  test('admin docs hub route and page expose phase1 operational docs', () => {
+    const appSrc = read('frontend/src/app/App.tsx');
+    expect(appSrc).toContain('path="/admin/docs"');
+    expect(appSrc).toContain('AdminDocsPage');
+
+    const pageSrc = read('frontend/src/features/admin/pages/AdminDocsPage.tsx');
+    expect(pageSrc).toContain('Admin Docs Hub · Cheer PHASE1');
+    expect(pageSrc).toContain('이번 스프린트 3종 고정');
+    expect(pageSrc).toContain('docs/cheer-stats-materializer-runbook.md');
+    expect(pageSrc).toContain('docs/cheer-phase1-qa-sheet.md');
+    expect(pageSrc).toContain('docs/cheer-phase1-remaining-todo.md');
+    expect(pageSrc).toContain('--execution-name');
+    expect(pageSrc).toContain('-ExecutionName');
+
+    const flowHubSrc = read('frontend/src/features/planning/pages/ParticipantFlowPlanPage.tsx');
+    expect(flowHubSrc).toContain("navigate('/admin/docs')");
+    expect(flowHubSrc).toContain('Admin Docs Hub');
+  });
+
   test('shared rate-limit helper supports atomic table window key strategy', () => {
     const src = read('backend/services/cheer/rate-limit.ts');
     expect(src).toContain('acquireRateLimitSlot');
