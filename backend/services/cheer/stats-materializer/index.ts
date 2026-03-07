@@ -27,8 +27,16 @@ type StatsRecord = {
   reactionCount: number;
 };
 
+type MaterializerEvent = {
+  fromIso?: string;
+  toIso?: string;
+  dryRun?: boolean;
+  maxRetries?: number;
+};
+
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const DEFAULT_MAX_RETRIES = 5;
 
 function createEmptyStats(): StatsRecord {
   return {
@@ -105,6 +113,43 @@ function ensureMapEntry(map: Map<string, StatsRecord>, key: string): StatsRecord
   const created = createEmptyStats();
   map.set(key, created);
   return created;
+}
+
+function resolveEventRange(event: MaterializerEvent | undefined): { fromIso?: string; toIso?: string } {
+  const fromIso = event?.fromIso;
+  const toIso = event?.toIso;
+
+  const fromValid = fromIso && !Number.isNaN(new Date(fromIso).getTime()) ? fromIso : undefined;
+  const toValid = toIso && !Number.isNaN(new Date(toIso).getTime()) ? toIso : undefined;
+
+  return {
+    fromIso: fromValid,
+    toIso: toValid
+  };
+}
+
+function isInEventRange(cheer: CheerItem, fromIso?: string, toIso?: string): boolean {
+  const ts = resolveTimestamp(cheer);
+  if (!ts) return false;
+  if (fromIso && ts < fromIso) return false;
+  if (toIso && ts > toIso) return false;
+  return true;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolveMaxRetries(event: MaterializerEvent | undefined): number {
+  const envMax = Number(process.env.CHEER_STATS_MATERIALIZER_MAX_RETRIES ?? DEFAULT_MAX_RETRIES);
+  const eventMax = Number(event?.maxRetries);
+  const candidate = Number.isFinite(eventMax) && eventMax > 0 ? eventMax : envMax;
+
+  if (!Number.isFinite(candidate) || candidate <= 0) {
+    return DEFAULT_MAX_RETRIES;
+  }
+
+  return Math.floor(candidate);
 }
 
 async function scanAllCheers(): Promise<CheerItem[]> {
@@ -186,44 +231,93 @@ function buildStatsDocuments(cheers: CheerItem[]): Array<Record<string, unknown>
   });
 }
 
-async function batchWriteStats(items: Array<Record<string, unknown>>): Promise<void> {
+async function writeChunkWithRetry(tableName: string, chunk: Array<Record<string, unknown>>, maxRetries: number): Promise<number> {
+  let unprocessed = chunk.map((item) => ({ PutRequest: { Item: item } }));
+  let attempt = 0;
+
+  while (unprocessed.length > 0 && attempt <= maxRetries) {
+    const result = await docClient.send(new BatchWriteCommand({
+      RequestItems: {
+        [tableName]: unprocessed
+      }
+    }));
+
+    const nextUnprocessed = result.UnprocessedItems?.[tableName] || [];
+    if (nextUnprocessed.length === 0) {
+      return 0;
+    }
+
+    unprocessed = nextUnprocessed.map((entry: any) => ({ PutRequest: entry.PutRequest }));
+    attempt += 1;
+
+    console.warn('Cheer stats materializer retrying unprocessed items', {
+      tableName,
+      attempt,
+      remaining: unprocessed.length
+    });
+
+    await sleep(Math.min(1000, attempt * 200));
+  }
+
+  return unprocessed.length;
+}
+
+async function batchWriteStats(items: Array<Record<string, unknown>>, maxRetries: number): Promise<{ requested: number; failed: number }> {
   const tableName = process.env.CHEER_STATS_TABLE;
   if (!tableName) {
     throw new Error('CHEER_STATS_TABLE is required');
   }
 
+  let failed = 0;
   for (let i = 0; i < items.length; i += 25) {
     const chunk = items.slice(i, i + 25);
-    await docClient.send(new BatchWriteCommand({
-      RequestItems: {
-        [tableName]: chunk.map((item) => ({
-          PutRequest: { Item: item }
-        }))
-      }
-    }));
+    failed += await writeChunkWithRetry(tableName, chunk, maxRetries);
   }
+
+  return {
+    requested: items.length,
+    failed
+  };
 }
 
-export const handler = async (): Promise<{ success: boolean; scanned: number; written: number }> => {
+export const handler = async (event?: MaterializerEvent): Promise<{ success: boolean; scanned: number; filtered: number; written: number; failed: number; dryRun: boolean }> => {
   const startedAt = Date.now();
 
-  console.info('Cheer stats materializer started');
+  console.info('Cheer stats materializer started', { event: event || {} });
+
+  const { fromIso, toIso } = resolveEventRange(event);
+  const dryRun = Boolean(event?.dryRun);
+  const maxRetries = resolveMaxRetries(event);
 
   const cheers = await scanAllCheers();
-  const docs = buildStatsDocuments(cheers);
+  const filteredCheers = cheers.filter((item) => isInEventRange(item, fromIso, toIso));
+  const docs = buildStatsDocuments(filteredCheers);
 
-  await batchWriteStats(docs);
+  let failed = 0;
+  if (!dryRun) {
+    const writeResult = await batchWriteStats(docs, maxRetries);
+    failed = writeResult.failed;
+  }
 
   const latencyMs = Date.now() - startedAt;
   console.info('Cheer stats materializer finished', {
     scanned: cheers.length,
+    filtered: filteredCheers.length,
     written: docs.length,
+    failed,
+    dryRun,
+    fromIso: fromIso ?? null,
+    toIso: toIso ?? null,
+    maxRetries,
     latencyMs
   });
 
   return {
-    success: true,
+    success: failed === 0,
     scanned: cheers.length,
-    written: docs.length
+    filtered: filteredCheers.length,
+    written: docs.length,
+    failed,
+    dryRun
   };
 };

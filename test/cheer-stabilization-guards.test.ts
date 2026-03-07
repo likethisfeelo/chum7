@@ -169,6 +169,7 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('CheerStatsMaterializerFn');
     expect(stack).toContain('CheerStatsMaterializerSchedule');
     expect(stack).toContain('stats-materializer/index.ts');
+    expect(stack).toContain('CHEER_STATS_MATERIALIZER_MAX_RETRIES');
   });
 
   test('stats handler supports period/day/week/month/challenge filters', () => {
@@ -206,6 +207,13 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('Cheer stats materializer finished');
     expect(src).toContain("challenge#${challengeId}#all");
     expect(src).toContain('owner#');
+    expect(src).toContain('writeChunkWithRetry');
+    expect(src).toContain('UnprocessedItems');
+    expect(src).toContain('maxRetries');
+    expect(src).toContain('dryRun');
+    expect(src).toContain('fromIso');
+    expect(src).toContain('toIso');
+    expect(src).toContain('Cheer stats materializer retrying unprocessed items');
   });
 
   test('reply and react handlers enforce receiver-only interaction and idempotency', () => {

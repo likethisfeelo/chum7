@@ -40,6 +40,7 @@ export class CheerStack extends Stack {
       CHEER_API_V2_CONTRACT: process.env.CHEER_API_V2_CONTRACT ?? 'false',
       CHEER_API_V2_SUNSET_AT: process.env.CHEER_API_V2_SUNSET_AT ?? '2026-06-30T00:00:00.000Z',
       CHEER_STATS_TABLE: process.env.CHEER_STATS_TABLE ?? '',
+      CHEER_STATS_MATERIALIZER_MAX_RETRIES: process.env.CHEER_STATS_MATERIALIZER_MAX_RETRIES ?? '5',
     };
 
     const commonProps = {
