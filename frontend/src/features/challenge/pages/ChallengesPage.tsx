@@ -139,7 +139,6 @@ export const ChallengesPage = () => {
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${CATEGORY_COLORS[challenge.category] || 'bg-gray-100 text-gray-600'}`}>
                         {challenge.category}
                       </span>
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">모집중</span>
                       {alreadyJoined && (
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
                           참여신청 완료

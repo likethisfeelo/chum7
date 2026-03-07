@@ -263,7 +263,15 @@ export const ChallengeDetailPage = () => {
             </div>
             <div>
               <p className="font-bold text-gray-900">{challenge.badgeName}</p>
-              <p className="text-sm text-gray-600">"나는 {challenge.identityKeyword} 사람"</p>
+              <div className="flex items-center gap-1 mt-1">
+                <p className="text-sm text-gray-600">"나는 {challenge.identityKeyword} 사람"</p>
+                <span
+                  title="챌린지를 완주하면 이 정체성 키워드를 가진 사람이 됩니다"
+                  className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] cursor-help"
+                >
+                  ?
+                </span>
+              </div>
             </div>
           </div>
         </motion.div>

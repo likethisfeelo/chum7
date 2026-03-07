@@ -5,8 +5,8 @@ const NAV_ITEMS = [
   { path: '/challenges', icon: '🎯', label: '챌린지' },
   { path: '/outer-space', icon: '🚀', label: '마당' },
   { path: '/me', icon: null, label: 'ME', isME: true },
-  { path: '/today', icon: '📊', label: '투데이' },
-  { path: '/assets', icon: '💎', label: '애셋' },
+  { path: '/today', icon: '📊', label: '오늘' },
+  { path: '/assets', icon: '👤', label: '프로필' },
 ];
 
 export const BottomNav = () => {
@@ -62,7 +62,7 @@ export const BottomNav = () => {
               {isActive && (
                 <motion.div
                   layoutId="activeIndicator"
-                  className="absolute bottom-0 w-1 h-1 bg-primary-500 rounded-full"
+                  className="absolute bottom-0 w-1.5 h-1.5 bg-primary-500 rounded-full"
                 />
               )}
             </button>

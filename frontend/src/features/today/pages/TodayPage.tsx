@@ -7,37 +7,11 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
-
-type PeriodType = 'all' | 'day' | 'week' | 'month' | 'challenge';
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
 
-const PERIOD_LABEL: Record<PeriodType, string> = {
-  all: '전체',
-  day: '일',
-  week: '주',
-  month: '월',
-  challenge: '챌린지'
-};
-
-function toWeekInputValue(date: Date): string {
-  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = target.getUTCDay() || 7;
-  target.setUTCDate(target.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  return `${target.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-}
-
 export const TodayPage = () => {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const [period, setPeriod] = useState<PeriodType>('all');
-  const [day, setDay] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [week, setWeek] = useState(toWeekInputValue(new Date()));
-  const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'));
-  const [challengeId, setChallengeId] = useState('');
   const [replyDraftByCheer, setReplyDraftByCheer] = useState<Record<string, string>>({});
 
   const { data: cheers, isLoading: cheersLoading } = useQuery({
@@ -56,21 +30,12 @@ export const TodayPage = () => {
     },
   });
 
-  const statsQueryString = useMemo(() => {
-    const params = new URLSearchParams({ period });
-    if (period === 'day') params.set('day', day);
-    if (period === 'week' && week.trim()) params.set('week', week.trim());
-    if (period === 'month' && month.trim()) params.set('month', month.trim());
-    if (period === 'challenge' && challengeId.trim()) params.set('challengeId', challengeId.trim());
-    return params.toString();
-  }, [period, day, week, month, challengeId]);
-
-  const { data: cheerStats, isLoading: statsLoading } = useQuery({
-    queryKey: ['cheer-stats', statsQueryString],
+  const { data: myChallengesData, isLoading: challengesLoading } = useQuery({
+    queryKey: ['my-challenges-today'],
     queryFn: async () => {
-      const response = await apiClient.get(`/cheers/stats?${statsQueryString}`);
+      const response = await apiClient.get('/challenges/my?status=active');
       return response.data.data;
-    }
+    },
   });
 
   const thankMutation = useMutation({
@@ -80,7 +45,6 @@ export const TodayPage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-cheers'] });
-      queryClient.invalidateQueries({ queryKey: ['cheer-stats'] });
       toast.success('감사 표현을 보냈어요 💖');
     },
     onError: () => {
@@ -95,7 +59,6 @@ export const TodayPage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-cheers'] });
-      queryClient.invalidateQueries({ queryKey: ['cheer-stats'] });
       toast.success('리액션을 보냈어요');
     },
     onError: () => {
@@ -111,7 +74,6 @@ export const TodayPage = () => {
     onSuccess: (_, variables) => {
       setReplyDraftByCheer((prev) => ({ ...prev, [variables.cheerId]: '' }));
       queryClient.invalidateQueries({ queryKey: ['my-cheers'] });
-      queryClient.invalidateQueries({ queryKey: ['cheer-stats'] });
       toast.success('답장을 보냈어요');
     },
     onError: () => {
@@ -119,97 +81,66 @@ export const TodayPage = () => {
     }
   });
 
-  const today = format(new Date(), 'M월 d일 (E)', { locale: ko });
+  const today = format(new Date(), 'yyyy.MM.dd (E)', { locale: ko });
   const unreadCheers = cheers?.filter((c: any) => !c.isRead) || [];
+
+  const activeChallenges = useMemo(
+    () => (myChallengesData?.challenges || []).filter(
+      (c: any) => String(c.challenge?.lifecycle || '') === 'active'
+    ),
+    [myChallengesData]
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">투데이 📊</h1>
-            <p className="text-sm text-gray-500">{today}</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => navigate('/ux-plan')}
-              className="px-3 py-2 rounded-xl bg-violet-50 text-violet-700 text-xs font-semibold hover:bg-violet-100 transition-colors"
-            >
-              PHASE1-2 테스트
-            </button>
-            <button
-              onClick={() => navigate('/admin/docs')}
-              className="px-3 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition-colors"
-            >
-              운영 Docs
-            </button>
-          </div>
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">오늘 📊</h1>
+        <p className="text-sm text-gray-500">📅 {today}</p>
       </div>
 
       <div className="p-6 space-y-6">
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 space-y-3">
-          <h2 className="text-base font-bold text-gray-900">응원 통계</h2>
-          <div className="flex flex-wrap gap-2">
-            {(['all', 'day', 'week', 'month', 'challenge'] as PeriodType[]).map((value) => (
-              <button
-                key={value}
-                onClick={() => setPeriod(value)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold ${period === value ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'}`}
-              >
-                {PERIOD_LABEL[value]}
-              </button>
-            ))}
-          </div>
 
-          {period === 'day' && (
-            <input
-              type="date"
-              className="w-full border rounded-xl px-3 py-2 text-sm"
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-            />
-          )}
-          {period === 'week' && (
-            <input
-              type="week"
-              className="w-full border rounded-xl px-3 py-2 text-sm"
-              value={week}
-              onChange={(e) => setWeek(e.target.value)}
-            />
-          )}
-          {period === 'month' && (
-            <input
-              type="month"
-              className="w-full border rounded-xl px-3 py-2 text-sm"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-            />
-          )}
-          {period === 'challenge' && (
-            <input className="w-full border rounded-xl px-3 py-2 text-sm" value={challengeId} onChange={(e) => setChallengeId(e.target.value)} placeholder="challengeId" />
-          )}
-
-          {statsLoading ? (
+        {/* 오늘의 인증 현황 */}
+        <section className="bg-white border border-gray-100 rounded-2xl p-4 space-y-3">
+          <h2 className="text-base font-bold text-gray-900">오늘의 인증</h2>
+          {challengesLoading ? (
             <Loading />
+          ) : activeChallenges.length === 0 ? (
+            <p className="text-sm text-gray-500">진행 중인 챌린지가 없어요</p>
           ) : (
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="bg-gray-50 rounded-xl p-3">보낸 응원: <b>{cheerStats?.stats?.sentCount ?? 0}</b></div>
-              <div className="bg-gray-50 rounded-xl p-3">받은 응원: <b>{cheerStats?.stats?.receivedCount ?? 0}</b></div>
-              <div className="bg-gray-50 rounded-xl p-3">감사 수: <b>{cheerStats?.stats?.thankedCount ?? 0}</b></div>
-              <div className="bg-gray-50 rounded-xl p-3">답장 수: <b>{cheerStats?.stats?.repliedCount ?? 0}</b></div>
-              <div className="bg-gray-50 rounded-xl p-3">리액션 수: <b>{cheerStats?.stats?.reactionCount ?? 0}</b></div>
-              <div className="bg-gray-50 rounded-xl p-3">기간 라벨: <b>{cheerStats?.label ?? 'all'}</b></div>
+            <div className="space-y-2">
+              {activeChallenges.map((challenge: any) => {
+                const progress = challenge.progress || [];
+                const currentDay = challenge.currentDay || 1;
+                const todayDone = progress[currentDay - 1]?.status === 'success';
+                return (
+                  <div key={challenge.userChallengeId} className="flex items-center justify-between gap-3 py-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{challenge.challenge?.badgeIcon || '🎯'}</span>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{challenge.challenge?.title}</p>
+                        <p className="text-xs text-gray-500">Day {currentDay} / 7</p>
+                      </div>
+                    </div>
+                    {todayDone ? (
+                      <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg">✅ 완료</span>
+                    ) : (
+                      <span className="text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg">⏳ 대기</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
-        </div>
+        </section>
 
-        <div>
+        {/* 받은 응원 */}
+        <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-900">받은 응원 💌</h2>
+            <h2 className="text-lg font-bold text-gray-900">💌 받은 응원</h2>
             {unreadCheers.length > 0 && (
               <span className="px-2 py-0.5 bg-primary-100 text-primary-600 text-xs font-bold rounded-full">
-                새 응원 {unreadCheers.length}개
+                {unreadCheers.length} NEW
               </span>
             )}
           </div>
@@ -267,6 +198,7 @@ export const TodayPage = () => {
                             </div>
                           ) : (
                             <div className="space-y-1">
+                              <p className="text-[11px] text-gray-500 mb-1">답장은 1회 작성 정책이며 전송 후 수정/삭제할 수 없어요.</p>
                               <div className="flex gap-2">
                                 <input
                                   value={replyDraftByCheer[cheer.cheerId] ?? ''}
@@ -282,7 +214,6 @@ export const TodayPage = () => {
                                   답장
                                 </button>
                               </div>
-                              <p className="text-[11px] text-gray-500">답장은 1회 작성 정책이며 전송 후 수정/삭제할 수 없어요.</p>
                             </div>
                           )}
                         </div>
@@ -305,11 +236,12 @@ export const TodayPage = () => {
               ))}
             </div>
           )}
-        </div>
+        </section>
 
-        <div>
+        {/* 보낸 응원 */}
+        <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-900">내가 보낸 응원 ✉️</h2>
+            <h2 className="text-lg font-bold text-gray-900">📤 내가 보낸 응원</h2>
           </div>
           {sentCheersLoading ? (
             <Loading />
@@ -339,7 +271,7 @@ export const TodayPage = () => {
               ))}
             </div>
           )}
-        </div>
+        </section>
       </div>
     </div>
   );

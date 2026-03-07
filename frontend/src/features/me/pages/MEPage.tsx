@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -11,6 +11,8 @@ import { VerificationSheet } from '@/features/verification/components/Verificati
 import { getChallengeTypeLabel as getChallengeTypeLabelByType, getRemedyLabel, getRemedyType, getRemainingRemedyCount } from '@/features/challenge/utils/flowPolicy';
 import toast from 'react-hot-toast';
 
+type METab = 'active' | 'pending' | 'completed';
+
 const DAY_STATUS_COLORS: Record<string, string> = {
   completed: 'bg-green-500',
   failed: 'bg-red-300',
@@ -18,7 +20,6 @@ const DAY_STATUS_COLORS: Record<string, string> = {
   skipped: 'bg-gray-200',
   pending: 'bg-gray-100 border-2 border-gray-300',
 };
-
 
 function getChallengeTypeLabel(challenge: any) {
   const type = String(challenge?.challenge?.challengeType || challenge?.challenge?.type || 'leader_personal');
@@ -33,16 +34,22 @@ function getTodayGuide(challenge: any) {
   return '오늘 실천한 내용을 인증하고, 필요하면 추가 기록도 남길 수 있어요.';
 }
 
+const getProposalStatusMeta = (status?: string) => {
+  const key = String(status || 'pending');
+  if (key === 'approved') return { label: '승인됨', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', nextAction: '승인 완료. 활성 단계에서 인증을 진행하세요.' };
+  if (key === 'rejected') return { label: '수정 필요', color: 'text-rose-700 bg-rose-50 border-rose-200', nextAction: '리더 피드백 반영 후 /quests 페이지에서 수정 재제출이 필요합니다.' };
+  if (key === 'revision_pending') return { label: '재심사 대기', color: 'text-indigo-700 bg-indigo-50 border-indigo-200', nextAction: '리더가 수정본을 검토 중입니다. 결과를 기다려주세요.' };
+  if (key === 'expired') return { label: '기간 만료', color: 'text-gray-700 bg-gray-100 border-gray-200', nextAction: '제안 마감이 지나 개인 퀘스트 없이 진행됩니다.' };
+  if (key === 'disqualified') return { label: '자격 제한', color: 'text-gray-700 bg-gray-200 border-gray-300', nextAction: '개인 퀘스트 제안 자격이 제한되었습니다.' };
+  return { label: '검토중', color: 'text-amber-700 bg-amber-50 border-amber-200', nextAction: '리더 검토 결과를 기다려주세요.' };
+};
+
 export const MEPage = () => {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const [activeTab, setActiveTab] = useState<METab>('active');
   const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
   const [showVerification, setShowVerification] = useState(false);
-  const [pendingVisibilityId, setPendingVisibilityId] = useState<string | null>(null);
-  const [isBulkPublishing, setIsBulkPublishing] = useState(false);
-  const [selectedExtraIds, setSelectedExtraIds] = useState<string[]>([]);
-  const [failedPublishIds, setFailedPublishIds] = useState<string[]>([]);
-  const [proposalFormByChallenge, setProposalFormByChallenge] = useState<Record<string, { title: string; description: string; verificationType: 'image' | 'text' | 'link' | 'video' }>>({});
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -63,13 +70,20 @@ export const MEPage = () => {
     },
   });
 
+  const { data: extraCountData } = useQuery({
+    queryKey: ['verifications', 'mine-extra-count'],
+    queryFn: async () => {
+      const response = await apiClient.get('/verifications?mine=true&isExtra=true&limit=1');
+      return response.data.data;
+    },
+  });
 
   const personalQuestTargetChallenges = useMemo(
     () => challenges.filter((challenge: any) => Boolean(challenge?.challenge?.personalQuestEnabled)),
     [challenges],
   );
 
-  const { data: personalQuestProposalMap, refetch: refetchPersonalQuestProposals } = useQuery({
+  const { data: personalQuestProposalMap } = useQuery({
     queryKey: ['my-personal-quest-proposals', personalQuestTargetChallenges.map((c: any) => c.challengeId).join(',')],
     enabled: personalQuestTargetChallenges.length > 0,
     queryFn: async () => {
@@ -81,82 +95,6 @@ export const MEPage = () => {
       );
       return Object.fromEntries(entries) as Record<string, any>;
     },
-  });
-
-  const revisePersonalQuestMutation = useMutation({
-    mutationFn: async ({ challengeId, proposalId }: { challengeId: string; proposalId: string }) => {
-      const form = proposalFormByChallenge[challengeId];
-      if (!form?.title?.trim()) {
-        throw new Error('퀘스트 제목을 입력해주세요');
-      }
-      await apiClient.put(`/challenges/${challengeId}/personal-quest/${proposalId}`, {
-        title: form.title.trim(),
-        description: form.description?.trim() || '',
-        verificationType: form.verificationType,
-      });
-    },
-    onSuccess: async () => {
-      toast.success('수정 재제출이 완료되었습니다 🔄');
-      await refetchPersonalQuestProposals();
-    },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.message || error?.message || '수정 재제출에 실패했습니다');
-    },
-  });
-
-  const { data: myExtraFeedPage, isFetching: isFetchingExtra } = useQuery({
-    queryKey: ['verifications', 'mine-extra'],
-    queryFn: async () => {
-      const response = await apiClient.get('/verifications?mine=true&isExtra=true&limit=10');
-      return {
-        verifications: response.data.data.verifications || [],
-        nextToken: response.data.data.nextToken || null,
-      };
-    },
-  });
-
-  const [extraItems, setExtraItems] = useState<any[]>([]);
-  const [extraNextToken, setExtraNextToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    setExtraItems(myExtraFeedPage?.verifications || []);
-    setExtraNextToken(myExtraFeedPage?.nextToken || null);
-  }, [myExtraFeedPage]);
-
-
-  useEffect(() => {
-    const privateIds = extraItems.filter((item: any) => item.isPersonalOnly).map((item: any) => item.verificationId);
-    setSelectedExtraIds((prev) => prev.filter((id) => privateIds.includes(id)));
-    setFailedPublishIds((prev) => prev.filter((id) => privateIds.includes(id)));
-  }, [extraItems]);
-
-  const privateExtraItems = useMemo(
-    () => extraItems.filter((item: any) => item.isPersonalOnly),
-    [extraItems],
-  );
-
-  const selectedPrivateCount = useMemo(
-    () => selectedExtraIds.filter((id) => privateExtraItems.some((item: any) => item.verificationId === id)).length,
-    [selectedExtraIds, privateExtraItems],
-  );
-
-  const loadMoreExtraMutation = useMutation({
-    mutationFn: async () => {
-      if (!extraNextToken) return null;
-      const response = await apiClient.get(`/verifications?mine=true&isExtra=true&limit=10&nextToken=${encodeURIComponent(extraNextToken)}`);
-      return {
-        verifications: response.data.data.verifications || [],
-        nextToken: response.data.data.nextToken || null,
-      };
-    },
-    onSuccess: (data) => {
-      if (!data) return;
-      setExtraItems((prev) => [...prev, ...data.verifications]);
-      setExtraNextToken(data.nextToken);
-    },
-    onError: () => {
-      toast.error('추가 기록을 더 불러오지 못했어요');
-    }
   });
 
   const [leaderDmTargetId, setLeaderDmTargetId] = useState<string | null>(null);
@@ -199,105 +137,6 @@ export const MEPage = () => {
     leaderDmMutation.mutate(challengeId);
   };
 
-  const visibilityMutation = useMutation({
-    mutationFn: async (verificationId: string) => {
-      setPendingVisibilityId(verificationId);
-      await apiClient.patch(`/verifications/${verificationId}/visibility`, { isPersonalOnly: false });
-      return verificationId;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['verifications', 'mine-extra'] });
-      queryClient.invalidateQueries({ queryKey: ['verifications', 'public'] });
-      toast.success('추가 기록을 공개 피드로 전환했어요 🌍');
-    },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.message || '공개 전환에 실패했습니다');
-    },
-    onSettled: () => {
-      setPendingVisibilityId(null);
-    }
-  });
-
-
-  const publishExtraVisibilityBatch = async (targetIds: string[]) => {
-    setIsBulkPublishing(true);
-    const results = await Promise.allSettled(
-      targetIds.map((verificationId) => apiClient.patch(`/verifications/${verificationId}/visibility`, { isPersonalOnly: false })),
-    );
-
-    const successIds = results
-      .map((result, idx) => (result.status === 'fulfilled' ? targetIds[idx] : null))
-      .filter((id): id is string => Boolean(id));
-
-    const failIds = results
-      .map((result, idx) => (result.status === 'rejected' ? targetIds[idx] : null))
-      .filter((id): id is string => Boolean(id));
-
-    queryClient.invalidateQueries({ queryKey: ['verifications', 'mine-extra'] });
-    queryClient.invalidateQueries({ queryKey: ['verifications', 'public'] });
-
-    setFailedPublishIds(failIds);
-    setSelectedExtraIds((prev) => prev.filter((id) => failIds.includes(id)));
-    setIsBulkPublishing(false);
-
-    return { successCount: successIds.length, failCount: failIds.length, failIds };
-  };
-
-  const handlePublishAllExtras = async () => {
-    const pendingItems = extraItems.filter((item: any) => item.isPersonalOnly);
-    if (pendingItems.length === 0) {
-      toast('이미 모든 추가 기록이 공개 상태예요.', { icon: 'ℹ️' });
-      return;
-    }
-
-    const confirmed = window.confirm(`비공개 추가 기록 ${pendingItems.length}건을 모두 공개할까요?`);
-    if (!confirmed) return;
-
-    const { successCount, failCount } = await publishExtraVisibilityBatch(
-      pendingItems.map((item: any) => item.verificationId),
-    );
-
-    if (failCount === 0) {
-      toast.success(`${successCount}건의 추가 기록을 공개 전환했어요 🌍`);
-    } else {
-      toast.error(`${successCount}건 성공, ${failCount}건 실패. 실패 항목을 선택해 재시도할 수 있어요.`);
-    }
-  };
-
-
-
-  const handlePublishSelectedExtras = async () => {
-    const targetIds = selectedExtraIds.filter((id) => privateExtraItems.some((item: any) => item.verificationId === id));
-    if (targetIds.length === 0) {
-      toast('공개할 항목을 먼저 선택해주세요.', { icon: 'ℹ️' });
-      return;
-    }
-
-    const confirmed = window.confirm(`선택한 추가 기록 ${targetIds.length}건을 공개할까요?`);
-    if (!confirmed) return;
-
-    const { successCount, failCount } = await publishExtraVisibilityBatch(targetIds);
-    if (failCount === 0) {
-      toast.success(`선택한 ${successCount}건을 공개 전환했어요 🌍`);
-    } else {
-      toast.error(`${successCount}건 성공, ${failCount}건 실패. 실패 항목만 남겨두었습니다.`);
-    }
-  };
-
-  const handleRetryFailedPublishes = async () => {
-    if (failedPublishIds.length === 0) {
-      toast('재시도할 실패 항목이 없어요.', { icon: 'ℹ️' });
-      return;
-    }
-
-    const { successCount, failCount } = await publishExtraVisibilityBatch(failedPublishIds);
-    if (failCount === 0) {
-      toast.success(`실패 항목 ${successCount}건 재시도에 성공했어요 ✅`);
-    } else {
-      toast.error(`재시도 결과: ${successCount}건 성공, ${failCount}건 실패`);
-    }
-  };
-
   const pendingChallenges = useMemo(
     () => challenges.filter((challenge: any) => {
       const lifecycle = String(challenge.challenge?.lifecycle || '');
@@ -305,6 +144,7 @@ export const MEPage = () => {
     }),
     [challenges],
   );
+
   const activeChallenges = useMemo(
     () => challenges.filter((challenge: any) => String(challenge.challenge?.lifecycle || '') === 'active'),
     [challenges],
@@ -315,24 +155,22 @@ export const MEPage = () => {
     [completedChallengesData],
   );
 
-
-  const getProposalStatusMeta = (status?: string) => {
-    const key = String(status || 'pending');
-    if (key === 'approved') return { label: '승인됨', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', nextAction: '승인 완료. 활성 단계에서 인증을 진행하세요.' };
-    if (key === 'rejected') return { label: '수정 필요', color: 'text-rose-700 bg-rose-50 border-rose-200', nextAction: '리더 피드백 반영 후 수정 재제출이 필요합니다.' };
-    if (key === 'revision_pending') return { label: '재심사 대기', color: 'text-indigo-700 bg-indigo-50 border-indigo-200', nextAction: '리더가 수정본을 검토 중입니다. 결과를 기다려주세요.' };
-    if (key === 'expired') return { label: '기간 만료', color: 'text-gray-700 bg-gray-100 border-gray-200', nextAction: '제안 마감이 지나 개인 퀘스트 없이 진행됩니다.' };
-    if (key === 'disqualified') return { label: '자격 제한', color: 'text-gray-700 bg-gray-200 border-gray-300', nextAction: '개인 퀘스트 제안 자격이 제한되었습니다.' };
-    return { label: '검토중', color: 'text-amber-700 bg-amber-50 border-amber-200', nextAction: '리더 검토 결과를 기다려주세요.' };
-  };
-
   const handleVerify = (challenge: any) => {
     setSelectedChallenge(challenge);
     setShowVerification(true);
   };
 
+  const TAB_CONFIG: { key: METab; label: string; count: number }[] = [
+    { key: 'active', label: '진행중', count: activeChallenges.length },
+    { key: 'pending', label: '준비중', count: pendingChallenges.length },
+    { key: 'completed', label: '완료', count: completedChallenges.length },
+  ];
+
+  const isEmpty = activeChallenges.length === 0 && pendingChallenges.length === 0 && completedChallenges.length === 0;
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* 헤더 */}
       <div className="bg-gradient-to-br from-primary-500 to-primary-700 pt-12 pb-8 px-6">
         <div className="flex items-center justify-between mb-2">
           <div>
@@ -351,7 +189,7 @@ export const MEPage = () => {
       <div className="p-6 space-y-4">
         {isLoading ? (
           <Loading />
-        ) : activeChallenges.length === 0 && pendingChallenges.length === 0 && completedChallenges.length === 0 ? (
+        ) : isEmpty ? (
           <EmptyState
             icon="🎯"
             title="진행 중인 챌린지가 없어요"
@@ -363,255 +201,314 @@ export const MEPage = () => {
           />
         ) : (
           <>
-            {activeChallenges.map((challenge: any, index: number) => {
-              const progress = challenge.progress || [];
-              const completedDays = progress.filter((p: any) => p.status === 'success').length;
-              const currentDay = challenge.currentDay || 1;
-              const todayDone = progress[currentDay - 1]?.status === 'success';
-
-              return (
-                <motion.div
-                  key={challenge.userChallengeId}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100"
+            {/* 탭 */}
+            <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+              {TAB_CONFIG.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    activeTab === tab.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                  }`}
                 >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="text-3xl">{challenge.challenge?.badgeIcon || '🎯'}</div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-gray-900">{challenge.challenge?.title}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <p className="text-sm text-primary-600">Day {currentDay} / 7</p>
-                        <span className="px-2 py-0.5 text-[11px] rounded-full bg-primary-50 text-primary-700 border border-primary-100">
-                          {getChallengeTypeLabel(challenge)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-900">{challenge.score || 0}</p>
-                      <p className="text-xs text-gray-500">점수</p>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 mb-4">
-                    💡 {getTodayGuide(challenge)}
-                  </p>
-
-                  <div className="mb-4">
-                    <ProgressBar current={completedDays} total={7} />
-                  </div>
-
-                  <div className="flex gap-2 mb-4">
-                    {Array.from({ length: 7 }, (_, i) => {
-                      const dayStatus = progress[i]?.status || (i < currentDay - 1 ? 'skipped' : 'pending');
-                      return (
-                        <div
-                          key={i}
-                          className={`flex-1 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${DAY_STATUS_COLORS[dayStatus] || 'bg-gray-100'}`}
-                        >
-                          <span className={dayStatus === 'pending' ? 'text-gray-400' : 'text-white'}>
-                            {i + 1}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {(() => {
-                    const remedyType = getRemedyType(challenge.remedyPolicy);
-                    const remaining = getRemainingRemedyCount(challenge.remedyPolicy, progress);
-                    return (
-                      <div className="mb-4 rounded-lg border border-purple-100 bg-purple-50 px-3 py-2 text-xs text-purple-800">
-                        레메디 정책: {getRemedyLabel(challenge.remedyPolicy)} · 남은 보완 {remaining === null ? '제한 없음' : `${remaining}회`}
-                        {remedyType === 'strict' && <span className="ml-1 font-semibold">(보완 버튼 비노출)</span>}
-                      </div>
-                    );
-                  })()}
-
-                  {!todayDone && currentDay <= 7 ? (
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleVerify(challenge)}
-                      className="w-full py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white font-bold rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all"
-                    >
-                      Day {currentDay} 인증하기 📸
-                    </motion.button>
-                  ) : todayDone ? (
-                    <div className="w-full py-3 bg-green-50 text-green-600 font-semibold rounded-xl text-center">
-                      ✅ 오늘 인증 완료!
-                    </div>
-                  ) : (
-                    <div className="w-full py-3 bg-gray-50 text-gray-500 font-semibold rounded-xl text-center">
-                      챌린지 완료 🎉
-                    </div>
+                  {tab.label}
+                  {tab.count > 0 && (
+                    <span className={`ml-1 text-xs ${activeTab === tab.key ? 'text-primary-600' : 'text-gray-400'}`}>
+                      {tab.count}
+                    </span>
                   )}
+                </button>
+              ))}
+            </div>
 
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
-                      className="py-2.5 rounded-xl border border-primary-200 text-primary-700 bg-primary-50"
-                    >
-                      피드 열기
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
-                      className="py-2.5 rounded-xl border border-amber-200 text-amber-700 bg-amber-50"
-                    >
-                      보드
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleLeaderDm(challenge)}
-                      disabled={leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId)}
-                      className="py-2.5 rounded-xl border border-blue-200 text-blue-700 bg-blue-50 disabled:opacity-50"
-                    >
-                      {leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId) ? 'DM 연결중...' : '리더 DM'}
-                    </button>
-                  </div>
+            {/* 진행중 탭 */}
+            {activeTab === 'active' && (
+              <div className="space-y-4">
+                {activeChallenges.length === 0 ? (
+                  <EmptyState icon="🏃" title="진행 중인 챌린지가 없어요" description="챌린지에 참여하고 오늘부터 시작해보세요" />
+                ) : activeChallenges.map((challenge: any, index: number) => {
+                  const progress = challenge.progress || [];
+                  const completedDays = progress.filter((p: any) => p.status === 'success').length;
+                  const currentDay = challenge.currentDay || 1;
+                  const todayDone = progress[currentDay - 1]?.status === 'success';
 
-                  {(() => {
-                    const remedyType = getRemedyType(challenge.remedyPolicy);
-                    const remaining = getRemainingRemedyCount(challenge.remedyPolicy, progress);
-                    const failedDays = progress.filter((p: any) => p.day <= 5 && p.status !== 'success' && !p.remedied);
-                    const canRemedy = remedyType !== 'strict' && (remaining === null || remaining > 0) && failedDays.length > 0;
-                    if (remedyType === 'strict') return null;
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/verification/remedy?userChallengeId=${challenge.userChallengeId}`)}
-                        disabled={!canRemedy}
-                        className="mt-2 w-full py-2.5 rounded-xl border border-purple-200 text-purple-700 bg-purple-50 disabled:opacity-50"
-                      >
-                        Day 6 보완하기 {remaining === null ? '(제한 없음)' : `(${remaining}회 남음)`}
-                      </button>
-                    );
-                  })()}
-                </motion.div>
-              );
-            })}
-
-            {pendingChallenges.length > 0 && (
-              <section className="bg-white rounded-2xl p-5 border border-amber-200 space-y-3">
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">참여신청/준비중 챌린지</h2>
-                  <p className="text-sm text-gray-500">리크루팅/준비중 단계에서는 인증 대신 상세/퀘스트 보드 확인이 가능합니다.</p>
-                </div>
-                <div className="space-y-2">
-                  {pendingChallenges.map((challenge: any) => {
-                    const lifecycle = String(challenge.challenge?.lifecycle || 'preparing');
-                    const statusLabel = lifecycle === 'recruiting' ? '리크루팅' : '준비중';
-                    return (
-                      <div key={challenge.userChallengeId} className="border border-amber-100 bg-amber-50 rounded-xl p-3 space-y-2">
-                        <p className="font-semibold text-gray-900">{challenge.challenge?.title}</p>
-                        <p className="text-xs text-amber-700">
-                          시작일: {challenge.startDate || '-'} · 상태: {statusLabel}
-                        </p>
-                        <div className="grid grid-cols-3 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
-                            className="py-2 rounded-lg border border-primary-200 bg-white text-primary-700 text-sm"
-                          >
-                            피드 열기
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
-                            className="py-2 rounded-lg border border-amber-200 bg-white text-amber-700 text-sm"
-                          >
-                            보드
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleLeaderDm(challenge)}
-                            disabled={leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId)}
-                            className="py-2 rounded-lg border border-blue-200 bg-white text-blue-700 text-sm disabled:opacity-50"
-                          >
-                            {leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId) ? 'DM 연결중...' : '리더 DM'}
-                          </button>
+                  return (
+                    <motion.div
+                      key={challenge.userChallengeId}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100"
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="text-3xl">{challenge.challenge?.badgeIcon || '🎯'}</div>
+                        <div className="flex-1">
+                          <h3 className="font-bold text-gray-900">{challenge.challenge?.title}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-sm text-primary-600">Day {currentDay} / 7</p>
+                            <span className="px-2 py-0.5 text-[11px] rounded-full bg-primary-50 text-primary-700 border border-primary-100">
+                              {getChallengeTypeLabel(challenge)}
+                            </span>
+                          </div>
                         </div>
-                        {challenge.challenge?.personalQuestEnabled && (() => {
-                          const proposal = personalQuestProposalMap?.[challenge.challengeId];
-                          const statusMeta = getProposalStatusMeta(proposal?.status);
-                          const currentForm = proposalFormByChallenge[challenge.challengeId] || {
-                            title: proposal?.title || '',
-                            description: proposal?.description || '',
-                            verificationType: (proposal?.verificationType || 'image') as 'image' | 'text' | 'link' | 'video',
-                          };
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-gray-900">{challenge.score || 0}</p>
+                          <p className="text-xs text-gray-500">점수</p>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 mb-4">
+                        💡 {getTodayGuide(challenge)}
+                      </p>
+
+                      <div className="mb-4">
+                        <ProgressBar current={completedDays} total={7} />
+                      </div>
+
+                      <div className="flex gap-2 mb-4">
+                        {Array.from({ length: 7 }, (_, i) => {
+                          const dayStatus = progress[i]?.status || (i < currentDay - 1 ? 'skipped' : 'pending');
                           return (
-                            <div className="rounded-lg border border-amber-200 bg-white p-3 space-y-2">
-                              <p className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${statusMeta.color}`}>개인 퀘스트: {statusMeta.label}</p>
-                              <p className="text-xs text-gray-700">{proposal?.title || '아직 제출한 개인 퀘스트가 없습니다.'}</p>
-                              {proposal?.registrationDeadline && <p className="text-xs text-gray-500">마감: {String(proposal.registrationDeadline).replace('T', ' ').slice(0, 16)}</p>}
-                              {proposal?.revisionCount !== undefined && <p className="text-xs text-gray-500">수정 사용: {proposal.revisionCount}/2</p>}
-                              <p className="text-xs text-gray-600">다음 할 일: {statusMeta.nextAction}</p>
-                              {proposal?.leaderFeedback && <p className="text-xs text-rose-700">피드백: {proposal.leaderFeedback}</p>}
-                              {proposal?.status === 'rejected' && (
-                                <div className="space-y-2">
-                                  <input
-                                    value={currentForm.title}
-                                    onChange={(e) => setProposalFormByChallenge((prev) => ({ ...prev, [challenge.challengeId]: { ...currentForm, title: e.target.value } }))}
-                                    placeholder="퀘스트 제목"
-                                    className="w-full px-2.5 py-2 text-xs border border-gray-300 rounded-lg"
-                                  />
-                                  <input
-                                    value={currentForm.description}
-                                    onChange={(e) => setProposalFormByChallenge((prev) => ({ ...prev, [challenge.challengeId]: { ...currentForm, description: e.target.value } }))}
-                                    placeholder="설명"
-                                    className="w-full px-2.5 py-2 text-xs border border-gray-300 rounded-lg"
-                                  />
-                                  <select
-                                    value={currentForm.verificationType}
-                                    onChange={(e) => setProposalFormByChallenge((prev) => ({ ...prev, [challenge.challengeId]: { ...currentForm, verificationType: e.target.value as 'image' | 'text' | 'link' | 'video' } }))}
-                                    className="w-full px-2.5 py-2 text-xs border border-gray-300 rounded-lg"
-                                  >
-                                    <option value="image">사진</option>
-                                    <option value="text">텍스트</option>
-                                    <option value="link">링크</option>
-                                    <option value="video">영상</option>
-                                  </select>
-                                  <button
-                                    type="button"
-                                    onClick={() => revisePersonalQuestMutation.mutate({ challengeId: challenge.challengeId, proposalId: proposal.proposalId })}
-                                    className="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white"
-                                    disabled={revisePersonalQuestMutation.isPending}
-                                  >
-                                    {revisePersonalQuestMutation.isPending ? '재제출 중...' : '수정하기'}
-                                  </button>
-                                </div>
-                              )}
+                            <div
+                              key={i}
+                              className={`flex-1 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${DAY_STATUS_COLORS[dayStatus] || 'bg-gray-100'}`}
+                            >
+                              <span className={dayStatus === 'pending' ? 'text-gray-400' : 'text-white'}>
+                                {i + 1}
+                              </span>
                             </div>
                           );
-                        })()}
-                        <div className="flex gap-2">
+                        })}
+                      </div>
+
+                      {(() => {
+                        const remedyType = getRemedyType(challenge.remedyPolicy);
+                        const remaining = getRemainingRemedyCount(challenge.remedyPolicy, progress);
+                        return (
+                          <div className="mb-4 rounded-lg border border-purple-100 bg-purple-50 px-3 py-2 text-xs text-purple-800">
+                            레메디 정책: {getRemedyLabel(challenge.remedyPolicy)} · 남은 보완 {remaining === null ? '제한 없음' : `${remaining}회`}
+                            {remedyType === 'strict' && <span className="ml-1 font-semibold">(보완 버튼 비노출)</span>}
+                          </div>
+                        );
+                      })()}
+
+                      {!todayDone && currentDay <= 7 ? (
+                        <motion.button
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => handleVerify(challenge)}
+                          className="w-full py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white font-bold rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all"
+                        >
+                          Day {currentDay} 인증하기 📸
+                        </motion.button>
+                      ) : todayDone ? (
+                        <div className="w-full py-3 bg-green-50 text-green-600 font-semibold rounded-xl text-center">
+                          ✅ 오늘 인증 완료!
+                        </div>
+                      ) : (
+                        <div className="w-full py-3 bg-gray-50 text-gray-500 font-semibold rounded-xl text-center">
+                          챌린지 완료 🎉
+                        </div>
+                      )}
+
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                          className="py-2.5 rounded-xl border border-primary-200 text-primary-700 bg-primary-50 text-sm"
+                        >
+                          피드
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                          className="py-2.5 rounded-xl border border-amber-200 text-amber-700 bg-amber-50 text-sm"
+                        >
+                          보드
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleLeaderDm(challenge)}
+                          disabled={leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId)}
+                          className="py-2.5 rounded-xl border border-blue-200 text-blue-700 bg-blue-50 disabled:opacity-50 text-sm"
+                        >
+                          {leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId) ? 'DM 중...' : '리더 DM'}
+                        </button>
+                      </div>
+
+                      {(() => {
+                        const remedyType = getRemedyType(challenge.remedyPolicy);
+                        const remaining = getRemainingRemedyCount(challenge.remedyPolicy, progress);
+                        const failedDays = progress.filter((p: any) => p.day <= 5 && p.status !== 'success' && !p.remedied);
+                        const canRemedy = remedyType !== 'strict' && (remaining === null || remaining > 0) && failedDays.length > 0;
+                        if (remedyType === 'strict') return null;
+                        return (
                           <button
                             type="button"
-                            onClick={() => navigate(`/challenges/${challenge.challengeId}`)}
-                            className="px-3 py-1.5 text-xs rounded-lg bg-white border border-amber-200 text-amber-800"
+                            onClick={() => navigate(`/verification/remedy?userChallengeId=${challenge.userChallengeId}`)}
+                            disabled={!canRemedy}
+                            className="mt-2 w-full py-2.5 rounded-xl border border-purple-200 text-purple-700 bg-purple-50 disabled:opacity-50 text-sm"
                           >
-                            챌린지 소개 보기
+                            Day 6 보완하기 {remaining === null ? '(제한 없음)' : `(${remaining}회 남음)`}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/quests?challengeId=${challenge.challengeId}`)}
-                            className="px-3 py-1.5 text-xs rounded-lg bg-amber-600 text-white"
-                          >
-                            퀘스트 보드 보기
-                          </button>
+                        );
+                      })()}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 준비중 탭 */}
+            {activeTab === 'pending' && (
+              <div className="space-y-3">
+                {pendingChallenges.length === 0 ? (
+                  <EmptyState icon="⏳" title="준비 중인 챌린지가 없어요" description="모집중 챌린지에 참여 신청해보세요" />
+                ) : pendingChallenges.map((challenge: any) => {
+                  const lifecycle = String(challenge.challenge?.lifecycle || 'preparing');
+                  const statusLabel = lifecycle === 'recruiting' ? '리크루팅' : '준비중';
+                  const proposal = personalQuestProposalMap?.[challenge.challengeId];
+                  const statusMeta = getProposalStatusMeta(proposal?.status);
+
+                  return (
+                    <div key={challenge.userChallengeId} className="bg-white rounded-2xl p-5 border border-amber-200 space-y-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl">{challenge.challenge?.badgeIcon || '🎯'}</span>
+                        <div className="flex-1">
+                          <p className="font-semibold text-gray-900">{challenge.challenge?.title}</p>
+                          <p className="text-xs text-amber-700 mt-0.5">
+                            시작일: {challenge.startDate || '-'} · {statusLabel}
+                          </p>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </section>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                          className="py-2 rounded-lg border border-primary-200 bg-white text-primary-700 text-sm"
+                        >
+                          피드
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                          className="py-2 rounded-lg border border-amber-200 bg-white text-amber-700 text-sm"
+                        >
+                          보드
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleLeaderDm(challenge)}
+                          disabled={leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId)}
+                          className="py-2 rounded-lg border border-blue-200 bg-white text-blue-700 text-sm disabled:opacity-50"
+                        >
+                          {leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId) ? 'DM 중...' : '리더 DM'}
+                        </button>
+                      </div>
+
+                      {challenge.challenge?.personalQuestEnabled && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1">
+                          <p className={`inline-flex px-2 py-0.5 text-[11px] rounded-full border ${statusMeta.color}`}>
+                            개인 퀘스트: {statusMeta.label}
+                          </p>
+                          <p className="text-xs text-gray-700">{proposal?.title || '아직 제출한 개인 퀘스트가 없습니다.'}</p>
+                          <p className="text-xs text-gray-600">{statusMeta.nextAction}</p>
+                          {proposal?.leaderFeedback && (
+                            <p className="text-xs text-rose-700">피드백: {proposal.leaderFeedback}</p>
+                          )}
+                          {proposal?.status === 'rejected' && (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/quests?challengeId=${challenge.challengeId}`)}
+                              className="mt-1 px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white"
+                            >
+                              퀘스트 보드에서 수정하기
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/challenges/${challenge.challengeId}`)}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-white border border-amber-200 text-amber-800"
+                        >
+                          챌린지 소개
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/quests?challengeId=${challenge.challengeId}`)}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-amber-600 text-white"
+                        >
+                          퀘스트 보드
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 완료 탭 */}
+            {activeTab === 'completed' && (
+              <div className="space-y-3">
+                {completedChallenges.length === 0 ? (
+                  <EmptyState icon="🏆" title="완료한 챌린지가 없어요" description="7일 챌린지를 완주하면 여기에 표시돼요" />
+                ) : completedChallenges.map((challenge: any) => (
+                  <div key={challenge.userChallengeId || challenge.challengeId} className="bg-white rounded-2xl p-5 border border-emerald-200 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">{challenge.challenge?.badgeIcon || challenge.badgeIcon || '🏆'}</span>
+                      <div>
+                        <p className="font-semibold text-gray-900">{challenge.challenge?.title || challenge.title}</p>
+                        <p className="text-xs text-emerald-700 mt-0.5">완주 완료 🎉</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                        className="py-2 rounded-lg border border-primary-200 bg-white text-primary-700 text-sm"
+                      >
+                        피드
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                        className="py-2 rounded-lg border border-amber-200 bg-white text-amber-700 text-sm"
+                      >
+                        보드
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleLeaderDm(challenge)}
+                        disabled={leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId)}
+                        className="py-2 rounded-lg border border-blue-200 bg-white text-blue-700 text-sm disabled:opacity-50"
+                      >
+                        {leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId) ? 'DM 중...' : '리더 DM'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </>
         )}
 
+        {/* 추가기록 링크 */}
+        {(extraCountData?.verifications?.length > 0 || extraCountData?.nextToken) && (
+          <button
+            type="button"
+            onClick={() => navigate('/me/records')}
+            className="w-full py-3 border border-gray-200 rounded-2xl text-sm text-gray-600 bg-white flex items-center justify-between px-5 hover:border-primary-300 hover:text-primary-600 transition-colors"
+          >
+            <span>📝 추가기록</span>
+            <span className="text-xs text-gray-400">더보기 →</span>
+          </button>
+        )}
 
+        {/* 실행 가이드 */}
         <section className="bg-white rounded-2xl p-5 border border-gray-200 space-y-3">
           <h2 className="text-lg font-bold text-gray-900">실행 가이드</h2>
           <ul className="text-sm text-gray-600 space-y-1">
@@ -621,145 +518,7 @@ export const MEPage = () => {
           </ul>
         </section>
 
-
-        {extraItems?.length > 0 && (
-          <section className="bg-white rounded-2xl p-5 border border-gray-200 space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">내 추가 기록</h2>
-                <p className="text-sm text-gray-500">추가 인증은 기본적으로 나만 보기로 저장되며, 여기서 공개 전환할 수 있어요.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handlePublishSelectedExtras}
-                  disabled={isBulkPublishing || selectedPrivateCount === 0}
-                  className="px-3 py-1.5 text-xs rounded-lg border border-primary-200 text-primary-700 bg-white disabled:opacity-50"
-                >
-                  선택 공개({selectedPrivateCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePublishAllExtras}
-                  disabled={isBulkPublishing || privateExtraItems.length === 0}
-                  className="px-3 py-1.5 text-xs rounded-lg border border-primary-200 text-primary-700 bg-primary-50 disabled:opacity-50"
-                >
-                  {isBulkPublishing ? '일괄 전환 중...' : '전체 공개'}
-                </button>
-              </div>
-            </div>
-
-            {failedPublishIds.length > 0 && (
-              <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-xs text-red-700">공개 전환 실패 {failedPublishIds.length}건이 있어요.</p>
-                <button
-                  type="button"
-                  onClick={handleRetryFailedPublishes}
-                  disabled={isBulkPublishing}
-                  className="px-2.5 py-1 text-xs rounded-md border border-red-300 text-red-700 bg-white disabled:opacity-50"
-                >
-                  실패 항목 재시도
-                </button>
-              </div>
-            )}
-
-
-            <div className="space-y-2">
-              {extraItems.map((item: any) => (
-                <div key={item.verificationId} className="border border-gray-100 rounded-xl p-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex items-start gap-2">
-                    {item.isPersonalOnly ? (
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={selectedExtraIds.includes(item.verificationId)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedExtraIds((prev) => Array.from(new Set([...prev, item.verificationId])));
-                          } else {
-                            setSelectedExtraIds((prev) => prev.filter((id) => id !== item.verificationId));
-                          }
-                        }}
-                      />
-                    ) : (
-                      <span className="mt-1 text-[10px] text-green-700 bg-green-50 border border-green-200 rounded px-1.5 py-0.5">공개</span>
-                    )}
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">Day {item.day} · 📝 추가 기록</p>
-                      <p className="text-xs text-gray-500 truncate">{item.todayNote || '소감 없음'}</p>
-                    </div>
-                  </div>
-
-                  {item.isPersonalOnly ? (
-                    <button
-                      type="button"
-                      onClick={() => visibilityMutation.mutate(item.verificationId)}
-                      className="px-3 py-1.5 text-xs rounded-lg bg-primary-600 text-white disabled:opacity-50"
-                      disabled={visibilityMutation.isPending && pendingVisibilityId === item.verificationId}
-                    >
-                      {visibilityMutation.isPending && pendingVisibilityId === item.verificationId ? '전환 중...' : '피드 공개'}
-                    </button>
-                  ) : (
-                    <span className="px-3 py-1.5 text-xs rounded-lg bg-green-50 text-green-700 border border-green-200">공개됨</span>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {extraNextToken && (
-              <button
-                type="button"
-                onClick={() => loadMoreExtraMutation.mutate()}
-                disabled={loadMoreExtraMutation.isPending || isFetchingExtra}
-                className="w-full mt-2 py-2 text-sm rounded-xl border border-gray-200 text-gray-700 disabled:opacity-50"
-              >
-                {loadMoreExtraMutation.isPending ? '불러오는 중...' : '추가 기록 더보기'}
-              </button>
-            )}
-          </section>
-        )}
-
-        {completedChallenges.length > 0 && (
-          <section className="bg-white rounded-2xl p-5 border border-emerald-200 space-y-3">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">완료된 챌린지 바로가기</h2>
-              <p className="text-sm text-gray-500">완료된 챌린지도 피드와 리더 DM으로 다시 진입할 수 있어요.</p>
-            </div>
-            <div className="space-y-2">
-              {completedChallenges.slice(0, 5).map((challenge: any) => (
-                <div key={challenge.userChallengeId || challenge.challengeId} className="border border-emerald-100 bg-emerald-50 rounded-xl p-3 space-y-2">
-                  <p className="font-semibold text-gray-900">{challenge.challenge?.title || challenge.title}</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
-                      className="py-2 rounded-lg border border-primary-200 bg-white text-primary-700 text-sm"
-                    >
-                      피드 열기
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
-                      className="py-2 rounded-lg border border-amber-200 bg-white text-amber-700 text-sm"
-                    >
-                      보드
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleLeaderDm(challenge)}
-                      disabled={leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId)}
-                      className="py-2 rounded-lg border border-blue-200 bg-white text-blue-700 text-sm disabled:opacity-50"
-                    >
-                      {leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId) ? 'DM 연결중...' : '리더 DM'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {(activeChallenges.length > 0 || pendingChallenges.length > 0 || completedChallenges.length > 0) && (
+        {!isLoading && (
           <button
             onClick={() => navigate('/challenges')}
             className="w-full py-4 border-2 border-dashed border-gray-300 rounded-2xl text-gray-500 hover:border-primary-400 hover:text-primary-500 transition-colors font-medium"
