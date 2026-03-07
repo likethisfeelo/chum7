@@ -26,6 +26,7 @@
 - `period=challenge` 검증 강화: challenge 존재 + 참여자 접근 검증
 - 투데이 페이지 UX 확장: 리액션/답장 UI + 기간 필터 통계 카드
 - Admin Docs Hub 1차: 런북/백필 명령/QA 체크리스트를 `/admin/docs`에서 조회 가능
+- Admin Docs Hub 2차: 역할기반 접근제어(Admin/Ops + allowlist email) 및 접근거부 페이지 적용
 
 ## 남은 TODO
 

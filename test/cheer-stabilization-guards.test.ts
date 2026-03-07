@@ -375,9 +375,18 @@ describe('cheer stabilization guards', () => {
     const appSrc = read('frontend/src/app/App.tsx');
     expect(appSrc).toContain('path="/admin/docs"');
     expect(appSrc).toContain('AdminDocsPage');
+    expect(appSrc).toContain('AdminRoute');
+    expect(appSrc).toContain('path="/admin/forbidden"');
+    expect(appSrc).toContain('AdminAccessDeniedPage');
+    expect(appSrc).toContain('VITE_ADMIN_EMAILS');
+    expect(appSrc).toContain('hasAdminAccess');
 
     const pageSrc = read('frontend/src/features/admin/pages/AdminDocsPage.tsx');
     expect(pageSrc).toContain('Admin Docs Hub · Cheer PHASE1');
+
+    const deniedPageSrc = read('frontend/src/features/admin/pages/AdminAccessDeniedPage.tsx');
+    expect(deniedPageSrc).toContain('운영 권한이 필요합니다');
+    expect(deniedPageSrc).toContain("navigate('/me')");
     expect(pageSrc).toContain('이번 스프린트 3종 고정');
     expect(pageSrc).toContain('docs/cheer-stats-materializer-runbook.md');
     expect(pageSrc).toContain('docs/cheer-phase1-qa-sheet.md');

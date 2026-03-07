@@ -23,6 +23,7 @@ import { QuestBoardPage } from '@/features/quest/pages/QuestBoardPage';
 import { MyQuestSubmissionsPage } from '@/features/quest/pages/MyQuestSubmissionsPage';
 import { ParticipantFlowPlanPage } from '@/features/planning/pages/ParticipantFlowPlanPage';
 import { AdminDocsPage } from '@/features/admin/pages/AdminDocsPage';
+import { AdminAccessDeniedPage } from '@/features/admin/pages/AdminAccessDeniedPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -33,6 +34,43 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const PublicOnlyRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   if (isAuthenticated) return <Navigate to="/me" replace />;
+  return <>{children}</>;
+};
+
+const ADMIN_EMAIL_ALLOWLIST = (import.meta.env.VITE_ADMIN_EMAILS || '')
+  .split(',')
+  .map((v: string) => v.trim().toLowerCase())
+  .filter(Boolean);
+
+const hasAdminAccess = (user: { email?: string; role?: string; roles?: string[] } | null): boolean => {
+  if (!user) {
+    return false;
+  }
+
+  const normalizedRole = user.role?.trim().toLowerCase();
+  if (normalizedRole === 'admin' || normalizedRole === 'ops') {
+    return true;
+  }
+
+  const normalizedRoles = (user.roles || []).map((role) => role.trim().toLowerCase());
+  if (normalizedRoles.includes('admin') || normalizedRoles.includes('ops')) {
+    return true;
+  }
+
+  const normalizedEmail = user.email?.trim().toLowerCase();
+  if (normalizedEmail && ADMIN_EMAIL_ALLOWLIST.includes(normalizedEmail)) {
+    return true;
+  }
+
+  return false;
+};
+
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!hasAdminAccess(user)) return <Navigate to="/admin/forbidden" replace />;
   return <>{children}</>;
 };
 
@@ -214,9 +252,20 @@ export default function App() {
         <Route
           path="/admin/docs"
           element={
-            <ProtectedRoute>
+            <AdminRoute>
               <MainLayout>
                 <AdminDocsPage />
+              </MainLayout>
+            </AdminRoute>
+          }
+        />
+
+        <Route
+          path="/admin/forbidden"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <AdminAccessDeniedPage />
               </MainLayout>
             </ProtectedRoute>
           }

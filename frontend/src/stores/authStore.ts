@@ -10,6 +10,8 @@ interface User {
   level: number;
   exp: number;
   cheerTickets: number;
+  role?: string;
+  roles?: string[];
 }
 
 interface AuthState {
