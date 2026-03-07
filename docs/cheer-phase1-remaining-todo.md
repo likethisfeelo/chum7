@@ -37,9 +37,9 @@
 3. 대시보드 위젯 변경 관리 자동화(체크리스트/스키마 lint)
 
 ### P1 (이번 스프린트 내)
-1. 프론트에서 period 입력 UX 개선(week picker, month picker)
+1. ✅ 프론트에서 period 입력 UX 개선(week/day/month picker 적용)
 2. 답장 수정/삭제 정책 확정(현재는 1회 작성 후 고정)
-3. sender 측 조회 페이지에서 reply/reaction 표시 강화
+3. ✅ sender 측 조회 페이지에서 reply/reaction 표시 강화(투데이 페이지 반영)
 
 ### P2 (차기)
 1. 익명→공개 전환 정책과 reply/reaction 노출 규칙 연동

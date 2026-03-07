@@ -13,20 +13,45 @@ type PeriodType = 'all' | 'day' | 'week' | 'month' | 'challenge';
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
 
+const PERIOD_LABEL: Record<PeriodType, string> = {
+  all: '전체',
+  day: '일',
+  week: '주',
+  month: '월',
+  challenge: '챌린지'
+};
+
+function toWeekInputValue(date: Date): string {
+  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${target.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
 export const TodayPage = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [period, setPeriod] = useState<PeriodType>('all');
   const [day, setDay] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [week, setWeek] = useState('');
+  const [week, setWeek] = useState(toWeekInputValue(new Date()));
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [challengeId, setChallengeId] = useState('');
   const [replyDraftByCheer, setReplyDraftByCheer] = useState<Record<string, string>>({});
 
   const { data: cheers, isLoading: cheersLoading } = useQuery({
-    queryKey: ['my-cheers'],
+    queryKey: ['my-cheers', 'received'],
     queryFn: async () => {
-      const response = await apiClient.get('/cheer/my-cheers?limit=20');
+      const response = await apiClient.get('/cheer/my-cheers?type=received&limit=20');
+      return response.data.data.cheers;
+    },
+  });
+
+  const { data: sentCheers, isLoading: sentCheersLoading } = useQuery({
+    queryKey: ['my-cheers', 'sent'],
+    queryFn: async () => {
+      const response = await apiClient.get('/cheer/my-cheers?type=sent&limit=20');
       return response.data.data.cheers;
     },
   });
@@ -35,7 +60,7 @@ export const TodayPage = () => {
     const params = new URLSearchParams({ period });
     if (period === 'day') params.set('day', day);
     if (period === 'week' && week.trim()) params.set('week', week.trim());
-    if (period === 'month') params.set('month', month);
+    if (period === 'month' && month.trim()) params.set('month', month.trim());
     if (period === 'challenge' && challengeId.trim()) params.set('challengeId', challengeId.trim());
     return params.toString();
   }, [period, day, week, month, challengeId]);
@@ -105,12 +130,20 @@ export const TodayPage = () => {
             <h1 className="text-2xl font-bold text-gray-900">투데이 📊</h1>
             <p className="text-sm text-gray-500">{today}</p>
           </div>
-          <button
-            onClick={() => navigate('/ux-plan')}
-            className="px-3 py-2 rounded-xl bg-violet-50 text-violet-700 text-xs font-semibold hover:bg-violet-100 transition-colors"
-          >
-            PHASE1-2 테스트
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate('/ux-plan')}
+              className="px-3 py-2 rounded-xl bg-violet-50 text-violet-700 text-xs font-semibold hover:bg-violet-100 transition-colors"
+            >
+              PHASE1-2 테스트
+            </button>
+            <button
+              onClick={() => navigate('/admin/docs')}
+              className="px-3 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition-colors"
+            >
+              운영 Docs
+            </button>
+          </div>
         </div>
       </div>
 
@@ -124,18 +157,34 @@ export const TodayPage = () => {
                 onClick={() => setPeriod(value)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold ${period === value ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'}`}
               >
-                {value}
+                {PERIOD_LABEL[value]}
               </button>
             ))}
           </div>
+
           {period === 'day' && (
-            <input className="w-full border rounded-xl px-3 py-2 text-sm" value={day} onChange={(e) => setDay(e.target.value)} placeholder="YYYY-MM-DD" />
+            <input
+              type="date"
+              className="w-full border rounded-xl px-3 py-2 text-sm"
+              value={day}
+              onChange={(e) => setDay(e.target.value)}
+            />
           )}
           {period === 'week' && (
-            <input className="w-full border rounded-xl px-3 py-2 text-sm" value={week} onChange={(e) => setWeek(e.target.value)} placeholder="YYYY-Www (예: 2026-W10)" />
+            <input
+              type="week"
+              className="w-full border rounded-xl px-3 py-2 text-sm"
+              value={week}
+              onChange={(e) => setWeek(e.target.value)}
+            />
           )}
           {period === 'month' && (
-            <input className="w-full border rounded-xl px-3 py-2 text-sm" value={month} onChange={(e) => setMonth(e.target.value)} placeholder="YYYY-MM" />
+            <input
+              type="month"
+              className="w-full border rounded-xl px-3 py-2 text-sm"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+            />
           )}
           {period === 'challenge' && (
             <input className="w-full border rounded-xl px-3 py-2 text-sm" value={challengeId} onChange={(e) => setChallengeId(e.target.value)} placeholder="challengeId" />
@@ -247,6 +296,40 @@ export const TodayPage = () => {
                     )}
                   </div>
                 </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-gray-900">내가 보낸 응원 ✉️</h2>
+          </div>
+          {sentCheersLoading ? (
+            <Loading />
+          ) : !sentCheers || sentCheers.length === 0 ? (
+            <EmptyState icon="📭" title="아직 보낸 응원이 없어요" description="챌린지 피드에서 응원을 보내보세요" />
+          ) : (
+            <div className="space-y-3">
+              {sentCheers.slice(0, 10).map((cheer: any) => (
+                <div key={cheer.cheerId} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                  <p className="text-sm text-gray-700">{cheer.message}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {format(new Date(cheer.createdAt || cheer.sentAt), 'MM/dd HH:mm', { locale: ko })}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                    {cheer.replyMessage ? (
+                      <span className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700">답장 도착</span>
+                    ) : (
+                      <span className="px-2 py-1 rounded-lg bg-gray-100 text-gray-600">답장 대기</span>
+                    )}
+                    {cheer.reactionType ? (
+                      <span className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">리액션 {cheer.reactionType}</span>
+                    ) : (
+                      <span className="px-2 py-1 rounded-lg bg-gray-100 text-gray-600">리액션 대기</span>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )}

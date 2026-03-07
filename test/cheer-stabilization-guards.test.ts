@@ -404,6 +404,23 @@ describe('cheer stabilization guards', () => {
     expect(flowHubSrc).toContain('Admin Docs Hub');
   });
 
+  test('today page keeps period picker UX and sender feedback visibility', () => {
+    const src = read('frontend/src/features/today/pages/TodayPage.tsx');
+    expect(src).toContain('const PERIOD_LABEL');
+    expect(src).toContain('toWeekInputValue');
+    expect(src).toContain("type=\"date\"");
+    expect(src).toContain("type=\"week\"");
+    expect(src).toContain("type=\"month\"");
+    expect(src).toContain("/cheer/my-cheers?type=received&limit=20");
+    expect(src).toContain("/cheer/my-cheers?type=sent&limit=20");
+    expect(src).toContain('내가 보낸 응원 ✉️');
+    expect(src).toContain('답장 도착');
+    expect(src).toContain('답장 대기');
+    expect(src).toContain('리액션 대기');
+    expect(src).toContain("navigate('/admin/docs')");
+    expect(src).toContain('운영 Docs');
+  });
+
   test('shared rate-limit helper supports atomic table window key strategy', () => {
     const src = read('backend/services/cheer/rate-limit.ts');
     expect(src).toContain('acquireRateLimitSlot');
