@@ -100,6 +100,10 @@ function shouldBlockLegacyRoute(contractEnabled: boolean, hasPathCheerIdValue: b
   return contractEnabled && !hasPathCheerIdValue;
 }
 
+function pickFirstDefinedString(...values: Array<string | undefined>): string | undefined {
+  return values.find(hasDefinedValue);
+}
+
 function resolveThankRouteMode(legacyBodyRouteAttempted: boolean): ThankRouteMode {
   return legacyBodyRouteAttempted ? 'legacy' : 'canonical';
 }
@@ -258,7 +262,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    const cheerId = cheerIdFromPath || cheerIdFromBody;
+    const cheerId = pickFirstDefinedString(cheerIdFromPath, cheerIdFromBody);
     resolvedCheerId = cheerId;
 
     if (!userId) {

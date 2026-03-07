@@ -10,6 +10,7 @@ describe('cheer stabilization guards', () => {
     const src = read('backend/services/cheer/thank/index.ts');
     expect(src).toContain('INVALID_JSON_BODY');
     expect(src).toContain('CHEER_ID_MISMATCH');
+    expect(src).toContain('const cheerId = pickFirstDefinedString(cheerIdFromPath, cheerIdFromBody);');
     expect(src).toContain("ConditionExpression: '(attribute_not_exists(isThanked) OR isThanked = :false) AND receiverId = :receiverId'");
     expect(src).toContain('ConditionalCheckFailedException');
     expect(src).toContain('receiverId = :receiverId');
@@ -74,6 +75,7 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('function hasDefinedValue(value: unknown): boolean {');
     expect(src).toContain('function shouldWarnLegacyRoute(contractEnabled: boolean, legacyBodyRouteAttempted: boolean): boolean {');
     expect(src).toContain('function shouldBlockLegacyRoute(contractEnabled: boolean, hasPathCheerIdValue: boolean): boolean {');
+    expect(src).toContain('function pickFirstDefinedString(...values: Array<string | undefined>): string | undefined {');
     expect(src).toContain('function resolveThankRouteMode(legacyBodyRouteAttempted: boolean): ThankRouteMode {');
     expect(src).toContain('type JsonObject = Record<string, any>;');
     expect(src).toContain('withThankRouteMode');
