@@ -279,6 +279,7 @@ describe('cheer stabilization guards', () => {
     expect(runbook).toContain('totalSegments');
     expect(runbook).toContain('segmentIndex');
     expect(runbook).toContain('failedSegments');
+    expect(runbook).toContain('orchestratorArn');
     expect(runbook).toContain('maxScanPages');
     expect(runbook).toContain('scanPageSize');
     expect(runbook).toContain('scripts/cheer-stats-backfill.sh');
@@ -292,6 +293,8 @@ describe('cheer stabilization guards', () => {
     expect(sh).toContain('--total-segments');
     expect(sh).toContain('--segment-index');
     expect(sh).toContain('--failed-segments');
+    expect(sh).toContain('--orchestrator-arn');
+    expect(sh).toContain('start-execution');
     expect(sh).toContain('--max-scan-pages');
     expect(sh).toContain('--scan-page-size');
 
@@ -303,6 +306,8 @@ describe('cheer stabilization guards', () => {
     expect(ps1).toContain('$TotalSegments');
     expect(ps1).toContain('$SegmentIndex');
     expect(ps1).toContain('$FailedSegments');
+    expect(ps1).toContain('$OrchestratorArn');
+    expect(ps1).toContain('start-execution');
     expect(ps1).toContain('$MaxScanPages');
     expect(ps1).toContain('$ScanPageSize');
   });

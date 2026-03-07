@@ -5,6 +5,7 @@ set -euo pipefail
 #   ./scripts/cheer-stats-backfill.sh --stage dev --dry-run
 #   ./scripts/cheer-stats-backfill.sh --stage prod --from 2026-03-01T00:00:00.000Z --to 2026-03-31T23:59:59.999Z --max-retries 7
 #   ./scripts/cheer-stats-backfill.sh --stage prod --total-segments 4 --failed-segments 1,3
+#   ./scripts/cheer-stats-backfill.sh --stage prod --orchestrator-arn arn:aws:states:... --failed-segments 1,3
 
 STAGE=""
 FROM_ISO=""
@@ -16,6 +17,7 @@ SEGMENT_INDEX=""
 FAILED_SEGMENTS=""
 MAX_SCAN_PAGES=""
 SCAN_PAGE_SIZE=""
+ORCHESTRATOR_ARN=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -59,6 +61,10 @@ while [[ $# -gt 0 ]]; do
       SCAN_PAGE_SIZE="${2:-}"
       shift 2
       ;;
+    --orchestrator-arn)
+      ORCHESTRATOR_ARN="${2:-}"
+      shift 2
+      ;;
     *)
       echo "Unknown option: $1" >&2
       exit 1
@@ -73,10 +79,9 @@ fi
 
 FUNCTION_NAME="chme-${STAGE}-cheer-stats-materializer"
 
-invoke_once() {
+build_lambda_payload() {
   local segment_index_value="${1:-}"
-
-  PAYLOAD=$(python - <<PY
+  python - <<PY
 import json
 payload = {}
 if "${FROM_ISO}":
@@ -98,12 +103,17 @@ if "${SCAN_PAGE_SIZE}":
     payload["scanPageSize"] = int("${SCAN_PAGE_SIZE}")
 print(json.dumps(payload))
 PY
-  )
+}
 
-  echo "Invoking ${FUNCTION_NAME} with payload: ${PAYLOAD}"
+invoke_lambda_once() {
+  local segment_index_value="${1:-}"
+  local payload
+  payload="$(build_lambda_payload "$segment_index_value")"
+
+  echo "Invoking ${FUNCTION_NAME} with payload: ${payload}"
   aws lambda invoke \
     --function-name "${FUNCTION_NAME}" \
-    --payload "${PAYLOAD}" \
+    --payload "${payload}" \
     --cli-binary-format raw-in-base64-out \
     /tmp/cheer-stats-backfill-result.json >/tmp/cheer-stats-backfill-meta.json
 
@@ -116,6 +126,44 @@ PY
   echo "\nDone"
 }
 
+invoke_orchestrator_once() {
+  local segment_csv="${1:-}"
+  local payload
+
+  payload=$(python - <<PY
+import json
+segments = []
+if "${segment_csv}":
+    for token in "${segment_csv}".split(','):
+        token = token.strip()
+        if not token:
+            continue
+        segments.append({"segmentIndex": int(token)})
+elif "${TOTAL_SEGMENTS}":
+    total = int("${TOTAL_SEGMENTS}")
+    segments = [{"segmentIndex": i} for i in range(total)]
+else:
+    segments = [{"segmentIndex": 0}]
+print(json.dumps({"segments": segments}))
+PY
+  )
+
+  echo "Starting orchestrator ${ORCHESTRATOR_ARN} with input: ${payload}"
+  aws stepfunctions start-execution \
+    --state-machine-arn "${ORCHESTRATOR_ARN}" \
+    --input "${payload}" \
+    >/tmp/cheer-stats-orchestrator-start.json
+
+  echo "--- StepFunctions start-execution ---"
+  cat /tmp/cheer-stats-orchestrator-start.json
+  echo "\nDone"
+}
+
+if [[ -n "${ORCHESTRATOR_ARN}" ]]; then
+  invoke_orchestrator_once "${FAILED_SEGMENTS}"
+  exit 0
+fi
+
 if [[ -n "${FAILED_SEGMENTS}" ]]; then
   IFS=',' read -r -a segments <<< "${FAILED_SEGMENTS}"
   for seg in "${segments[@]}"; do
@@ -124,8 +172,8 @@ if [[ -n "${FAILED_SEGMENTS}" ]]; then
       continue
     fi
 
-    invoke_once "$trimmed"
+    invoke_lambda_once "$trimmed"
   done
 else
-  invoke_once ""
+  invoke_lambda_once ""
 fi
