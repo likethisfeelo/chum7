@@ -41,6 +41,21 @@ const DOC_SECTIONS: DocSection[] = [
     references: ['docs/cheer-stats-materializer-runbook.md']
   },
   {
+    title: 'Materializer 실패 세그먼트 자동 재실행 + SNS 알림',
+    description: '실패 세그먼트 재실행과 운영 알림 전송을 단일 명령으로 수행합니다.',
+    commands: [
+      './scripts/cheer-materializer-rerun-failed.sh --stage prod --total-segments 4 --failed-segments 1,3',
+      './scripts/cheer-materializer-rerun-failed.sh --stage prod --orchestrator-arn <STATE_MACHINE_ARN> --total-segments 4 --failed-segments 1,3 --notify-topic-arn <SNS_TOPIC_ARN>'
+    ],
+    references: ['docs/cheer-stats-materializer-runbook.md']
+  },
+  {
+    title: 'Dashboard Widget Catalog Lint',
+    description: '대시보드 템플릿과 운영 카탈로그 문서 title 싱크를 CI 전에 확인합니다.',
+    commands: ['npm run lint:cheer-widgets'],
+    references: ['docs/cheer-observability-widget-catalog.md']
+  },
+  {
     title: 'PHASE1 라이브 QA 핵심 체크리스트',
     description: '이번 스프린트 라이브 게이트 기준으로 최소 필수 항목만 선별했습니다.',
     checklist: [

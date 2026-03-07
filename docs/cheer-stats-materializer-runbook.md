@@ -85,3 +85,17 @@
 ## 롤백
 - materializer 실행 중단(스케줄 비활성화)
 - stats API는 realtime fallback이 있으므로 서비스 조회 자체는 유지됨
+
+
+## 실패 세그먼트 재실행 + 알림 자동화(신규)
+
+운영자가 실패 세그먼트 재실행 후 알림을 자동 전송하려면 아래 wrapper 스크립트를 사용한다.
+
+```bash
+./scripts/cheer-materializer-rerun-failed.sh --stage prod --total-segments 4 --failed-segments 1,3
+./scripts/cheer-materializer-rerun-failed.sh --stage prod --orchestrator-arn arn:aws:states:ap-northeast-2:123456789012:stateMachine:chme-prod-cheer-stats-materializer-orchestrator --total-segments 4 --failed-segments 1,3 --notify-topic-arn arn:aws:sns:ap-northeast-2:123456789012:ops-alerts
+```
+
+- 내부적으로 `scripts/cheer-stats-backfill.sh`를 호출한다.
+- `--notify-topic-arn`이 지정되면 실행 직후 SNS 알림을 발송한다.
+- 배포 파이프라인/수동 재실행 공통 진입점으로 사용한다.

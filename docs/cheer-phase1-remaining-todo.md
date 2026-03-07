@@ -33,8 +33,9 @@
 
 ### P0 (바로 다음)
 1. 레이트 리밋 5차(분산 Lua·Redis/멀티리전 옵션 검토)
-2. materializer 워크플로우 운영자동화(실패 세그먼트 재실행/알림 연동)
-3. 대시보드 위젯 변경 관리 자동화(체크리스트/스키마 lint)
+   - 레이트 리밋 5차 제안서 문서화: `docs/cheer-rate-limit-phase5-options.md`
+2. ✅ materializer 워크플로우 운영자동화(실패 세그먼트 재실행 + SNS 알림 스크립트 추가)
+3. ✅ 대시보드 위젯 변경 관리 자동화(카탈로그 동기화 lint 스크립트 추가)
 
 ### P1 (이번 스프린트 내)
 1. ✅ 프론트에서 period 입력 UX 개선(week/day/month picker 적용)

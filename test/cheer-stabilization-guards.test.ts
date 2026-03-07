@@ -268,6 +268,7 @@ describe('cheer stabilization guards', () => {
 
     const runbook = read('docs/cheer-stats-materializer-runbook.md');
     expect(runbook).toContain('cheer-observability-widget-catalog.md');
+    expect(runbook).toContain('cheer-materializer-rerun-failed.sh');
   });
 
   test('materializer runbook and backfill scripts are documented', () => {
@@ -318,6 +319,12 @@ describe('cheer stabilization guards', () => {
     expect(sh).toContain('--max-scan-pages must be >= 1');
     expect(sh).toContain('--scan-page-size');
     expect(sh).toContain('--scan-page-size must be between 1 and 1000');
+
+    const rerun = read('scripts/cheer-materializer-rerun-failed.sh');
+    expect(rerun).toContain('--failed-segments is required');
+    expect(rerun).toContain('--notify-topic-arn');
+    expect(rerun).toContain('aws sns publish');
+    expect(rerun).toContain('cheer-stats-backfill.sh');
 
     const ps1 = read('scripts/cheer-stats-backfill.ps1');
     expect(ps1).toContain('$Stage');
@@ -422,6 +429,22 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('운영 Docs');
     expect(src).toContain('답장은 1회 작성 정책으로 수정/삭제할 수 없어요.');
     expect(src).toContain('답장은 1회 작성 정책이며 전송 후 수정/삭제할 수 없어요.');
+  });
+
+
+  test('dashboard widget lint script and phase5 rate-limit doc are documented', () => {
+    const pkg = read('package.json');
+    expect(pkg).toContain('lint:cheer-widgets');
+
+    const lintScript = read('scripts/validate-cheer-widget-catalog.mjs');
+    expect(lintScript).toContain('template titles missing in docs catalog');
+    expect(lintScript).toContain('docs catalog titles missing in template');
+    expect(lintScript).toContain('duplicated widget titles');
+
+    const phase5Doc = read('docs/cheer-rate-limit-phase5-options.md');
+    expect(phase5Doc).toContain('Redis + Lua');
+    expect(phase5Doc).toContain('DynamoDB Global Table');
+    expect(phase5Doc).toContain('하이브리드(Primary Redis + Dynamo fallback)');
   });
 
   test('shared rate-limit helper supports atomic table window key strategy', () => {
