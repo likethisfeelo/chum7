@@ -32,6 +32,14 @@ if ($script:PSBoundParameters.ContainsKey('TotalSegments') -and $TotalSegments -
   throw '-TotalSegments must be >= 1.'
 }
 
+if ($script:PSBoundParameters.ContainsKey('MaxScanPages') -and $MaxScanPages -lt 1) {
+  throw '-MaxScanPages must be >= 1.'
+}
+
+if ($script:PSBoundParameters.ContainsKey('ScanPageSize') -and ($ScanPageSize -lt 1 -or $ScanPageSize -gt 1000)) {
+  throw '-ScanPageSize must be between 1 and 1000.'
+}
+
 if ($script:PSBoundParameters.ContainsKey('SegmentIndex') -and $SegmentIndex -lt 0) {
   throw '-SegmentIndex must be >= 0.'
 }

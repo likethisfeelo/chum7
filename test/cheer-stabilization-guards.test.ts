@@ -282,7 +282,9 @@ describe('cheer stabilization guards', () => {
     expect(runbook).toContain('orchestratorArn');
     expect(runbook).toContain('segmentIndex < totalSegments');
     expect(runbook).toContain('maxScanPages');
+    expect(runbook).toContain('1 이상');
     expect(runbook).toContain('scanPageSize');
+    expect(runbook).toContain('1~1000');
     expect(runbook).toContain('scripts/cheer-stats-backfill.sh');
     expect(runbook).toContain('scripts/cheer-stats-backfill.ps1');
 
@@ -298,7 +300,9 @@ describe('cheer stabilization guards', () => {
     expect(sh).toContain('--segment-index must be less than --total-segments');
     expect(sh).toContain('start-execution');
     expect(sh).toContain('--max-scan-pages');
+    expect(sh).toContain('--max-scan-pages must be >= 1');
     expect(sh).toContain('--scan-page-size');
+    expect(sh).toContain('--scan-page-size must be between 1 and 1000');
 
     const ps1 = read('scripts/cheer-stats-backfill.ps1');
     expect(ps1).toContain('$Stage');
@@ -312,7 +316,9 @@ describe('cheer stabilization guards', () => {
     expect(ps1).toContain('-SegmentIndex must be less than -TotalSegments');
     expect(ps1).toContain('start-execution');
     expect(ps1).toContain('$MaxScanPages');
+    expect(ps1).toContain('-MaxScanPages must be >= 1');
     expect(ps1).toContain('$ScanPageSize');
+    expect(ps1).toContain('-ScanPageSize must be between 1 and 1000');
   });
 
   test('stats materializer scans cheers and writes bucketed summaries', () => {

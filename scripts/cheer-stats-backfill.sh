@@ -116,6 +116,26 @@ if [[ -n "$TOTAL_SEGMENTS" && "$TOTAL_SEGMENTS" -lt 1 ]]; then
   exit 1
 fi
 
+if [[ -n "$MAX_SCAN_PAGES" && ! "$MAX_SCAN_PAGES" =~ ^[0-9]+$ ]]; then
+  echo "--max-scan-pages must be a positive integer" >&2
+  exit 1
+fi
+
+if [[ -n "$MAX_SCAN_PAGES" && "$MAX_SCAN_PAGES" -lt 1 ]]; then
+  echo "--max-scan-pages must be >= 1" >&2
+  exit 1
+fi
+
+if [[ -n "$SCAN_PAGE_SIZE" && ! "$SCAN_PAGE_SIZE" =~ ^[0-9]+$ ]]; then
+  echo "--scan-page-size must be a positive integer" >&2
+  exit 1
+fi
+
+if [[ -n "$SCAN_PAGE_SIZE" && ( "$SCAN_PAGE_SIZE" -lt 1 || "$SCAN_PAGE_SIZE" -gt 1000 ) ]]; then
+  echo "--scan-page-size must be between 1 and 1000" >&2
+  exit 1
+fi
+
 if [[ -n "$TOTAL_SEGMENTS" && -n "$SEGMENT_INDEX" && "$SEGMENT_INDEX" -ge "$TOTAL_SEGMENTS" ]]; then
   echo "--segment-index must be less than --total-segments" >&2
   exit 1
