@@ -383,6 +383,11 @@ describe('cheer stabilization guards', () => {
 
     const pageSrc = read('frontend/src/features/admin/pages/AdminDocsPage.tsx');
     expect(pageSrc).toContain('Admin Docs Hub · Cheer PHASE1');
+    expect(pageSrc).toContain('Backfill Command Builder');
+    expect(pageSrc).toContain('buildBackfillCommand');
+    expect(pageSrc).toContain('명령어 복사');
+    expect(pageSrc).toContain('totalSegments는 1 이상이어야 합니다.');
+    expect(pageSrc).toContain('executionName은 orchestratorArn과 함께 사용해야 합니다.');
 
     const deniedPageSrc = read('frontend/src/features/admin/pages/AdminAccessDeniedPage.tsx');
     expect(deniedPageSrc).toContain('운영 권한이 필요합니다');
