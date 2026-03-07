@@ -285,5 +285,22 @@ export class AdminStack extends Stack {
       authorizer,
     });
 
+
+    const cheerDeadLetterBatchRequeueFn = new NodejsFunction(this, 'CheerDeadLetterBatchRequeueFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-cheer-dead-letter-requeue-batch`,
+      entry: path.join(__dirname, '../../backend/services/admin/cheer/dead-letter/requeue-batch/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheerDeadLettersTable.grantReadWriteData(cheerDeadLetterBatchRequeueFn);
+    cheersTable.grantReadWriteData(cheerDeadLetterBatchRequeueFn);
+    apiGateway.addRoutes({
+      path: '/admin/cheer/dead-letters/requeue-batch',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('AdminCheerDeadLetterBatchRequeueIntegration', cheerDeadLetterBatchRequeueFn),
+      authorizer,
+    });
+
   }
 }

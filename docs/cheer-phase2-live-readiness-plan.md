@@ -55,7 +55,8 @@
 ## Track C. 운영 콘솔/런북 강화 (필수)
 - Admin Docs에 아래 운영 액션 추가:
   - dead-letter 목록 조회 방법
-  - 단건/범위 재처리 절차
+  - 단건 재처리 API: `POST /admin/cheer/dead-letters/{cheerId}/requeue`
+  - 배치 재처리 API: `POST /admin/cheer/dead-letters/requeue-batch` (최대 50건)
   - 재처리 금지 기준(수신자 탈퇴, 정책 만료 등)
 - 알람 체계:
   - dead-letter 건수 급증
