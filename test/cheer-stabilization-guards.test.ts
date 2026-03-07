@@ -182,6 +182,9 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('segments: materializerSegments');
     expect(stack).toContain('addRetry');
     expect(stack).toContain('CheerStatsMaterializerOrchestratorFailedAlarm');
+    expect(stack).toContain('CheerStatsMaterializerExecutionFailedEventRule');
+    expect(stack).toContain("status: ['FAILED', 'TIMED_OUT', 'ABORTED']");
+    expect(stack).toContain('new SnsTopic(snsTopic)');
     expect(stack).toContain('materializerStateMachine.metricFailed');
     expect(stack).toContain('RuleTargetInput.fromObject');
     expect(stack).toContain('segmentIndex');

@@ -8,7 +8,7 @@ import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { EventBus, Rule, RuleTargetInput, Schedule } from 'aws-cdk-lib/aws-events';
-import { LambdaFunction, SfnStateMachine } from 'aws-cdk-lib/aws-events-targets';
+import { LambdaFunction, SfnStateMachine, SnsTopic } from 'aws-cdk-lib/aws-events-targets';
 import { Alarm, ComparisonOperator, Dashboard, Metric, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
@@ -355,6 +355,18 @@ export class CheerStack extends Stack {
           })
         })
       ],
+    });
+
+    new Rule(this, 'CheerStatsMaterializerExecutionFailedEventRule', {
+      eventPattern: {
+        source: ['aws.states'],
+        detailType: ['Step Functions Execution Status Change'],
+        detail: {
+          stateMachineArn: [materializerStateMachine.stateMachineArn],
+          status: ['FAILED', 'TIMED_OUT', 'ABORTED']
+        }
+      },
+      targets: [new SnsTopic(snsTopic)]
     });
 
     // 11. Observability baseline alarms (reply/react/stats)
