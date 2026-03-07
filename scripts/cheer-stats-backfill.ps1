@@ -15,13 +15,18 @@ param(
   [int[]]$FailedSegments,
   [int]$MaxScanPages,
   [int]$ScanPageSize,
-  [string]$OrchestratorArn
+  [string]$OrchestratorArn,
+  [string]$ExecutionName
 )
 
 $functionName = "chme-$Stage-cheer-stats-materializer"
 
 if ($script:PSBoundParameters.ContainsKey('FailedSegments') -and $script:PSBoundParameters.ContainsKey('SegmentIndex')) {
   throw '-FailedSegments and -SegmentIndex cannot be used together.'
+}
+
+if ($ExecutionName -and -not $OrchestratorArn) {
+  throw '-ExecutionName requires -OrchestratorArn.'
 }
 
 if ($OrchestratorArn -and $script:PSBoundParameters.ContainsKey('SegmentIndex')) {
@@ -162,9 +167,15 @@ function Invoke-Orchestrator {
   $input = @{ segments = $segments } | ConvertTo-Json -Compress
   Write-Host "Starting orchestrator $OrchestratorArn with input: $input"
 
+  $executionArgs = @()
+  if ($ExecutionName) {
+    $executionArgs += @('--name', $ExecutionName)
+  }
+
   aws stepfunctions start-execution `
     --state-machine-arn $OrchestratorArn `
-    --input $input | Out-File "/tmp/cheer-stats-orchestrator-start.json"
+    --input $input `
+    @executionArgs | Out-File "/tmp/cheer-stats-orchestrator-start.json"
 
   Write-Host "--- StepFunctions start-execution ---"
   Get-Content "/tmp/cheer-stats-orchestrator-start.json"

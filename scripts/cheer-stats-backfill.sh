@@ -6,6 +6,7 @@ set -euo pipefail
 #   ./scripts/cheer-stats-backfill.sh --stage prod --from 2026-03-01T00:00:00.000Z --to 2026-03-31T23:59:59.999Z --max-retries 7
 #   ./scripts/cheer-stats-backfill.sh --stage prod --total-segments 4 --failed-segments 1,3
 #   ./scripts/cheer-stats-backfill.sh --stage prod --orchestrator-arn arn:aws:states:... --failed-segments 1,3
+#   ./scripts/cheer-stats-backfill.sh --stage prod --orchestrator-arn arn:aws:states:... --execution-name cheer-stats-backfill-20260331
 
 STAGE=""
 FROM_ISO=""
@@ -18,6 +19,7 @@ FAILED_SEGMENTS=""
 MAX_SCAN_PAGES=""
 SCAN_PAGE_SIZE=""
 ORCHESTRATOR_ARN=""
+EXECUTION_NAME=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -65,6 +67,10 @@ while [[ $# -gt 0 ]]; do
       ORCHESTRATOR_ARN="${2:-}"
       shift 2
       ;;
+    --execution-name)
+      EXECUTION_NAME="${2:-}"
+      shift 2
+      ;;
     *)
       echo "Unknown option: $1" >&2
       exit 1
@@ -79,6 +85,11 @@ fi
 
 if [[ -n "$FAILED_SEGMENTS" && -n "$SEGMENT_INDEX" ]]; then
   echo "--failed-segments and --segment-index cannot be used together" >&2
+  exit 1
+fi
+
+if [[ -n "$EXECUTION_NAME" && -z "$ORCHESTRATOR_ARN" ]]; then
+  echo "--execution-name requires --orchestrator-arn" >&2
   exit 1
 fi
 
@@ -284,9 +295,15 @@ PY
   )
 
   echo "Starting orchestrator ${ORCHESTRATOR_ARN} with input: ${payload}"
+  local execution_args=()
+  if [[ -n "${EXECUTION_NAME}" ]]; then
+    execution_args+=(--name "${EXECUTION_NAME}")
+  fi
+
   aws stepfunctions start-execution \
     --state-machine-arn "${ORCHESTRATOR_ARN}" \
     --input "${payload}" \
+    "${execution_args[@]}" \
     >/tmp/cheer-stats-orchestrator-start.json
 
   echo "--- StepFunctions start-execution ---"

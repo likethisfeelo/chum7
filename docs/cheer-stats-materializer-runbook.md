@@ -24,6 +24,7 @@
 - `totalSegments` / `segmentIndex` (옵션): Scan 분할 실행(병렬 백필/부분 재실행)
 - `failedSegments` (스크립트 옵션): 실패 세그먼트만 순차 재실행 (중복 입력은 자동 제거, 오름차순 정규화)
 - `orchestratorArn` (스크립트 옵션): Step Functions 오케스트레이터 직접 실행
+- `executionName` (스크립트 옵션): 오케스트레이터 실행 이름 지정(재시도 추적 용도, orchestratorArn과 함께 사용)
 - `maxScanPages` (옵션): 한 번 실행에서 최대 Scan 페이지 수 제한 (1 이상)
 - `scanPageSize` (옵션): Scan `Limit` (1~1000, 기본 500 권장)
 - `segmentIndex`와 `failedSegments`는 동시에 지정할 수 없음
@@ -41,6 +42,7 @@
 ./scripts/cheer-stats-backfill.sh --stage prod --total-segments 4 --failed-segments 1,3
 ./scripts/cheer-stats-backfill.sh --stage prod --orchestrator-arn arn:aws:states:ap-northeast-2:123456789012:stateMachine:chme-prod-cheer-stats-materializer-orchestrator --total-segments 4
 ./scripts/cheer-stats-backfill.sh --stage prod --orchestrator-arn arn:aws:states:ap-northeast-2:123456789012:stateMachine:chme-prod-cheer-stats-materializer-orchestrator --failed-segments 1,3
+./scripts/cheer-stats-backfill.sh --stage prod --orchestrator-arn arn:aws:states:ap-northeast-2:123456789012:stateMachine:chme-prod-cheer-stats-materializer-orchestrator --execution-name cheer-stats-backfill-20260331
 ```
 
 ### Windows PowerShell
@@ -51,6 +53,7 @@
 ./scripts/cheer-stats-backfill.ps1 -Stage prod -TotalSegments 4 -FailedSegments 1,3
 ./scripts/cheer-stats-backfill.ps1 -Stage prod -OrchestratorArn arn:aws:states:ap-northeast-2:123456789012:stateMachine:chme-prod-cheer-stats-materializer-orchestrator -TotalSegments 4
 ./scripts/cheer-stats-backfill.ps1 -Stage prod -OrchestratorArn arn:aws:states:ap-northeast-2:123456789012:stateMachine:chme-prod-cheer-stats-materializer-orchestrator -FailedSegments 1,3
+./scripts/cheer-stats-backfill.ps1 -Stage prod -OrchestratorArn arn:aws:states:ap-northeast-2:123456789012:stateMachine:chme-prod-cheer-stats-materializer-orchestrator -ExecutionName cheer-stats-backfill-20260331
 ```
 
 ## 스케줄 오케스트레이션 환경변수 (CDK 배포 시)

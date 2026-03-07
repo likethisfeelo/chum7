@@ -284,6 +284,7 @@ describe('cheer stabilization guards', () => {
     expect(runbook).toContain('failedSegments');
     expect(runbook).toContain('중복 입력은 자동 제거');
     expect(runbook).toContain('orchestratorArn');
+    expect(runbook).toContain('executionName');
     expect(runbook).toContain('segmentIndex < totalSegments');
     expect(runbook).toContain('totalSegments');
     expect(runbook).toContain('maxScanPages');
@@ -305,6 +306,8 @@ describe('cheer stabilization guards', () => {
     expect(sh).toContain('--segment-index');
     expect(sh).toContain('--failed-segments');
     expect(sh).toContain('--orchestrator-arn');
+    expect(sh).toContain('--execution-name');
+    expect(sh).toContain('--execution-name requires --orchestrator-arn');
     expect(sh).toContain('--segment-index requires --total-segments');
     expect(sh).toContain('--failed-segments requires --total-segments');
     expect(sh).toContain('normalize_failed_segments_csv');
@@ -328,6 +331,8 @@ describe('cheer stabilization guards', () => {
     expect(ps1).toContain('$SegmentIndex');
     expect(ps1).toContain('$FailedSegments');
     expect(ps1).toContain('$OrchestratorArn');
+    expect(ps1).toContain('$ExecutionName');
+    expect(ps1).toContain('-ExecutionName requires -OrchestratorArn');
     expect(ps1).toContain('-SegmentIndex requires -TotalSegments');
     expect(ps1).toContain('-FailedSegments requires -TotalSegments');
     expect(ps1).toContain('Resolve-NormalizedFailedSegments');
