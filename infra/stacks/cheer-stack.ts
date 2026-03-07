@@ -9,7 +9,7 @@ import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { EventBus, Rule, RuleTargetInput, Schedule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction, SfnStateMachine, SnsTopic } from 'aws-cdk-lib/aws-events-targets';
-import { Alarm, ComparisonOperator, Dashboard, Metric, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
+import { Alarm, ComparisonOperator, Dashboard, GraphWidget, Metric, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import { FilterPattern, LogGroup, LogRetention, MetricFilter, RetentionDays } from 'aws-cdk-lib/aws-logs';
@@ -21,6 +21,7 @@ interface CheerStackProps extends StackProps {
   apiGateway: HttpApi;
   authorizer: HttpJwtAuthorizer;
   cheersTable: Table;
+  cheerDeadLettersTable: Table;
   userCheerTicketsTable: Table;
   userChallengesTable: Table;
   challengesTable: Table;
@@ -32,7 +33,7 @@ export class CheerStack extends Stack {
   constructor(scope: Construct, id: string, props: CheerStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, authorizer, cheersTable, userCheerTicketsTable, userChallengesTable, challengesTable, snsTopic, eventBus } = props;
+    const { stage, apiGateway, authorizer, cheersTable, cheerDeadLettersTable, userCheerTicketsTable, userChallengesTable, challengesTable, snsTopic, eventBus } = props;
 
     const commonEnv = {
       STAGE: stage,
@@ -47,6 +48,7 @@ export class CheerStack extends Stack {
       CHEER_STATS_TABLE: process.env.CHEER_STATS_TABLE ?? '',
       CHEER_STATS_MATERIALIZER_MAX_RETRIES: process.env.CHEER_STATS_MATERIALIZER_MAX_RETRIES ?? '5',
       CHEER_RATE_LIMITS_TABLE: process.env.CHEER_RATE_LIMITS_TABLE ?? '',
+      CHEER_DEAD_LETTERS_TABLE: cheerDeadLettersTable.tableName,
     };
 
     const commonProps = {
@@ -153,6 +155,7 @@ export class CheerStack extends Stack {
       timeout: Duration.seconds(60),
     });
     cheersTable.grantReadWriteData(sendScheduledFn);
+    cheerDeadLettersTable.grantReadWriteData(sendScheduledFn);
     snsTopic.grantPublish(sendScheduledFn);
 
     // EventBridge 5분마다 실행
@@ -231,6 +234,23 @@ export class CheerStack extends Stack {
       path: '/cheer/scheduled',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('GetScheduledIntegration', getScheduledFn),
+      authorizer,
+    });
+
+
+    // 7-1. Cancel Scheduled Cheer (protected)
+    const cancelScheduledFn = new NodejsFunction(this, 'CancelScheduledFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-cheer-cancel-scheduled`,
+      entry: path.join(__dirname, '../../backend/services/cheer/cancel-scheduled/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheersTable.grantReadWriteData(cancelScheduledFn);
+    apiGateway.addRoutes({
+      path: '/cheer/scheduled/{cheerId}',
+      methods: [HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration('CancelScheduledIntegration', cancelScheduledFn),
       authorizer,
     });
 
@@ -400,8 +420,30 @@ export class CheerStack extends Stack {
       period: Duration.minutes(5)
     });
 
-    const statsBucketedMetric = createLogCountMetric('CheerStatsBucketedSource', cheerStatsFn.functionName, 'bucketed');
-    const statsRealtimeFallbackMetric = createLogCountMetric('CheerStatsRealtimeFallbackSource', cheerStatsFn.functionName, 'realtime_fallback');
+
+    const scheduledDeadLetterMetric = createLogCountMetric('CheerScheduledDeadLetter', sendScheduledFn.functionName, 'Cheer moved to dead-letter');
+    const scheduledRaceSkippedMetric = createLogCountMetric('CheerScheduledRaceSkipped', sendScheduledFn.functionName, 'skipped due to concurrent state change');
+
+    new Alarm(this, 'CheerScheduledDeadLetterAlarm', {
+      metric: scheduledDeadLetterMetric,
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Scheduled cheer dead-letter events detected'
+    });
+
+    new Alarm(this, 'CheerScheduledRaceSkippedAlarm', {
+      metric: scheduledRaceSkippedMetric,
+      threshold: 5,
+      evaluationPeriods: 1,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Scheduled cheer concurrent race-skip events detected'
+    });
+
+    const statsBucketedMetric = createLogCountMetric('CheerStatsBucketedSource', cheerStatsFn.functionName, "source: 'bucketed'");
+    const statsRealtimeFallbackMetric = createLogCountMetric('CheerStatsRealtimeFallbackSource', cheerStatsFn.functionName, "source: 'realtime_fallback'");
 
     const replyRequestMetric = createLogCountMetric('CheerReplyRequest', cheerReplyFn.functionName, 'Cheer reply request received');
     const replySuccessMetric = createLogCountMetric('CheerReplySuccess', cheerReplyFn.functionName, 'Cheer reply success');
@@ -451,5 +493,15 @@ export class CheerStack extends Stack {
     });
 
     dashboardRows.forEach((row) => cheerDashboard.addWidgets(...row));
+
+    cheerDashboard.addWidgets(
+      new GraphWidget({
+        title: 'Scheduled Cheer DLQ / Race Skip (5m Sum)',
+        left: [scheduledDeadLetterMetric, scheduledRaceSkippedMetric],
+        width: 24,
+        height: 6,
+      })
+    );
+
   }
 }

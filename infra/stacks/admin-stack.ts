@@ -13,6 +13,8 @@ interface AdminStackProps extends StackProps {
   apiGateway: HttpApi;
   authorizer: HttpJwtAuthorizer;
   usersTable: Table;
+  cheersTable: Table;
+  cheerDeadLettersTable: Table;
   challengesTable: Table;
   userChallengesTable: Table;
   questSubmissionsTable: Table;
@@ -30,6 +32,8 @@ export class AdminStack extends Stack {
       apiGateway,
       authorizer,
       usersTable,
+      cheersTable,
+      cheerDeadLettersTable,
       challengesTable,
       userChallengesTable,
       questSubmissionsTable,
@@ -41,6 +45,8 @@ export class AdminStack extends Stack {
     const commonEnv = {
       STAGE: stage,
       USERS_TABLE: usersTable.tableName,
+      CHEERS_TABLE: cheersTable.tableName,
+      CHEER_DEAD_LETTERS_TABLE: cheerDeadLettersTable.tableName,
       CHALLENGES_TABLE: challengesTable.tableName,
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
       QUEST_SUBMISSIONS_TABLE: questSubmissionsTable.tableName,
@@ -246,5 +252,105 @@ export class AdminStack extends Stack {
       integration: new HttpLambdaIntegration('AdminPersonalQuestListIntegration', personalQuestListFn),
       authorizer,
     });
+
+    // 10. Cheer Dead Letters (Ops)
+    const cheerDeadLetterListFn = new NodejsFunction(this, 'CheerDeadLetterListFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-cheer-dead-letter-list`,
+      entry: path.join(__dirname, '../../backend/services/admin/cheer/dead-letter/list/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheerDeadLettersTable.grantReadData(cheerDeadLetterListFn);
+    apiGateway.addRoutes({
+      path: '/admin/cheer/dead-letters',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminCheerDeadLetterListIntegration', cheerDeadLetterListFn),
+      authorizer,
+    });
+
+
+
+    const cheerDeadLetterStatsFn = new NodejsFunction(this, 'CheerDeadLetterStatsFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-cheer-dead-letter-stats`,
+      entry: path.join(__dirname, '../../backend/services/admin/cheer/dead-letter/stats/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheerDeadLettersTable.grantReadData(cheerDeadLetterStatsFn);
+    apiGateway.addRoutes({
+      path: '/admin/cheer/dead-letters/stats',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminCheerDeadLetterStatsIntegration', cheerDeadLetterStatsFn),
+      authorizer,
+    });
+
+    const cheerDeadLetterGetFn = new NodejsFunction(this, 'CheerDeadLetterGetFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-cheer-dead-letter-get`,
+      entry: path.join(__dirname, '../../backend/services/admin/cheer/dead-letter/get/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheerDeadLettersTable.grantReadData(cheerDeadLetterGetFn);
+    cheersTable.grantReadData(cheerDeadLetterGetFn);
+    apiGateway.addRoutes({
+      path: '/admin/cheer/dead-letters/{cheerId}',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminCheerDeadLetterGetIntegration', cheerDeadLetterGetFn),
+      authorizer,
+    });
+
+    const cheerDeadLetterRequeueFn = new NodejsFunction(this, 'CheerDeadLetterRequeueFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-cheer-dead-letter-requeue`,
+      entry: path.join(__dirname, '../../backend/services/admin/cheer/dead-letter/requeue/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheerDeadLettersTable.grantReadWriteData(cheerDeadLetterRequeueFn);
+    cheersTable.grantReadWriteData(cheerDeadLetterRequeueFn);
+    apiGateway.addRoutes({
+      path: '/admin/cheer/dead-letters/{cheerId}/requeue',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('AdminCheerDeadLetterRequeueIntegration', cheerDeadLetterRequeueFn),
+      authorizer,
+    });
+
+
+
+    const cheerDeadLetterRequeueByQueryFn = new NodejsFunction(this, 'CheerDeadLetterRequeueByQueryFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-cheer-dead-letter-requeue-by-query`,
+      entry: path.join(__dirname, '../../backend/services/admin/cheer/dead-letter/requeue-by-query/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheerDeadLettersTable.grantReadWriteData(cheerDeadLetterRequeueByQueryFn);
+    cheersTable.grantReadWriteData(cheerDeadLetterRequeueByQueryFn);
+    apiGateway.addRoutes({
+      path: '/admin/cheer/dead-letters/requeue-by-query',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('AdminCheerDeadLetterRequeueByQueryIntegration', cheerDeadLetterRequeueByQueryFn),
+      authorizer,
+    });
+
+    const cheerDeadLetterBatchRequeueFn = new NodejsFunction(this, 'CheerDeadLetterBatchRequeueFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-cheer-dead-letter-requeue-batch`,
+      entry: path.join(__dirname, '../../backend/services/admin/cheer/dead-letter/requeue-batch/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheerDeadLettersTable.grantReadWriteData(cheerDeadLetterBatchRequeueFn);
+    cheersTable.grantReadWriteData(cheerDeadLetterBatchRequeueFn);
+    apiGateway.addRoutes({
+      path: '/admin/cheer/dead-letters/requeue-batch',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('AdminCheerDeadLetterBatchRequeueIntegration', cheerDeadLetterBatchRequeueFn),
+      authorizer,
+    });
+
   }
 }
