@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -66,37 +66,44 @@ async function requeueOne(cheerId: string, actorId: string): Promise<{ cheerId: 
   const requeueScheduledTime = new Date(now.getTime() + 60 * 1000).toISOString();
 
   try {
-    await docClient.send(new UpdateCommand({
-      TableName: process.env.CHEERS_TABLE!,
-      Key: { cheerId },
-      UpdateExpression: 'SET #status = :pending, retryCount = :retryCount, scheduledTime = :scheduledTime, nextRetryAt = :nextRetryAt, requeuedAt = :requeuedAt REMOVE deadLetterReason, failureCode, failedAt',
-      ExpressionAttributeNames: {
-        '#status': 'status',
-      },
-      ExpressionAttributeValues: {
-        ':pending': 'pending',
-        ':retryCount': 0,
-        ':scheduledTime': requeueScheduledTime,
-        ':nextRetryAt': requeueScheduledTime,
-        ':requeuedAt': nowIso,
-      },
-      ConditionExpression: 'attribute_exists(cheerId)',
-    }));
-
-    await docClient.send(new UpdateCommand({
-      TableName: process.env.CHEER_DEAD_LETTERS_TABLE!,
-      Key: { cheerId },
-      UpdateExpression: 'SET #status = :status, requeuedAt = :requeuedAt, requeuedBy = :requeuedBy',
-      ExpressionAttributeNames: {
-        '#status': 'status',
-      },
-      ExpressionAttributeValues: {
-        ':status': 'requeued',
-        ':requeuedAt': nowIso,
-        ':requeuedBy': actorId,
-        ':dead': 'dead',
-      },
-      ConditionExpression: '#status = :dead',
+    await docClient.send(new TransactWriteCommand({
+      TransactItems: [
+        {
+          Update: {
+            TableName: process.env.CHEERS_TABLE!,
+            Key: { cheerId },
+            UpdateExpression: 'SET #status = :pending, retryCount = :retryCount, scheduledTime = :scheduledTime, nextRetryAt = :nextRetryAt, requeuedAt = :requeuedAt REMOVE deadLetterReason, failureCode, failedAt',
+            ExpressionAttributeNames: {
+              '#status': 'status',
+            },
+            ExpressionAttributeValues: {
+              ':pending': 'pending',
+              ':retryCount': 0,
+              ':scheduledTime': requeueScheduledTime,
+              ':nextRetryAt': requeueScheduledTime,
+              ':requeuedAt': nowIso,
+            },
+            ConditionExpression: 'attribute_exists(cheerId)',
+          },
+        },
+        {
+          Update: {
+            TableName: process.env.CHEER_DEAD_LETTERS_TABLE!,
+            Key: { cheerId },
+            UpdateExpression: 'SET #status = :status, requeuedAt = :requeuedAt, requeuedBy = :requeuedBy',
+            ExpressionAttributeNames: {
+              '#status': 'status',
+            },
+            ExpressionAttributeValues: {
+              ':status': 'requeued',
+              ':requeuedAt': nowIso,
+              ':requeuedBy': actorId,
+              ':dead': 'dead',
+            },
+            ConditionExpression: '#status = :dead',
+          },
+        },
+      ],
     }));
 
     return {
@@ -104,7 +111,7 @@ async function requeueOne(cheerId: string, actorId: string): Promise<{ cheerId: 
       ok: true,
     };
   } catch (error: any) {
-    if (error?.name === 'ConditionalCheckFailedException') {
+    if (error?.name === 'ConditionalCheckFailedException' || error?.name === 'TransactionCanceledException') {
       return {
         cheerId,
         ok: false,

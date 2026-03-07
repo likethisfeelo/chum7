@@ -18,6 +18,10 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
     input: any;
     constructor(input: any) { this.input = input; }
   },
+  TransactWriteCommand: class TransactWriteCommand {
+    input: any;
+    constructor(input: any) { this.input = input; }
+  },
 }), { virtual: true });
 
 function buildEvent(): APIGatewayProxyEvent {

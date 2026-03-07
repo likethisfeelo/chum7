@@ -22,6 +22,12 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
       this.input = input;
     }
   },
+  TransactWriteCommand: class TransactWriteCommand {
+    input: any;
+    constructor(input: any) {
+      this.input = input;
+    }
+  },
 }), { virtual: true });
 
 function buildEvent(body: any): APIGatewayProxyEvent {
@@ -78,11 +84,10 @@ describe('dead-letter batch requeue handler', () => {
   });
 
   it('returns mixed success/failure results', async () => {
-    // c1: get(dead) + update cheer + update dlq success
+    // c1: get(dead) + transactional requeue success
     // c2: get(not found)
     sendMock
       .mockResolvedValueOnce({ Item: { cheerId: 'c1', status: 'dead' } })
-      .mockResolvedValueOnce({})
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({ Item: null });
 
