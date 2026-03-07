@@ -230,6 +230,23 @@ export class CheerStack extends Stack {
       authorizer,
     });
 
+
+    // 7-1. Cancel Scheduled Cheer (protected)
+    const cancelScheduledFn = new NodejsFunction(this, 'CancelScheduledFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-cheer-cancel-scheduled`,
+      entry: path.join(__dirname, '../../backend/services/cheer/cancel-scheduled/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheersTable.grantReadWriteData(cancelScheduledFn);
+    apiGateway.addRoutes({
+      path: '/cheer/scheduled/{cheerId}',
+      methods: [HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration('CancelScheduledIntegration', cancelScheduledFn),
+      authorizer,
+    });
+
     // 8. Cheer Stats (기간/챌린지 필터) (protected)
     const cheerStatsFn = new NodejsFunction(this, 'CheerStatsFn', {
       ...commonProps,
