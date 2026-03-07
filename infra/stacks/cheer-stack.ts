@@ -96,6 +96,78 @@ export class CheerStack extends Stack {
       return Math.floor(parsed);
     };
 
+
+    const buildCheerOpsWidgetRows = (input: {
+      replyErrorMetric: Metric;
+      reactErrorMetric: Metric;
+      statsErrorMetric: Metric;
+      statsBucketedMetric: Metric;
+      statsRealtimeFallbackMetric: Metric;
+      replyRequestMetric: Metric;
+      replySuccessMetric: Metric;
+      replyClientErrorMetric: Metric;
+      reactRequestMetric: Metric;
+      reactSuccessMetric: Metric;
+      reactClientErrorMetric: Metric;
+      statsRequestMetric: Metric;
+      statsSuccessMetric: Metric;
+      cheerReplyFnRef: NodejsFunction;
+      cheerReactFnRef: NodejsFunction;
+      cheerStatsFnRef: NodejsFunction;
+      statsMaterializerFnRef: NodejsFunction;
+    }): Array<Array<GraphWidget | SingleValueWidget>> => {
+      return [
+        [
+          new SingleValueWidget({
+            title: 'Cheer Error Count (5m)',
+            metrics: [input.replyErrorMetric, input.reactErrorMetric, input.statsErrorMetric],
+            width: 8
+          }),
+          new GraphWidget({
+            title: 'Cheer Handler Latency p95',
+            left: [
+              input.cheerReplyFnRef.metricDuration({ statistic: 'p95', period: Duration.minutes(5) }),
+              input.cheerReactFnRef.metricDuration({ statistic: 'p95', period: Duration.minutes(5) }),
+              input.cheerStatsFnRef.metricDuration({ statistic: 'p95', period: Duration.minutes(5) })
+            ],
+            width: 16
+          })
+        ],
+        [
+          new GraphWidget({
+            title: 'Cheer Stats Source Mix (5m)',
+            left: [input.statsBucketedMetric, input.statsRealtimeFallbackMetric],
+            width: 12
+          }),
+          new GraphWidget({
+            title: 'Materializer Invocations/Errors',
+            left: [
+              input.statsMaterializerFnRef.metricInvocations({ period: Duration.minutes(5) }),
+              input.statsMaterializerFnRef.metricErrors({ period: Duration.minutes(5) })
+            ],
+            width: 12
+          })
+        ],
+        [
+          new GraphWidget({
+            title: 'Reply Traffic Split (req/success/429)',
+            left: [input.replyRequestMetric, input.replySuccessMetric, input.replyClientErrorMetric],
+            width: 8
+          }),
+          new GraphWidget({
+            title: 'React Traffic Split (req/success/429)',
+            left: [input.reactRequestMetric, input.reactSuccessMetric, input.reactClientErrorMetric],
+            width: 8
+          }),
+          new GraphWidget({
+            title: 'Stats Traffic Split (req/success/5xx)',
+            left: [input.statsRequestMetric, input.statsSuccessMetric, input.statsErrorMetric],
+            width: 8
+          })
+        ]
+      ];
+    };
+
     // 1. Send Immediate Cheer
     const sendImmediateFn = new NodejsFunction(this, 'SendImmediateFn', {
       ...commonProps,
@@ -359,56 +431,26 @@ export class CheerStack extends Stack {
       dashboardName: `chme-${stage}-cheer-ops`
     });
 
-    cheerDashboard.addWidgets(
-      new SingleValueWidget({
-        title: 'Cheer Error Count (5m)',
-        metrics: [replyErrorMetric, reactErrorMetric, statsErrorMetric],
-        width: 8
-      }),
-      new GraphWidget({
-        title: 'Cheer Handler Latency p95',
-        left: [
-          cheerReplyFn.metricDuration({ statistic: 'p95', period: Duration.minutes(5) }),
-          cheerReactFn.metricDuration({ statistic: 'p95', period: Duration.minutes(5) }),
-          cheerStatsFn.metricDuration({ statistic: 'p95', period: Duration.minutes(5) })
-        ],
-        width: 16
-      })
-    );
+    const dashboardRows = buildCheerOpsWidgetRows({
+      replyErrorMetric,
+      reactErrorMetric,
+      statsErrorMetric,
+      statsBucketedMetric,
+      statsRealtimeFallbackMetric,
+      replyRequestMetric,
+      replySuccessMetric,
+      replyClientErrorMetric,
+      reactRequestMetric,
+      reactSuccessMetric,
+      reactClientErrorMetric,
+      statsRequestMetric,
+      statsSuccessMetric,
+      cheerReplyFnRef: cheerReplyFn,
+      cheerReactFnRef: cheerReactFn,
+      cheerStatsFnRef: cheerStatsFn,
+      statsMaterializerFnRef: statsMaterializerFn
+    });
 
-    cheerDashboard.addWidgets(
-      new GraphWidget({
-        title: 'Cheer Stats Source Mix (5m)',
-        left: [statsBucketedMetric, statsRealtimeFallbackMetric],
-        width: 12
-      }),
-      new GraphWidget({
-        title: 'Materializer Invocations/Errors',
-        left: [
-          statsMaterializerFn.metricInvocations({ period: Duration.minutes(5) }),
-          statsMaterializerFn.metricErrors({ period: Duration.minutes(5) })
-        ],
-        width: 12
-      })
-    );
-
-
-    cheerDashboard.addWidgets(
-      new GraphWidget({
-        title: 'Reply Traffic Split (req/success/429)',
-        left: [replyRequestMetric, replySuccessMetric, replyClientErrorMetric],
-        width: 8
-      }),
-      new GraphWidget({
-        title: 'React Traffic Split (req/success/429)',
-        left: [reactRequestMetric, reactSuccessMetric, reactClientErrorMetric],
-        width: 8
-      }),
-      new GraphWidget({
-        title: 'Stats Traffic Split (req/success/5xx)',
-        left: [statsRequestMetric, statsSuccessMetric, statsErrorMetric],
-        width: 8
-      })
-    );
+    dashboardRows.forEach((row) => cheerDashboard.addWidgets(...row));
   }
 }

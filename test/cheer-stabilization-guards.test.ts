@@ -188,6 +188,8 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('React cheer error');
     expect(stack).toContain('Get cheer stats error');
     expect(stack).toContain('CheerOpsDashboard');
+    expect(stack).toContain('buildCheerOpsWidgetRows');
+    expect(stack).toContain('dashboardRows.forEach');
     expect(stack).toContain('Dashboard');
     expect(stack).toContain('Cheer Handler Latency p95');
     expect(stack).toContain('Cheer Stats Source Mix (5m)');
