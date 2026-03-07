@@ -31,3 +31,15 @@ declare module '@aws-sdk/lib-dynamodb' {
     };
   };
 }
+
+
+declare module '@aws-sdk/client-sns' {
+  export class SNSClient {
+    constructor(config?: Record<string, unknown>);
+    send(command: unknown): Promise<any>;
+  }
+
+  export class PublishCommand {
+    constructor(input: Record<string, unknown>);
+  }
+}
