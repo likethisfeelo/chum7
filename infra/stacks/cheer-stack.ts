@@ -230,5 +230,25 @@ export class CheerStack extends Stack {
       integration: new HttpLambdaIntegration('CheerReactIntegration', cheerReactFn),
       authorizer,
     });
+
+    // 10. Cheer stats materializer (scheduled batch)
+    const statsMaterializerFn = new NodejsFunction(this, 'CheerStatsMaterializerFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-cheer-stats-materializer`,
+      entry: path.join(__dirname, '../../backend/services/cheer/stats-materializer/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+      timeout: Duration.seconds(120),
+      memorySize: 512,
+    });
+    cheersTable.grantReadData(statsMaterializerFn);
+    if (process.env.CHEER_STATS_TABLE) {
+      Table.fromTableName(this, 'CheerStatsTableRef', process.env.CHEER_STATS_TABLE).grantReadWriteData(statsMaterializerFn);
+    }
+
+    new Rule(this, 'CheerStatsMaterializerSchedule', {
+      schedule: Schedule.rate(Duration.hours(1)),
+      targets: [new LambdaFunction(statsMaterializerFn)],
+    });
   }
 }

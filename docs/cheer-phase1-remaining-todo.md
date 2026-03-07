@@ -5,13 +5,14 @@
 - 인터랙션 레이트 리밋 1차: reply/reaction 분당 요청 제한(환경변수 기반)
 - 통계 API 확장: `GET /cheers/stats` with `period=all|day|week|month|challenge`
 - CheerStats 하이브리드 조회: bucket 우선 + 실시간 fallback(`source` 필드 제공)
+- CheerStats 적재 파이프라인 1차: 배치 materializer Lambda + 1시간 스케줄 트리거
 - `period=challenge` 검증 강화: challenge 존재 + 참여자 접근 검증
 - 투데이 페이지 UX 확장: 리액션/답장 UI + 기간 필터 통계 카드
 
 ## 남은 TODO
 
 ### P0 (바로 다음)
-1. CheerStats 적재 파이프라인/백필 작업 배치 구성(현재는 bucket 조회 준비 단계)
+1. CheerStats 백필 범위/주기 튜닝 및 실패 재처리 전략 확정
 2. 인터랙션/통계 구조화 로그 대시보드 연동(요청수, 4xx, 5xx, latency p95)
 3. 레이트 리밋 우회/분산 요청 대응(고정 윈도우 → 토큰 버킷 등)
 

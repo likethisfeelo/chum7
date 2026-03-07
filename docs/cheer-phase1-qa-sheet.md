@@ -28,6 +28,7 @@
 - [ ] 비참여자 challengeId 요청 시 403
 - [ ] 응답에 sent/received/thanked/replied/reaction count 포함
 - [ ] 응답 `source`가 `bucketed` 또는 `realtime_fallback`으로 반환
+- [ ] 배치 materializer 실행 후 bucketed source 응답 비율 확인
 
 ## 2. 프론트 QA (Today)
 - [ ] 받은 응원 카드에서 리액션 버튼 노출

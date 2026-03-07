@@ -166,6 +166,9 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('challengesTable.grantReadData(cheerStatsFn)');
     expect(stack).toContain('userChallengesTable.grantReadData(cheerStatsFn)');
     expect(stack).toContain('CHEER_STATS_TABLE');
+    expect(stack).toContain('CheerStatsMaterializerFn');
+    expect(stack).toContain('CheerStatsMaterializerSchedule');
+    expect(stack).toContain('stats-materializer/index.ts');
   });
 
   test('stats handler supports period/day/week/month/challenge filters', () => {
@@ -190,6 +193,19 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain("source: 'bucketed'");
     expect(src).toContain("source: 'realtime_fallback'");
     expect(src).toContain('resolveStatsBucketSk');
+    expect(src).toContain('source: bucketed.source');
+    expect(src).toContain("source: 'realtime_fallback'");
+  });
+
+  test('stats materializer scans cheers and writes bucketed summaries', () => {
+    const src = read('backend/services/cheer/stats-materializer/index.ts');
+    expect(src).toContain('scanAllCheers');
+    expect(src).toContain('buildStatsDocuments');
+    expect(src).toContain('batchWriteStats');
+    expect(src).toContain('BatchWriteCommand');
+    expect(src).toContain('Cheer stats materializer finished');
+    expect(src).toContain("challenge#${challengeId}#all");
+    expect(src).toContain('owner#');
   });
 
   test('reply and react handlers enforce receiver-only interaction and idempotency', () => {
