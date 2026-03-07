@@ -167,9 +167,16 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('userChallengesTable.grantReadData(cheerStatsFn)');
     expect(stack).toContain('CHEER_STATS_TABLE');
     expect(stack).toContain('CheerStatsMaterializerFn');
-    expect(stack).toContain('CheerStatsMaterializerSchedule');
+    expect(stack).toContain('CheerStatsMaterializerScheduleSeg');
     expect(stack).toContain('stats-materializer/index.ts');
     expect(stack).toContain('CHEER_STATS_MATERIALIZER_MAX_RETRIES');
+    expect(stack).toContain('CHEER_STATS_MATERIALIZER_SCHEDULE_MINUTES');
+    expect(stack).toContain('CHEER_STATS_MATERIALIZER_TOTAL_SEGMENTS');
+    expect(stack).toContain('CHEER_STATS_MATERIALIZER_MAX_SCAN_PAGES');
+    expect(stack).toContain('CHEER_STATS_MATERIALIZER_SCAN_PAGE_SIZE');
+    expect(stack).toContain('RuleTargetInput.fromObject');
+    expect(stack).toContain('segmentIndex');
+    expect(stack).toContain('totalSegments');
     expect(stack).toContain('CHEER_RATE_LIMITS_TABLE');
     expect(stack).toContain('CheerRateLimitsTableRef');
     expect(stack).toContain('CheerRateLimitsTableRefForReact');

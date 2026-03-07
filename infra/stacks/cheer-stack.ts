@@ -7,7 +7,7 @@ import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Topic } from 'aws-cdk-lib/aws-sns';
-import { EventBus, Rule, Schedule } from 'aws-cdk-lib/aws-events';
+import { EventBus, Rule, RuleTargetInput, Schedule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 import { Alarm, ComparisonOperator, Dashboard, GraphWidget, Metric, SingleValueWidget, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
 import { FilterPattern, LogGroup, MetricFilter } from 'aws-cdk-lib/aws-logs';
@@ -85,6 +85,15 @@ export class CheerStack extends Stack {
         statistic: 'Sum',
         period: Duration.minutes(5)
       });
+    };
+
+    const resolvePositiveInt = (raw: string | undefined, fallback: number): number => {
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return fallback;
+      }
+
+      return Math.floor(parsed);
     };
 
     // 1. Send Immediate Cheer
@@ -286,10 +295,27 @@ export class CheerStack extends Stack {
       Table.fromTableName(this, 'CheerStatsTableRef', process.env.CHEER_STATS_TABLE).grantReadWriteData(statsMaterializerFn);
     }
 
-    new Rule(this, 'CheerStatsMaterializerSchedule', {
-      schedule: Schedule.rate(Duration.hours(1)),
-      targets: [new LambdaFunction(statsMaterializerFn)],
-    });
+    const materializerScheduleMinutes = resolvePositiveInt(process.env.CHEER_STATS_MATERIALIZER_SCHEDULE_MINUTES, 60);
+    const materializerTotalSegments = resolvePositiveInt(process.env.CHEER_STATS_MATERIALIZER_TOTAL_SEGMENTS, 1);
+    const materializerMaxScanPages = resolvePositiveInt(process.env.CHEER_STATS_MATERIALIZER_MAX_SCAN_PAGES, 20);
+    const materializerScanPageSize = resolvePositiveInt(process.env.CHEER_STATS_MATERIALIZER_SCAN_PAGE_SIZE, 500);
+
+    for (let segmentIndex = 0; segmentIndex < materializerTotalSegments; segmentIndex += 1) {
+      new Rule(this, `CheerStatsMaterializerScheduleSeg${segmentIndex}`, {
+        schedule: Schedule.rate(Duration.minutes(materializerScheduleMinutes)),
+        targets: [
+          new LambdaFunction(statsMaterializerFn, {
+            event: RuleTargetInput.fromObject({
+              dryRun: false,
+              totalSegments: materializerTotalSegments,
+              segmentIndex,
+              maxScanPages: materializerMaxScanPages,
+              scanPageSize: materializerScanPageSize
+            })
+          })
+        ],
+      });
+    }
 
     // 11. Observability baseline alarms (reply/react/stats)
     createErrorAlarm('CheerReplyError', cheerReplyFn.functionName, 'Reply cheer error');
