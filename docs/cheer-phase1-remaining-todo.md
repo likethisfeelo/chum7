@@ -15,6 +15,7 @@
 - materializer 오케스트레이션 4차: Step Functions Map + LambdaInvoke retry 체계
 - materializer 관측 5차: Step Functions orchestrator 실패 알람 + 실행지표 위젯
 - materializer 관측 6차: Step Functions 실패 이벤트 SNS 알림 연동
+- materializer 운영 7차: 백필 스크립트 실패 세그먼트 재실행 옵션 지원
 - CloudWatch 에러 알람 베이스라인: reply/react/stats 에러 로그 메트릭 필터+알람
 - CloudWatch 운영 대시보드 1차: 에러카운트/latency p95/source mix/materializer invocations·errors 위젯
 - CloudWatch 운영 대시보드 2차: reply/react/stats 요청·성공·에러유형(429/5xx) 분리 위젯

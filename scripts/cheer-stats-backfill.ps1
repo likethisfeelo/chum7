@@ -12,35 +12,58 @@ param(
 
   [int]$TotalSegments,
   [int]$SegmentIndex,
+  [int[]]$FailedSegments,
   [int]$MaxScanPages,
   [int]$ScanPageSize
 )
 
 $functionName = "chme-$Stage-cheer-stats-materializer"
 
-$payload = @{}
-if ($FromIso) { $payload.fromIso = $FromIso }
-if ($ToIso) { $payload.toIso = $ToIso }
-$payload.dryRun = [bool]$DryRun
-if ($PSBoundParameters.ContainsKey('MaxRetries')) { $payload.maxRetries = $MaxRetries }
-if ($PSBoundParameters.ContainsKey('TotalSegments')) { $payload.totalSegments = $TotalSegments }
-if ($PSBoundParameters.ContainsKey('SegmentIndex')) { $payload.segmentIndex = $SegmentIndex }
-if ($PSBoundParameters.ContainsKey('MaxScanPages')) { $payload.maxScanPages = $MaxScanPages }
-if ($PSBoundParameters.ContainsKey('ScanPageSize')) { $payload.scanPageSize = $ScanPageSize }
+function Invoke-BackfillSegment {
+  param(
+    [Nullable[int]]$OverrideSegmentIndex
+  )
 
-$payloadJson = $payload | ConvertTo-Json -Compress
-Write-Host "Invoking $functionName with payload: $payloadJson"
+  $payload = @{}
+  if ($FromIso) { $payload.fromIso = $FromIso }
+  if ($ToIso) { $payload.toIso = $ToIso }
+  $payload.dryRun = [bool]$DryRun
 
-aws lambda invoke `
-  --function-name $functionName `
-  --payload $payloadJson `
-  --cli-binary-format raw-in-base64-out `
-  "/tmp/cheer-stats-backfill-result.json" | Out-File "/tmp/cheer-stats-backfill-meta.json"
+  if ($PSBoundParameters.ContainsKey('MaxRetries')) { $payload.maxRetries = $MaxRetries }
+  if ($PSBoundParameters.ContainsKey('TotalSegments')) { $payload.totalSegments = $TotalSegments }
 
-Write-Host "--- Lambda metadata ---"
-Get-Content "/tmp/cheer-stats-backfill-meta.json"
+  if ($null -ne $OverrideSegmentIndex) {
+    $payload.segmentIndex = [int]$OverrideSegmentIndex
+  }
+  elseif ($PSBoundParameters.ContainsKey('SegmentIndex')) {
+    $payload.segmentIndex = $SegmentIndex
+  }
 
-Write-Host "`n--- Lambda result ---"
-Get-Content "/tmp/cheer-stats-backfill-result.json"
+  if ($PSBoundParameters.ContainsKey('MaxScanPages')) { $payload.maxScanPages = $MaxScanPages }
+  if ($PSBoundParameters.ContainsKey('ScanPageSize')) { $payload.scanPageSize = $ScanPageSize }
 
-Write-Host "`nDone"
+  $payloadJson = $payload | ConvertTo-Json -Compress
+  Write-Host "Invoking $functionName with payload: $payloadJson"
+
+  aws lambda invoke `
+    --function-name $functionName `
+    --payload $payloadJson `
+    --cli-binary-format raw-in-base64-out `
+    "/tmp/cheer-stats-backfill-result.json" | Out-File "/tmp/cheer-stats-backfill-meta.json"
+
+  Write-Host "--- Lambda metadata ---"
+  Get-Content "/tmp/cheer-stats-backfill-meta.json"
+
+  Write-Host "`n--- Lambda result ---"
+  Get-Content "/tmp/cheer-stats-backfill-result.json"
+
+  Write-Host "`nDone"
+}
+
+if ($PSBoundParameters.ContainsKey('FailedSegments') -and $FailedSegments.Count -gt 0) {
+  foreach ($seg in $FailedSegments) {
+    Invoke-BackfillSegment -OverrideSegmentIndex $seg
+  }
+} else {
+  Invoke-BackfillSegment
+}

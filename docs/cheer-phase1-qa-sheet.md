@@ -60,5 +60,6 @@
 - [x] materializer Step Functions Orchestrator 적용(Map segment 병렬 + Lambda retry)
 - [x] materializer Orchestrator failed alarm 등록(CheerStatsMaterializerOrchestratorFailedAlarm)
 - [x] materializer Execution failed 이벤트 SNS 연동(CheerStatsMaterializerExecutionFailedEventRule)
+- [x] 백필 스크립트 실패 세그먼트 재실행 옵션(--failed-segments / -FailedSegments)
 - [x] 레이트 리밋 token bucket 전략 검증(`CHEER_RATE_LIMIT_STRATEGY=token_bucket_approx`)
 - [ ] 배포 직후 1시간/24시간 오류율 추적
