@@ -6,6 +6,24 @@ import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/li
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
+type CheerRecord = {
+  cheerId: string;
+  cheerType?: string;
+  message?: string;
+  senderDelta?: number;
+  scheduledTime?: string;
+  status?: string;
+  isRead?: boolean;
+  readAt?: string | null;
+  isThanked?: boolean;
+  createdAt?: string;
+  sentAt?: string;
+  replyMessage?: string | null;
+  repliedAt?: string | null;
+  reactionType?: string | null;
+  reactedAt?: string | null;
+};
+
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
     statusCode,
@@ -67,14 +85,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }));
     }
 
-    const cheers = result.Items || [];
+    const cheers = (result.Items || []) as CheerRecord[];
 
     // 받은 응원 조회 시 unread를 읽음 처리
     if (type === 'received') {
-      const unreadCheers = cheers.filter((c: any) => !c.isRead);
+      const unreadCheers = cheers.filter((c) => !c.isRead);
       const readAt = new Date().toISOString();
 
-      const readResults = await Promise.allSettled(unreadCheers.map((cheer: any) =>
+      const readResults = await Promise.allSettled(unreadCheers.map((cheer) =>
         docClient.send(new UpdateCommand({
           TableName: process.env.CHEERS_TABLE!,
           Key: { cheerId: cheer.cheerId },
@@ -89,7 +107,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         }))
       ));
 
-      unreadCheers.forEach((cheer: any, index: number) => {
+      unreadCheers.forEach((cheer, index: number) => {
         if (readResults[index].status === 'fulfilled') {
           cheer.isRead = true;
           cheer.readAt = readAt;
@@ -137,6 +155,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           isRead: cheer.isRead,
           readAt: cheer.readAt ?? null,
           isThanked: cheer.isThanked,
+          replyMessage: cheer.replyMessage ?? null,
+          repliedAt: cheer.repliedAt ?? null,
+          reactionType: cheer.reactionType ?? null,
+          reactedAt: cheer.reactedAt ?? null,
           createdAt: cheer.createdAt,
           sentAt: cheer.sentAt
         })),

@@ -213,6 +213,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         senderId: userId,
         receiverId: target.userId,
         verificationId: null,
+        challengeId,
         cheerType: 'immediate',
         message: input.message,
         senderDelta: parsedDelta,
@@ -222,6 +223,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         isRead: false,
         isThanked: false,
         thankedAt: null,
+        replyMessage: null,
+        repliedAt: null,
+        reactionType: null,
+        reactedAt: null,
         createdAt: nowISO,
         sentAt: nowISO
       };

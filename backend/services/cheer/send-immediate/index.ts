@@ -14,7 +14,8 @@ const snsClient = new SNSClient({});
 const sendImmediateSchema = z.object({
   receiverIds: z.array(z.string().uuid()).min(1).max(50),
   message: z.string().min(1).max(200),
-  senderDelta: z.number().min(0)
+  senderDelta: z.number().min(0),
+  challengeId: z.string().uuid().optional()
 });
 
 type SendImmediateInput = z.infer<typeof sendImmediateSchema>;
@@ -84,6 +85,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         senderId,
         receiverId,
         verificationId: null,
+        challengeId: input.challengeId || null,
         cheerType: 'immediate',
         message: input.message,
         senderDelta: input.senderDelta,
@@ -92,6 +94,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         isRead: false,
         isThanked: false,
         thankedAt: null,
+        replyMessage: null,
+        repliedAt: null,
+        reactionType: null,
+        reactedAt: null,
         createdAt: now,
         sentAt: now
       };

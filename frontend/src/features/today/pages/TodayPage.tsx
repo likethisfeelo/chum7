@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion } from 'framer-motion';
@@ -8,16 +9,68 @@ import { ko } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+type PeriodType = 'all' | 'day' | 'week' | 'month' | 'challenge';
+
+const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
+
+const PERIOD_LABEL: Record<PeriodType, string> = {
+  all: '전체',
+  day: '일',
+  week: '주',
+  month: '월',
+  challenge: '챌린지'
+};
+
+function toWeekInputValue(date: Date): string {
+  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${target.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
 export const TodayPage = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [period, setPeriod] = useState<PeriodType>('all');
+  const [day, setDay] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [week, setWeek] = useState(toWeekInputValue(new Date()));
+  const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [challengeId, setChallengeId] = useState('');
+  const [replyDraftByCheer, setReplyDraftByCheer] = useState<Record<string, string>>({});
 
   const { data: cheers, isLoading: cheersLoading } = useQuery({
-    queryKey: ['my-cheers'],
+    queryKey: ['my-cheers', 'received'],
     queryFn: async () => {
-      const response = await apiClient.get('/cheer/my-cheers?limit=20');
+      const response = await apiClient.get('/cheer/my-cheers?type=received&limit=20');
       return response.data.data.cheers;
     },
+  });
+
+  const { data: sentCheers, isLoading: sentCheersLoading } = useQuery({
+    queryKey: ['my-cheers', 'sent'],
+    queryFn: async () => {
+      const response = await apiClient.get('/cheer/my-cheers?type=sent&limit=20');
+      return response.data.data.cheers;
+    },
+  });
+
+  const statsQueryString = useMemo(() => {
+    const params = new URLSearchParams({ period });
+    if (period === 'day') params.set('day', day);
+    if (period === 'week' && week.trim()) params.set('week', week.trim());
+    if (period === 'month' && month.trim()) params.set('month', month.trim());
+    if (period === 'challenge' && challengeId.trim()) params.set('challengeId', challengeId.trim());
+    return params.toString();
+  }, [period, day, week, month, challengeId]);
+
+  const { data: cheerStats, isLoading: statsLoading } = useQuery({
+    queryKey: ['cheer-stats', statsQueryString],
+    queryFn: async () => {
+      const response = await apiClient.get(`/cheers/stats?${statsQueryString}`);
+      return response.data.data;
+    }
   });
 
   const thankMutation = useMutation({
@@ -27,6 +80,7 @@ export const TodayPage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-cheers'] });
+      queryClient.invalidateQueries({ queryKey: ['cheer-stats'] });
       toast.success('감사 표현을 보냈어요 💖');
     },
     onError: () => {
@@ -34,29 +88,122 @@ export const TodayPage = () => {
     },
   });
 
+  const reactionMutation = useMutation({
+    mutationFn: async ({ cheerId, reactionType }: { cheerId: string; reactionType: string }) => {
+      const response = await apiClient.post(`/cheers/${cheerId}/reaction`, { reactionType });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-cheers'] });
+      queryClient.invalidateQueries({ queryKey: ['cheer-stats'] });
+      toast.success('리액션을 보냈어요');
+    },
+    onError: () => {
+      toast.error('리액션 전송 중 오류가 발생했습니다');
+    }
+  });
+
+  const replyMutation = useMutation({
+    mutationFn: async ({ cheerId, message }: { cheerId: string; message: string }) => {
+      const response = await apiClient.post(`/cheers/${cheerId}/reply`, { message });
+      return response.data;
+    },
+    onSuccess: (_, variables) => {
+      setReplyDraftByCheer((prev) => ({ ...prev, [variables.cheerId]: '' }));
+      queryClient.invalidateQueries({ queryKey: ['my-cheers'] });
+      queryClient.invalidateQueries({ queryKey: ['cheer-stats'] });
+      toast.success('답장을 보냈어요');
+    },
+    onError: () => {
+      toast.error('답장 전송 중 오류가 발생했습니다');
+    }
+  });
+
   const today = format(new Date(), 'M월 d일 (E)', { locale: ko });
   const unreadCheers = cheers?.filter((c: any) => !c.isRead) || [];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 헤더 */}
       <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">투데이 📊</h1>
             <p className="text-sm text-gray-500">{today}</p>
           </div>
-          <button
-            onClick={() => navigate('/ux-plan')}
-            className="px-3 py-2 rounded-xl bg-violet-50 text-violet-700 text-xs font-semibold hover:bg-violet-100 transition-colors"
-          >
-            PHASE1-2 테스트
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate('/ux-plan')}
+              className="px-3 py-2 rounded-xl bg-violet-50 text-violet-700 text-xs font-semibold hover:bg-violet-100 transition-colors"
+            >
+              PHASE1-2 테스트
+            </button>
+            <button
+              onClick={() => navigate('/admin/docs')}
+              className="px-3 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition-colors"
+            >
+              운영 Docs
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="p-6 space-y-6">
-        {/* 받은 응원 */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 space-y-3">
+          <h2 className="text-base font-bold text-gray-900">응원 통계</h2>
+          <div className="flex flex-wrap gap-2">
+            {(['all', 'day', 'week', 'month', 'challenge'] as PeriodType[]).map((value) => (
+              <button
+                key={value}
+                onClick={() => setPeriod(value)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold ${period === value ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+              >
+                {PERIOD_LABEL[value]}
+              </button>
+            ))}
+          </div>
+
+          {period === 'day' && (
+            <input
+              type="date"
+              className="w-full border rounded-xl px-3 py-2 text-sm"
+              value={day}
+              onChange={(e) => setDay(e.target.value)}
+            />
+          )}
+          {period === 'week' && (
+            <input
+              type="week"
+              className="w-full border rounded-xl px-3 py-2 text-sm"
+              value={week}
+              onChange={(e) => setWeek(e.target.value)}
+            />
+          )}
+          {period === 'month' && (
+            <input
+              type="month"
+              className="w-full border rounded-xl px-3 py-2 text-sm"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+            />
+          )}
+          {period === 'challenge' && (
+            <input className="w-full border rounded-xl px-3 py-2 text-sm" value={challengeId} onChange={(e) => setChallengeId(e.target.value)} placeholder="challengeId" />
+          )}
+
+          {statsLoading ? (
+            <Loading />
+          ) : (
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="bg-gray-50 rounded-xl p-3">보낸 응원: <b>{cheerStats?.stats?.sentCount ?? 0}</b></div>
+              <div className="bg-gray-50 rounded-xl p-3">받은 응원: <b>{cheerStats?.stats?.receivedCount ?? 0}</b></div>
+              <div className="bg-gray-50 rounded-xl p-3">감사 수: <b>{cheerStats?.stats?.thankedCount ?? 0}</b></div>
+              <div className="bg-gray-50 rounded-xl p-3">답장 수: <b>{cheerStats?.stats?.repliedCount ?? 0}</b></div>
+              <div className="bg-gray-50 rounded-xl p-3">리액션 수: <b>{cheerStats?.stats?.reactionCount ?? 0}</b></div>
+              <div className="bg-gray-50 rounded-xl p-3">기간 라벨: <b>{cheerStats?.label ?? 'all'}</b></div>
+            </div>
+          )}
+        </div>
+
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-gray-900">받은 응원 💌</h2>
@@ -91,18 +238,57 @@ export const TodayPage = () => {
                         💖
                       </div>
                       <div className="flex-1">
-                        <p className="font-semibold text-gray-900 mb-1">
-                          익명의 응원자
-                        </p>
-                        <p className="text-gray-700 text-sm leading-relaxed">
-                          {cheer.message}
-                        </p>
+                        <p className="font-semibold text-gray-900 mb-1">익명의 응원자</p>
+                        <p className="text-gray-700 text-sm leading-relaxed">{cheer.message}</p>
                         <p className="text-xs text-gray-400 mt-2">
                           {format(new Date(cheer.createdAt || cheer.sentAt), 'MM/dd HH:mm', { locale: ko })}
                         </p>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          {cheer.reactionType ? (
+                            <span className="px-2 py-1 text-xs rounded-lg bg-emerald-50 text-emerald-700">리액션 {cheer.reactionType}</span>
+                          ) : REACTION_OPTIONS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={() => reactionMutation.mutate({ cheerId: cheer.cheerId, reactionType: emoji })}
+                              className="px-2 py-1 text-xs rounded-lg bg-gray-100 hover:bg-gray-200"
+                              disabled={reactionMutation.isPending}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="mt-2">
+                          {cheer.replyMessage ? (
+                            <div className="space-y-1">
+                              <p className="text-xs text-indigo-700 bg-indigo-50 rounded-xl p-2">답장: {cheer.replyMessage}</p>
+                              <p className="text-[11px] text-gray-500">답장은 1회 작성 정책으로 수정/삭제할 수 없어요.</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <div className="flex gap-2">
+                                <input
+                                  value={replyDraftByCheer[cheer.cheerId] ?? ''}
+                                  onChange={(e) => setReplyDraftByCheer((prev) => ({ ...prev, [cheer.cheerId]: e.target.value }))}
+                                  placeholder="응원에 답장 남기기"
+                                  className="flex-1 border rounded-xl px-3 py-2 text-xs"
+                                />
+                                <button
+                                  onClick={() => replyMutation.mutate({ cheerId: cheer.cheerId, message: (replyDraftByCheer[cheer.cheerId] ?? '').trim() })}
+                                  className="px-3 py-2 bg-indigo-50 text-indigo-600 text-xs font-semibold rounded-xl"
+                                  disabled={replyMutation.isPending || !(replyDraftByCheer[cheer.cheerId] ?? '').trim()}
+                                >
+                                  답장
+                                </button>
+                              </div>
+                              <p className="text-[11px] text-gray-500">답장은 1회 작성 정책이며 전송 후 수정/삭제할 수 없어요.</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    {!cheer.isThanked && (
+                    {!cheer.isThanked ? (
                       <motion.button
                         whileTap={{ scale: 0.95 }}
                         onClick={() => thankMutation.mutate(cheer.cheerId)}
@@ -111,14 +297,45 @@ export const TodayPage = () => {
                       >
                         감사 💝
                       </motion.button>
-                    )}
-                    {cheer.isThanked && (
-                      <span className="flex-shrink-0 px-3 py-2 bg-gray-50 text-gray-400 text-xs rounded-xl">
-                        감사 완료
-                      </span>
+                    ) : (
+                      <span className="flex-shrink-0 px-3 py-2 bg-gray-50 text-gray-400 text-xs rounded-xl">감사 완료</span>
                     )}
                   </div>
                 </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-gray-900">내가 보낸 응원 ✉️</h2>
+          </div>
+          {sentCheersLoading ? (
+            <Loading />
+          ) : !sentCheers || sentCheers.length === 0 ? (
+            <EmptyState icon="📭" title="아직 보낸 응원이 없어요" description="챌린지 피드에서 응원을 보내보세요" />
+          ) : (
+            <div className="space-y-3">
+              {sentCheers.slice(0, 10).map((cheer: any) => (
+                <div key={cheer.cheerId} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                  <p className="text-sm text-gray-700">{cheer.message}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {format(new Date(cheer.createdAt || cheer.sentAt), 'MM/dd HH:mm', { locale: ko })}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                    {cheer.replyMessage ? (
+                      <span className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700">답장 도착</span>
+                    ) : (
+                      <span className="px-2 py-1 rounded-lg bg-gray-100 text-gray-600">답장 대기</span>
+                    )}
+                    {cheer.reactionType ? (
+                      <span className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">리액션 {cheer.reactionType}</span>
+                    ) : (
+                      <span className="px-2 py-1 rounded-lg bg-gray-100 text-gray-600">리액션 대기</span>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )}

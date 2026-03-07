@@ -12,7 +12,8 @@
     "deploy": "cdk deploy --all",
     "deploy:hotswap": "cdk deploy --hotswap",
     "destroy": "cdk destroy --all",
-    "bootstrap": "cdk bootstrap"
+    "bootstrap": "cdk bootstrap",
+    "lint:cheer-widgets": "node scripts/validate-cheer-widget-catalog.mjs"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.145",

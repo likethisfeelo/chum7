@@ -154,4 +154,340 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('CHEER_API_V2_CONTRACT');
     expect(stack).toContain('CHEER_API_V2_SUNSET_AT');
   });
+
+  test('cheer stack wires stats and interaction endpoints', () => {
+    const stack = read('infra/stacks/cheer-stack.ts');
+    expect(stack).toContain("path: '/cheers/stats'");
+    expect(stack).toContain("path: '/cheers/{cheerId}/reply'");
+    expect(stack).toContain("path: '/cheers/{cheerId}/reaction'");
+    expect(stack).toContain('CheerStatsFn');
+    expect(stack).toContain('CheerReplyFn');
+    expect(stack).toContain('CheerReactFn');
+    expect(stack).toContain('challengesTable.grantReadData(cheerStatsFn)');
+    expect(stack).toContain('userChallengesTable.grantReadData(cheerStatsFn)');
+    expect(stack).toContain('CHEER_STATS_TABLE');
+    expect(stack).toContain('CheerStatsMaterializerFn');
+    expect(stack).toContain('CheerStatsMaterializerSchedule');
+    expect(stack).toContain('stats-materializer/index.ts');
+    expect(stack).toContain('CHEER_STATS_MATERIALIZER_MAX_RETRIES');
+    expect(stack).toContain('CHEER_STATS_MATERIALIZER_SCHEDULE_MINUTES');
+    expect(stack).toContain('CHEER_STATS_MATERIALIZER_TOTAL_SEGMENTS');
+    expect(stack).toContain('CHEER_STATS_MATERIALIZER_MAX_SCAN_PAGES');
+    expect(stack).toContain('CHEER_STATS_MATERIALIZER_SCAN_PAGE_SIZE');
+    expect(stack).toContain('CheerStatsMaterializerOrchestrator');
+    expect(stack).toContain('CheerStatsMaterializerSegmentMap');
+    expect(stack).toContain('CheerStatsMaterializerInvokeTask');
+    expect(stack).toContain('SfnStateMachine');
+    expect(stack).toContain('RuleTargetInput.fromObject');
+    expect(stack).toContain('segments: materializerSegments');
+    expect(stack).toContain('addRetry');
+    expect(stack).toContain('CheerStatsMaterializerOrchestratorFailedAlarm');
+    expect(stack).toContain('CheerStatsMaterializerExecutionFailedEventRule');
+    expect(stack).toContain("status: ['FAILED', 'TIMED_OUT', 'ABORTED']");
+    expect(stack).toContain('new SnsTopic(snsTopic)');
+    expect(stack).toContain('materializerStateMachine.metricFailed');
+    expect(stack).toContain('RuleTargetInput.fromObject');
+    expect(stack).toContain('segmentIndex');
+    expect(stack).toContain('totalSegments');
+    expect(stack).toContain('CHEER_RATE_LIMITS_TABLE');
+    expect(stack).toContain('CheerRateLimitsTableRef');
+    expect(stack).toContain('CheerRateLimitsTableRefForReact');
+    expect(stack).toContain('createErrorAlarm');
+    expect(stack).toContain('CheerReplyError');
+    expect(stack).toContain('CheerReactError');
+    expect(stack).toContain('CheerStatsError');
+    expect(stack).toContain('Reply cheer error');
+    expect(stack).toContain('React cheer error');
+    expect(stack).toContain('Get cheer stats error');
+    expect(stack).toContain('CheerOpsDashboard');
+    expect(stack).toContain('Dashboard');
+    expect(stack).toContain('buildCheerOpsWidgetRows');
+    expect(stack).toContain('dashboardRows.forEach');
+    expect(stack).toContain('CheerStatsBucketedSource');
+    expect(stack).toContain('CheerStatsRealtimeFallbackSource');
+    expect(stack).toContain('CheerReplyRequest');
+    expect(stack).toContain('CheerReplySuccess');
+    expect(stack).toContain('CheerReplyClientError');
+    expect(stack).toContain('CheerReactRequest');
+    expect(stack).toContain('CheerReactSuccess');
+    expect(stack).toContain('CheerReactClientError');
+    expect(stack).toContain('CheerStatsRequest');
+    expect(stack).toContain('CheerStatsSuccess');
+    expect(stack).toContain("source: 'bucketed'");
+    expect(stack).toContain("source: 'realtime_fallback'");
+  });
+
+
+  test('dashboard widget template module keeps cheer ops widget definitions', () => {
+    const src = read('infra/stacks/observability/cheer-dashboard-widgets.ts');
+    expect(src).toContain('buildCheerOpsWidgetRows');
+    expect(src).toContain('Cheer Error Count (5m)');
+    expect(src).toContain('Cheer Handler Latency p95');
+    expect(src).toContain('Cheer Stats Source Mix (5m)');
+    expect(src).toContain('Materializer Invocations/Errors');
+    expect(src).toContain('Materializer Orchestrator (started/succeeded/failed)');
+    expect(src).toContain('Reply Traffic Split (req/success/429)');
+    expect(src).toContain('React Traffic Split (req/success/429)');
+    expect(src).toContain('Stats Traffic Split (req/success/5xx)');
+  });
+
+  test('stats handler supports period/day/week/month/challenge filters', () => {
+    const src = read('backend/services/cheer/stats/index.ts');
+    expect(src).toContain("const period = (params.period || 'all').trim().toLowerCase();");
+    expect(src).toContain("if (period === 'challenge' && !challengeId)");
+    expect(src).toContain('toIsoRange(period');
+    expect(src).toContain("collectByIndex('senderId-index'");
+    expect(src).toContain("collectByIndex('receiverId-index'");
+    expect(src).toContain('repliedCount');
+    expect(src).toContain('reactionCount');
+    expect(src).toContain('validateChallengeAccess');
+    expect(src).toContain('CHALLENGE_NOT_FOUND');
+    expect(src).toContain('CHALLENGE_ACCESS_DENIED');
+    expect(src).toContain('TableName: process.env.CHALLENGES_TABLE!');
+    expect(src).toContain('TableName: process.env.USER_CHALLENGES_TABLE!');
+    expect(src).toContain('Get cheer stats request received');
+    expect(src).toContain('Get cheer stats success');
+    expect(src).toContain('latencyMs');
+    expect(src).toContain('tryLoadBucketedStats');
+    expect(src).toContain('CHEER_STATS_TABLE');
+    expect(src).toContain("source: 'bucketed'");
+    expect(src).toContain("source: 'realtime_fallback'");
+    expect(src).toContain('resolveStatsBucketSk');
+    expect(src).toContain('source: bucketed.source');
+    expect(src).toContain("source: 'realtime_fallback'");
+  });
+
+
+  test('widget catalog docs are documented', () => {
+    const catalog = read('docs/cheer-observability-widget-catalog.md');
+    expect(catalog).toContain('Cheer Error Count (5m)');
+    expect(catalog).toContain('Cheer Handler Latency p95');
+    expect(catalog).toContain('Materializer Orchestrator (started/succeeded/failed)');
+    expect(catalog).toContain('Reply Traffic Split (req/success/429)');
+    expect(catalog).toContain('infra/stacks/observability/cheer-dashboard-widgets.ts');
+
+    const runbook = read('docs/cheer-stats-materializer-runbook.md');
+    expect(runbook).toContain('cheer-observability-widget-catalog.md');
+    expect(runbook).toContain('cheer-materializer-rerun-failed.sh');
+  });
+
+  test('materializer runbook and backfill scripts are documented', () => {
+    const runbook = read('docs/cheer-stats-materializer-runbook.md');
+    expect(runbook).toContain('fromIso');
+    expect(runbook).toContain('toIso');
+    expect(runbook).toContain('ISO-8601');
+    expect(runbook).toContain('fromIso <= toIso');
+    expect(runbook).toContain('dryRun');
+    expect(runbook).toContain('maxRetries');
+    expect(runbook).toContain('0 이상');
+    expect(runbook).toContain('totalSegments');
+    expect(runbook).toContain('segmentIndex');
+    expect(runbook).toContain('failedSegments');
+    expect(runbook).toContain('중복 입력은 자동 제거');
+    expect(runbook).toContain('orchestratorArn');
+    expect(runbook).toContain('executionName');
+    expect(runbook).toContain('segmentIndex < totalSegments');
+    expect(runbook).toContain('totalSegments');
+    expect(runbook).toContain('maxScanPages');
+    expect(runbook).toContain('1 이상');
+    expect(runbook).toContain('scanPageSize');
+    expect(runbook).toContain('1~1000');
+    expect(runbook).toContain('scripts/cheer-stats-backfill.sh');
+    expect(runbook).toContain('scripts/cheer-stats-backfill.ps1');
+
+    const sh = read('scripts/cheer-stats-backfill.sh');
+    expect(sh).toContain('--stage');
+    expect(sh).toContain('--dry-run');
+    expect(sh).toContain('--from');
+    expect(sh).toContain('--to');
+    expect(sh).toContain('--from must be an ISO-8601 datetime string');
+    expect(sh).toContain('--to must be an ISO-8601 datetime string');
+    expect(sh).toContain('--from must be less than or equal to --to');
+    expect(sh).toContain('--total-segments');
+    expect(sh).toContain('--segment-index');
+    expect(sh).toContain('--failed-segments');
+    expect(sh).toContain('--orchestrator-arn');
+    expect(sh).toContain('--execution-name');
+    expect(sh).toContain('--execution-name requires --orchestrator-arn');
+    expect(sh).toContain('--segment-index requires --total-segments');
+    expect(sh).toContain('--failed-segments requires --total-segments');
+    expect(sh).toContain('normalize_failed_segments_csv');
+    expect(sh).toContain('--max-retries must be a non-negative integer');
+    expect(sh).toContain('--segment-index must be less than --total-segments');
+    expect(sh).toContain('start-execution');
+    expect(sh).toContain('--max-scan-pages');
+    expect(sh).toContain('--max-scan-pages must be >= 1');
+    expect(sh).toContain('--scan-page-size');
+    expect(sh).toContain('--scan-page-size must be between 1 and 1000');
+
+    const rerun = read('scripts/cheer-materializer-rerun-failed.sh');
+    expect(rerun).toContain('--failed-segments is required');
+    expect(rerun).toContain('--notify-topic-arn');
+    expect(rerun).toContain('aws sns publish');
+    expect(rerun).toContain('cheer-stats-backfill.sh');
+
+    const ps1 = read('scripts/cheer-stats-backfill.ps1');
+    expect(ps1).toContain('$Stage');
+    expect(ps1).toContain('$DryRun');
+    expect(ps1).toContain('$FromIso');
+    expect(ps1).toContain('$ToIso');
+    expect(ps1).toContain('-FromIso must be an ISO-8601 datetime string');
+    expect(ps1).toContain('-ToIso must be an ISO-8601 datetime string');
+    expect(ps1).toContain('-FromIso must be less than or equal to -ToIso');
+    expect(ps1).toContain('$TotalSegments');
+    expect(ps1).toContain('$SegmentIndex');
+    expect(ps1).toContain('$FailedSegments');
+    expect(ps1).toContain('$OrchestratorArn');
+    expect(ps1).toContain('$ExecutionName');
+    expect(ps1).toContain('-ExecutionName requires -OrchestratorArn');
+    expect(ps1).toContain('-SegmentIndex requires -TotalSegments');
+    expect(ps1).toContain('-FailedSegments requires -TotalSegments');
+    expect(ps1).toContain('Resolve-NormalizedFailedSegments');
+    expect(ps1).toContain('-MaxRetries must be >= 0');
+    expect(ps1).toContain('-SegmentIndex must be less than -TotalSegments');
+    expect(ps1).toContain('start-execution');
+    expect(ps1).toContain('$MaxScanPages');
+    expect(ps1).toContain('-MaxScanPages must be >= 1');
+    expect(ps1).toContain('$ScanPageSize');
+    expect(ps1).toContain('-ScanPageSize must be between 1 and 1000');
+  });
+
+  test('stats materializer scans cheers and writes bucketed summaries', () => {
+    const src = read('backend/services/cheer/stats-materializer/index.ts');
+    expect(src).toContain('scanAllCheers');
+    expect(src).toContain('buildStatsDocuments');
+    expect(src).toContain('batchWriteStats');
+    expect(src).toContain('BatchWriteCommand');
+    expect(src).toContain('Cheer stats materializer finished');
+    expect(src).toContain("challenge#${challengeId}#all");
+    expect(src).toContain('owner#');
+    expect(src).toContain('writeChunkWithRetry');
+    expect(src).toContain('UnprocessedItems');
+    expect(src).toContain('maxRetries');
+    expect(src).toContain('dryRun');
+    expect(src).toContain('fromIso');
+    expect(src).toContain('toIso');
+    expect(src).toContain('resolveScanOptions');
+    expect(src).toContain('totalSegments');
+    expect(src).toContain('segmentIndex');
+    expect(src).toContain('maxScanPages');
+    expect(src).toContain('scanPageSize');
+    expect(src).toContain('scannedPages');
+    expect(src).toContain('truncated');
+    expect(src).toContain('Cheer stats materializer retrying unprocessed items');
+  });
+
+
+  test('admin docs hub route and page expose phase1 operational docs', () => {
+    const appSrc = read('frontend/src/app/App.tsx');
+    expect(appSrc).toContain('path="/admin/docs"');
+    expect(appSrc).toContain('AdminDocsPage');
+    expect(appSrc).toContain('AdminRoute');
+    expect(appSrc).toContain('path="/admin/forbidden"');
+    expect(appSrc).toContain('AdminAccessDeniedPage');
+    expect(appSrc).toContain('VITE_ADMIN_EMAILS');
+    expect(appSrc).toContain('hasAdminAccess');
+
+    const pageSrc = read('frontend/src/features/admin/pages/AdminDocsPage.tsx');
+    expect(pageSrc).toContain('Admin Docs Hub · Cheer PHASE1');
+    expect(pageSrc).toContain('Backfill Command Builder');
+    expect(pageSrc).toContain('buildBackfillCommand');
+    expect(pageSrc).toContain('명령어 복사');
+    expect(pageSrc).toContain('totalSegments는 1 이상이어야 합니다.');
+    expect(pageSrc).toContain('executionName은 orchestratorArn과 함께 사용해야 합니다.');
+
+    const deniedPageSrc = read('frontend/src/features/admin/pages/AdminAccessDeniedPage.tsx');
+    expect(deniedPageSrc).toContain('운영 권한이 필요합니다');
+    expect(deniedPageSrc).toContain("navigate('/me')");
+    expect(pageSrc).toContain('이번 스프린트 3종 고정');
+    expect(pageSrc).toContain('docs/cheer-stats-materializer-runbook.md');
+    expect(pageSrc).toContain('docs/cheer-phase1-qa-sheet.md');
+    expect(pageSrc).toContain('docs/cheer-phase1-remaining-todo.md');
+    expect(pageSrc).toContain('--execution-name');
+    expect(pageSrc).toContain('-ExecutionName');
+    expect(pageSrc).toContain('Reply 정책: 1회 작성 후 수정/삭제 불가');
+
+    const flowHubSrc = read('frontend/src/features/planning/pages/ParticipantFlowPlanPage.tsx');
+    expect(flowHubSrc).toContain("navigate('/admin/docs')");
+    expect(flowHubSrc).toContain('Admin Docs Hub');
+  });
+
+  test('today page keeps period picker UX and sender feedback visibility', () => {
+    const src = read('frontend/src/features/today/pages/TodayPage.tsx');
+    expect(src).toContain('const PERIOD_LABEL');
+    expect(src).toContain('toWeekInputValue');
+    expect(src).toContain("type=\"date\"");
+    expect(src).toContain("type=\"week\"");
+    expect(src).toContain("type=\"month\"");
+    expect(src).toContain("/cheer/my-cheers?type=received&limit=20");
+    expect(src).toContain("/cheer/my-cheers?type=sent&limit=20");
+    expect(src).toContain('내가 보낸 응원 ✉️');
+    expect(src).toContain('답장 도착');
+    expect(src).toContain('답장 대기');
+    expect(src).toContain('리액션 대기');
+    expect(src).toContain("navigate('/admin/docs')");
+    expect(src).toContain('운영 Docs');
+    expect(src).toContain('답장은 1회 작성 정책으로 수정/삭제할 수 없어요.');
+    expect(src).toContain('답장은 1회 작성 정책이며 전송 후 수정/삭제할 수 없어요.');
+  });
+
+
+  test('dashboard widget lint script and phase5 rate-limit doc are documented', () => {
+    const pkg = read('package.json');
+    expect(pkg).toContain('lint:cheer-widgets');
+
+    const lintScript = read('scripts/validate-cheer-widget-catalog.mjs');
+    expect(lintScript).toContain('template titles missing in docs catalog');
+    expect(lintScript).toContain('docs catalog titles missing in template');
+    expect(lintScript).toContain('duplicated widget titles');
+
+    const phase5Doc = read('docs/cheer-rate-limit-phase5-options.md');
+    expect(phase5Doc).toContain('Redis + Lua');
+    expect(phase5Doc).toContain('DynamoDB Global Table');
+    expect(phase5Doc).toContain('하이브리드(Primary Redis + Dynamo fallback)');
+  });
+
+  test('shared rate-limit helper supports atomic table window key strategy', () => {
+    const src = read('backend/services/cheer/rate-limit.ts');
+    expect(src).toContain('acquireRateLimitSlot');
+    expect(src).toContain('rateKey');
+    expect(src).toContain('computeSlidingUsage');
+    expect(src).toContain('sliding_window_approx');
+    expect(src).toContain('token_bucket_approx');
+    expect(src).toContain('BatchGetCommand');
+    expect(src).toContain('requestCount = :expectedCurrent');
+    expect(src).toContain('tokenBalance = :expectedTokenBalance');
+    expect(src).toContain('CHEER_RATE_LIMIT_STRATEGY');
+    expect(src).toContain("mode: 'atomic_table'");
+    expect(src).toContain("mode: 'disabled'");
+  });
+
+  test('reply and react handlers enforce receiver-only interaction and idempotency', () => {
+    const replySrc = read('backend/services/cheer/reply/index.ts');
+    expect(replySrc).toContain('replyMessage');
+    expect(replySrc).toContain('attribute_not_exists(replyMessage) AND receiverId = :receiverId');
+    expect(replySrc).toContain('ALREADY_REPLIED');
+    expect(replySrc).toContain('checkReplyRateLimit');
+    expect(replySrc).toContain('checkReplyRateLimitFallback');
+    expect(replySrc).toContain('acquireRateLimitSlot');
+    expect(replySrc).toContain('CHEER_RATE_LIMITS_TABLE');
+    expect(replySrc).toContain('scan_fallback');
+    expect(replySrc).toContain('REPLY_RATE_LIMIT_EXCEEDED');
+    expect(replySrc).toContain('Cheer reply request received');
+    expect(replySrc).toContain('Cheer reply success');
+
+    const reactSrc = read('backend/services/cheer/react/index.ts');
+    expect(reactSrc).toContain('ALLOWED_REACTIONS');
+    expect(reactSrc).toContain('attribute_not_exists(reactionType) AND receiverId = :receiverId');
+    expect(reactSrc).toContain('ALREADY_REACTED');
+    expect(reactSrc).toContain('checkReactionRateLimit');
+    expect(reactSrc).toContain('checkReactionRateLimitFallback');
+    expect(reactSrc).toContain('acquireRateLimitSlot');
+    expect(reactSrc).toContain('CHEER_RATE_LIMITS_TABLE');
+    expect(reactSrc).toContain('scan_fallback');
+    expect(reactSrc).toContain('REACTION_RATE_LIMIT_EXCEEDED');
+    expect(reactSrc).toContain('Cheer reaction request received');
+    expect(reactSrc).toContain('Cheer reaction success');
+  });
+
 });

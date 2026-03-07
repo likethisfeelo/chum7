@@ -99,6 +99,17 @@ export const ParticipantFlowPlanPage = () => {
           <p className="text-xs text-emerald-800 mt-1">공통 기반(진행도/점수/연속일/정책) 노출이 챌린지별로 일관적인지 먼저 확인한 뒤, 아래 Flow A~D 테스트를 진행하세요.</p>
         </div>
 
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <h2 className="font-bold text-amber-900">운영자 Admin Docs Hub</h2>
+          <p className="text-xs text-amber-800">런북/백필 명령/QA 체크리스트를 Admin 문서 페이지에서 바로 조회할 수 있습니다.</p>
+          <button
+            onClick={() => navigate('/admin/docs')}
+            className="px-3 py-1.5 text-xs rounded-lg border border-amber-300 text-amber-800 bg-white"
+          >
+            Admin Docs 열기
+          </button>
+        </section>
+
         <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 space-y-3">
           <h2 className="font-bold text-blue-900">실행용 QA 체크리스트</h2>
           {QA_CHECKLIST.map((group) => (
