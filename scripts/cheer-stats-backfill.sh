@@ -87,6 +87,25 @@ if [[ -n "$ORCHESTRATOR_ARN" && -n "$SEGMENT_INDEX" ]]; then
   exit 1
 fi
 
+if [[ -n "$SEGMENT_INDEX" && ! "$SEGMENT_INDEX" =~ ^[0-9]+$ ]]; then
+  echo "--segment-index must be a non-negative integer" >&2
+  exit 1
+fi
+
+if [[ -n "$FAILED_SEGMENTS" ]]; then
+  IFS=',' read -r -a _failed_segments_numeric <<< "$FAILED_SEGMENTS"
+  for _seg in "${_failed_segments_numeric[@]}"; do
+    _trimmed="$(echo "$_seg" | xargs)"
+    if [[ -z "$_trimmed" ]]; then
+      continue
+    fi
+    if ! [[ "$_trimmed" =~ ^[0-9]+$ ]]; then
+      echo "--failed-segments contains non-numeric value: $_trimmed" >&2
+      exit 1
+    fi
+  done
+fi
+
 if [[ -n "$TOTAL_SEGMENTS" && ! "$TOTAL_SEGMENTS" =~ ^[0-9]+$ ]]; then
   echo "--total-segments must be a positive integer" >&2
   exit 1
@@ -97,16 +116,17 @@ if [[ -n "$TOTAL_SEGMENTS" && "$TOTAL_SEGMENTS" -lt 1 ]]; then
   exit 1
 fi
 
+if [[ -n "$TOTAL_SEGMENTS" && -n "$SEGMENT_INDEX" && "$SEGMENT_INDEX" -ge "$TOTAL_SEGMENTS" ]]; then
+  echo "--segment-index must be less than --total-segments" >&2
+  exit 1
+fi
+
 if [[ -n "$FAILED_SEGMENTS" && -n "$TOTAL_SEGMENTS" ]]; then
   IFS=',' read -r -a _failed_segments_validated <<< "$FAILED_SEGMENTS"
   for _seg in "${_failed_segments_validated[@]}"; do
     _trimmed="$(echo "$_seg" | xargs)"
     if [[ -z "$_trimmed" ]]; then
       continue
-    fi
-    if ! [[ "$_trimmed" =~ ^[0-9]+$ ]]; then
-      echo "--failed-segments contains non-numeric value: $_trimmed" >&2
-      exit 1
     fi
     if (( _trimmed < 0 || _trimmed >= TOTAL_SEGMENTS )); then
       echo "--failed-segments value out of range: $_trimmed (total segments: $TOTAL_SEGMENTS)" >&2
