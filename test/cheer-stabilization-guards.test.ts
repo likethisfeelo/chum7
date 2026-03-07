@@ -398,6 +398,7 @@ describe('cheer stabilization guards', () => {
     expect(pageSrc).toContain('docs/cheer-phase1-remaining-todo.md');
     expect(pageSrc).toContain('--execution-name');
     expect(pageSrc).toContain('-ExecutionName');
+    expect(pageSrc).toContain('Reply 정책: 1회 작성 후 수정/삭제 불가');
 
     const flowHubSrc = read('frontend/src/features/planning/pages/ParticipantFlowPlanPage.tsx');
     expect(flowHubSrc).toContain("navigate('/admin/docs')");
@@ -419,6 +420,8 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('리액션 대기');
     expect(src).toContain("navigate('/admin/docs')");
     expect(src).toContain('운영 Docs');
+    expect(src).toContain('답장은 1회 작성 정책으로 수정/삭제할 수 없어요.');
+    expect(src).toContain('답장은 1회 작성 정책이며 전송 후 수정/삭제할 수 없어요.');
   });
 
   test('shared rate-limit helper supports atomic table window key strategy', () => {

@@ -48,6 +48,7 @@ const DOC_SECTIONS: DocSection[] = [
       'Reaction API: 허용 이모지/비허용 이모지(400)/중복(409)/rate-limit(429)',
       'Stats API: period(all/day/week/month/challenge) + source(bucketed/realtime_fallback) 확인',
       'Today UI: reply/reaction 동작 후 my-cheers/cheer-stats invalidate 확인',
+      'Reply 정책: 1회 작성 후 수정/삭제 불가(운영 문구/UX 노출) 확인',
       'Materializer: dry-run 결과 기록 후 본실행, failedSegments 재실행 흐름 확인'
     ],
     references: ['docs/cheer-phase1-qa-sheet.md', 'docs/cheer-phase1-remaining-todo.md']

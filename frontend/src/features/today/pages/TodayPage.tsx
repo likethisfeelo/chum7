@@ -261,22 +261,28 @@ export const TodayPage = () => {
 
                         <div className="mt-2">
                           {cheer.replyMessage ? (
-                            <p className="text-xs text-indigo-700 bg-indigo-50 rounded-xl p-2">답장: {cheer.replyMessage}</p>
+                            <div className="space-y-1">
+                              <p className="text-xs text-indigo-700 bg-indigo-50 rounded-xl p-2">답장: {cheer.replyMessage}</p>
+                              <p className="text-[11px] text-gray-500">답장은 1회 작성 정책으로 수정/삭제할 수 없어요.</p>
+                            </div>
                           ) : (
-                            <div className="flex gap-2">
-                              <input
-                                value={replyDraftByCheer[cheer.cheerId] ?? ''}
-                                onChange={(e) => setReplyDraftByCheer((prev) => ({ ...prev, [cheer.cheerId]: e.target.value }))}
-                                placeholder="응원에 답장 남기기"
-                                className="flex-1 border rounded-xl px-3 py-2 text-xs"
-                              />
-                              <button
-                                onClick={() => replyMutation.mutate({ cheerId: cheer.cheerId, message: (replyDraftByCheer[cheer.cheerId] ?? '').trim() })}
-                                className="px-3 py-2 bg-indigo-50 text-indigo-600 text-xs font-semibold rounded-xl"
-                                disabled={replyMutation.isPending || !(replyDraftByCheer[cheer.cheerId] ?? '').trim()}
-                              >
-                                답장
-                              </button>
+                            <div className="space-y-1">
+                              <div className="flex gap-2">
+                                <input
+                                  value={replyDraftByCheer[cheer.cheerId] ?? ''}
+                                  onChange={(e) => setReplyDraftByCheer((prev) => ({ ...prev, [cheer.cheerId]: e.target.value }))}
+                                  placeholder="응원에 답장 남기기"
+                                  className="flex-1 border rounded-xl px-3 py-2 text-xs"
+                                />
+                                <button
+                                  onClick={() => replyMutation.mutate({ cheerId: cheer.cheerId, message: (replyDraftByCheer[cheer.cheerId] ?? '').trim() })}
+                                  className="px-3 py-2 bg-indigo-50 text-indigo-600 text-xs font-semibold rounded-xl"
+                                  disabled={replyMutation.isPending || !(replyDraftByCheer[cheer.cheerId] ?? '').trim()}
+                                >
+                                  답장
+                                </button>
+                              </div>
+                              <p className="text-[11px] text-gray-500">답장은 1회 작성 정책이며 전송 후 수정/삭제할 수 없어요.</p>
                             </div>
                           )}
                         </div>
