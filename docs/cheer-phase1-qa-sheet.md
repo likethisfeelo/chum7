@@ -56,5 +56,6 @@
 - [x] Cheer Ops Dashboard 2차 위젯 생성(Reply/React/Stats 요청·성공·에러유형 분리)
 - [x] Cheer Ops Dashboard 3차 템플릿 함수 적용(buildCheerOpsWidgetRows)
 - [x] materializer 스케줄 분할 실행 설정(EventBridge + segment fan-out payload)
+- [x] materializer Step Functions Orchestrator 적용(Map segment 병렬 + Lambda retry)
 - [x] 레이트 리밋 token bucket 전략 검증(`CHEER_RATE_LIMIT_STRATEGY=token_bucket_approx`)
 - [ ] 배포 직후 1시간/24시간 오류율 추적

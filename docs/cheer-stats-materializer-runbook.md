@@ -42,10 +42,12 @@
 ```
 
 ## 스케줄 오케스트레이션 환경변수 (CDK 배포 시)
+- 스케줄 트리거는 EventBridge → Step Functions(`CheerStatsMaterializerOrchestrator`) → segment map 병렬 invoke 흐름으로 동작
 - `CHEER_STATS_MATERIALIZER_SCHEDULE_MINUTES`: 실행 주기(분)
 - `CHEER_STATS_MATERIALIZER_TOTAL_SEGMENTS`: 세그먼트 개수(병렬 fan-out)
 - `CHEER_STATS_MATERIALIZER_MAX_SCAN_PAGES`: invocation당 최대 scan 페이지
 - `CHEER_STATS_MATERIALIZER_SCAN_PAGE_SIZE`: scan limit (권장 500)
+- 오케스트레이터 map 병렬도는 `min(totalSegments, 5)`로 제한
 
 ## 운영 체크리스트
 1. **Dry-run 선행**: 같은 파라미터로 dry-run 결과(`scanned`, `filtered`, `written`) 확인

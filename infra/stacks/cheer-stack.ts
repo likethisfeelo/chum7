@@ -8,8 +8,10 @@ import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { EventBus, Rule, RuleTargetInput, Schedule } from 'aws-cdk-lib/aws-events';
-import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
+import { LambdaFunction, SfnStateMachine } from 'aws-cdk-lib/aws-events-targets';
 import { Alarm, ComparisonOperator, Dashboard, GraphWidget, Metric, SingleValueWidget, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import { FilterPattern, LogGroup, MetricFilter } from 'aws-cdk-lib/aws-logs';
 import * as path from 'path';
 
@@ -371,23 +373,46 @@ export class CheerStack extends Stack {
     const materializerTotalSegments = resolvePositiveInt(process.env.CHEER_STATS_MATERIALIZER_TOTAL_SEGMENTS, 1);
     const materializerMaxScanPages = resolvePositiveInt(process.env.CHEER_STATS_MATERIALIZER_MAX_SCAN_PAGES, 20);
     const materializerScanPageSize = resolvePositiveInt(process.env.CHEER_STATS_MATERIALIZER_SCAN_PAGE_SIZE, 500);
+    const materializerSegments = Array.from({ length: materializerTotalSegments }, (_unused, segmentIndex) => ({ segmentIndex }));
 
-    for (let segmentIndex = 0; segmentIndex < materializerTotalSegments; segmentIndex += 1) {
-      new Rule(this, `CheerStatsMaterializerScheduleSeg${segmentIndex}`, {
-        schedule: Schedule.rate(Duration.minutes(materializerScheduleMinutes)),
-        targets: [
-          new LambdaFunction(statsMaterializerFn, {
-            event: RuleTargetInput.fromObject({
-              dryRun: false,
-              totalSegments: materializerTotalSegments,
-              segmentIndex,
-              maxScanPages: materializerMaxScanPages,
-              scanPageSize: materializerScanPageSize
-            })
+    const materializerInvokeTask = new tasks.LambdaInvoke(this, 'CheerStatsMaterializerInvokeTask', {
+      lambdaFunction: statsMaterializerFn,
+      payload: sfn.TaskInput.fromObject({
+        dryRun: false,
+        totalSegments: materializerTotalSegments,
+        segmentIndex: sfn.JsonPath.numberAt('$.segmentIndex'),
+        maxScanPages: materializerMaxScanPages,
+        scanPageSize: materializerScanPageSize
+      }),
+      outputPath: '$.Payload'
+    }).addRetry({
+      maxAttempts: 3,
+      interval: Duration.seconds(10),
+      backoffRate: 2
+    });
+
+    const materializerMap = new sfn.Map(this, 'CheerStatsMaterializerSegmentMap', {
+      itemsPath: '$.segments',
+      maxConcurrency: Math.min(materializerTotalSegments, 5)
+    });
+    materializerMap.itemProcessor(materializerInvokeTask);
+
+    const materializerStateMachine = new sfn.StateMachine(this, 'CheerStatsMaterializerOrchestrator', {
+      stateMachineName: `chme-${stage}-cheer-stats-materializer-orchestrator`,
+      definitionBody: sfn.DefinitionBody.fromChainable(materializerMap),
+      timeout: Duration.minutes(15)
+    });
+
+    new Rule(this, 'CheerStatsMaterializerSchedule', {
+      schedule: Schedule.rate(Duration.minutes(materializerScheduleMinutes)),
+      targets: [
+        new SfnStateMachine(materializerStateMachine, {
+          input: RuleTargetInput.fromObject({
+            segments: materializerSegments
           })
-        ],
-      });
-    }
+        })
+      ],
+    });
 
     // 11. Observability baseline alarms (reply/react/stats)
     createErrorAlarm('CheerReplyError', cheerReplyFn.functionName, 'Reply cheer error');

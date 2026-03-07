@@ -12,6 +12,7 @@
 - materializer 실패 재처리 기반: UnprocessedItems 재시도/백오프 + dry-run + 범위 백필(fromIso/toIso)
 - materializer 실행 제어 2차: scan segmentation(totalSegments/segmentIndex) + maxScanPages/scanPageSize
 - materializer 스케줄 자동화 3차: EventBridge 분 단위 주기 + segment fan-out 오케스트레이션
+- materializer 오케스트레이션 4차: Step Functions Map + LambdaInvoke retry 체계
 - CloudWatch 에러 알람 베이스라인: reply/react/stats 에러 로그 메트릭 필터+알람
 - CloudWatch 운영 대시보드 1차: 에러카운트/latency p95/source mix/materializer invocations·errors 위젯
 - CloudWatch 운영 대시보드 2차: reply/react/stats 요청·성공·에러유형(429/5xx) 분리 위젯
@@ -23,9 +24,9 @@
 ## 남은 TODO
 
 ### P0 (바로 다음)
-1. materializer 오케스트레이션 고도화(step-functions 분할/재시도 체계)
-2. 레이트 리밋 5차(분산 Lua·Redis/멀티리전 옵션 검토)
-3. 대시보드 위젯 라이브러리 외부 모듈화(스택 간 재사용)
+1. 레이트 리밋 5차(분산 Lua·Redis/멀티리전 옵션 검토)
+2. 대시보드 위젯 라이브러리 외부 모듈화(스택 간 재사용)
+3. materializer 워크플로우 운영자동화(실패 세그먼트 재실행/알림 연동)
 
 ### P1 (이번 스프린트 내)
 1. 프론트에서 period 입력 UX 개선(week picker, month picker)
