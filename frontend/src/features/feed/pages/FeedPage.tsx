@@ -6,7 +6,6 @@ import { format, nextMonday } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
 import { EmptyState } from '@/shared/components/EmptyState';
-import { Loading } from '@/shared/components/Loading';
 import { SkeletonList } from '@/shared/components/Skeleton';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import {
