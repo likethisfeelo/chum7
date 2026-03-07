@@ -13,6 +13,10 @@ declare module '@aws-sdk/lib-dynamodb' {
     constructor(input: Record<string, unknown>);
   }
 
+  export class BatchGetCommand {
+    constructor(input: Record<string, unknown>);
+  }
+
   export const DynamoDBDocumentClient: {
     from(client: unknown): {
       send(command: unknown): Promise<{ Items?: unknown[] }>;

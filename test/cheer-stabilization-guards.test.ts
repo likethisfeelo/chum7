@@ -261,7 +261,10 @@ describe('cheer stabilization guards', () => {
     const src = read('backend/services/cheer/rate-limit.ts');
     expect(src).toContain('acquireRateLimitSlot');
     expect(src).toContain('rateKey');
-    expect(src).toContain('requestCount < :limit');
+    expect(src).toContain('computeSlidingUsage');
+    expect(src).toContain('sliding_window_approx');
+    expect(src).toContain('BatchGetCommand');
+    expect(src).toContain('requestCount = :expectedCurrent');
     expect(src).toContain("mode: 'atomic_table'");
     expect(src).toContain("mode: 'disabled'");
   });
