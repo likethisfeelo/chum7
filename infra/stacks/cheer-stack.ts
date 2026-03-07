@@ -400,8 +400,8 @@ export class CheerStack extends Stack {
       period: Duration.minutes(5)
     });
 
-    const statsBucketedMetric = createLogCountMetric('CheerStatsBucketedSource', cheerStatsFn.functionName, "source: 'bucketed'");
-    const statsRealtimeFallbackMetric = createLogCountMetric('CheerStatsRealtimeFallbackSource', cheerStatsFn.functionName, "source: 'realtime_fallback'");
+    const statsBucketedMetric = createLogCountMetric('CheerStatsBucketedSource', cheerStatsFn.functionName, 'bucketed');
+    const statsRealtimeFallbackMetric = createLogCountMetric('CheerStatsRealtimeFallbackSource', cheerStatsFn.functionName, 'realtime_fallback');
 
     const replyRequestMetric = createLogCountMetric('CheerReplyRequest', cheerReplyFn.functionName, 'Cheer reply request received');
     const replySuccessMetric = createLogCountMetric('CheerReplySuccess', cheerReplyFn.functionName, 'Cheer reply success');
