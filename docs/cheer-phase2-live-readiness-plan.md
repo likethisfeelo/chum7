@@ -59,6 +59,7 @@
   - dead-letter 지표 API: `GET /admin/cheer/dead-letters/stats`
   - 단건 재처리 API: `POST /admin/cheer/dead-letters/{cheerId}/requeue`
   - 배치 재처리 API: `POST /admin/cheer/dead-letters/requeue-batch` (최대 50건)
+  - 조건 재처리 API: `POST /admin/cheer/dead-letters/requeue-by-query` (기간/failureCode 기반, dry-run 지원)
   - 재처리 금지 기준(수신자 탈퇴, 정책 만료 등)
 - 알람 체계:
   - dead-letter 건수 급증

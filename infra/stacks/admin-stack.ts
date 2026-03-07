@@ -319,6 +319,23 @@ export class AdminStack extends Stack {
     });
 
 
+
+    const cheerDeadLetterRequeueByQueryFn = new NodejsFunction(this, 'CheerDeadLetterRequeueByQueryFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-cheer-dead-letter-requeue-by-query`,
+      entry: path.join(__dirname, '../../backend/services/admin/cheer/dead-letter/requeue-by-query/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheerDeadLettersTable.grantReadWriteData(cheerDeadLetterRequeueByQueryFn);
+    cheersTable.grantReadWriteData(cheerDeadLetterRequeueByQueryFn);
+    apiGateway.addRoutes({
+      path: '/admin/cheer/dead-letters/requeue-by-query',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('AdminCheerDeadLetterRequeueByQueryIntegration', cheerDeadLetterRequeueByQueryFn),
+      authorizer,
+    });
+
     const cheerDeadLetterBatchRequeueFn = new NodejsFunction(this, 'CheerDeadLetterBatchRequeueFn', {
       ...commonProps,
       functionName: `chme-${stage}-admin-cheer-dead-letter-requeue-batch`,
