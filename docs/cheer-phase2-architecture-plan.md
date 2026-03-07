@@ -1,6 +1,9 @@
 # CHME Cheer Phase 2 아키텍처 고도화 계획
 
 ## 목표
+
+> 실행 우선순위/라이브 게이트는 `docs/cheer-phase2-live-readiness-plan.md`를 기준으로 운영합니다.
+
 - 예약 응원 정식화
 - 실패 재시도/백오프/DLQ 도입
 - 기간 기반 공개 인터랙션 정책 확장
