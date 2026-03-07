@@ -87,6 +87,16 @@ if [[ -n "$ORCHESTRATOR_ARN" && -n "$SEGMENT_INDEX" ]]; then
   exit 1
 fi
 
+if [[ -n "$SEGMENT_INDEX" && -z "$TOTAL_SEGMENTS" ]]; then
+  echo "--segment-index requires --total-segments" >&2
+  exit 1
+fi
+
+if [[ -n "$FAILED_SEGMENTS" && -z "$TOTAL_SEGMENTS" ]]; then
+  echo "--failed-segments requires --total-segments" >&2
+  exit 1
+fi
+
 if [[ -n "$SEGMENT_INDEX" && ! "$SEGMENT_INDEX" =~ ^[0-9]+$ ]]; then
   echo "--segment-index must be a non-negative integer" >&2
   exit 1
@@ -104,6 +114,11 @@ if [[ -n "$FAILED_SEGMENTS" ]]; then
       exit 1
     fi
   done
+fi
+
+if [[ -n "$MAX_RETRIES" && ! "$MAX_RETRIES" =~ ^[0-9]+$ ]]; then
+  echo "--max-retries must be a non-negative integer" >&2
+  exit 1
 fi
 
 if [[ -n "$TOTAL_SEGMENTS" && ! "$TOTAL_SEGMENTS" =~ ^[0-9]+$ ]]; then

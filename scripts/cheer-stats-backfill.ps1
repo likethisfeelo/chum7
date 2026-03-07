@@ -28,6 +28,18 @@ if ($OrchestratorArn -and $script:PSBoundParameters.ContainsKey('SegmentIndex'))
   throw '-SegmentIndex is not supported with -OrchestratorArn. Use -FailedSegments or -TotalSegments.'
 }
 
+if ($script:PSBoundParameters.ContainsKey('SegmentIndex') -and -not $script:PSBoundParameters.ContainsKey('TotalSegments')) {
+  throw '-SegmentIndex requires -TotalSegments.'
+}
+
+if ($script:PSBoundParameters.ContainsKey('FailedSegments') -and -not $script:PSBoundParameters.ContainsKey('TotalSegments')) {
+  throw '-FailedSegments requires -TotalSegments.'
+}
+
+if ($script:PSBoundParameters.ContainsKey('MaxRetries') -and $MaxRetries -lt 0) {
+  throw '-MaxRetries must be >= 0.'
+}
+
 if ($script:PSBoundParameters.ContainsKey('TotalSegments') -and $TotalSegments -lt 1) {
   throw '-TotalSegments must be >= 1.'
 }

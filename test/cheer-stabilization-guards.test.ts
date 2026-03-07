@@ -276,11 +276,13 @@ describe('cheer stabilization guards', () => {
     expect(runbook).toContain('toIso');
     expect(runbook).toContain('dryRun');
     expect(runbook).toContain('maxRetries');
+    expect(runbook).toContain('0 이상');
     expect(runbook).toContain('totalSegments');
     expect(runbook).toContain('segmentIndex');
     expect(runbook).toContain('failedSegments');
     expect(runbook).toContain('orchestratorArn');
     expect(runbook).toContain('segmentIndex < totalSegments');
+    expect(runbook).toContain('totalSegments');
     expect(runbook).toContain('maxScanPages');
     expect(runbook).toContain('1 이상');
     expect(runbook).toContain('scanPageSize');
@@ -297,6 +299,9 @@ describe('cheer stabilization guards', () => {
     expect(sh).toContain('--segment-index');
     expect(sh).toContain('--failed-segments');
     expect(sh).toContain('--orchestrator-arn');
+    expect(sh).toContain('--segment-index requires --total-segments');
+    expect(sh).toContain('--failed-segments requires --total-segments');
+    expect(sh).toContain('--max-retries must be a non-negative integer');
     expect(sh).toContain('--segment-index must be less than --total-segments');
     expect(sh).toContain('start-execution');
     expect(sh).toContain('--max-scan-pages');
@@ -313,6 +318,9 @@ describe('cheer stabilization guards', () => {
     expect(ps1).toContain('$SegmentIndex');
     expect(ps1).toContain('$FailedSegments');
     expect(ps1).toContain('$OrchestratorArn');
+    expect(ps1).toContain('-SegmentIndex requires -TotalSegments');
+    expect(ps1).toContain('-FailedSegments requires -TotalSegments');
+    expect(ps1).toContain('-MaxRetries must be >= 0');
     expect(ps1).toContain('-SegmentIndex must be less than -TotalSegments');
     expect(ps1).toContain('start-execution');
     expect(ps1).toContain('$MaxScanPages');
