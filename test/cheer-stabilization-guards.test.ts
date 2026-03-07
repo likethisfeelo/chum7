@@ -282,6 +282,7 @@ describe('cheer stabilization guards', () => {
     expect(runbook).toContain('totalSegments');
     expect(runbook).toContain('segmentIndex');
     expect(runbook).toContain('failedSegments');
+    expect(runbook).toContain('중복 입력은 자동 제거');
     expect(runbook).toContain('orchestratorArn');
     expect(runbook).toContain('segmentIndex < totalSegments');
     expect(runbook).toContain('totalSegments');
@@ -306,6 +307,7 @@ describe('cheer stabilization guards', () => {
     expect(sh).toContain('--orchestrator-arn');
     expect(sh).toContain('--segment-index requires --total-segments');
     expect(sh).toContain('--failed-segments requires --total-segments');
+    expect(sh).toContain('normalize_failed_segments_csv');
     expect(sh).toContain('--max-retries must be a non-negative integer');
     expect(sh).toContain('--segment-index must be less than --total-segments');
     expect(sh).toContain('start-execution');
@@ -328,6 +330,7 @@ describe('cheer stabilization guards', () => {
     expect(ps1).toContain('$OrchestratorArn');
     expect(ps1).toContain('-SegmentIndex requires -TotalSegments');
     expect(ps1).toContain('-FailedSegments requires -TotalSegments');
+    expect(ps1).toContain('Resolve-NormalizedFailedSegments');
     expect(ps1).toContain('-MaxRetries must be >= 0');
     expect(ps1).toContain('-SegmentIndex must be less than -TotalSegments');
     expect(ps1).toContain('start-execution');

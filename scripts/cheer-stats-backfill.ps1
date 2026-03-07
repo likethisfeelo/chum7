@@ -90,6 +90,16 @@ if ($script:PSBoundParameters.ContainsKey('FailedSegments') -and $script:PSBound
   }
 }
 
+function Resolve-NormalizedFailedSegments {
+  if (-not ($script:PSBoundParameters.ContainsKey('FailedSegments') -and $FailedSegments.Count -gt 0)) {
+    return @()
+  }
+
+  return $FailedSegments |
+    ForEach-Object { [int]$_ } |
+    Sort-Object -Unique
+}
+
 function Invoke-BackfillSegment {
   param(
     [Nullable[int]]$OverrideSegmentIndex
@@ -134,8 +144,9 @@ function Invoke-BackfillSegment {
 function Invoke-Orchestrator {
   $segments = @()
 
-  if ($script:PSBoundParameters.ContainsKey('FailedSegments') -and $FailedSegments.Count -gt 0) {
-    foreach ($seg in $FailedSegments) {
+  $normalizedFailedSegments = Resolve-NormalizedFailedSegments
+  if ($normalizedFailedSegments.Count -gt 0) {
+    foreach ($seg in $normalizedFailedSegments) {
       $segments += @{ segmentIndex = [int]$seg }
     }
   }
@@ -165,8 +176,9 @@ if ($OrchestratorArn) {
   exit 0
 }
 
-if ($script:PSBoundParameters.ContainsKey('FailedSegments') -and $FailedSegments.Count -gt 0) {
-  foreach ($seg in $FailedSegments) {
+$normalizedFailedSegments = Resolve-NormalizedFailedSegments
+if ($normalizedFailedSegments.Count -gt 0) {
+  foreach ($seg in $normalizedFailedSegments) {
     Invoke-BackfillSegment -OverrideSegmentIndex $seg
   }
 } else {

@@ -196,6 +196,24 @@ fi
 
 FUNCTION_NAME="chme-${STAGE}-cheer-stats-materializer"
 
+normalize_failed_segments_csv() {
+  local input_csv="$1"
+  python - <<PYNORM
+segments = []
+seen = set()
+for token in "${input_csv}".split(','):
+    token = token.strip()
+    if not token:
+        continue
+    value = int(token)
+    if value in seen:
+        continue
+    seen.add(value)
+    segments.append(value)
+segments.sort()
+print(','.join(str(v) for v in segments))
+PYNORM
+}
 build_lambda_payload() {
   local segment_index_value="${1:-}"
   python - <<PY
@@ -277,12 +295,14 @@ PY
 }
 
 if [[ -n "${ORCHESTRATOR_ARN}" ]]; then
-  invoke_orchestrator_once "${FAILED_SEGMENTS}"
+  normalized_failed_segments="$(normalize_failed_segments_csv "${FAILED_SEGMENTS}")"
+  invoke_orchestrator_once "${normalized_failed_segments}"
   exit 0
 fi
 
 if [[ -n "${FAILED_SEGMENTS}" ]]; then
-  IFS=',' read -r -a segments <<< "${FAILED_SEGMENTS}"
+  normalized_failed_segments="$(normalize_failed_segments_csv "${FAILED_SEGMENTS}")"
+  IFS=',' read -r -a segments <<< "${normalized_failed_segments}"
   for seg in "${segments[@]}"; do
     trimmed="$(echo "$seg" | xargs)"
     if [[ -z "$trimmed" ]]; then

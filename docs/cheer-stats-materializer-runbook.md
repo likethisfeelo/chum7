@@ -22,7 +22,7 @@
 - `dryRun` (옵션): `true`면 write 없이 집계 건수만 계산
 - `maxRetries` (옵션): BatchWrite `UnprocessedItems` 재시도 횟수 오버라이드 (0 이상)
 - `totalSegments` / `segmentIndex` (옵션): Scan 분할 실행(병렬 백필/부분 재실행)
-- `failedSegments` (스크립트 옵션): 실패 세그먼트만 순차 재실행
+- `failedSegments` (스크립트 옵션): 실패 세그먼트만 순차 재실행 (중복 입력은 자동 제거, 오름차순 정규화)
 - `orchestratorArn` (스크립트 옵션): Step Functions 오케스트레이터 직접 실행
 - `maxScanPages` (옵션): 한 번 실행에서 최대 Scan 페이지 수 제한 (1 이상)
 - `scanPageSize` (옵션): Scan `Limit` (1~1000, 기본 500 권장)
