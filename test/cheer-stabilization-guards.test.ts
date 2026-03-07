@@ -154,4 +154,38 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('CHEER_API_V2_CONTRACT');
     expect(stack).toContain('CHEER_API_V2_SUNSET_AT');
   });
+
+  test('cheer stack wires stats and interaction endpoints', () => {
+    const stack = read('infra/stacks/cheer-stack.ts');
+    expect(stack).toContain("path: '/cheers/stats'");
+    expect(stack).toContain("path: '/cheers/{cheerId}/reply'");
+    expect(stack).toContain("path: '/cheers/{cheerId}/reaction'");
+    expect(stack).toContain('CheerStatsFn');
+    expect(stack).toContain('CheerReplyFn');
+    expect(stack).toContain('CheerReactFn');
+  });
+
+  test('stats handler supports period/day/week/month/challenge filters', () => {
+    const src = read('backend/services/cheer/stats/index.ts');
+    expect(src).toContain("const period = (params.period || 'all').trim().toLowerCase();");
+    expect(src).toContain("if (period === 'challenge' && !challengeId)");
+    expect(src).toContain('toIsoRange(period');
+    expect(src).toContain("collectByIndex('senderId-index'");
+    expect(src).toContain("collectByIndex('receiverId-index'");
+    expect(src).toContain('repliedCount');
+    expect(src).toContain('reactionCount');
+  });
+
+  test('reply and react handlers enforce receiver-only interaction and idempotency', () => {
+    const replySrc = read('backend/services/cheer/reply/index.ts');
+    expect(replySrc).toContain('replyMessage');
+    expect(replySrc).toContain('attribute_not_exists(replyMessage) AND receiverId = :receiverId');
+    expect(replySrc).toContain('ALREADY_REPLIED');
+
+    const reactSrc = read('backend/services/cheer/react/index.ts');
+    expect(reactSrc).toContain('ALLOWED_REACTIONS');
+    expect(reactSrc).toContain('attribute_not_exists(reactionType) AND receiverId = :receiverId');
+    expect(reactSrc).toContain('ALREADY_REACTED');
+  });
+
 });

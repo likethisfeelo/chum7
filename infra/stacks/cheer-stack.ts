@@ -178,5 +178,54 @@ export class CheerStack extends Stack {
       integration: new HttpLambdaIntegration('GetScheduledIntegration', getScheduledFn),
       authorizer,
     });
+
+    // 8. Cheer Stats (기간/챌린지 필터) (protected)
+    const cheerStatsFn = new NodejsFunction(this, 'CheerStatsFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-cheer-stats`,
+      entry: path.join(__dirname, '../../backend/services/cheer/stats/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheersTable.grantReadData(cheerStatsFn);
+    apiGateway.addRoutes({
+      path: '/cheers/stats',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('CheerStatsIntegration', cheerStatsFn),
+      authorizer,
+    });
+
+    // 9. Cheer reply / reaction (protected)
+    const cheerReplyFn = new NodejsFunction(this, 'CheerReplyFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-cheer-reply`,
+      entry: path.join(__dirname, '../../backend/services/cheer/reply/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheersTable.grantReadWriteData(cheerReplyFn);
+    snsTopic.grantPublish(cheerReplyFn);
+    apiGateway.addRoutes({
+      path: '/cheers/{cheerId}/reply',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('CheerReplyIntegration', cheerReplyFn),
+      authorizer,
+    });
+
+    const cheerReactFn = new NodejsFunction(this, 'CheerReactFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-cheer-react`,
+      entry: path.join(__dirname, '../../backend/services/cheer/react/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheersTable.grantReadWriteData(cheerReactFn);
+    snsTopic.grantPublish(cheerReactFn);
+    apiGateway.addRoutes({
+      path: '/cheers/{cheerId}/reaction',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('CheerReactIntegration', cheerReactFn),
+      authorizer,
+    });
   }
 }
