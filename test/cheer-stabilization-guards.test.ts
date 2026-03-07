@@ -187,6 +187,17 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('Materializer Invocations/Errors');
     expect(stack).toContain('CheerStatsBucketedSource');
     expect(stack).toContain('CheerStatsRealtimeFallbackSource');
+    expect(stack).toContain('CheerReplyRequest');
+    expect(stack).toContain('CheerReplySuccess');
+    expect(stack).toContain('CheerReplyClientError');
+    expect(stack).toContain('CheerReactRequest');
+    expect(stack).toContain('CheerReactSuccess');
+    expect(stack).toContain('CheerReactClientError');
+    expect(stack).toContain('CheerStatsRequest');
+    expect(stack).toContain('CheerStatsSuccess');
+    expect(stack).toContain('Reply Traffic Split (req/success/429)');
+    expect(stack).toContain('React Traffic Split (req/success/429)');
+    expect(stack).toContain('Stats Traffic Split (req/success/5xx)');
     expect(stack).toContain("source: 'bucketed'");
     expect(stack).toContain("source: 'realtime_fallback'");
   });

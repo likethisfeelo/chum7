@@ -318,6 +318,17 @@ export class CheerStack extends Stack {
     const statsBucketedMetric = createLogCountMetric('CheerStatsBucketedSource', cheerStatsFn.functionName, "source: 'bucketed'");
     const statsRealtimeFallbackMetric = createLogCountMetric('CheerStatsRealtimeFallbackSource', cheerStatsFn.functionName, "source: 'realtime_fallback'");
 
+    const replyRequestMetric = createLogCountMetric('CheerReplyRequest', cheerReplyFn.functionName, 'Cheer reply request received');
+    const replySuccessMetric = createLogCountMetric('CheerReplySuccess', cheerReplyFn.functionName, 'Cheer reply success');
+    const replyClientErrorMetric = createLogCountMetric('CheerReplyClientError', cheerReplyFn.functionName, 'REPLY_RATE_LIMIT_EXCEEDED');
+
+    const reactRequestMetric = createLogCountMetric('CheerReactRequest', cheerReactFn.functionName, 'Cheer reaction request received');
+    const reactSuccessMetric = createLogCountMetric('CheerReactSuccess', cheerReactFn.functionName, 'Cheer reaction success');
+    const reactClientErrorMetric = createLogCountMetric('CheerReactClientError', cheerReactFn.functionName, 'REACTION_RATE_LIMIT_EXCEEDED');
+
+    const statsRequestMetric = createLogCountMetric('CheerStatsRequest', cheerStatsFn.functionName, 'Get cheer stats request received');
+    const statsSuccessMetric = createLogCountMetric('CheerStatsSuccess', cheerStatsFn.functionName, 'Get cheer stats success');
+
     const cheerDashboard = new Dashboard(this, 'CheerOpsDashboard', {
       dashboardName: `chme-${stage}-cheer-ops`
     });
@@ -352,6 +363,25 @@ export class CheerStack extends Stack {
           statsMaterializerFn.metricErrors({ period: Duration.minutes(5) })
         ],
         width: 12
+      })
+    );
+
+
+    cheerDashboard.addWidgets(
+      new GraphWidget({
+        title: 'Reply Traffic Split (req/success/429)',
+        left: [replyRequestMetric, replySuccessMetric, replyClientErrorMetric],
+        width: 8
+      }),
+      new GraphWidget({
+        title: 'React Traffic Split (req/success/429)',
+        left: [reactRequestMetric, reactSuccessMetric, reactClientErrorMetric],
+        width: 8
+      }),
+      new GraphWidget({
+        title: 'Stats Traffic Split (req/success/5xx)',
+        left: [statsRequestMetric, statsSuccessMetric, statsErrorMetric],
+        width: 8
       })
     );
   }

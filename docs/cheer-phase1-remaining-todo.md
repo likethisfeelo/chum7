@@ -12,6 +12,7 @@
 - materializer 실행 제어 2차: scan segmentation(totalSegments/segmentIndex) + maxScanPages/scanPageSize
 - CloudWatch 에러 알람 베이스라인: reply/react/stats 에러 로그 메트릭 필터+알람
 - CloudWatch 운영 대시보드 1차: 에러카운트/latency p95/source mix/materializer invocations·errors 위젯
+- CloudWatch 운영 대시보드 2차: reply/react/stats 요청·성공·에러유형(429/5xx) 분리 위젯
 - CheerStats 운영 런북/백필 스크립트 표준화(`scripts/cheer-stats-backfill.*`, runbook 문서)
 - `period=challenge` 검증 강화: challenge 존재 + 참여자 접근 검증
 - 투데이 페이지 UX 확장: 리액션/답장 UI + 기간 필터 통계 카드
@@ -20,8 +21,8 @@
 
 ### P0 (바로 다음)
 1. materializer 장기운영 튜닝(스케줄 주기 자동화/세그먼트 병렬 오케스트레이션)
-2. 대시보드 위젯 2차 확장(요청수/4xx/5xx 분리, stage별 대시보드 템플릿화)
-3. 레이트 리밋 4차(토큰 버킷/분산 Lua·Redis 옵션 검토)
+2. 레이트 리밋 4차(토큰 버킷/분산 Lua·Redis 옵션 검토)
+3. 대시보드 템플릿화(stage별 공통 위젯 모듈)
 
 ### P1 (이번 스프린트 내)
 1. 프론트에서 period 입력 UX 개선(week picker, month picker)

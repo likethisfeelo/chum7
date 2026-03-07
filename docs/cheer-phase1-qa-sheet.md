@@ -53,4 +53,5 @@
 - [x] 구조화 로그 키(`path`, `userId`, `cheerId/reactionType`, `period/challengeId`, `latencyMs`) 대시보드 매핑
 - [x] 응답 지연 p95 모니터링(초기 기준선 수립)
 - [x] Cheer Ops Dashboard 위젯 생성(에러 카운트, Handler latency p95, Stats source mix, Materializer invocations/errors)
+- [x] Cheer Ops Dashboard 2차 위젯 생성(Reply/React/Stats 요청·성공·에러유형 분리)
 - [ ] 배포 직후 1시간/24시간 오류율 추적
