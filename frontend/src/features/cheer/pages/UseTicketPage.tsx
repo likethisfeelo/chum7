@@ -91,7 +91,8 @@ export const UseTicketPage = () => {
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['cheer-targets'] });
-      toast.success(res?.message || '응원권을 사용했어요! 💌');
+      const remaining = (data?.myTickets ?? 1) - 1;
+      toast.success(`응원을 보냈어요! 💌 잔여 응원권: ${remaining}장`);
       navigate('/me');
     },
     onError: (error: any) => {
@@ -115,11 +116,6 @@ export const UseTicketPage = () => {
         <div className="bg-white rounded-2xl border border-gray-200 p-4">
           <p className="text-sm text-gray-600">보유 응원권: <span className="font-bold text-gray-900">{data?.myTickets || 0}</span>장</p>
           <p className="text-sm text-gray-600 mt-1">즉시 응원 대상(미완료): <span className="font-bold text-gray-900">{immediateTargets.length}</span>명</p>
-        </div>
-
-        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4">
-          <p className="text-sm font-bold text-indigo-800 mb-1">응원권 기능 분화 기획(프론트 자산 반영)</p>
-          <p className="text-xs text-indigo-700">챌린지별 조회/사용을 위해 아래에서 챌린지 필터를 먼저 선택할 수 있도록 UI를 분리했습니다.</p>
         </div>
 
         <div>

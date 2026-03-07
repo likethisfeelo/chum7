@@ -13,6 +13,7 @@ import { ChallengeDetailPage } from '@/features/challenge/pages/ChallengeDetailP
 import { ChallengeFeedPage } from '@/features/challenge-feed/pages/ChallengeFeedPage';
 import { ChallengeBoardPage } from '@/features/challenge-board/pages/ChallengeBoardPage';
 import { MEPage } from '@/features/me/pages/MEPage';
+import { MyRecordsPage } from '@/features/me/pages/MyRecordsPage';
 import { TodayPage } from '@/features/today/pages/TodayPage';
 import { FeedPage } from '@/features/feed/pages/FeedPage';
 import { ProfilePage } from '@/features/profile/pages/ProfilePage';
@@ -163,6 +164,14 @@ export default function App() {
               <MainLayout>
                 <MEPage />
               </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/me/records"
+          element={
+            <ProtectedRoute>
+              <MyRecordsPage />
             </ProtectedRoute>
           }
         />

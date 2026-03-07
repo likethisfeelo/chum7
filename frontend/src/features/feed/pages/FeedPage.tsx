@@ -7,6 +7,7 @@ import { ko } from 'date-fns/locale';
 
 import { EmptyState } from '@/shared/components/EmptyState';
 import { Loading } from '@/shared/components/Loading';
+import { SkeletonList } from '@/shared/components/Skeleton';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import {
   createPlazaComment,
@@ -313,7 +314,7 @@ export const FeedPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
-        <h1 className="text-2xl font-bold text-gray-900">마당 (Outer Space)</h1>
+        <h1 className="text-2xl font-bold text-gray-900">마당 🚀</h1>
         <p className="text-sm text-gray-600 mt-1">광장 피드 · 반익명 커뮤니티</p>
       </div>
 
@@ -353,7 +354,7 @@ export const FeedPage = () => {
 
           <div className="mt-4 space-y-3">
             {isLoading ? (
-              <Loading />
+              <SkeletonList count={3} />
             ) : isError ? (
               <EmptyState icon="⚠️" title="광장 피드를 불러오지 못했어요" description="잠시 후 다시 시도해주세요." />
             ) : posts.length === 0 ? (
@@ -366,9 +367,9 @@ export const FeedPage = () => {
                 className="border border-gray-200 rounded-2xl p-4 bg-white"
               >
                 <p className="text-[11px] font-semibold text-primary-700">
-                  {post.postType === 'recruitment' && '카드 A · 챌린지 모집 공고'}
-                  {post.postType === 'progress_update' && '카드 B · 진행 중 업데이트'}
-                  {(post.postType === 'courtyard' || post.postType === 'badge_review') && '카드 C · 마당 게시물(익명)'}
+                  {post.postType === 'recruitment' && '모집 공고'}
+                  {post.postType === 'progress_update' && '진행 업데이트'}
+                  {(post.postType === 'courtyard' || post.postType === 'badge_review') && '마당 글'}
                 </p>
 
                 <h3 className="mt-1 text-sm font-semibold text-gray-900">{post.challengeTitle || '챌린지'}</h3>
@@ -413,7 +414,10 @@ export const FeedPage = () => {
                 {commentOpenMap[post.plazaPostId] && (
                   <div className="mt-3 rounded-xl border border-gray-200 p-3 bg-gray-50">
                     {commentLoadingMap[post.plazaPostId] ? (
-                      <p className="text-xs text-gray-500">댓글 불러오는 중...</p>
+                      <div className="space-y-2">
+                        <div className="animate-pulse bg-gray-200 rounded h-3 w-3/4" />
+                        <div className="animate-pulse bg-gray-200 rounded h-3 w-1/2" />
+                      </div>
                     ) : (
                       <>
                         <div className="space-y-2">
