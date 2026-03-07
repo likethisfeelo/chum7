@@ -9,6 +9,14 @@ declare module '@aws-sdk/lib-dynamodb' {
     constructor(input: Record<string, unknown>);
   }
 
+  export class GetCommand {
+    constructor(input: Record<string, unknown>);
+  }
+
+  export class PutCommand {
+    constructor(input: Record<string, unknown>);
+  }
+
   export class UpdateCommand {
     constructor(input: Record<string, unknown>);
   }
@@ -19,7 +27,7 @@ declare module '@aws-sdk/lib-dynamodb' {
 
   export const DynamoDBDocumentClient: {
     from(client: unknown): {
-      send(command: unknown): Promise<{ Items?: unknown[] }>;
+      send(command: unknown): Promise<any>;
     };
   };
 }
