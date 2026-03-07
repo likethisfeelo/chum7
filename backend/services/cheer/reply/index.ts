@@ -92,8 +92,12 @@ async function sendReplyNotification(senderId: string, message: string): Promise
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startedAt = Date.now();
+  const path = event.requestContext.http?.path || event.rawPath || '/cheers/{cheerId}/reply';
+
   try {
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string | undefined;
+    console.info('Cheer reply request received', { path, userId });
     if (!userId) {
       return response(401, { error: 'UNAUTHORIZED', message: '인증이 필요합니다' });
     }
@@ -121,6 +125,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const rateLimit = await checkReplyRateLimit(userId);
     if (!rateLimit.allowed) {
+      console.warn('Cheer reply rate limit exceeded', { path, userId, ...rateLimit });
       return response(429, {
         error: 'REPLY_RATE_LIMIT_EXCEEDED',
         message: '짧은 시간 내 답장 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요',
@@ -166,6 +171,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       await sendReplyNotification(cheer.senderId, message);
     }
 
+    const latencyMs = Date.now() - startedAt;
+    console.info('Cheer reply success', { path, userId, cheerId, latencyMs });
+
     return response(200, {
       success: true,
       message: '답장을 보냈습니다',
@@ -180,7 +188,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(409, { error: 'ALREADY_REPLIED', message: '이미 답장을 보냈습니다' });
     }
 
-    console.error('Reply cheer error:', error);
+    const latencyMs = Date.now() - startedAt;
+    console.error('Reply cheer error:', {
+      path,
+      latencyMs,
+      error
+    });
     return response(500, { error: 'INTERNAL_SERVER_ERROR', message: '서버 오류가 발생했습니다' });
   }
 };

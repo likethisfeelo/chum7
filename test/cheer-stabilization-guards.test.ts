@@ -181,6 +181,9 @@ describe('cheer stabilization guards', () => {
     expect(src).toContain('CHALLENGE_ACCESS_DENIED');
     expect(src).toContain('TableName: process.env.CHALLENGES_TABLE!');
     expect(src).toContain('TableName: process.env.USER_CHALLENGES_TABLE!');
+    expect(src).toContain('Get cheer stats request received');
+    expect(src).toContain('Get cheer stats success');
+    expect(src).toContain('latencyMs');
   });
 
   test('reply and react handlers enforce receiver-only interaction and idempotency', () => {
@@ -190,6 +193,8 @@ describe('cheer stabilization guards', () => {
     expect(replySrc).toContain('ALREADY_REPLIED');
     expect(replySrc).toContain('checkReplyRateLimit');
     expect(replySrc).toContain('REPLY_RATE_LIMIT_EXCEEDED');
+    expect(replySrc).toContain('Cheer reply request received');
+    expect(replySrc).toContain('Cheer reply success');
 
     const reactSrc = read('backend/services/cheer/react/index.ts');
     expect(reactSrc).toContain('ALLOWED_REACTIONS');
@@ -197,6 +202,8 @@ describe('cheer stabilization guards', () => {
     expect(reactSrc).toContain('ALREADY_REACTED');
     expect(reactSrc).toContain('checkReactionRateLimit');
     expect(reactSrc).toContain('REACTION_RATE_LIMIT_EXCEEDED');
+    expect(reactSrc).toContain('Cheer reaction request received');
+    expect(reactSrc).toContain('Cheer reaction success');
   });
 
 });

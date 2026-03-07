@@ -160,8 +160,12 @@ async function validateChallengeAccess(userId: string, challengeId: string): Pro
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startedAt = Date.now();
+  const path = event.requestContext.http?.path || event.rawPath || '/cheers/stats';
+
   try {
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string | undefined;
+    console.info('Get cheer stats request received', { path, userId });
     if (!userId) {
       return response(401, { error: 'UNAUTHORIZED', message: '인증이 필요합니다' });
     }
@@ -177,6 +181,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (period === 'challenge' && challengeId) {
       const challengeValidation = await validateChallengeAccess(userId, challengeId);
       if (!challengeValidation.ok) {
+        console.warn('Get cheer stats challenge access denied', {
+          path,
+          userId,
+          challengeId,
+          error: challengeValidation.error
+        });
         return response(challengeValidation.statusCode || 400, {
           error: challengeValidation.error,
           message: challengeValidation.message
@@ -211,6 +221,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       reactionCount: received.filter((item) => Boolean(item.reactionType)).length
     };
 
+    const latencyMs = Date.now() - startedAt;
+    console.info('Get cheer stats success', { path, userId, period, challengeId: challengeId ?? null, latencyMs });
+
     return response(200, {
       success: true,
       data: {
@@ -222,7 +235,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     });
   } catch (error) {
-    console.error('Get cheer stats error:', error);
+    const latencyMs = Date.now() - startedAt;
+    console.error('Get cheer stats error:', {
+      path,
+      latencyMs,
+      error
+    });
     return response(500, { error: 'INTERNAL_SERVER_ERROR', message: '서버 오류가 발생했습니다' });
   }
 };
