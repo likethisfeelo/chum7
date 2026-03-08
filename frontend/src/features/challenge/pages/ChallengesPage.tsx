@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion, AnimatePresence } from 'framer-motion';
+import { IoNotificationsOutline } from 'react-icons/io5';
+import { HiDotsVertical } from 'react-icons/hi';
 import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import {
@@ -20,15 +22,14 @@ type CategoryBanner = {
 };
 
 const slideVariants = {
-  enter: (dir: number) => ({ x: dir > 0 ? '100%' : '-100%', opacity: 0 }),
-  center: { x: 0, opacity: 1 },
-  exit: (dir: number) => ({ x: dir > 0 ? '-100%' : '100%', opacity: 0 }),
+  enter: { opacity: 0, scale: 0.97 },
+  center: { opacity: 1, scale: 1 },
+  exit: { opacity: 0, scale: 0.97 },
 };
 
 export const ChallengesPage = () => {
   const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [direction, setDirection] = useState(0);
 
   const currentCategory = CHALLENGE_CATEGORIES[currentIndex];
 
@@ -60,7 +61,6 @@ export const ChallengesPage = () => {
 
   const goTo = (index: number) => {
     if (index === currentIndex) return;
-    setDirection(index > currentIndex ? 1 : -1);
     setCurrentIndex(index);
   };
 
@@ -80,52 +80,15 @@ export const ChallengesPage = () => {
         <p className="text-sm text-gray-500 mt-0.5">7일간의 짧고 강렬한 도전</p>
       </div>
 
-      {/* Category Navigation */}
-      <div className="bg-white border-b border-gray-100 px-6 py-3 flex items-center justify-between gap-3">
-        <button
-          onClick={() => goTo(Math.max(0, currentIndex - 1))}
-          disabled={currentIndex === 0}
-          className="text-gray-400 disabled:opacity-20 hover:text-gray-700 transition-colors text-xl font-light w-6 flex-shrink-0"
-          aria-label="previous category"
-        >
-          ←
-        </button>
-
-        <div className="flex gap-1.5 flex-1 justify-center">
-          {CHALLENGE_CATEGORIES.map((cat, i) => (
-            <button
-              key={cat.slug}
-              onClick={() => goTo(i)}
-              aria-label={cat.label}
-              className={`rounded-full transition-all duration-200 ${
-                i === currentIndex
-                  ? 'w-6 h-2.5 bg-primary-500'
-                  : 'w-2.5 h-2.5 bg-gray-300 hover:bg-gray-400'
-              }`}
-            />
-          ))}
-        </div>
-
-        <button
-          onClick={() => goTo(Math.min(CHALLENGE_CATEGORIES.length - 1, currentIndex + 1))}
-          disabled={currentIndex === CHALLENGE_CATEGORIES.length - 1}
-          className="text-gray-400 disabled:opacity-20 hover:text-gray-700 transition-colors text-xl font-light w-6 flex-shrink-0"
-          aria-label="next category"
-        >
-          →
-        </button>
-      </div>
-
       {/* Swipeable Category Banner + Challenge List */}
-      <AnimatePresence mode="wait" custom={direction}>
+      <AnimatePresence mode="wait">
         <motion.div
           key={currentCategory.slug}
-          custom={direction}
           variants={slideVariants}
           initial="enter"
           animate="center"
           exit="exit"
-          transition={{ type: 'tween', duration: 0.25 }}
+          transition={{ type: 'tween', duration: 0.3, ease: 'easeInOut' }}
           drag="x"
           dragConstraints={{ left: 0, right: 0 }}
           dragElastic={0.1}
@@ -133,51 +96,96 @@ export const ChallengesPage = () => {
           className="select-none"
         >
           {/* Hero Banner */}
-          <div className="mx-4 mt-4 rounded-2xl overflow-hidden shadow-sm">
+          <div className="mx-4 mt-4 rounded-2xl overflow-hidden shadow-sm relative">
             {activeBanner?.imageUrl ? (
-              <div className="relative">
-                <img
-                  src={activeBanner.imageUrl}
-                  alt={currentCategory.label}
-                  className="w-full h-52 object-cover"
-                  draggable={false}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                <div className="absolute bottom-0 left-0 p-5 text-white">
-                  <p className="text-xs font-semibold uppercase tracking-widest opacity-80 mb-1">
-                    {currentCategory.emoji} {currentCategory.label}
-                  </p>
-                  <h2 className="text-2xl font-bold leading-tight">{tagline}</h2>
-                  {description && (
-                    <p className="text-sm opacity-80 mt-1">{description}</p>
-                  )}
+              <>
+                <div className="aspect-square">
+                  <img
+                    src={activeBanner.imageUrl}
+                    alt={currentCategory.label}
+                    className="w-full h-full object-cover"
+                    draggable={false}
+                  />
                 </div>
-              </div>
+                <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
+              </>
             ) : (
-              <div
-                className="w-full h-52 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-gray-100 to-gray-200"
-              >
-                <span className="text-5xl">{currentCategory.emoji}</span>
-                <div className="text-center px-6">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">
-                    {currentCategory.label}
-                  </p>
-                  <h2 className="text-lg font-bold text-gray-800 leading-snug">{tagline}</h2>
-                  {description && (
-                    <p className="text-sm text-gray-500 mt-1">{description}</p>
-                  )}
+              <div className="aspect-square bg-gradient-to-br from-gray-700 to-gray-500 relative">
+                <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-6xl">{currentCategory.emoji}</span>
                 </div>
               </div>
             )}
+
+            {/* Navigation overlay — top of banner */}
+            <div className="absolute top-0 left-0 right-0 px-4 pt-3 pb-2 flex items-center justify-between">
+              <button
+                onClick={() => goTo(Math.max(0, currentIndex - 1))}
+                disabled={currentIndex === 0}
+                className="text-white disabled:opacity-20 hover:text-white/80 transition-colors text-xl font-light w-6 flex-shrink-0"
+                aria-label="previous category"
+              >
+                ←
+              </button>
+
+              <div className="flex flex-col items-center gap-1.5 flex-1">
+                <span className="text-white font-semibold text-xs uppercase tracking-widest">
+                  {currentCategory.label}
+                </span>
+                <div className="flex gap-1.5 justify-center">
+                  {CHALLENGE_CATEGORIES.map((cat, i) => (
+                    <button
+                      key={cat.slug}
+                      onClick={() => goTo(i)}
+                      aria-label={cat.label}
+                      className={`rounded-full transition-all duration-200 ${
+                        i === currentIndex
+                          ? 'w-5 h-1.5 bg-white'
+                          : 'w-1.5 h-1.5 bg-white/40 hover:bg-white/60'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={() => goTo(Math.min(CHALLENGE_CATEGORIES.length - 1, currentIndex + 1))}
+                disabled={currentIndex === CHALLENGE_CATEGORIES.length - 1}
+                className="text-white disabled:opacity-20 hover:text-white/80 transition-colors text-xl font-light w-6 flex-shrink-0"
+                aria-label="next category"
+              >
+                →
+              </button>
+            </div>
+
+            {/* Content overlay — bottom of banner */}
+            <div className="absolute bottom-0 left-0 right-0 p-5 flex items-end justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-2xl font-bold text-white leading-tight">{tagline}</h2>
+                {description && (
+                  <p className="text-sm text-white/80 mt-1 line-clamp-2">{description}</p>
+                )}
+              </div>
+              <div className="flex flex-col gap-3 items-center flex-shrink-0 pb-0.5">
+                <button
+                  aria-label="알림"
+                  className="text-white/90 hover:text-white transition-colors"
+                >
+                  <IoNotificationsOutline size={22} />
+                </button>
+                <button
+                  aria-label="더보기"
+                  className="text-white/90 hover:text-white transition-colors"
+                >
+                  <HiDotsVertical size={22} />
+                </button>
+              </div>
+            </div>
           </div>
 
-          {/* Category label pill */}
-          <div className="px-4 mt-4 mb-2 flex items-center gap-2">
-            <span
-              className={`text-xs font-semibold px-3 py-1 rounded-full ${SLUG_TO_COLOR[currentCategory.slug] || 'bg-gray-100 text-gray-600'}`}
-            >
-              {currentCategory.label}
-            </span>
+          {/* Section label */}
+          <div className="px-4 mt-4 mb-2">
             <span className="text-sm text-gray-400">모집 중인 챌린지</span>
           </div>
 
