@@ -52,6 +52,31 @@ export async function isParticipant(
   return !!result.Items?.length;
 }
 
+// 현재 활성 참여자 및 완료/실패한 전 참여자 포함 (챌린지 완료 후 읽기 접근용)
+export async function wasParticipant(
+  docClient: DynamoDBDocumentClient,
+  challengeId: string,
+  userId: string,
+): Promise<boolean> {
+  const result = await docClient.send(new QueryCommand({
+    TableName: process.env.USER_CHALLENGES_TABLE!,
+    IndexName: 'userId-index',
+    KeyConditionExpression: 'userId = :uid',
+    FilterExpression: 'challengeId = :cid AND #status IN (:active, :completed, :failed)',
+    ExpressionAttributeNames: { '#status': 'status' },
+    ExpressionAttributeValues: {
+      ':uid': userId,
+      ':cid': challengeId,
+      ':active': 'active',
+      ':completed': 'completed',
+      ':failed': 'failed',
+    },
+    Limit: 1,
+  }));
+
+  return !!result.Items?.length;
+}
+
 export async function isLeader(
   docClient: DynamoDBDocumentClient,
   challengeId: string,

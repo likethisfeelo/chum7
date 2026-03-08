@@ -8,10 +8,12 @@
  *   draft       → recruiting   : recruitingStartAt <= now
  *   recruiting  → preparing    : recruitingEndAt   <= now
  *   preparing   → active       : challengeStartAt  <= now
+ *                                (requireStartConfirmation=true 이면 startConfirmedAt 필요)
  *   active      → completed    : challengeEndAt    <= now
  *
  * UserChallenge Side Effects:
- *   preparing → active       : userChallenge.phase = 'active', currentDay = 1
+ *   preparing → active       : joinStatus='requested' 참여자 자동 거절
+ *                              userChallenge.phase = 'active', currentDay = 1 (승인된 참여자)
  *   active    → completed    : userChallenge.status = 'completed' | 'failed'
  *                              (7/7 완료 시 completed, 미달성 시 failed)
  */
@@ -48,7 +50,11 @@ const TRANSITION_RULES: TransitionRule[] = [
   {
     from: 'preparing',
     to: 'active',
-    condition: (item, now) => item.challengeStartAt <= now,
+    condition: (item, now) => {
+      if (item.challengeStartAt > now) return false;
+      if (!item.requireStartConfirmation) return true;
+      return !!item.startConfirmedAt;
+    },
   },
   {
     from: 'active',
@@ -86,8 +92,97 @@ async function transitionChallenge(challengeId: string, from: Lifecycle, to: Lif
   );
 }
 
+async function handleUnapprovedJoinRequests(challengeId: string, challenge: any): Promise<void> {
+  let lastKey: any = undefined;
+  let rejectedCount = 0;
+  const now = new Date().toISOString();
+
+  do {
+    const result: any = await docClient.send(
+      new QueryCommand({
+        TableName: USER_CHALLENGES_TABLE,
+        IndexName: 'challengeId-index',
+        KeyConditionExpression: 'challengeId = :cid',
+        FilterExpression: 'phase = :phase AND joinStatus = :requested',
+        ExpressionAttributeValues: {
+          ':cid': challengeId,
+          ':phase': 'preparing',
+          ':requested': 'requested',
+        },
+        ExclusiveStartKey: lastKey,
+      })
+    );
+
+    for (const uc of result.Items ?? []) {
+      const isPaid = uc.paymentStatus && uc.paymentStatus !== 'free';
+      const extraUpdate = isPaid
+        ? ', paymentStatus = :refunded, refundStatus = :completed'
+        : '';
+      const extraValues: Record<string, any> = isPaid
+        ? { ':refunded': 'refunded', ':completed': 'completed' }
+        : {};
+
+      await docClient.send(
+        new UpdateCommand({
+          TableName: USER_CHALLENGES_TABLE,
+          Key: { userChallengeId: uc.userChallengeId },
+          UpdateExpression: `SET #status = :failed, joinStatus = :rejected, phase = :failed${extraUpdate}, updatedAt = :now`,
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: {
+            ':failed': 'failed',
+            ':rejected': 'rejected',
+            ':now': now,
+            ...extraValues,
+          },
+        })
+      );
+
+      await sendNotification({
+        recipientId: uc.userId,
+        type: 'join_request_auto_rejected',
+        title: '참여 신청이 자동 취소됐어요',
+        body: '챌린지 시작 전 승인이 완료되지 않아 참여 신청이 자동 취소되었습니다.',
+        relatedId: challengeId,
+        relatedType: 'challenge',
+      });
+
+      rejectedCount++;
+    }
+
+    lastKey = result.LastEvaluatedKey;
+  } while (lastKey);
+
+  if (rejectedCount > 0) {
+    // stats.pendingParticipants 감소
+    await docClient.send(
+      new UpdateCommand({
+        TableName: CHALLENGES_TABLE,
+        Key: { challengeId },
+        UpdateExpression:
+          'SET stats.pendingParticipants = if_not_exists(stats.pendingParticipants, :zero) - :count, updatedAt = :now',
+        ExpressionAttributeValues: {
+          ':zero': 0,
+          ':count': rejectedCount,
+          ':now': now,
+        },
+      })
+    );
+
+    if (challenge.createdBy) {
+      await sendNotification({
+        recipientId: challenge.createdBy,
+        type: 'join_requests_auto_rejected',
+        title: `${rejectedCount}명의 참여 신청이 자동 취소됐어요`,
+        body: `챌린지가 시작되어 미승인 참여 신청 ${rejectedCount}건이 자동으로 취소되었습니다.`,
+        relatedId: challengeId,
+        relatedType: 'challenge',
+      });
+    }
+  }
+}
+
 async function activateUserChallenges(challengeId: string): Promise<void> {
-  // phase: preparing → active, currentDay = 1
+  // phase: preparing → active, currentDay = 1 (joinStatus='approved' 참여자만)
   let lastKey: any = undefined;
 
   do {
@@ -96,10 +191,11 @@ async function activateUserChallenges(challengeId: string): Promise<void> {
         TableName: USER_CHALLENGES_TABLE,
         IndexName: 'challengeId-index',
         KeyConditionExpression: 'challengeId = :cid',
-        FilterExpression: 'phase = :phase',
+        FilterExpression: 'phase = :phase AND (joinStatus = :approved OR attribute_not_exists(joinStatus))',
         ExpressionAttributeValues: {
           ':cid': challengeId,
           ':phase': 'preparing',
+          ':approved': 'approved',
         },
         ExclusiveStartKey: lastKey,
       })
@@ -224,6 +320,79 @@ async function expirePendingProposals(challenge: any): Promise<void> {
   }
 }
 
+async function notifyPreparingEntry(challenge: any): Promise<void> {
+  if (!challenge.createdBy) return;
+
+  const startDate = new Date(challenge.challengeStartAt).toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  const body = challenge.requireStartConfirmation
+    ? `'${challenge.title}' 챌린지 모집이 마감됐어요. ${startDate}에 시작 예정입니다. 시작 전 확인 버튼을 눌러 챌린지를 시작해주세요.`
+    : `'${challenge.title}' 챌린지 모집이 마감됐어요. ${startDate}에 자동으로 시작됩니다.`;
+
+  await sendNotification({
+    recipientId: challenge.createdBy,
+    type: 'challenge_preparing',
+    title: '챌린지 모집이 마감됐어요',
+    body,
+    relatedId: challenge.challengeId,
+    relatedType: 'challenge',
+  });
+}
+
+async function notifyStartDelay(challenge: any): Promise<void> {
+  const now = new Date().toISOString();
+
+  // 어드민 알림
+  if (challenge.createdBy) {
+    await sendNotification({
+      recipientId: challenge.createdBy,
+      type: 'challenge_start_confirmation_required',
+      title: '챌린지 시작 확인이 필요해요',
+      body: `'${challenge.title}' 챌린지 시작일이 지났습니다. 지금 확인하거나 시작일을 변경해주세요.`,
+      relatedId: challenge.challengeId,
+      relatedType: 'challenge',
+    });
+  }
+
+  // 참여자 알림 (승인된 참여자들)
+  let lastKey: any = undefined;
+  do {
+    const result: any = await docClient.send(
+      new QueryCommand({
+        TableName: USER_CHALLENGES_TABLE,
+        IndexName: 'challengeId-index',
+        KeyConditionExpression: 'challengeId = :cid',
+        FilterExpression: 'phase = :phase AND joinStatus = :approved',
+        ExpressionAttributeValues: {
+          ':cid': challenge.challengeId,
+          ':phase': 'preparing',
+          ':approved': 'approved',
+        },
+        ExclusiveStartKey: lastKey,
+      })
+    );
+
+    for (const uc of result.Items ?? []) {
+      await sendNotification({
+        recipientId: uc.userId,
+        type: 'challenge_start_delayed',
+        title: '챌린지 시작이 지연되고 있어요',
+        body: `'${challenge.title}' 챌린지 시작이 지연되고 있습니다. 리더의 확인을 기다리고 있어요.`,
+        relatedId: challenge.challengeId,
+        relatedType: 'challenge',
+      });
+    }
+
+    lastKey = result.LastEvaluatedKey;
+  } while (lastKey);
+
+  console.log(`[lifecycle-manager] Start delay notified for ${challenge.challengeId} at ${now}`);
+}
+
 export const handler = async (): Promise<void> => {
   const now = new Date().toISOString();
   console.log(`[lifecycle-manager] Running at ${now}`);
@@ -239,7 +408,12 @@ export const handler = async (): Promise<void> => {
         await transitionChallenge(challenge.challengeId, rule.from, rule.to);
         console.log(`[lifecycle-manager] Transitioned ${challenge.challengeId}: ${rule.from} → ${rule.to}`);
 
+        if (rule.from === 'recruiting' && rule.to === 'preparing') {
+          await notifyPreparingEntry(challenge);
+        }
+
         if (rule.from === 'preparing' && rule.to === 'active') {
+          await handleUnapprovedJoinRequests(challenge.challengeId, challenge);
           await expirePendingProposals(challenge);
           await activateUserChallenges(challenge.challengeId);
         }
@@ -251,6 +425,22 @@ export const handler = async (): Promise<void> => {
         if (err.name !== 'ConditionalCheckFailedException') {
           console.error(`[lifecycle-manager] Error transitioning ${challenge.challengeId}:`, err);
         }
+      }
+    }
+  }
+
+  // 시작 확인 필요 챌린지 중 시작일이 지났으나 미확인인 챌린지에 지연 알림 발송
+  const preparingChallenges = await queryChallengesByLifecycle('preparing');
+  for (const challenge of preparingChallenges) {
+    if (
+      challenge.requireStartConfirmation &&
+      !challenge.startConfirmedAt &&
+      challenge.challengeStartAt <= now
+    ) {
+      try {
+        await notifyStartDelay(challenge);
+      } catch (err) {
+        console.error(`[lifecycle-manager] Error sending delay notification for ${challenge.challengeId}:`, err);
       }
     }
   }

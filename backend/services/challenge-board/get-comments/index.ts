@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { response, getUserId, isParticipant, decodeNextToken, encodeNextToken } from '../_shared/common';
+import { response, getUserId, wasParticipant, decodeNextToken, encodeNextToken } from '../_shared/common';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -13,7 +13,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (!userId) return response(401, { error: 'UNAUTHORIZED', message: '인증이 필요합니다.' });
     if (!challengeId) return response(400, { error: 'MISSING_CHALLENGE_ID' });
 
-    const participant = await isParticipant(client, challengeId, userId);
+    const participant = await wasParticipant(client, challengeId, userId);
     if (!participant) {
       return response(403, { error: 'FORBIDDEN', message: '참여자만 댓글을 열람할 수 있습니다.' });
     }

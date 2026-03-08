@@ -53,7 +53,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const proposalId = uuidv4();
     const now = new Date().toISOString();
-    const auto = challenge.personalQuestAutoApprove ?? true;
+    const auto = challenge.personalQuestAutoApprove ?? false;
     const item = {
       proposalId,
       challengeId,

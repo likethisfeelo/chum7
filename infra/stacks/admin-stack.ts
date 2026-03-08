@@ -115,6 +115,25 @@ export class AdminStack extends Stack {
       authorizer,
     });
 
+    // 4a. Confirm Start (Admin) - requireStartConfirmation=true 챌린지 수동 시작 확인
+    const confirmStartFn = new NodejsFunction(this, 'ConfirmStartFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-challenge-confirm-start`,
+      entry: path.join(__dirname, '../../backend/services/admin/challenge/confirm-start/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadWriteData(confirmStartFn);
+    userChallengesTable.grantReadWriteData(confirmStartFn);
+    personalQuestProposalsTable.grantReadWriteData(confirmStartFn);
+    notificationsTable.grantWriteData(confirmStartFn);
+    apiGateway.addRoutes({
+      path: '/admin/challenges/{challengeId}/confirm-start',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('AdminConfirmStartIntegration', confirmStartFn),
+      authorizer,
+    });
+
     // 4. Lifecycle Transition (Admin) - 수동 라이프사이클 전환 (protected)
     const lifecycleTransitionFn = new NodejsFunction(this, 'LifecycleTransitionFn', {
       ...commonProps,
