@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FiArrowLeft } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { Loading } from '@/shared/components/Loading';
-import { VerificationSheet } from '@/features/verification/components/VerificationSheet';
+import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
 
 function isSameKstDate(iso?: string | null): boolean {
   if (!iso) return false;
@@ -26,8 +26,6 @@ export const ChallengeFeedPage = () => {
   const { challengeId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [showVerificationSheet, setShowVerificationSheet] = useState(false);
-
   const { data: challengeData, isLoading: isChallengeLoading } = useQuery({
     queryKey: ['challenge-feed', challengeId],
     enabled: Boolean(challengeId),
@@ -179,15 +177,15 @@ export const ChallengeFeedPage = () => {
 
           {!iDidTodayVerification && userChallenge && (
             <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-              <h3 className="font-bold text-gray-900 mb-1">오늘의 인증</h3>
-              <p className="text-sm text-gray-600 mb-3">아직 오늘 인증 전이에요. 피드에 바로 인증을 남겨보세요.</p>
-              <button
-                type="button"
-                onClick={() => setShowVerificationSheet(true)}
-                className="w-full py-3 rounded-xl bg-primary-600 text-white font-semibold"
-              >
-                오늘 인증 작성하기
-              </button>
+              <h3 className="font-bold text-gray-900 mb-3">오늘의 인증</h3>
+              <InlineVerificationForm
+                userChallenge={userChallenge}
+                allowedVerificationTypes={challengeData?.allowedVerificationTypes}
+                onSuccess={() => {
+                  queryClient.invalidateQueries({ queryKey: ['challenge-feed-verifications', challengeId] });
+                  queryClient.invalidateQueries({ queryKey: ['challenge-feed-my-verifications', challengeId] });
+                }}
+              />
             </section>
           )}
 
@@ -249,18 +247,6 @@ export const ChallengeFeedPage = () => {
         </div>
       </div>
 
-      {userChallenge && (
-        <VerificationSheet
-          isOpen={showVerificationSheet}
-          onClose={() => setShowVerificationSheet(false)}
-          userChallenge={userChallenge}
-          onSuccess={() => {
-            setShowVerificationSheet(false);
-            queryClient.invalidateQueries({ queryKey: ['challenge-feed-verifications', challengeId] });
-            queryClient.invalidateQueries({ queryKey: ['challenge-feed-my-verifications', challengeId] });
-          }}
-        />
-      )}
     </div>
   );
 };

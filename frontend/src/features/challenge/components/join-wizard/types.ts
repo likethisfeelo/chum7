@@ -30,4 +30,5 @@ export interface JoinWizardChallenge {
   recruitEndDate?: string;
   recruitEndAt?: string;
   recruitmentEndAt?: string;
+  allowedVerificationTypes?: string[];
 }
