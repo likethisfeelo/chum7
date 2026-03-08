@@ -50,7 +50,8 @@ const createChallengeSchema = z.object({
     allowBulk: z.boolean().nullable().default(null),
   }).default({ type: 'open', maxRemedyDays: null, allowBulk: null }),
   personalQuestEnabled: z.boolean().default(false),
-  personalQuestAutoApprove: z.boolean().default(true),
+  personalQuestAutoApprove: z.boolean().default(false),
+  requireStartConfirmation: z.boolean().default(false),
 });
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
@@ -167,6 +168,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       defaultRemedyPolicy: input.defaultRemedyPolicy,
       personalQuestEnabled: input.personalQuestEnabled,
       personalQuestAutoApprove: input.personalQuestAutoApprove,
+      requireStartConfirmation: input.requireStartConfirmation,
 
       // Stats
       stats: {
