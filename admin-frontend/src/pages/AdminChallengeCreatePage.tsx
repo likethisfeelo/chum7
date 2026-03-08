@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
+import { lifecycleLabel } from '@/utils/lifecycle';
 
 type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
 type ChallengeType = 'leader_only' | 'personal_only' | 'leader_personal' | 'mixed';
@@ -124,8 +125,8 @@ export const AdminChallengeCreatePage = () => {
       const lifecycle = (res.data?.data?.lifecycle || null) as Lifecycle | null;
       setCreatedChallengeId(challengeId);
       setCurrentLifecycle(lifecycle);
+      setForm(INITIAL);
       alert('챌린지가 생성되었습니다. 아래 운영 버튼으로 모집 시작/마감/챌린지 시작을 수동 전환할 수 있습니다.');
-      navigate('/admin/challenges/create');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setError(e.response?.data?.message || '생성에 실패했습니다');
@@ -288,12 +289,16 @@ export const AdminChallengeCreatePage = () => {
 
 
         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
-          <h2 className="font-bold text-gray-800">Remedy Policy</h2>
+          <h2 className="font-bold text-gray-800">보완(Remedy) 정책</h2>
           <div className="flex gap-4">
-            {(['strict', 'limited', 'open'] as const).map((t) => (
-              <label key={t} className="text-sm flex items-center gap-1">
-                <input type="radio" checked={form.remedyType === t} onChange={() => set('remedyType', t as any)} />
-                {t}
+            {([
+              { value: 'strict',  label: '엄격 (strict)' },
+              { value: 'limited', label: '제한부 (limited)' },
+              { value: 'open',    label: '자유 (open)' },
+            ] as const).map((t) => (
+              <label key={t.value} className="text-sm flex items-center gap-1">
+                <input type="radio" checked={form.remedyType === t.value} onChange={() => set('remedyType', t.value as any)} />
+                {t.label}
               </label>
             ))}
           </div>
@@ -389,7 +394,7 @@ export const AdminChallengeCreatePage = () => {
         {createdChallengeId && (
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
             <p className="text-sm text-blue-800 mb-2">최근 생성 챌린지 ID: <span className="font-semibold">{createdChallengeId}</span></p>
-            <p className="text-xs text-blue-700 mb-3">현재 상태: <span className="font-semibold">{currentLifecycle ?? 'unknown'}</span></p>
+            <p className="text-xs text-blue-700 mb-3">현재 상태: <span className="font-semibold">{currentLifecycle ? lifecycleLabel(currentLifecycle) : 'unknown'}</span></p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -397,7 +402,7 @@ export const AdminChallengeCreatePage = () => {
                 disabled={lifecycleLoading !== null || currentLifecycle === 'recruiting'}
                 className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold disabled:opacity-50"
               >
-                {lifecycleLoading === 'recruiting' ? '전환 중...' : '리크루팅 시작'}
+                {lifecycleLoading === 'recruiting' ? '전환 중...' : '모집 시작'}
               </button>
               <button
                 type="button"
@@ -405,7 +410,7 @@ export const AdminChallengeCreatePage = () => {
                 disabled={lifecycleLoading !== null || currentLifecycle === 'preparing'}
                 className="px-4 py-2 rounded-xl bg-amber-600 text-white font-semibold disabled:opacity-50"
               >
-                {lifecycleLoading === 'preparing' ? '전환 중...' : '리크루팅 종료(Preparing)'}
+                {lifecycleLoading === 'preparing' ? '전환 중...' : '모집 마감'}
               </button>
               <button
                 type="button"
@@ -413,7 +418,7 @@ export const AdminChallengeCreatePage = () => {
                 disabled={lifecycleLoading !== null || currentLifecycle === 'active'}
                 className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold disabled:opacity-50"
               >
-                {lifecycleLoading === 'active' ? '전환 중...' : '챌린지 시작(Active)'}
+                {lifecycleLoading === 'active' ? '전환 중...' : '챌린지 시작'}
               </button>
             </div>
           </div>

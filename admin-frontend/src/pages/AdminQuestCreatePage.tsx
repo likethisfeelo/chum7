@@ -296,18 +296,29 @@ export const AdminQuestCreatePage = () => {
 
 
           <div className="mt-4 pt-4 border-t space-y-3">
-            <p className="text-sm font-semibold text-gray-700">Remedy Policy</p>
-            <div className="flex gap-4">{(['strict','limited','open'] as const).map((t)=> <label key={t} className="text-sm flex items-center gap-1"><input type="radio" checked={form.remedyType===t} onChange={()=>set('remedyType', t as any)} /> {t}</label>)}</div>
+            <p className="text-sm font-semibold text-gray-700">보완(Remedy) 정책</p>
+            <div className="flex gap-4">
+              {([
+                { value: 'strict',  label: '엄격 (strict)' },
+                { value: 'limited', label: '제한부 (limited)' },
+                { value: 'open',    label: '자유 (open)' },
+              ] as const).map((t) => (
+                <label key={t.value} className="text-sm flex items-center gap-1">
+                  <input type="radio" checked={form.remedyType === t.value} onChange={() => set('remedyType', t.value as any)} />
+                  {t.label}
+                </label>
+              ))}
+            </div>
             {form.remedyType === 'limited' && <select value={form.maxRemedyDays} onChange={(e)=>set('maxRemedyDays', Number(e.target.value) as any)} className="px-3 py-2 border rounded-lg"><option value={1}>1일</option><option value={2}>2일</option></select>}
             {form.remedyType === 'open' && <label className="text-sm flex items-center gap-2"><input type="checkbox" checked={form.allowBulk} onChange={(e)=>set('allowBulk', e.target.checked as any)} /> 몰아서 제출 허용</label>}
           </div>
           {form.questLayer === 'D' && (
             <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
-              <p className="text-xs text-amber-700">(추후 기능, 현재 저장만 됨)</p>
+              <p className="text-xs text-amber-700 font-medium">D 레이어 — 날짜별 공개 설정 (선택)</p>
               <div className="grid grid-cols-3 gap-2">
-                <input type="number" min={1} max={7} placeholder="startDay" value={form.startDay} onChange={(e)=>set('startDay', e.target.value as any)} className="px-3 py-2 border rounded-lg"/>
-                <input type="number" min={1} max={7} placeholder="endDay" value={form.endDay} onChange={(e)=>set('endDay', e.target.value as any)} className="px-3 py-2 border rounded-lg"/>
-                <input type="datetime-local" value={form.revealAt} onChange={(e)=>set('revealAt', e.target.value as any)} className="px-3 py-2 border rounded-lg"/>
+                <input type="number" min={1} max={7} placeholder="시작 Day" value={form.startDay} onChange={(e)=>set('startDay', e.target.value as any)} className="px-3 py-2 border rounded-lg text-sm"/>
+                <input type="number" min={1} max={7} placeholder="종료 Day" value={form.endDay} onChange={(e)=>set('endDay', e.target.value as any)} className="px-3 py-2 border rounded-lg text-sm"/>
+                <input type="datetime-local" value={form.revealAt} onChange={(e)=>set('revealAt', e.target.value as any)} className="px-3 py-2 border rounded-lg text-sm"/>
               </div>
             </div>
           )}
@@ -337,9 +348,9 @@ export const AdminQuestCreatePage = () => {
                 onChange={e => set('questLayer', e.target.value as QuestLayer)}
                 className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                <option value="A">A 레이어 (공통)</option>
-                <option value="B">B 레이어 (운영 확장)</option>
-                <option value="D">D 레이어 (개인화)</option>
+                <option value="A">A 레이어 — 공통 (모든 참여자에게 동일 적용)</option>
+                <option value="B">B 레이어 — 운영 확장 (특정 기간/그룹 대상)</option>
+                <option value="D">D 레이어 — 개인화 (날짜별 공개 · 개인 목표 연동)</option>
               </select>
             </div>
 

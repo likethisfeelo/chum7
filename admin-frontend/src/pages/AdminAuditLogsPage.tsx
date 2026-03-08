@@ -15,32 +15,64 @@ type AuditLog = {
 };
 
 const ACTION_TABS = [
-  { key: 'all', label: '전체' },
-  { key: 'approved', label: '승인' },
-  { key: 'rejected', label: '거절' },
+  { key: 'all',           label: '전체' },
+  { key: 'approved',      label: '승인' },
+  { key: 'rejected',      label: '거절' },
   { key: 'auto_approved', label: '자동승인' },
 ] as const;
 
 type ActionTab = typeof ACTION_TABS[number]['key'];
 
+const ACTION_LABEL: Record<string, string> = {
+  approved:      '승인',
+  rejected:      '거절',
+  auto_approved: '자동승인',
+};
+
 const formatDate = (iso: string) => format(new Date(iso), 'M월 d일 HH:mm:ss', { locale: ko });
 
+const shortId = (id?: string) => (id ? id.slice(0, 8) : '-');
+
 const statusBadgeClass: Record<string, string> = {
-  approved: 'bg-green-100 text-green-700',
-  rejected: 'bg-red-100 text-red-700',
+  approved:      'bg-green-100 text-green-700',
+  rejected:      'bg-red-100 text-red-700',
   auto_approved: 'bg-blue-100 text-blue-700',
+};
+
+const CopyButton = ({ text }: { text: string }) => {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className="ml-1 text-gray-400 hover:text-gray-700 transition-colors text-xs"
+      title="클립보드 복사"
+    >
+      {copied ? '✓' : '⎘'}
+    </button>
+  );
 };
 
 export const AdminAuditLogsPage = () => {
   const [actionFilter, setActionFilter] = useState<ActionTab>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [nextToken, setNextToken] = useState<string | null>(null);
 
   const { data, isLoading, isFetching, refetch } = useQuery({
-    queryKey: ['admin-audit-logs', actionFilter],
+    queryKey: ['admin-audit-logs', actionFilter, dateFrom, dateTo],
     queryFn: async () => {
       const params = new URLSearchParams({ limit: '30' });
       if (actionFilter !== 'all') params.set('action', actionFilter);
+      if (dateFrom) params.set('from', new Date(dateFrom).toISOString());
+      if (dateTo)   params.set('to',   new Date(dateTo).toISOString());
       const res = await apiClient.get(`/admin/audit/logs?${params}`);
       return res.data.data;
     },
@@ -57,6 +89,8 @@ export const AdminAuditLogsPage = () => {
       if (!nextToken) return null;
       const params = new URLSearchParams({ limit: '30', nextToken });
       if (actionFilter !== 'all') params.set('action', actionFilter);
+      if (dateFrom) params.set('from', new Date(dateFrom).toISOString());
+      if (dateTo)   params.set('to',   new Date(dateTo).toISOString());
       const res = await apiClient.get(`/admin/audit/logs?${params}`);
       return res.data.data;
     },
@@ -87,6 +121,7 @@ export const AdminAuditLogsPage = () => {
         </button>
       </div>
 
+      {/* 액션 필터 */}
       <div className="flex flex-wrap gap-2">
         {ACTION_TABS.map((tab) => (
           <button
@@ -102,6 +137,35 @@ export const AdminAuditLogsPage = () => {
             {tab.label}
           </button>
         ))}
+      </div>
+
+      {/* 날짜 범위 필터 */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap gap-3 items-end">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">시작 날짜</label>
+          <input
+            type="datetime-local"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">종료 날짜</label>
+          <input
+            type="datetime-local"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => { setDateFrom(''); setDateTo(''); }}
+          className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+        >
+          초기화
+        </button>
       </div>
 
       {isLoading ? (
@@ -128,12 +192,25 @@ export const AdminAuditLogsPage = () => {
                     <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{formatDate(log.createdAt)}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusBadgeClass[log.action] || 'bg-gray-100 text-gray-700'}`}>
-                        {log.action}
+                        {ACTION_LABEL[log.action] ?? log.action}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-700">{log.actorId}</td>
-                    <td className="px-4 py-3 text-gray-700 break-all">{log.targetId}</td>
-                    <td className="px-4 py-3 text-gray-500 break-all">{log.questId || '-'}</td>
+                    <td className="px-4 py-3 text-gray-700 font-mono text-xs whitespace-nowrap">
+                      {shortId(log.actorId)}
+                      <CopyButton text={log.actorId} />
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 font-mono text-xs whitespace-nowrap">
+                      {shortId(log.targetId)}
+                      <CopyButton text={log.targetId} />
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">
+                      {log.questId ? (
+                        <>
+                          {shortId(log.questId)}
+                          <CopyButton text={log.questId} />
+                        </>
+                      ) : '-'}
+                    </td>
                     <td className="px-4 py-3 text-gray-500 whitespace-pre-wrap">{log.note || '-'}</td>
                   </tr>
                 ))}
