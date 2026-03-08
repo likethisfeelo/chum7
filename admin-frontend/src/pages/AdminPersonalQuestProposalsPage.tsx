@@ -89,7 +89,7 @@ export const AdminPersonalQuestProposalsPage = () => {
             className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm"
           >
             <option value="">챌린지를 선택하세요</option>
-            {challengeOptions.map((c) => (
+            {challengeOptions.map((c: { challengeId: string; title: string }) => (
               <option key={c.challengeId} value={c.challengeId}>{c.title}</option>
             ))}
           </select>
