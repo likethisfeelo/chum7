@@ -442,8 +442,8 @@ export class CheerStack extends Stack {
       alarmDescription: 'Scheduled cheer concurrent race-skip events detected'
     });
 
-    const statsBucketedMetric = createLogCountMetric('CheerStatsBucketedSource', cheerStatsFn.functionName, "source: 'bucketed'");
-    const statsRealtimeFallbackMetric = createLogCountMetric('CheerStatsRealtimeFallbackSource', cheerStatsFn.functionName, "source: 'realtime_fallback'");
+    const statsBucketedMetric = createLogCountMetric('CheerStatsBucketedSource', cheerStatsFn.functionName, '{ $.source = "bucketed" }');
+    const statsRealtimeFallbackMetric = createLogCountMetric('CheerStatsRealtimeFallbackSource', cheerStatsFn.functionName, '{ $.source = "realtime_fallback" }');
 
     const replyRequestMetric = createLogCountMetric('CheerReplyRequest', cheerReplyFn.functionName, 'Cheer reply request received');
     const replySuccessMetric = createLogCountMetric('CheerReplySuccess', cheerReplyFn.functionName, 'Cheer reply success');

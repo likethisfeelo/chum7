@@ -213,8 +213,8 @@ describe('cheer stabilization guards', () => {
     expect(stack).toContain('CheerReactClientError');
     expect(stack).toContain('CheerStatsRequest');
     expect(stack).toContain('CheerStatsSuccess');
-    expect(stack).toContain("source: 'bucketed'");
-    expect(stack).toContain("source: 'realtime_fallback'");
+    expect(stack).toContain('$.source = "bucketed"');
+    expect(stack).toContain('$.source = "realtime_fallback"');
   });
 
 
