@@ -5,6 +5,14 @@ import { lifecycleLabel } from '@/utils/lifecycle';
 
 type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
 type ChallengeType = 'leader_only' | 'personal_only' | 'leader_personal' | 'mixed';
+type VerificationType = 'image' | 'text' | 'link' | 'video';
+
+const VERIFICATION_TYPE_OPTIONS: { value: VerificationType; label: string }[] = [
+  { value: 'image', label: '📸 사진' },
+  { value: 'text',  label: '✍️ 텍스트' },
+  { value: 'link',  label: '🔗 URL' },
+  { value: 'video', label: '🎥 영상' },
+];
 
 const CATEGORIES = [
   { value: 'health',        label: '💪 건강' },
@@ -46,6 +54,7 @@ const INITIAL = {
   allowBulk: false,
   personalQuestEnabled: false,
   personalQuestAutoApprove: true,
+  allowedVerificationTypes: ['image', 'text', 'link', 'video'] as VerificationType[],
 };
 
 export const AdminChallengeCreatePage = () => {
@@ -110,6 +119,7 @@ export const AdminChallengeCreatePage = () => {
         },
         personalQuestEnabled: form.personalQuestEnabled,
         personalQuestAutoApprove: form.personalQuestAutoApprove,
+        allowedVerificationTypes: form.allowedVerificationTypes,
         layerPolicy: {
           requirePersonalGoalOnJoin: form.requirePersonalGoalOnJoin,
           requirePersonalTargetOnJoin: form.requirePersonalTargetOnJoin,
@@ -390,6 +400,30 @@ export const AdminChallengeCreatePage = () => {
           <p className="text-xs text-gray-400 mt-1">비워두면 참가자 수 제한 없음</p>
         </div>
 
+
+        {/* 허용 인증 유형 */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
+          <h2 className="font-bold text-gray-800">허용 인증 유형</h2>
+          <p className="text-xs text-gray-500">이 챌린지에서 사용 가능한 인증 방식을 선택하세요. 최소 1개 이상 필요.</p>
+          <div className="grid grid-cols-2 gap-2">
+            {VERIFICATION_TYPE_OPTIONS.map(vt => (
+              <label key={vt.value} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.allowedVerificationTypes.includes(vt.value)}
+                  onChange={(e) => {
+                    const next = e.target.checked
+                      ? [...form.allowedVerificationTypes, vt.value]
+                      : form.allowedVerificationTypes.filter(t => t !== vt.value);
+                    if (next.length > 0) set('allowedVerificationTypes', next as any);
+                  }}
+                  className="w-4 h-4 text-primary-600 rounded"
+                />
+                {vt.label}
+              </label>
+            ))}
+          </div>
+        </div>
 
         {createdChallengeId && (
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">

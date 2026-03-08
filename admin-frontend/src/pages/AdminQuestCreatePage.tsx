@@ -46,7 +46,7 @@ export const AdminQuestCreatePage = () => {
   const [form, setForm] = useState(INITIAL);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
-  const [challengeOptions, setChallengeOptions] = useState<Array<{ challengeId: string; title: string; lifecycle?: string }>>([]);
+  const [challengeOptions, setChallengeOptions] = useState<Array<{ challengeId: string; title: string; lifecycle?: string; allowedVerificationTypes?: string[] }>>([]);
   const [challengeLoading, setChallengeLoading] = useState(false);
 
   useEffect(() => {
@@ -65,6 +65,7 @@ export const AdminQuestCreatePage = () => {
               challengeId: challenge.challengeId,
               title: challenge.title ?? '제목 없음',
               lifecycle: challenge.lifecycle,
+              allowedVerificationTypes: challenge.allowedVerificationTypes,
             }))
         );
       } catch {
@@ -83,6 +84,15 @@ export const AdminQuestCreatePage = () => {
 
   const set = <K extends keyof typeof INITIAL>(key: K, val: (typeof INITIAL)[K]) =>
     setForm(prev => ({ ...prev, [key]: val }));
+
+  const selectedChallenge = challengeOptions.find(c => c.challengeId === challengeId);
+  const allowedTypes: VerificationType[] = (selectedChallenge?.allowedVerificationTypes as VerificationType[] | undefined) ?? ['image', 'link', 'text', 'video'];
+
+  useEffect(() => {
+    if (challengeId && allowedTypes.length > 0 && !allowedTypes.includes(form.verificationType)) {
+      set('verificationType', allowedTypes[0]);
+    }
+  }, [challengeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,21 +251,30 @@ export const AdminQuestCreatePage = () => {
           <h2 className="font-bold text-gray-800">인증 방식</h2>
 
           <div className="grid grid-cols-4 gap-2">
-            {VERIFICATION_TYPES.map(vt => (
-              <button
-                key={vt.value}
-                type="button"
-                onClick={() => set('verificationType', vt.value as any)}
-                className={`py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                  form.verificationType === vt.value
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {vt.label}
-              </button>
-            ))}
+            {VERIFICATION_TYPES.map(vt => {
+              const isAllowed = allowedTypes.includes(vt.value);
+              return (
+                <button
+                  key={vt.value}
+                  type="button"
+                  disabled={!isAllowed}
+                  onClick={() => isAllowed && set('verificationType', vt.value as any)}
+                  className={`py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                    form.verificationType === vt.value
+                      ? 'bg-primary-600 text-white'
+                      : isAllowed
+                        ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        : 'bg-gray-50 text-gray-300 cursor-not-allowed'
+                  }`}
+                >
+                  {vt.label}
+                </button>
+              );
+            })}
           </div>
+          {challengeId && allowedTypes.length < 4 && (
+            <p className="text-xs text-amber-600">이 챌린지는 일부 인증 방식만 허용합니다: {allowedTypes.join(', ')}</p>
+          )}
 
           {form.verificationType === 'link' && (
             <div className="space-y-3 pt-2">

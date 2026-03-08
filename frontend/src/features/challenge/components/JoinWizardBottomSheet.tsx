@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BottomSheet } from '@/shared/components/BottomSheet';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { JoinWizardChallenge, WizardFormState } from './join-wizard/types';
+import { JoinWizardChallenge, QuestVerificationType, WizardFormState } from './join-wizard/types';
 import { resolveWizardSteps } from './join-wizard/resolveWizardSteps';
 
 interface JoinWizardBottomSheetProps {
@@ -119,11 +119,14 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
   const [wizardStepIdx, setWizardStepIdx] = useState(0);
   const [slideDir, setSlideDir] = useState(1);
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Seoul';
+  const allowedTypes = (challenge.allowedVerificationTypes?.length ? challenge.allowedVerificationTypes : ['image', 'text', 'link', 'video']) as QuestVerificationType[];
+  const defaultVerificationType = allowedTypes.includes('image') ? 'image' : allowedTypes[0];
+
   const [formState, setFormState] = useState<WizardFormState>({
     ...getInitialTimeState(challenge.targetTime),
     questTitle: '',
     questDescription: '',
-    questVerificationType: 'image',
+    questVerificationType: defaultVerificationType,
   });
 
   useEffect(() => {
@@ -136,7 +139,7 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
       ...getInitialTimeState(challenge.targetTime),
       questTitle: '',
       questDescription: '',
-      questVerificationType: 'image',
+      questVerificationType: defaultVerificationType,
     }));
   }, [isOpen, challenge.targetTime]);
 
@@ -263,19 +266,29 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
           <div>
             <p className="text-sm font-medium text-gray-700 mb-2">인증 방식</p>
             <div className="grid grid-cols-4 gap-2">
-              {(['image', 'text', 'link', 'video'] as const).map((verificationType) => (
-                <button
-                  key={verificationType}
-                  type="button"
-                  onClick={() => setFormState((prev) => ({ ...prev, questVerificationType: verificationType }))}
-                  className={`px-2 py-2 rounded-xl text-sm ${formState.questVerificationType === verificationType ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-                >
-                  {verificationType === 'image' && '사진'}
-                  {verificationType === 'text' && '텍스트'}
-                  {verificationType === 'link' && '링크'}
-                  {verificationType === 'video' && '영상'}
-                </button>
-              ))}
+              {(['image', 'text', 'link', 'video'] as const).map((verificationType) => {
+                const isAllowed = allowedTypes.includes(verificationType);
+                return (
+                  <button
+                    key={verificationType}
+                    type="button"
+                    disabled={!isAllowed}
+                    onClick={() => isAllowed && setFormState((prev) => ({ ...prev, questVerificationType: verificationType }))}
+                    className={`px-2 py-2 rounded-xl text-sm ${
+                      formState.questVerificationType === verificationType
+                        ? 'bg-primary-600 text-white'
+                        : isAllowed
+                          ? 'bg-gray-100 text-gray-700'
+                          : 'bg-gray-50 text-gray-300 cursor-not-allowed'
+                    }`}
+                  >
+                    {verificationType === 'image' && '사진'}
+                    {verificationType === 'text' && '텍스트'}
+                    {verificationType === 'link' && '링크'}
+                    {verificationType === 'video' && '영상'}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

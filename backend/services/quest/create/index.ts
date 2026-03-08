@@ -124,6 +124,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(403, { error: 'FORBIDDEN', message: '퀘스트 생성 권한이 없습니다' });
     }
 
+    const allowedTypes = challenge.allowedVerificationTypes as string[] | undefined;
+    if (allowedTypes?.length && !allowedTypes.includes(input.verificationType)) {
+      return response(400, {
+        error: 'VERIFICATION_TYPE_NOT_ALLOWED',
+        message: `이 챌린지에서 허용되지 않는 인증 방식입니다. 허용: ${allowedTypes.join(', ')}`,
+      });
+    }
+
     const questId = uuidv4();
     const now = new Date().toISOString();
     const verificationGuide = input.verificationGuide?.trim() || input.description;

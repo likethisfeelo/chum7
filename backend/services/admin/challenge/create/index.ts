@@ -52,6 +52,7 @@ const createChallengeSchema = z.object({
   personalQuestEnabled: z.boolean().default(false),
   personalQuestAutoApprove: z.boolean().default(false),
   requireStartConfirmation: z.boolean().default(false),
+  allowedVerificationTypes: z.array(z.enum(['image', 'text', 'link', 'video'])).min(1).default(['image', 'text', 'link', 'video']),
 });
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
@@ -169,6 +170,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       personalQuestEnabled: input.personalQuestEnabled,
       personalQuestAutoApprove: input.personalQuestAutoApprove,
       requireStartConfirmation: input.requireStartConfirmation,
+      allowedVerificationTypes: input.allowedVerificationTypes,
 
       // Stats
       stats: {
