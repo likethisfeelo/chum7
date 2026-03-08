@@ -142,109 +142,111 @@ export const ChallengeFeedPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4 z-10">
-        <button
-          onClick={() => navigate(-1)}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-        >
-          <FiArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-lg font-bold text-gray-900">챌린지 피드</h1>
-      </div>
-
-      <div className="p-6 space-y-4">
-        <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-          <h2 className="text-xl font-bold text-gray-900">{challengeData?.title || '챌린지'}</h2>
-          <p className="text-sm text-gray-600 mt-2">{challengeData?.description || '챌린지 소개를 불러오지 못했습니다.'}</p>
-        </section>
-
-        <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold text-gray-900">챌린지 보드 요약</h3>
-            <span className="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 border border-primary-100">
-              블록 {boardSummary.blockCount}개
-            </span>
-          </div>
-          <p className="text-sm text-gray-700 line-clamp-3">{boardSummary.summary}</p>
+    <div className="min-h-screen bg-gray-100">
+      <div className="mx-auto min-h-screen w-full max-w-3xl bg-gray-50 pb-20 md:border-x md:border-gray-200">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4 z-10">
           <button
-            type="button"
-            onClick={() => navigate(`/challenge-board/${challengeId}`)}
-            className="mt-3 text-xs font-semibold text-primary-700"
+            onClick={() => navigate(-1)}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
           >
-            보드 전체 보기 →
+            <FiArrowLeft className="w-5 h-5" />
           </button>
-        </section>
+          <h1 className="text-lg font-bold text-gray-900">챌린지 피드</h1>
+        </div>
 
-        {!iDidTodayVerification && userChallenge && (
+        <div className="p-6 space-y-4">
           <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-            <h3 className="font-bold text-gray-900 mb-1">오늘의 인증</h3>
-            <p className="text-sm text-gray-600 mb-3">아직 오늘 인증 전이에요. 피드에 바로 인증을 남겨보세요.</p>
+            <h2 className="text-xl font-bold text-gray-900">{challengeData?.title || '챌린지'}</h2>
+            <p className="text-sm text-gray-600 mt-2">{challengeData?.description || '챌린지 소개를 불러오지 못했습니다.'}</p>
+          </section>
+
+          <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-gray-900">챌린지 보드 요약</h3>
+              <span className="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700 border border-primary-100">
+                블록 {boardSummary.blockCount}개
+              </span>
+            </div>
+            <p className="text-sm text-gray-700 line-clamp-3">{boardSummary.summary}</p>
             <button
               type="button"
-              onClick={() => setShowVerificationSheet(true)}
-              className="w-full py-3 rounded-xl bg-primary-600 text-white font-semibold"
+              onClick={() => navigate(`/challenge-board/${challengeId}`)}
+              className="mt-3 text-xs font-semibold text-primary-700"
             >
-              오늘 인증 작성하기
+              보드 전체 보기 →
             </button>
           </section>
-        )}
 
-        {iDidTodayVerification && (
-          <section className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
-            <h3 className="font-bold text-emerald-800">✅ 오늘 인증 완료!</h3>
-            <p className="text-sm text-emerald-700 mt-1">이제 다른 참여자를 응원할 수 있어요.</p>
+          {!iDidTodayVerification && userChallenge && (
+            <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+              <h3 className="font-bold text-gray-900 mb-1">오늘의 인증</h3>
+              <p className="text-sm text-gray-600 mb-3">아직 오늘 인증 전이에요. 피드에 바로 인증을 남겨보세요.</p>
+              <button
+                type="button"
+                onClick={() => setShowVerificationSheet(true)}
+                className="w-full py-3 rounded-xl bg-primary-600 text-white font-semibold"
+              >
+                오늘 인증 작성하기
+              </button>
+            </section>
+          )}
+
+          {iDidTodayVerification && (
+            <section className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
+              <h3 className="font-bold text-emerald-800">✅ 오늘 인증 완료!</h3>
+              <p className="text-sm text-emerald-700 mt-1">이제 다른 참여자를 응원할 수 있어요.</p>
+            </section>
+          )}
+
+          <section className="grid grid-cols-2 gap-2">
+            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+              <p className="text-xs text-gray-500">오늘 인증 완료 인원</p>
+              <p className="mt-1 text-xl font-bold text-gray-900">{todayCompletedCount}명</p>
+              <p className="text-xs text-gray-500">KST 기준</p>
+            </div>
+            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+              <p className="text-xs text-gray-500">전체 참여자</p>
+              <p className="mt-1 text-xl font-bold text-gray-900">{challengeData?.stats?.totalParticipants || challengeData?.participantCount || 0}명</p>
+              <p className="text-xs text-gray-500">챌린지 누적</p>
+            </div>
           </section>
-        )}
 
-        <section className="grid grid-cols-2 gap-2">
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <p className="text-xs text-gray-500">오늘 인증 완료 인원</p>
-            <p className="mt-1 text-xl font-bold text-gray-900">{todayCompletedCount}명</p>
-            <p className="text-xs text-gray-500">KST 기준</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <p className="text-xs text-gray-500">전체 참여자</p>
-            <p className="mt-1 text-xl font-bold text-gray-900">{challengeData?.stats?.totalParticipants || challengeData?.participantCount || 0}명</p>
-            <p className="text-xs text-gray-500">챌린지 누적</p>
-          </div>
-        </section>
+          <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+            <h3 className="font-bold text-gray-900 mb-2">내 응원권/기록 현황</h3>
+            <p className="text-sm text-gray-700">기간 내 내 인증 기록: <span className="font-semibold">{myTotalCount}회</span></p>
+            <p className="text-sm text-gray-700 mt-1">{canCheerNow ? '응원권을 사용할 수 있어요. 피드에서 응원해보세요!' : '인증 후 응원권 기능이 열립니다.'}</p>
+          </section>
 
-        <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-          <h3 className="font-bold text-gray-900 mb-2">내 응원권/기록 현황</h3>
-          <p className="text-sm text-gray-700">기간 내 내 인증 기록: <span className="font-semibold">{myTotalCount}회</span></p>
-          <p className="text-sm text-gray-700 mt-1">{canCheerNow ? '응원권을 사용할 수 있어요. 피드에서 응원해보세요!' : '인증 후 응원권 기능이 열립니다.'}</p>
-        </section>
+          <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+            <h3 className="font-bold text-gray-900 mb-3">인증 피드</h3>
+            <div className="space-y-3">
+              {challengeVerifications.map((item: any) => (
+                <article key={item.verificationId} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-gray-500">{item.isAnonymous ? '익명 참여자' : item.userName || '참여자'}</p>
+                    <p className="text-xs text-gray-400">Day {item.day || '-'}</p>
+                  </div>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{item.todayNote || '내용 없음'}</p>
+                  {item.imageUrl && (
+                    <img src={item.imageUrl} alt="verification" className="mt-2 w-full rounded-lg border border-gray-100" />
+                  )}
+                </article>
+              ))}
+              {challengeVerifications.length === 0 && (
+                <p className="text-sm text-gray-500">아직 올라온 인증 게시물이 없습니다.</p>
+              )}
+            </div>
+          </section>
 
-        <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-          <h3 className="font-bold text-gray-900 mb-3">인증 피드</h3>
-          <div className="space-y-3">
-            {challengeVerifications.map((item: any) => (
-              <article key={item.verificationId} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs text-gray-500">{item.isAnonymous ? '익명 참여자' : item.userName || '참여자'}</p>
-                  <p className="text-xs text-gray-400">Day {item.day || '-'}</p>
-                </div>
-                <p className="text-sm text-gray-800 whitespace-pre-wrap">{item.todayNote || '내용 없음'}</p>
-                {item.imageUrl && (
-                  <img src={item.imageUrl} alt="verification" className="mt-2 w-full rounded-lg border border-gray-100" />
-                )}
-              </article>
-            ))}
-            {challengeVerifications.length === 0 && (
-              <p className="text-sm text-gray-500">아직 올라온 인증 게시물이 없습니다.</p>
-            )}
-          </div>
-        </section>
-
-        <button
-          type="button"
-          onClick={() => leaderDmMutation.mutate()}
-          disabled={leaderDmMutation.isPending}
-          className="w-full py-3 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 font-semibold disabled:opacity-50"
-        >
-          {leaderDmMutation.isPending ? 'DM 연결중...' : '리더 DM'}
-        </button>
+          <button
+            type="button"
+            onClick={() => leaderDmMutation.mutate()}
+            disabled={leaderDmMutation.isPending}
+            className="w-full py-3 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 font-semibold disabled:opacity-50"
+          >
+            {leaderDmMutation.isPending ? 'DM 연결중...' : '리더 DM'}
+          </button>
+        </div>
       </div>
 
       {userChallenge && (
