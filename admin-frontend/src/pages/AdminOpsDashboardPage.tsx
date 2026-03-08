@@ -44,18 +44,21 @@ export const AdminOpsDashboardPage = () => {
     );
   }
 
+  const pendingCount = data.operations?.pendingReviewCount ?? 0;
+
   const cards = [
-    { label: '총 사용자', value: data.totalUsers },
-    { label: '총 챌린지', value: data.totalChallenges },
-    { label: '총 참여', value: data.totalParticipations },
-    { label: '심사 대기', value: data.operations?.pendingReviewCount ?? 0 },
-    { label: '거절률(%)', value: data.operations?.reviewRejectRate ?? 0 },
-    { label: '최근 7일 인증', value: data.verifications?.recent7DaysCount ?? 0 },
-    { label: 'Remedy 인증', value: data.verifications?.remedyCount ?? 0 },
-    { label: '추가 인증', value: data.verifications?.extraCount ?? 0 },
+    { label: '총 사용자', value: data.totalUsers, alert: false },
+    { label: '총 챌린지', value: data.totalChallenges, alert: false },
+    { label: '총 참여', value: data.totalParticipations, alert: false },
+    { label: '심사 대기', value: pendingCount, alert: pendingCount > 0 },
+    { label: '거절률(%)', value: data.operations?.reviewRejectRate ?? 0, alert: false },
+    { label: '최근 7일 인증', value: data.verifications?.recent7DaysCount ?? 0, alert: false },
+    { label: 'Remedy 인증', value: data.verifications?.remedyCount ?? 0, alert: false },
+    { label: '추가 인증', value: data.verifications?.extraCount ?? 0, alert: false },
   ];
 
-  const daily = data.verifications?.verificationDaily || [];
+  const daily: Array<{ date: string; count: number }> = data.verifications?.verificationDaily || [];
+  const maxCount = daily.length > 0 ? Math.max(...daily.map((d) => d.count), 1) : 1;
 
   return (
     <div className="p-6 space-y-6">
@@ -92,25 +95,38 @@ export const AdminOpsDashboardPage = () => {
 
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {cards.map((card) => (
-          <div key={card.label} className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-500">{card.label}</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{card.value}</p>
+          <div
+            key={card.label}
+            className={`border rounded-xl p-4 ${card.alert ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200'}`}
+          >
+            <p className={`text-xs ${card.alert ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>{card.label}</p>
+            <p className={`text-2xl font-bold mt-1 ${card.alert ? 'text-red-700' : 'text-gray-900'}`}>{card.value}</p>
+            {card.alert && <p className="text-xs text-red-600 mt-1">⚠️ 심사 대기 중</p>}
           </div>
         ))}
       </section>
 
       <section className="bg-white border border-gray-200 rounded-xl p-4">
-        <h2 className="font-bold text-gray-900 mb-2">최근 7일 인증 추세</h2>
+        <h2 className="font-bold text-gray-900 mb-4">최근 7일 인증 추세</h2>
         {daily.length === 0 ? (
           <p className="text-sm text-gray-500">표시할 데이터가 없습니다.</p>
         ) : (
-          <div className="space-y-2">
-            {daily.map((d: any) => (
-              <div key={d.date} className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">{d.date}</span>
-                <span className="font-semibold text-gray-900">{d.count}건</span>
-              </div>
-            ))}
+          <div className="space-y-3">
+            {daily.map((d) => {
+              const pct = maxCount > 0 ? Math.round((d.count / maxCount) * 100) : 0;
+              return (
+                <div key={d.date} className="flex items-center gap-3">
+                  <span className="text-xs text-gray-500 w-20 flex-shrink-0">{d.date}</span>
+                  <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-800 w-12 text-right">{d.count}건</span>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

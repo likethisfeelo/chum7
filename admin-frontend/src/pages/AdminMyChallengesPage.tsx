@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { lifecycleLabel, transitionLabel } from '@/utils/lifecycle';
 
 type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
 
@@ -37,6 +38,8 @@ export const AdminMyChallengesPage = () => {
   const [boardDraft, setBoardDraft] = useState('');
   const [previewSaving, setPreviewSaving] = useState(false);
   const [boardSaving, setBoardSaving] = useState(false);
+  const [previewHasNonText, setPreviewHasNonText] = useState(false);
+  const [boardHasNonText, setBoardHasNonText] = useState(false);
 
   const { data: challengesData, isLoading, error, refetch: refetchChallenges } = useQuery({
     queryKey: ['admin-my-challenges'],
@@ -85,19 +88,23 @@ export const AdminMyChallengesPage = () => {
   );
 
   useEffect(() => {
-    const previewText = (previewData?.blocks || [])
+    const blocks = previewData?.blocks || [];
+    const previewText = blocks
       .filter((b: any) => b.type === 'text' && typeof b.content === 'string')
       .map((b: any) => b.content)
       .join('\n\n');
     setPreviewDraft(previewText);
+    setPreviewHasNonText(blocks.some((b: any) => b.type !== 'text'));
   }, [previewData]);
 
   useEffect(() => {
-    const boardText = (challengeBoardData?.blocks || [])
+    const blocks = challengeBoardData?.blocks || [];
+    const boardText = blocks
       .filter((b: any) => b.type === 'text' && typeof b.content === 'string')
       .map((b: any) => b.content)
       .join('\n\n');
     setBoardDraft(boardText);
+    setBoardHasNonText(blocks.some((b: any) => b.type !== 'text'));
   }, [challengeBoardData]);
 
   const toTextBlocks = (raw: string) =>
@@ -155,7 +162,7 @@ export const AdminMyChallengesPage = () => {
         reason: transitionReason.trim(),
       });
       await refetchChallenges();
-      alert(`챌린지 상태를 ${target}로 변경했습니다.`);
+      alert(`챌린지 상태를 '${lifecycleLabel(target)}'으로 변경했습니다.`);
     } catch (e: any) {
       alert(e?.response?.data?.message || '챌린지 상태 변경에 실패했습니다.');
     } finally {
@@ -216,7 +223,7 @@ export const AdminMyChallengesPage = () => {
           <option value="">챌린지를 선택하세요</option>
           {filteredChallenges.map((c: any) => (
             <option key={c.challengeId} value={c.challengeId}>
-              {c.title} ({c.lifecycle})
+              {c.title} ({lifecycleLabel(c.lifecycle)})
             </option>
           ))}
         </select>
@@ -225,7 +232,7 @@ export const AdminMyChallengesPage = () => {
       {selectedChallenge && (
         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
           <h2 className="text-lg font-bold text-gray-900">{selectedChallenge.title}</h2>
-          <p className="text-sm text-gray-600">상태: {selectedChallenge.lifecycle}</p>
+          <p className="text-sm text-gray-600">상태: {lifecycleLabel(selectedChallenge.lifecycle)}</p>
           <p className="text-sm text-gray-600">생성자 ID: {selectedChallenge.createdBy || '-'}</p>
           <p className="text-sm text-gray-600">생성자 이름: {selectedChallenge.createdByName || '-'}</p>
           <p className="text-sm text-gray-600">챌린지 ID: {selectedChallenge.challengeId}</p>
@@ -248,7 +255,7 @@ export const AdminMyChallengesPage = () => {
                   disabled={transitionLoading !== null || transitionReason.trim().length < 3}
                   className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm disabled:opacity-50"
                 >
-                  {transitionLoading === lc ? '변경 중...' : `${lc} 전환`}
+                  {transitionLoading === lc ? '변경 중...' : transitionLabel(lc)}
                 </button>
               ))}
             </div>
@@ -262,12 +269,17 @@ export const AdminMyChallengesPage = () => {
           <div>
             <h3 className="text-lg font-bold text-gray-900">챌린지 프리뷰/보드 내용 관리</h3>
             <p className="text-sm text-gray-600">챌린지 생성 시 비워둘 수 있으며, 이후 추가/수정 가능합니다. (preparing까지 허용, active부터 원칙적 수정불가)</p>
-            {isBoardEditingLocked && <p className="text-xs text-rose-600 mt-1">현재 lifecycle: {currentLifecycle} · 읽기 전용</p>}
+            {isBoardEditingLocked && <p className="text-xs text-rose-600 mt-1">현재 상태: {lifecycleLabel(currentLifecycle!)} · 읽기 전용</p>}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="border border-gray-200 rounded-xl p-3 space-y-2">
               <p className="font-semibold text-gray-900">프리뷰 보드 (공개)</p>
+              {previewHasNonText && (
+                <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  ⚠️ 이 보드에는 이미지/링크 블록이 포함되어 있습니다. 텍스트 편집기에서 저장하면 해당 블록이 사라집니다.
+                </div>
+              )}
               <textarea
                 value={previewDraft}
                 onChange={(e) => setPreviewDraft(e.target.value)}
@@ -287,6 +299,11 @@ export const AdminMyChallengesPage = () => {
 
             <div className="border border-gray-200 rounded-xl p-3 space-y-2">
               <p className="font-semibold text-gray-900">챌린지 보드 (참여자 전용)</p>
+              {boardHasNonText && (
+                <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  ⚠️ 이 보드에는 이미지/링크 블록이 포함되어 있습니다. 텍스트 편집기에서 저장하면 해당 블록이 사라집니다.
+                </div>
+              )}
               <textarea
                 value={boardDraft}
                 onChange={(e) => setBoardDraft(e.target.value)}

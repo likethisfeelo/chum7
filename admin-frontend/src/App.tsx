@@ -81,7 +81,7 @@ const RoleRoute = ({ children, roles }: { children: React.ReactNode; roles: Role
 
 const PublicOnlyRoute = ({ children }: { children: React.ReactNode }) => {
   const { authenticated } = getAuthContext();
-  if (authenticated) return <Navigate to="/admin/challenges/mine" replace />;
+  if (authenticated) return <Navigate to="/admin/ops/dashboard" replace />;
   return <>{children}</>;
 };
 
@@ -130,7 +130,7 @@ const Sidebar = () => {
             key={item.path}
             onClick={() => navigate(item.path)}
             className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium mb-1 transition-colors ${
-              location.pathname === item.path
+              location.pathname.startsWith(item.path)
                 ? 'bg-primary-600 text-white'
                 : 'text-gray-300 hover:bg-gray-800'
             }`}
@@ -185,7 +185,7 @@ export default function App() {
 
           <Route
             path="/"
-            element={<Navigate to={getAuthContext().authenticated ? '/admin/challenges/mine' : '/login'} replace />}
+            element={<Navigate to={getAuthContext().authenticated ? '/admin/ops/dashboard' : '/login'} replace />}
           />
 
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { lifecycleLabel, transitionLabel } from '@/utils/lifecycle';
 
 type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
 
@@ -84,7 +85,7 @@ export const AdminAllChallengesPage = () => {
         reason: transitionReason.trim(),
       });
       await refetch();
-      alert(`챌린지 상태를 ${target}로 변경했습니다.`);
+      alert(`챌린지 상태를 '${lifecycleLabel(target)}'으로 변경했습니다.`);
     } catch (e: any) {
       alert(e?.response?.data?.message || '챌린지 상태 변경에 실패했습니다.');
     } finally {
@@ -174,7 +175,7 @@ export const AdminAllChallengesPage = () => {
           <option value="">챌린지를 선택하세요</option>
           {(challengesData ?? []).map((c: any) => (
             <option key={c.challengeId} value={c.challengeId}>
-              {c.title} ({c.lifecycle})
+              {c.title} ({lifecycleLabel(c.lifecycle)})
             </option>
           ))}
         </select>
@@ -183,7 +184,7 @@ export const AdminAllChallengesPage = () => {
       {selectedChallenge && (
         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
           <h2 className="text-lg font-bold text-gray-900">{selectedChallenge.title}</h2>
-          <p className="text-sm text-gray-600">상태: {selectedChallenge.lifecycle}</p>
+          <p className="text-sm text-gray-600">상태: {lifecycleLabel(selectedChallenge.lifecycle)}</p>
           <p className="text-sm text-gray-600">생성자 ID: {selectedChallenge.createdBy || '-'}</p>
           <p className="text-sm text-gray-600">생성자 이름: {selectedChallenge.createdByName || '-'}</p>
           <p className="text-sm text-gray-600">챌린지 ID: {selectedChallenge.challengeId}</p>
@@ -206,7 +207,7 @@ export const AdminAllChallengesPage = () => {
                   disabled={transitionLoading !== null || transitionReason.trim().length < 3}
                   className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm disabled:opacity-50"
                 >
-                  {transitionLoading === lc ? '변경 중...' : `${lc} 전환`}
+                  {transitionLoading === lc ? '변경 중...' : transitionLabel(lc)}
                 </button>
               ))}
             </div>
