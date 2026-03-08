@@ -89,7 +89,7 @@ export const UseTicketPage = () => {
       });
       return response.data;
     },
-    onSuccess: (res) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cheer-targets'] });
       const remaining = (data?.myTickets ?? 1) - 1;
       toast.success(`응원을 보냈어요! 💌 잔여 응원권: ${remaining}장`);

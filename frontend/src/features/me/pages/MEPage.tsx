@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
@@ -50,7 +50,6 @@ export const MEPage = () => {
   const [activeTab, setActiveTab] = useState<METab>('active');
   const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
   const [showVerification, setShowVerification] = useState(false);
-  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-challenges'],
