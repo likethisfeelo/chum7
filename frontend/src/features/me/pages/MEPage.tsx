@@ -56,6 +56,17 @@ function formatPersonalTarget(challenge: any): string {
   return `${meridiem} ${hour}:${minute}`;
 }
 
+function formatVerificationTime(iso: string | undefined | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const mer = h < 12 ? '오전' : '오후';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${mer} ${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 function isTodayVerified(challenge: any): boolean {
   const progress = challenge.progress || [];
   const currentDay = challenge.currentDay || 1;
@@ -104,6 +115,21 @@ export const MEPage = () => {
     },
   });
 
+  const { data: myVerificationsData } = useQuery({
+    queryKey: ['verifications', 'mine-all'],
+    queryFn: async () => {
+      const response = await apiClient.get('/verifications?mine=true&isExtra=false&limit=20');
+      return response.data.data;
+    },
+  });
+
+  const verificationMap = useMemo(() => {
+    const items: any[] = myVerificationsData?.verifications || [];
+    const map = new Map<string, any>();
+    items.forEach((v: any) => map.set(v.verificationId, v));
+    return map;
+  }, [myVerificationsData]);
+
   const personalQuestTargetChallenges = useMemo(
     () => challenges.filter((challenge: any) => Boolean(challenge?.challenge?.personalQuestEnabled)),
     [challenges],
@@ -124,6 +150,7 @@ export const MEPage = () => {
   });
 
   const [leaderDmTargetId, setLeaderDmTargetId] = useState<string | null>(null);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
   const leaderDmMutation = useMutation({
     mutationFn: async (challengeId: string) => {
@@ -153,6 +180,16 @@ export const MEPage = () => {
       setLeaderDmTargetId(null);
     },
   });
+
+  const handleVerifiedCardClick = (challenge: any) => {
+    const id = challenge.userChallengeId;
+    const challengeId = challenge.challengeId || challenge.challenge?.challengeId;
+    if (expandedCards.has(id)) {
+      navigate(`/challenge-feed/${challengeId}`);
+    } else {
+      setExpandedCards((prev) => { const next = new Set(prev); next.add(id); return next; });
+    }
+  };
 
   const handleLeaderDm = (challenge: any) => {
     const challengeId = challenge?.challengeId || challenge?.challenge?.challengeId;
@@ -335,42 +372,98 @@ export const MEPage = () => {
                         {verifiedTodayChallenges.map((challenge: any, index: number) => {
                           const progress = challenge.progress || [];
                           const currentDay = challenge.currentDay || 1;
-                          const challengeId = challenge.challengeId || challenge.challenge?.challengeId;
+                          const uid = challenge.userChallengeId;
+                          const isExpanded = expandedCards.has(uid);
+
+                          // 가장 최근 인증된 날 (접힌 상태에서 표시할 행)
+                          const lastVerifiedEntry = [...progress]
+                            .map((p: any, i: number) => ({ ...p, i }))
+                            .filter((p: any) => ['success', 'remedy', 'failed'].includes(p.status))
+                            .sort((a: any, b: any) => b.i - a.i)[0];
 
                           return (
                             <motion.div
-                              key={challenge.userChallengeId}
+                              key={uid}
                               initial={{ opacity: 0, y: 12 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: index * 0.05 }}
-                              onClick={() => navigate(`/challenge-feed/${challengeId}`)}
-                              className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 cursor-pointer active:bg-gray-50 hover:border-primary-200 transition-colors"
+                              onClick={() => handleVerifiedCardClick(challenge)}
+                              className={`bg-white rounded-2xl p-4 shadow-sm border cursor-pointer transition-colors ${
+                                isExpanded ? 'border-primary-200 active:bg-primary-50' : 'border-gray-100 hover:border-primary-200 active:bg-gray-50'
+                              }`}
                             >
+                              {/* 헤더: 배지 + 제목 + 점수 + 펼침 표시 */}
                               <div className="flex items-center gap-3 mb-3">
-                                <span className="text-2xl">{challenge.challenge?.badgeIcon || '🎯'}</span>
+                                <span className="text-2xl flex-shrink-0">{challenge.challenge?.badgeIcon || '🎯'}</span>
                                 <div className="flex-1 min-w-0">
                                   <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
-                                  <p className="text-xs text-green-600 mt-0.5">✅ 오늘 인증 완료 · Day {currentDay} / 7</p>
+                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · Day {currentDay} / 7</p>
                                 </div>
-                                <span className="text-2xl font-bold text-gray-800 flex-shrink-0">{challenge.score || 0}
-                                  <span className="text-xs font-normal text-gray-400 ml-0.5">점</span>
-                                </span>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <span className="text-xl font-bold text-gray-800">{challenge.score || 0}</span>
+                                  <span className="text-xs text-gray-400">점</span>
+                                  <span className="ml-1 text-xs text-gray-300">{isExpanded ? '▲' : '▼'}</span>
+                                </div>
                               </div>
 
-                              {/* Day 1~7 트래커 */}
-                              <div className="flex gap-1.5">
-                                {Array.from({ length: 7 }, (_, i) => {
-                                  const dayStatus = progress[i]?.status || (i < currentDay - 1 ? 'skipped' : 'pending');
-                                  return (
-                                    <div
-                                      key={i}
-                                      className={`flex-1 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${DAY_STATUS_COLORS[dayStatus] || 'bg-gray-100'}`}
-                                    >
-                                      <span className={dayStatus === 'pending' ? 'text-gray-400' : 'text-white'}>{i + 1}</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                              {/* 접힌 상태: 최근 인증 날 행 1줄 */}
+                              {!isExpanded && lastVerifiedEntry && (() => {
+                                const p = lastVerifiedEntry;
+                                const verif = p.verificationId ? verificationMap.get(p.verificationId) : undefined;
+                                const timeStr = formatVerificationTime(p.timestamp);
+                                const note = verif?.todayNote || '';
+                                const dotColor = (DAY_STATUS_COLORS[p.status] || 'bg-gray-200').split(' ')[0];
+                                return (
+                                  <div className="flex items-center gap-2.5 pt-1">
+                                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dotColor}`} />
+                                    <p className="text-xs text-gray-500 truncate flex-1 min-w-0">
+                                      <span className="font-semibold text-gray-700">{p.i + 1}일차</span>
+                                      {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
+                                      {note && <span className="text-gray-400"> · {note}</span>}
+                                    </p>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* 펼친 상태: Day 1~7 세로 타임라인 */}
+                              {isExpanded && (
+                                <div className="pt-1">
+                                  <p className="text-xs text-primary-500 text-right mb-2">탭하면 피드로 이동 →</p>
+                                  {Array.from({ length: 7 }, (_, i) => {
+                                    const p = progress[i];
+                                    const status = p?.status || (i < currentDay - 1 ? 'skipped' : 'pending');
+                                    const isPending = status === 'pending';
+                                    const verif = p?.verificationId ? verificationMap.get(p.verificationId) : undefined;
+                                    const timeStr = formatVerificationTime(p?.timestamp);
+                                    const note = verif?.todayNote || '';
+                                    const dotColor = (DAY_STATUS_COLORS[status] || 'bg-gray-200').split(' ')[0];
+                                    const isLastItem = i === 6;
+                                    return (
+                                      <div key={i} className="flex items-start gap-3">
+                                        {/* 왼쪽: 점 + 세로선 */}
+                                        <div className="flex flex-col items-center flex-shrink-0" style={{ width: 16 }}>
+                                          <div className={`w-2.5 h-2.5 rounded-full mt-1 ${dotColor}`} />
+                                          {!isLastItem && (
+                                            <div className={`mt-0.5 flex-1 min-h-[22px] ${isPending ? 'border-l border-dashed border-gray-200' : 'w-px bg-gray-200'}`} />
+                                          )}
+                                        </div>
+                                        {/* 오른쪽: 텍스트 */}
+                                        <div className="flex-1 min-w-0 pb-2.5">
+                                          {isPending ? (
+                                            <p className="text-xs text-gray-300 mt-0.5">{i + 1}일차</p>
+                                          ) : (
+                                            <p className="text-xs text-gray-500 truncate mt-0.5">
+                                              <span className="font-semibold text-gray-700">{i + 1}일차</span>
+                                              {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
+                                              {note && <span className="text-gray-400"> · {note}</span>}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </motion.div>
                           );
                         })}
