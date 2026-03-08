@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
-import { getChallengeTypeLabel as getChallengeTypeLabelByType, getRemedyType, getRemainingRemedyCount } from '@/features/challenge/utils/flowPolicy';
+import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
 import toast from 'react-hot-toast';
 
 type METab = 'active' | 'pending' | 'completed';
@@ -336,10 +336,6 @@ export const MEPage = () => {
                           const progress = challenge.progress || [];
                           const currentDay = challenge.currentDay || 1;
                           const challengeId = challenge.challengeId || challenge.challenge?.challengeId;
-                          const remedyType = getRemedyType(challenge.remedyPolicy);
-                          const remaining = getRemainingRemedyCount(challenge.remedyPolicy, progress);
-                          const failedDays = progress.filter((p: any) => p.day <= 5 && p.status !== 'success' && !p.remedied);
-                          const canRemedy = remedyType !== 'strict' && (remaining === null || remaining > 0) && failedDays.length > 0;
 
                           return (
                             <motion.div
@@ -347,7 +343,8 @@ export const MEPage = () => {
                               initial={{ opacity: 0, y: 12 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: index * 0.05 }}
-                              className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100"
+                              onClick={() => navigate(`/challenge-feed/${challengeId}`)}
+                              className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 cursor-pointer active:bg-gray-50 hover:border-primary-200 transition-colors"
                             >
                               <div className="flex items-center gap-3 mb-3">
                                 <span className="text-2xl">{challenge.challenge?.badgeIcon || '🎯'}</span>
@@ -361,7 +358,7 @@ export const MEPage = () => {
                               </div>
 
                               {/* Day 1~7 트래커 */}
-                              <div className="flex gap-1.5 mb-3">
+                              <div className="flex gap-1.5">
                                 {Array.from({ length: 7 }, (_, i) => {
                                   const dayStatus = progress[i]?.status || (i < currentDay - 1 ? 'skipped' : 'pending');
                                   return (
@@ -374,27 +371,6 @@ export const MEPage = () => {
                                   );
                                 })}
                               </div>
-
-                              {/* 챌린지 피드 이동 버튼 */}
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/challenge-feed/${challengeId}`)}
-                                className="w-full py-2.5 rounded-xl border border-primary-200 text-primary-700 bg-primary-50 text-sm font-medium hover:bg-primary-100 transition-colors"
-                              >
-                                챌린지 피드 →
-                              </button>
-
-                              {/* 보완 버튼 (해당하는 경우만) */}
-                              {remedyType !== 'strict' && (
-                                <button
-                                  type="button"
-                                  onClick={() => navigate(`/verification/remedy?userChallengeId=${challenge.userChallengeId}`)}
-                                  disabled={!canRemedy}
-                                  className="mt-2 w-full py-2 rounded-xl border border-purple-200 text-purple-700 bg-purple-50 disabled:opacity-40 text-sm"
-                                >
-                                  보완하기 {remaining === null ? '(제한 없음)' : `(${remaining}회 남음)`}
-                                </button>
-                              )}
                             </motion.div>
                           );
                         })}
