@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { Loading } from '@/shared/components/Loading';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
+import { getRemedyType, getRemainingRemedyCount } from '@/features/challenge/utils/flowPolicy';
 
 function isSameKstDate(iso?: string | null): boolean {
   if (!iso) return false;
@@ -195,6 +196,31 @@ export const ChallengeFeedPage = () => {
               <p className="text-sm text-emerald-700 mt-1">이제 다른 참여자를 응원할 수 있어요.</p>
             </section>
           )}
+
+          {(() => {
+            if (!userChallenge) return null;
+            const remedyType = getRemedyType(userChallenge.remedyPolicy);
+            if (remedyType === 'strict') return null;
+            const remaining = getRemainingRemedyCount(userChallenge.remedyPolicy, userChallenge.progress || []);
+            const failedDays = (userChallenge.progress || []).filter((p: any) => p.day <= 5 && p.status !== 'success' && !p.remedied);
+            const canRemedy = (remaining === null || remaining > 0) && failedDays.length > 0;
+            return (
+              <section className="bg-white rounded-2xl p-5 border border-purple-100 shadow-sm">
+                <h3 className="font-bold text-gray-900 mb-2">보완 인증</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  실패한 Day는 보완 인증(70% 점수)으로 연결할 수 있어요. · 남은 보완 {remaining === null ? '제한 없음' : `${remaining}회`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/verification/remedy?userChallengeId=${userChallenge.userChallengeId}`)}
+                  disabled={!canRemedy}
+                  className="w-full py-2.5 rounded-xl border border-purple-200 text-purple-700 bg-purple-50 disabled:opacity-40 text-sm font-medium hover:bg-purple-100 transition-colors"
+                >
+                  보완하기 {remaining === null ? '(제한 없음)' : `(${remaining}회 남음)`}
+                </button>
+              </section>
+            );
+          })()}
 
           <section className="grid grid-cols-2 gap-2">
             <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
