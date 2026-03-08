@@ -441,60 +441,66 @@ export const AdminQuestSubmissionsPage = () => {
 
             {selectedSubmission.status === 'pending' && (
               <div className="p-5 border-t border-gray-100 space-y-3">
-                {reviewing?.id === selectedSubmission.submissionId && reviewing.action === 'reject' && (
-                  <textarea
-                    value={reviewNote}
-                    onChange={(e) => setReviewNote(e.target.value)}
-                    placeholder="거절 사유를 입력해주세요 (10자 이상)"
-                    rows={3}
-                    className="w-full px-3 py-2 border border-red-300 rounded-xl resize-none text-sm"
-                  />
-                )}
-                <div className="flex gap-2 justify-end">
-                  {reviewing?.id === selectedSubmission.submissionId ? (
+                {(() => {
+                  const activeReview = reviewing?.id === selectedSubmission.submissionId ? reviewing : null;
+                  return (
                     <>
-                      <button
-                        onClick={() => { setReviewing(null); setReviewNote(''); }}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl"
-                      >
-                        취소
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (reviewing.action === 'reject' && reviewNote.trim().length < 10) {
-                            alert('거절 사유를 10자 이상 입력해주세요');
-                            return;
-                          }
-                          reviewMutation.mutate({
-                            submissionId: reviewing.id,
-                            action: reviewing.action,
-                            note: reviewNote,
-                          });
-                          setSelectedSubmission(null);
-                        }}
-                        disabled={reviewMutation.isPending}
-                        className={`px-4 py-2 text-white text-sm font-semibold rounded-xl disabled:opacity-50 ${reviewing.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
-                      >
-                        {reviewMutation.isPending ? '처리 중...' : '확인'}
-                      </button>
+                      {activeReview?.action === 'reject' && (
+                        <textarea
+                          value={reviewNote}
+                          onChange={(e) => setReviewNote(e.target.value)}
+                          placeholder="거절 사유를 입력해주세요 (10자 이상)"
+                          rows={3}
+                          className="w-full px-3 py-2 border border-red-300 rounded-xl resize-none text-sm"
+                        />
+                      )}
+                      <div className="flex gap-2 justify-end">
+                        {activeReview ? (
+                          <>
+                            <button
+                              onClick={() => { setReviewing(null); setReviewNote(''); }}
+                              className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl"
+                            >
+                              취소
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (activeReview.action === 'reject' && reviewNote.trim().length < 10) {
+                                  alert('거절 사유를 10자 이상 입력해주세요');
+                                  return;
+                                }
+                                reviewMutation.mutate({
+                                  submissionId: activeReview.id,
+                                  action: activeReview.action,
+                                  note: reviewNote,
+                                });
+                                setSelectedSubmission(null);
+                              }}
+                              disabled={reviewMutation.isPending}
+                              className={`px-4 py-2 text-white text-sm font-semibold rounded-xl disabled:opacity-50 ${activeReview.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+                            >
+                              {reviewMutation.isPending ? '처리 중...' : '확인'}
+                            </button>
+                          </>
+                          <>
+                            <button
+                              onClick={() => { setReviewing({ id: selectedSubmission.submissionId, action: 'approve' }); setReviewNote(''); }}
+                              className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700"
+                            >
+                              승인
+                            </button>
+                            <button
+                              onClick={() => { setReviewing({ id: selectedSubmission.submissionId, action: 'reject' }); setReviewNote(''); }}
+                              className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700"
+                            >
+                              거절
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => { setReviewing({ id: selectedSubmission.submissionId, action: 'approve' }); setReviewNote(''); }}
-                        className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700"
-                      >
-                        승인
-                      </button>
-                      <button
-                        onClick={() => { setReviewing({ id: selectedSubmission.submissionId, action: 'reject' }); setReviewNote(''); }}
-                        className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700"
-                      >
-                        거절
-                      </button>
-                    </>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
             )}
           </div>
