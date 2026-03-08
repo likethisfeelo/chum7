@@ -482,6 +482,7 @@ export const AdminQuestSubmissionsPage = () => {
                               {reviewMutation.isPending ? '처리 중...' : '확인'}
                             </button>
                           </>
+                        ) : (
                           <>
                             <button
                               onClick={() => { setReviewing({ id: selectedSubmission.submissionId, action: 'approve' }); setReviewNote(''); }}
