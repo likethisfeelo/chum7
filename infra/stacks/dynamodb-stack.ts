@@ -20,6 +20,7 @@ export class DynamoDBStack extends Stack {
   public readonly verificationsTable: dynamodb.Table;
   public readonly cheersTable: dynamodb.Table;
   public readonly userCheerTicketsTable: dynamodb.Table;
+  public readonly categoryBannersTable: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: DynamoDBStackProps) {
     super(scope, id, props);
@@ -321,6 +322,32 @@ export class DynamoDBStack extends Stack {
     });
 
     // ==========================================
+    // 7. CategoryBanners 테이블
+    // ==========================================
+    this.categoryBannersTable = new dynamodb.Table(this, 'CategoryBannersTable', {
+      tableName: `chme-${stage}-category-banners`,
+      partitionKey: {
+        name: 'slug',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'bannerId',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+    });
+
+    // GSI: 활성 배너만 빠르게 조회
+    this.categoryBannersTable.addGlobalSecondaryIndex({
+      indexName: 'slug-isActive-index',
+      partitionKey: { name: 'slug', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'isActive', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    // ==========================================
     // Outputs
     // ==========================================
     new CfnOutput(this, 'UsersTableName', {
@@ -351,6 +378,11 @@ export class DynamoDBStack extends Stack {
     new CfnOutput(this, 'UserCheerTicketsTableName', {
       value: this.userCheerTicketsTable.tableName,
       exportName: `chme-${stage}-user-cheer-tickets-table-name`
+    });
+
+    new CfnOutput(this, 'CategoryBannersTableName', {
+      value: this.categoryBannersTable.tableName,
+      exportName: `chme-${stage}-category-banners-table-name`,
     });
   }
 }

@@ -19,13 +19,14 @@ interface ChallengeStackProps extends StackProps {
   personalQuestProposalsTable: Table;
   notificationsTable: Table;
   payoutAuditLogsTable: Table;
+  categoryBannersTable: Table;
 }
 
 export class ChallengeStack extends Stack {
   constructor(scope: Construct, id: string, props: ChallengeStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable, personalQuestProposalsTable, notificationsTable, payoutAuditLogsTable } = props;
+    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable, personalQuestProposalsTable, notificationsTable, payoutAuditLogsTable, categoryBannersTable } = props;
 
     const commonEnv = {
       STAGE: stage,
@@ -34,6 +35,7 @@ export class ChallengeStack extends Stack {
       PERSONAL_QUEST_PROPOSALS_TABLE: personalQuestProposalsTable.tableName,
       NOTIFICATIONS_TABLE: notificationsTable.tableName,
       PAYOUT_AUDIT_LOGS_TABLE: payoutAuditLogsTable.tableName,
+      CATEGORY_BANNERS_TABLE: categoryBannersTable.tableName,
     };
 
     const commonProps = {
@@ -306,6 +308,22 @@ export class ChallengeStack extends Stack {
       // 매 1시간 실행 (운영환경에서는 더 짧게 조정 가능)
       schedule: Schedule.rate(Duration.hours(1)),
       targets: [new LambdaFunction(lifecycleManagerFn)],
+    });
+
+    // Public: GET /category-banners
+    const categoryBannersListFn = new NodejsFunction(this, 'CategoryBannersListFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-category-banners-list`,
+      entry: path.join(__dirname, '../../backend/services/category-banners/list/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    categoryBannersTable.grantReadData(categoryBannersListFn);
+    apiGateway.addRoutes({
+      path: '/category-banners',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('CategoryBannersListIntegration', categoryBannersListFn),
+      // No authorizer - public endpoint
     });
   }
 }
