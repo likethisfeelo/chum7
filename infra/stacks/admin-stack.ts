@@ -21,6 +21,7 @@ interface AdminStackProps extends StackProps {
   verificationsTable: Table;
   personalQuestProposalsTable: Table;
   notificationsTable: Table;
+  categoryBannersTable: Table;
 }
 
 export class AdminStack extends Stack {
@@ -40,6 +41,7 @@ export class AdminStack extends Stack {
       verificationsTable,
       personalQuestProposalsTable,
       notificationsTable,
+      categoryBannersTable,
     } = props;
 
     const commonEnv = {
@@ -53,6 +55,7 @@ export class AdminStack extends Stack {
       VERIFICATIONS_TABLE: verificationsTable.tableName,
       PERSONAL_QUEST_PROPOSALS_TABLE: personalQuestProposalsTable.tableName,
       NOTIFICATIONS_TABLE: notificationsTable.tableName,
+      CATEGORY_BANNERS_TABLE: categoryBannersTable.tableName,
     };
 
     const commonProps = {
@@ -368,6 +371,53 @@ export class AdminStack extends Stack {
       path: '/admin/cheer/dead-letters/requeue-batch',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('AdminCheerDeadLetterBatchRequeueIntegration', cheerDeadLetterBatchRequeueFn),
+      authorizer,
+    });
+
+    // ── Category Banners (Admin) ──────────────────────────────────────────────
+
+    const categoryBannerListFn = new NodejsFunction(this, 'AdminCategoryBannerListFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-category-banner-list`,
+      entry: path.join(__dirname, '../../backend/services/admin/category-banners/list/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    categoryBannersTable.grantReadData(categoryBannerListFn);
+    apiGateway.addRoutes({
+      path: '/admin/category-banners/{slug}',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminCategoryBannerListIntegration', categoryBannerListFn),
+      authorizer,
+    });
+
+    const categoryBannerUpsertFn = new NodejsFunction(this, 'AdminCategoryBannerUpsertFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-category-banner-upsert`,
+      entry: path.join(__dirname, '../../backend/services/admin/category-banners/upsert/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    categoryBannersTable.grantWriteData(categoryBannerUpsertFn);
+    apiGateway.addRoutes({
+      path: '/admin/category-banners/{slug}',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('AdminCategoryBannerUpsertIntegration', categoryBannerUpsertFn),
+      authorizer,
+    });
+
+    const categoryBannerActivateFn = new NodejsFunction(this, 'AdminCategoryBannerActivateFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-category-banner-activate`,
+      entry: path.join(__dirname, '../../backend/services/admin/category-banners/activate/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    categoryBannersTable.grantReadWriteData(categoryBannerActivateFn);
+    apiGateway.addRoutes({
+      path: '/admin/category-banners/{slug}/{bannerId}/activate',
+      methods: [HttpMethod.PUT],
+      integration: new HttpLambdaIntegration('AdminCategoryBannerActivateIntegration', categoryBannerActivateFn),
       authorizer,
     });
 

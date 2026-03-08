@@ -24,7 +24,7 @@ const MIN_PREPARING_GAP_MS = 60 * 1000;
 const createChallengeSchema = z.object({
   title: z.string().min(1).max(100),
   description: z.string().min(10).max(1000),
-  category: z.enum(['health', 'habit', 'development', 'creativity', 'relationship', 'mindfulness']),
+  category: z.enum(['health', 'habit', 'development', 'creativity', 'relationship', 'mindfulness', 'expand', 'impact']),
   targetTime: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/),   // "HH:MM"
   identityKeyword: z.string().min(1).max(50),
   badgeIcon: z.string().min(1).max(10),

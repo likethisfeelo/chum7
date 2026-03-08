@@ -60,6 +60,7 @@ export class CoreStack extends Stack {
   public readonly plazaCommentsTable: Table;
   public readonly plazaReactionsTable: Table;
   public readonly plazaRecommendationsTable: Table;
+  public readonly categoryBannersTable: Table;
 
   public readonly uploadsBucket: IBucket;
   public readonly snsTopic: Topic;
@@ -530,6 +531,21 @@ export class CoreStack extends Stack {
       indexName: 'userId-createdAt-index',
       partitionKey: { name: 'userId', type: AttributeType.STRING },
       sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    this.categoryBannersTable = new Table(this, 'CategoryBannersTable', {
+      tableName: `chme-${stage}-category-banners`,
+      partitionKey: { name: 'slug', type: AttributeType.STRING },
+      sortKey: { name: 'bannerId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    this.categoryBannersTable.addGlobalSecondaryIndex({
+      indexName: 'slug-isActive-index',
+      partitionKey: { name: 'slug', type: AttributeType.STRING },
+      sortKey: { name: 'isActive', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
 

@@ -10,6 +10,7 @@ import { AdminOpsDashboardPage } from '@/pages/AdminOpsDashboardPage';
 import { AdminAuditLogsPage } from '@/pages/AdminAuditLogsPage';
 import { AdminPersonalQuestProposalsPage } from '@/pages/AdminPersonalQuestProposalsPage';
 import { AdminNotificationsPage } from '@/pages/AdminNotificationsPage';
+import { AdminCategoryBannersPage } from '@/pages/AdminCategoryBannersPage';
 import '@/styles/index.css';
 
 const queryClient = new QueryClient({
@@ -102,6 +103,10 @@ const Sidebar = () => {
 
   if (hasAnyRole(groups, ['admins', 'productowners', 'leaders'])) {
     nav.push({ path: '/admin/challenges/mine', label: '📚 내 챌린지/퀘스트' });
+  }
+
+  if (hasAnyRole(groups, ['admins', 'productowners'])) {
+    nav.push({ path: '/admin/category-banners', label: '🖼️ 카테고리 배너' });
   }
 
   if (hasAnyRole(groups, ['admins', 'productowners', 'leaders', 'managers'])) {
@@ -284,6 +289,17 @@ export default function App() {
               <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
                 <Layout>
                   <AdminNotificationsPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/admin/category-banners"
+            element={
+              <RoleRoute roles={['admins', 'productowners']}>
+                <Layout>
+                  <AdminCategoryBannersPage />
                 </Layout>
               </RoleRoute>
             }

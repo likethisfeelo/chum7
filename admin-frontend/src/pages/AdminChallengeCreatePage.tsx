@@ -15,12 +15,14 @@ const VERIFICATION_TYPE_OPTIONS: { value: VerificationType; label: string }[] = 
 ];
 
 const CATEGORIES = [
-  { value: 'health',        label: '💪 건강' },
-  { value: 'habit',         label: '📅 습관' },
-  { value: 'development',   label: '💻 개발' },
-  { value: 'creativity',    label: '🎨 창작' },
-  { value: 'relationship',  label: '🤝 관계' },
-  { value: 'mindfulness',   label: '🧘 마음챙김' },
+  { value: 'health',        label: '💗 Selflove' },
+  { value: 'mindfulness',   label: '🔥 Attitude' },
+  { value: 'habit',         label: '⚡ Discipline' },
+  { value: 'creativity',    label: '🧭 Explore' },
+  { value: 'development',   label: '🎨 Create' },
+  { value: 'relationship',  label: '🏗️ Build' },
+  { value: 'expand',        label: '🌱 Expand' },
+  { value: 'impact',        label: '🚀 Impact' },
 ] as const;
 
 type Category = typeof CATEGORIES[number]['value'];
