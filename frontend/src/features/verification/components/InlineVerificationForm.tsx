@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,6 +10,10 @@ interface InlineVerificationFormProps {
   allowedVerificationTypes?: string[];
   onSuccess?: (data: any) => void;
 }
+
+type VerificationType = 'text' | 'image' | 'video' | 'link';
+
+const ALL_TYPES: VerificationType[] = ['text', 'image', 'video', 'link'];
 
 function toIsoFromLocalDateTime(localDateTime: string): string {
   if (!localDateTime) return new Date().toISOString();
@@ -41,6 +45,24 @@ function extractApiErrorMessage(error: any): string {
   return apiMessage || '인증에 실패했습니다';
 }
 
+async function readVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      const duration = Number(video.duration || 0);
+      URL.revokeObjectURL(url);
+      resolve(duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('VIDEO_DURATION_READ_FAILED'));
+    };
+    video.src = url;
+  });
+}
+
 export const InlineVerificationForm = ({
   userChallenge,
   allowedVerificationTypes,
@@ -48,11 +70,19 @@ export const InlineVerificationForm = ({
 }: InlineVerificationFormProps) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const availableTypes = useMemo(() => {
+    if (!allowedVerificationTypes || allowedVerificationTypes.length === 0) return ALL_TYPES;
+    const filtered = ALL_TYPES.filter((t) => allowedVerificationTypes.includes(t));
+    return filtered.length ? filtered : ALL_TYPES;
+  }, [allowedVerificationTypes]);
 
   const [isExpanded, setIsExpanded] = useState(false);
+  const [selectedType, setSelectedType] = useState<VerificationType>(availableTypes[0]);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [videoDurationSec, setVideoDurationSec] = useState<number | null>(null);
+  const [linkUrl, setLinkUrl] = useState('');
   const [formData, setFormData] = useState({
     todayNote: '',
     tomorrowPromise: '',
@@ -60,45 +90,71 @@ export const InlineVerificationForm = ({
   });
   const [extraVisibilityPrompt, setExtraVisibilityPrompt] = useState<{ verificationId: string } | null>(null);
 
-  const allowsMedia =
-    !allowedVerificationTypes ||
-    allowedVerificationTypes.length === 0 ||
-    allowedVerificationTypes.some((t) => t === 'image' || t === 'video');
+  const acceptsFile = selectedType === 'image' || selectedType === 'video';
 
-  const acceptAttr = (() => {
-    if (!allowedVerificationTypes || allowedVerificationTypes.length === 0) return 'image/*,video/*';
-    const types = [];
-    if (allowedVerificationTypes.includes('image')) types.push('image/*');
-    if (allowedVerificationTypes.includes('video')) types.push('video/*');
-    return types.join(',') || 'image/*,video/*';
-  })();
+  const acceptAttr = selectedType === 'video' ? 'video/*' : 'image/*';
 
   const handleFocus = () => setIsExpanded(true);
 
-  const handleCollapse = () => {
-    setIsExpanded(false);
+  const resetMedia = () => {
     setMediaFile(null);
     setMediaPreview(null);
+    setVideoDurationSec(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleCollapse = () => {
+    setIsExpanded(false);
+    resetMedia();
+    setLinkUrl('');
+    setSelectedType(availableTypes[0]);
     setFormData({ todayNote: '', tomorrowPromise: '', completedAt: toLocalDateTimeInputValue(new Date()) });
     setExtraVisibilityPrompt(null);
   };
 
-  const handleMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTypeChange = (next: VerificationType) => {
+    setSelectedType(next);
+    resetMedia();
+    if (next !== 'link') setLinkUrl('');
+  };
+
+  const handleMediaSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-      toast.error('이미지 또는 영상 파일만 업로드할 수 있어요.');
+
+    if (selectedType === 'image' && !file.type.startsWith('image/')) {
+      toast.error('사진 인증에서는 이미지 파일만 업로드할 수 있어요.');
       return;
     }
+
+    if (selectedType === 'video' && !file.type.startsWith('video/')) {
+      toast.error('영상 인증에서는 영상 파일만 업로드할 수 있어요.');
+      return;
+    }
+
+    if (selectedType === 'video') {
+      try {
+        const duration = await readVideoDuration(file);
+        if (duration > 60) {
+          toast.error('영상은 60초 이내만 업로드할 수 있어요.');
+          return;
+        }
+        setVideoDurationSec(duration);
+      } catch {
+        toast.error('영상 길이를 확인할 수 없습니다. 다시 시도해주세요.');
+        return;
+      }
+    }
+
     setMediaFile(file);
     setMediaPreview(URL.createObjectURL(file));
   };
 
   const verificationMutation = useMutation({
     mutationFn: async () => {
-      let imageUrl: string | undefined;
+      let uploadedUrl: string | undefined;
 
-      if (mediaFile) {
+      if (acceptsFile && mediaFile) {
         const challengeId = userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
         const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
           fileName: mediaFile.name,
@@ -113,14 +169,17 @@ export const InlineVerificationForm = ({
         });
 
         if (!uploadResp.ok) throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
-        imageUrl = uploadData.data.fileUrl;
+        uploadedUrl = uploadData.data.fileUrl;
       }
 
       const response = await apiClient.post('/verifications', {
         userChallengeId: userChallenge.userChallengeId,
         day: Math.max(1, Number(userChallenge.currentDay || 1)),
-        ...(imageUrl ? { imageUrl } : {}),
-        todayNote: formData.todayNote,
+        verificationType: selectedType,
+        ...(selectedType === 'image' && uploadedUrl ? { imageUrl: uploadedUrl } : {}),
+        ...(selectedType === 'video' && uploadedUrl ? { videoUrl: uploadedUrl, videoDurationSec } : {}),
+        ...(selectedType === 'link' && linkUrl.trim() ? { linkUrl: linkUrl.trim() } : {}),
+        ...(formData.todayNote.trim() ? { todayNote: formData.todayNote.trim() } : {}),
         tomorrowPromise: formData.tomorrowPromise,
         performedAt: toIsoFromLocalDateTime(formData.completedAt),
         isPublic: true,
@@ -163,10 +222,28 @@ export const InlineVerificationForm = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.todayNote.trim()) {
-      toast.error('오늘의 소감을 입력해주세요');
+
+    if (selectedType === 'image' && !mediaFile) {
+      toast.error('사진을 첨부해주세요.');
       return;
     }
+
+    if (selectedType === 'video') {
+      if (!mediaFile) {
+        toast.error('영상을 첨부해주세요.');
+        return;
+      }
+      if ((videoDurationSec || 0) > 60) {
+        toast.error('영상은 60초 이내만 업로드할 수 있어요.');
+        return;
+      }
+    }
+
+    if (selectedType === 'link' && !linkUrl.trim()) {
+      toast.error('링크를 입력해주세요.');
+      return;
+    }
+
     verificationMutation.mutate();
   };
 
@@ -194,7 +271,6 @@ export const InlineVerificationForm = ({
 
   return (
     <div className="relative">
-      {/* 기본 상태: 한 줄 입력창 */}
       {!isExpanded && (
         <div className="flex items-center gap-3">
           <span className="text-2xl flex-shrink-0">{badgeIcon}</span>
@@ -204,10 +280,15 @@ export const InlineVerificationForm = ({
           >
             오늘의 인증을 남겨보세요... (Day {safeDay})
           </div>
-          {allowsMedia && (
+          {availableTypes.some((t) => t === 'image' || t === 'video') && (
             <button
               type="button"
-              onClick={() => { setIsExpanded(true); setTimeout(() => fileInputRef.current?.click(), 100); }}
+              onClick={() => {
+                setIsExpanded(true);
+                const defaultMediaType = availableTypes.includes('image') ? 'image' : availableTypes.includes('video') ? 'video' : availableTypes[0];
+                setSelectedType(defaultMediaType);
+                setTimeout(() => fileInputRef.current?.click(), 100);
+              }}
               className="p-2 rounded-full text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
             >
               <FiCamera className="w-5 h-5" />
@@ -216,7 +297,6 @@ export const InlineVerificationForm = ({
         </div>
       )}
 
-      {/* 확장 상태: 전체 폼 */}
       <AnimatePresence>
         {isExpanded && (
           <motion.form
@@ -227,7 +307,6 @@ export const InlineVerificationForm = ({
             transition={{ duration: 0.18 }}
             className="bg-white border border-gray-200 rounded-2xl p-4 space-y-4 shadow-sm"
           >
-            {/* 헤더 */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-xl">{badgeIcon}</span>
@@ -245,39 +324,70 @@ export const InlineVerificationForm = ({
               </button>
             </div>
 
-            {/* 오늘의 소감 (항상 표시) */}
+            <div className="grid grid-cols-4 gap-2">
+              {availableTypes.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => handleTypeChange(type)}
+                  className={`px-2 py-2 text-xs rounded-lg border transition-colors ${
+                    selectedType === type
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 font-semibold'
+                      : 'border-gray-200 text-gray-600 hover:border-primary-200'
+                  }`}
+                >
+                  {type === 'text' && '텍스트'}
+                  {type === 'image' && '사진'}
+                  {type === 'video' && '영상'}
+                  {type === 'link' && '링크'}
+                </button>
+              ))}
+            </div>
+
             <div>
               <textarea
-                ref={textareaRef}
-                autoFocus
                 value={formData.todayNote}
                 onChange={(e) => setFormData({ ...formData, todayNote: e.target.value })}
                 className="w-full px-3 py-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-primary-400 text-sm"
-                placeholder="오늘 어떻게 실천했나요? 느낀 점을 나눠주세요 ✍️"
+                placeholder="소감(선택)을 남겨보세요 ✍️"
                 rows={3}
-                required
               />
             </div>
 
-            {/* 사진/영상 업로드 (허용된 경우만) */}
-            {allowsMedia && (
+            {selectedType === 'link' && (
+              <div>
+                <input
+                  type="url"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                  required
+                />
+              </div>
+            )}
+
+            {acceptsFile && (
               <div>
                 {mediaPreview ? (
                   <div className="relative">
-                    {mediaFile?.type.startsWith('video/') ? (
+                    {selectedType === 'video' ? (
                       <video src={mediaPreview} controls className="w-full h-40 object-cover rounded-xl" />
                     ) : (
                       <img src={mediaPreview} alt="Preview" className="w-full h-40 object-cover rounded-xl" />
                     )}
                     <button
                       type="button"
-                      onClick={() => { setMediaFile(null); setMediaPreview(null); }}
+                      onClick={resetMedia}
                       className="absolute top-2 right-2 w-7 h-7 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70"
                     >
                       <FiX className="w-3 h-3" />
                     </button>
                   </div>
                 ) : null}
+                {selectedType === 'video' && videoDurationSec !== null && (
+                  <p className="mt-1 text-xs text-gray-500">영상 길이: {videoDurationSec.toFixed(1)}초 (최대 60초)</p>
+                )}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -289,7 +399,6 @@ export const InlineVerificationForm = ({
               </div>
             )}
 
-            {/* 실천 시간 */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">실천한 시간 ⏰</label>
               <input
@@ -301,7 +410,6 @@ export const InlineVerificationForm = ({
               />
             </div>
 
-            {/* 내일의 다짐 */}
             <div>
               <textarea
                 value={formData.tomorrowPromise}
@@ -312,7 +420,6 @@ export const InlineVerificationForm = ({
               />
             </div>
 
-            {/* Extra 공개 전환 프롬프트 */}
             {extraVisibilityPrompt && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
                 <p className="text-xs text-amber-800">추가 기록(Extra)이 저장되었습니다. 지금 공개 피드로 전환할까요?</p>
@@ -327,15 +434,14 @@ export const InlineVerificationForm = ({
               </div>
             )}
 
-            {/* 하단 액션 바 */}
             <div className="flex items-center justify-between pt-1 border-t border-gray-100">
               <div className="flex items-center gap-1">
-                {allowsMedia && (
+                {acceptsFile && (
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="p-2 rounded-full text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
-                    title="사진/영상 첨부"
+                    title={selectedType === 'video' ? '영상 첨부' : '사진 첨부'}
                   >
                     <FiCamera className="w-5 h-5" />
                   </button>
@@ -344,7 +450,7 @@ export const InlineVerificationForm = ({
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 type="submit"
-                disabled={verificationMutation.isPending || !formData.todayNote.trim()}
+                disabled={verificationMutation.isPending}
                 className="px-5 py-2 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 transition-colors disabled:opacity-50"
               >
                 {verificationMutation.isPending ? '제출 중...' : '인증하기 🎉'}

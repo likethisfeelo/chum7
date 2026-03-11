@@ -77,6 +77,18 @@ function isPublicVerification(v: VerificationItem): boolean {
 
 async function normalizeVerification(v: VerificationItem) {
   const imageUrl = await toRenderableMediaUrl(v.imageUrl || null);
+  const videoUrl = await toRenderableMediaUrl(v.videoUrl || null);
+
+  const fallbackType = (() => {
+    if (v.linkUrl) return 'link';
+    if (v.videoUrl) return 'video';
+    if (v.imageUrl && /\.(mp4|webm|mov)(\?|$)/i.test(String(v.imageUrl))) return 'video';
+    if (v.imageUrl) return 'image';
+    return 'text';
+  })();
+
+  const verificationType = v.verificationType || fallbackType;
+  const mediaUrl = verificationType === 'video' ? (videoUrl || imageUrl) : imageUrl;
 
   return {
     verificationId: v.verificationId,
@@ -85,8 +97,12 @@ async function normalizeVerification(v: VerificationItem) {
     userChallengeId: v.userChallengeId || null,
     userName: v.userName || null,
     day: v.day,
+    verificationType,
     todayNote: v.todayNote,
-    imageUrl,
+    imageUrl: verificationType === 'image' ? mediaUrl : null,
+    videoUrl: verificationType === 'video' ? mediaUrl : null,
+    mediaUrl,
+    linkUrl: v.linkUrl || null,
     isAnonymous: Boolean(v.isAnonymous),
     isExtra: Boolean(v.isExtra),
     isPersonalOnly: Boolean(v.isPersonalOnly),

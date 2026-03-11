@@ -251,8 +251,21 @@ export const ChallengeFeedPage = () => {
                     <p className="text-xs text-gray-400">Day {item.day || '-'}</p>
                   </div>
                   <p className="text-sm text-gray-800 whitespace-pre-wrap">{item.todayNote || '내용 없음'}</p>
-                  {item.imageUrl && (
+                  {item.verificationType === 'image' && item.imageUrl && (
                     <img src={item.imageUrl} alt="verification" className="mt-2 w-full rounded-lg border border-gray-100" />
+                  )}
+                  {item.verificationType === 'video' && item.videoUrl && (
+                    <video src={item.videoUrl} controls className="mt-2 w-full rounded-lg border border-gray-100" />
+                  )}
+                  {item.verificationType === 'link' && item.linkUrl && (
+                    <a
+                      href={item.linkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex text-sm text-primary-600 underline break-all"
+                    >
+                      {item.linkUrl}
+                    </a>
                   )}
                 </article>
               ))}
