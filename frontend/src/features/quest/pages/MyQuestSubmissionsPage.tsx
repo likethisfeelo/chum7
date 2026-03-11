@@ -165,6 +165,13 @@ export const MyQuestSubmissionsPage = () => {
                     className="w-full h-40 object-cover rounded-xl mb-3"
                   />
                 )}
+                {sub.content?.videoUrl && (
+                  <video
+                    src={sub.content.videoUrl}
+                    controls
+                    className="w-full h-40 object-cover rounded-xl mb-3"
+                  />
+                )}
                 {sub.content?.linkUrl && (
                   <a
                     href={sub.content.linkUrl}
