@@ -463,7 +463,12 @@ export const InlineVerificationForm = ({
                     <button
                       key={type}
                       type="button"
-                      onClick={() => handleTypeChange(type)}
+                      onClick={() => {
+                        handleTypeChange(type);
+                        if (type === 'image' || type === 'video') {
+                          setTimeout(() => fileInputRef.current?.click(), 50);
+                        }
+                      }}
                       className={`p-2 rounded-full transition-colors ${
                         isActive
                           ? 'text-primary-700 bg-primary-50 border border-primary-200'
@@ -475,16 +480,6 @@ export const InlineVerificationForm = ({
                     </button>
                   );
                 })}
-                {acceptsFile && (
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-2 rounded-full text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
-                    title={selectedType === 'video' ? '영상 첨부' : '사진 첨부'}
-                  >
-                    <FiCamera className="w-5 h-5" />
-                  </button>
-                )}
               </div>
               <motion.button
                 whileTap={{ scale: 0.97 }}
