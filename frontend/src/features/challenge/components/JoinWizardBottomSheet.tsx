@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { JoinWizardChallenge, QuestVerificationType, WizardFormState } from './join-wizard/types';
 import { resolveWizardSteps } from './join-wizard/resolveWizardSteps';
+import { resolveJoinRequirements } from './join-wizard/requirements';
 
 interface JoinWizardBottomSheetProps {
   isOpen: boolean;
@@ -147,7 +148,9 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
   const isLastStep = wizardStepIdx === stepConfigs.length - 1;
   const progressRatio = ((wizardStepIdx + 1) / stepConfigs.length) * 100;
   const timeCopy = getTimeCopy(challenge.challengeType);
+  const joinRequirements = resolveJoinRequirements(challenge);
   const isQuestRequired = challenge.challengeType === 'personal_only';
+  const showQuestDetailFields = Boolean(challenge.personalQuestEnabled);
 
   const goNext = () => {
     const error = currentConfig.validate(formState);
@@ -224,79 +227,87 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
 
     if (currentConfig.id === 'quest') {
       return (
-        <div className="space-y-4">
+        <div className="space-y-4"> 
           <div>
             <h3 className="text-xl font-bold text-gray-900">
-              {isQuestRequired ? '나만의 퀘스트를 등록해주세요' : '나만의 퀘스트를 추가할 수 있어요'}
+              {showQuestDetailFields
+                ? (isQuestRequired ? '나만의 퀘스트를 등록해주세요' : '나만의 퀘스트를 추가할 수 있어요')
+                : '참여를 위한 개인 목표를 입력해주세요'}
             </h3>
             <p className="text-sm text-gray-500 mt-1">
-              {isQuestRequired ? '이 챌린지는 개인 퀘스트가 필요합니다' : '공통 퀘스트 외 개인 목표를 더할 수 있어요'}
+              {showQuestDetailFields
+                ? (isQuestRequired ? '이 챌린지는 개인 퀘스트가 필요합니다' : '공통 퀘스트 외 개인 목표를 더할 수 있어요')
+                : '입력한 개인 목표는 챌린지 참여 정보로 저장됩니다'}
             </p>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700">퀘스트 제목</label>
+              <label className="text-sm font-medium text-gray-700">{joinRequirements.requirePersonalGoalOnJoin ? '개인 목표' : '퀘스트 제목'}</label>
               <span className="text-xs text-gray-400">{formState.questTitle.length}/100</span>
             </div>
             <input
               value={formState.questTitle}
               maxLength={100}
               onChange={(e) => setFormState((prev) => ({ ...prev, questTitle: e.target.value }))}
-              placeholder="퀘스트 제목을 입력하세요"
+              placeholder={joinRequirements.requirePersonalGoalOnJoin ? '개인 목표를 입력하세요' : '퀘스트 제목을 입력하세요'}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl"
             />
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700">퀘스트 설명</label>
-              <span className="text-xs text-gray-400">{formState.questDescription.length}/1000</span>
-            </div>
-            <textarea
-              value={formState.questDescription}
-              maxLength={1000}
-              rows={4}
-              onChange={(e) => setFormState((prev) => ({ ...prev, questDescription: e.target.value }))}
-              placeholder="퀘스트 설명을 입력하세요"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl resize-none"
-            />
-          </div>
+          {showQuestDetailFields && (
+            <>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-700">퀘스트 설명</label>
+                  <span className="text-xs text-gray-400">{formState.questDescription.length}/1000</span>
+                </div>
+                <textarea
+                  value={formState.questDescription}
+                  maxLength={1000}
+                  rows={4}
+                  onChange={(e) => setFormState((prev) => ({ ...prev, questDescription: e.target.value }))}
+                  placeholder="퀘스트 설명을 입력하세요"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl resize-none"
+                />
+              </div>
 
-          <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">인증 방식</p>
-            <div className="grid grid-cols-4 gap-2">
-              {(['image', 'text', 'link', 'video'] as const).map((verificationType) => {
-                const isAllowed = allowedTypes.includes(verificationType);
-                return (
-                  <button
-                    key={verificationType}
-                    type="button"
-                    disabled={!isAllowed}
-                    onClick={() => isAllowed && setFormState((prev) => ({ ...prev, questVerificationType: verificationType }))}
-                    className={`px-2 py-2 rounded-xl text-sm ${
-                      formState.questVerificationType === verificationType
-                        ? 'bg-primary-600 text-white'
-                        : isAllowed
-                          ? 'bg-gray-100 text-gray-700'
-                          : 'bg-gray-50 text-gray-300 cursor-not-allowed'
-                    }`}
-                  >
-                    {verificationType === 'image' && '사진'}
-                    {verificationType === 'text' && '텍스트'}
-                    {verificationType === 'link' && '링크'}
-                    {verificationType === 'video' && '영상'}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">인증 방식</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['image', 'text', 'link', 'video'] as const).map((verificationType) => {
+                    const isAllowed = allowedTypes.includes(verificationType);
+                    return (
+                      <button
+                        key={verificationType}
+                        type="button"
+                        disabled={!isAllowed}
+                        onClick={() => isAllowed && setFormState((prev) => ({ ...prev, questVerificationType: verificationType }))}
+                        className={`px-2 py-2 rounded-xl text-sm ${
+                          formState.questVerificationType === verificationType
+                            ? 'bg-primary-600 text-white'
+                            : isAllowed
+                              ? 'bg-gray-100 text-gray-700'
+                              : 'bg-gray-50 text-gray-300 cursor-not-allowed'
+                        }`}
+                      >
+                        {verificationType === 'image' && '사진'}
+                        {verificationType === 'text' && '텍스트'}
+                        {verificationType === 'link' && '링크'}
+                        {verificationType === 'video' && '영상'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-          <p className="text-xs text-gray-500">
-            {challenge.personalQuestAutoApprove
-              ? '✓ 등록 즉시 자동 승인됩니다'
-              : getManualReviewGuide(challenge, userTimezone)}
-          </p>
+              <p className="text-xs text-gray-500">
+                {challenge.personalQuestAutoApprove
+                  ? '✓ 등록 즉시 자동 승인됩니다'
+                  : getManualReviewGuide(challenge, userTimezone)}
+              </p>
+            </>
+          )}
         </div>
       );
     }
@@ -326,16 +337,18 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
           {!!formState.questTitle.trim() && (
             <>
               <div className="border-t border-gray-100 pt-2" />
-              <p className="text-sm text-gray-500">나만의 퀘스트</p>
+              <p className="text-sm text-gray-500">{showQuestDetailFields ? '나만의 퀘스트' : '개인 목표'}</p>
               <p className="font-semibold text-gray-900">{formState.questTitle.trim()}</p>
-              {confirmQuestPolicy.showDescription && !!formState.questDescription.trim() && (
+              {showQuestDetailFields && confirmQuestPolicy.showDescription && !!formState.questDescription.trim() && (
                 <p className="text-xs text-gray-600 line-clamp-2">{formState.questDescription.trim()}</p>
               )}
-              <p className="text-xs text-gray-500">인증: {getVerificationTypeLabel(formState.questVerificationType)}</p>
-              <p className="text-xs text-gray-500">
-                {challenge.personalQuestAutoApprove ? '자동 승인' : '리더 검토 후 승인'}
-              </p>
-              {confirmQuestPolicy.guide && (
+              {showQuestDetailFields && <p className="text-xs text-gray-500">인증: {getVerificationTypeLabel(formState.questVerificationType)}</p>}
+              {showQuestDetailFields && (
+                <p className="text-xs text-gray-500">
+                  {challenge.personalQuestAutoApprove ? '자동 승인' : '리더 검토 후 승인'}
+                </p>
+              )}
+              {showQuestDetailFields && confirmQuestPolicy.guide && (
                 <p className="text-[11px] text-gray-400">{confirmQuestPolicy.guide}</p>
               )}
             </>
