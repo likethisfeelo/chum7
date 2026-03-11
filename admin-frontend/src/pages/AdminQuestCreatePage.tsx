@@ -13,6 +13,20 @@ const VERIFICATION_TYPES: { value: VerificationType; label: string }[] = [
   { value: 'video', label: '🎥 영상' },
 ];
 
+const DEFAULT_ALLOWED_TYPES: VerificationType[] = ['image', 'link', 'text', 'video'];
+
+const sanitizeAllowedVerificationTypes = (raw: unknown): VerificationType[] => {
+  if (!Array.isArray(raw)) return DEFAULT_ALLOWED_TYPES;
+
+  const normalized = raw
+    .filter((value): value is VerificationType =>
+      value === 'image' || value === 'link' || value === 'text' || value === 'video'
+    )
+    .filter((value, index, arr) => arr.indexOf(value) === index);
+
+  return normalized.length > 0 ? normalized : DEFAULT_ALLOWED_TYPES;
+};
+
 const INITIAL = {
   title:           '',
   description:     '',
@@ -86,18 +100,22 @@ export const AdminQuestCreatePage = () => {
     setForm(prev => ({ ...prev, [key]: val }));
 
   const selectedChallenge = challengeOptions.find(c => c.challengeId === challengeId);
-  const allowedTypes: VerificationType[] = (selectedChallenge?.allowedVerificationTypes as VerificationType[] | undefined) ?? ['image', 'link', 'text', 'video'];
+  const allowedTypes = sanitizeAllowedVerificationTypes(selectedChallenge?.allowedVerificationTypes);
 
   useEffect(() => {
     if (challengeId && allowedTypes.length > 0 && !allowedTypes.includes(form.verificationType)) {
       set('verificationType', allowedTypes[0]);
     }
-  }, [challengeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [allowedTypes, challengeId, form.verificationType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) { setError('제목을 입력해주세요'); return; }
     if (!challengeId.trim()) { setError('연결할 챌린지를 선택해주세요'); return; }
+    if (!allowedTypes.includes(form.verificationType)) {
+      setError('선택한 챌린지에서 허용되지 않는 인증 유형입니다. 인증 유형을 다시 선택해주세요.');
+      return;
+    }
 
     setLoading(true);
     setError('');

@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBDocumentClient, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { resolveVerificationType } from '../../../shared/lib/verification-normalization';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -77,6 +78,19 @@ function isPublicVerification(v: VerificationItem): boolean {
 
 async function normalizeVerification(v: VerificationItem) {
   const imageUrl = await toRenderableMediaUrl(v.imageUrl || null);
+  const videoUrl = await toRenderableMediaUrl(v.videoUrl || null);
+
+  const linkUrlRaw = typeof v.linkUrl === 'string' ? v.linkUrl.trim() : '';
+  const videoUrlRaw = typeof v.videoUrl === 'string' ? v.videoUrl.trim() : '';
+  const imageUrlRaw = typeof v.imageUrl === 'string' ? v.imageUrl.trim() : '';
+
+  const verificationType = resolveVerificationType({
+    verificationType: v.verificationType,
+    imageUrl: imageUrlRaw,
+    videoUrl: videoUrlRaw,
+    linkUrl: linkUrlRaw,
+  });
+  const mediaUrl = verificationType === 'video' ? (videoUrl || imageUrl) : imageUrl;
 
   return {
     verificationId: v.verificationId,
@@ -85,8 +99,12 @@ async function normalizeVerification(v: VerificationItem) {
     userChallengeId: v.userChallengeId || null,
     userName: v.userName || null,
     day: v.day,
+    verificationType,
     todayNote: v.todayNote,
-    imageUrl,
+    imageUrl: verificationType === 'image' ? mediaUrl : null,
+    videoUrl: verificationType === 'video' ? mediaUrl : null,
+    mediaUrl,
+    linkUrl: linkUrlRaw || null,
     isAnonymous: Boolean(v.isAnonymous),
     isExtra: Boolean(v.isExtra),
     isPersonalOnly: Boolean(v.isPersonalOnly),
