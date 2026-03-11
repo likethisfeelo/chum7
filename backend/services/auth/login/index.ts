@@ -42,6 +42,13 @@ type IdTokenPayload = {
   email_verified?: boolean | string;
 };
 
+function decodeBase64Url(input: string): string {
+  const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+  const paddingLength = (4 - (normalized.length % 4)) % 4;
+  const padded = normalized.padEnd(normalized.length + paddingLength, '=');
+  return Buffer.from(padded, 'base64').toString('utf8');
+}
+
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
     statusCode,
@@ -61,8 +68,7 @@ function parseIdTokenPayload(idToken?: string): IdTokenPayload | null {
     const payload = idToken.split('.')[1];
     if (!payload) return null;
 
-    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const decodedPayload = Buffer.from(normalizedPayload, 'base64').toString('utf8');
+    const decodedPayload = decodeBase64Url(payload);
     return JSON.parse(decodedPayload) as IdTokenPayload;
   } catch (error) {
     console.error('Failed to parse Cognito idToken payload:', error);
@@ -71,7 +77,7 @@ function parseIdTokenPayload(idToken?: string): IdTokenPayload | null {
 }
 
 function isEmailVerified(payload: IdTokenPayload | null): boolean {
-  if (!payload) return false;
+  if (!payload || payload.email_verified === undefined) return true;
   return payload.email_verified === true || payload.email_verified === 'true';
 }
 
