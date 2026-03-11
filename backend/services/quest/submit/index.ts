@@ -54,6 +54,15 @@ function isTransactionConditionFailed(error: any): boolean {
   return Array.isArray(reasons) && reasons.some((r: any) => r?.Code === 'ConditionalCheckFailed');
 }
 
+function isRetriableHistoryLookupError(error: any): boolean {
+  const code = String(error?.name || error?.Code || '');
+  const message = String(error?.message || '');
+
+  if (code === 'ValidationException' && message.includes('IndexName')) return true;
+  if (code === 'ResourceNotFoundException') return true;
+  return false;
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
@@ -88,16 +97,27 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(400, { error: 'INVALID_CONTENT', message: contentError });
     }
 
-    const historyResult = await docClient.send(new QueryCommand({
-      TableName: process.env.QUEST_SUBMISSIONS_TABLE!,
-      IndexName: 'userId-createdAt-index',
-      KeyConditionExpression: 'userId = :uid',
-      FilterExpression: 'questId = :qid',
-      ExpressionAttributeValues: { ':uid': userId, ':qid': questId },
-      ScanIndexForward: false,
-    }));
+    let previousAttempts: any[] = [];
+    try {
+      const historyResult = await docClient.send(new QueryCommand({
+        TableName: process.env.QUEST_SUBMISSIONS_TABLE!,
+        IndexName: 'userId-createdAt-index',
+        KeyConditionExpression: 'userId = :uid',
+        FilterExpression: 'questId = :qid',
+        ExpressionAttributeValues: { ':uid': userId, ':qid': questId },
+        ScanIndexForward: false,
+      }));
+      previousAttempts = historyResult.Items ?? [];
+    } catch (historyLookupError: any) {
+      if (!isRetriableHistoryLookupError(historyLookupError)) {
+        throw historyLookupError;
+      }
+      console.warn('Quest submission history lookup skipped due to missing index/resource:', {
+        errorName: historyLookupError?.name,
+        message: historyLookupError?.message,
+      });
+    }
 
-    const previousAttempts = historyResult.Items ?? [];
     const attemptNumber = previousAttempts.length + 1;
     const lastRejected = previousAttempts.find((s: any) => s.status === 'rejected');
     const previousSubmissionId = lastRejected?.submissionId ?? null;

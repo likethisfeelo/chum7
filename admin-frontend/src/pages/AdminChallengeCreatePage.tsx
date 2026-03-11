@@ -61,13 +61,23 @@ const INITIAL = {
 };
 
 
-const isForcedPersonalGoalType = (challengeType: ChallengeType) =>
+const isForcedPersonalGoalRequiredType = (challengeType: ChallengeType) =>
   challengeType === 'personal_only' || challengeType === 'leader_personal';
+
+const isForcedPersonalGoalDisabledType = (challengeType: ChallengeType) =>
+  challengeType === 'leader_only';
+
+const isPersonalGoalPolicyLockedType = (challengeType: ChallengeType) =>
+  isForcedPersonalGoalRequiredType(challengeType) || isForcedPersonalGoalDisabledType(challengeType);
 
 const normalizeJoinPolicyByType = (challengeType: ChallengeType, prev: typeof INITIAL) => ({
   ...prev,
   challengeType,
-  requirePersonalGoalOnJoin: isForcedPersonalGoalType(challengeType) ? true : prev.requirePersonalGoalOnJoin,
+  requirePersonalGoalOnJoin: isForcedPersonalGoalRequiredType(challengeType)
+    ? true
+    : isForcedPersonalGoalDisabledType(challengeType)
+      ? false
+      : prev.requirePersonalGoalOnJoin,
 });
 
 export const AdminChallengeCreatePage = () => {
@@ -300,12 +310,15 @@ export const AdminChallengeCreatePage = () => {
               <input
                 type="checkbox"
                 checked={form.requirePersonalGoalOnJoin}
-                disabled={isForcedPersonalGoalType(form.challengeType)}
+                disabled={isPersonalGoalPolicyLockedType(form.challengeType)}
                 onChange={(e) => set('requirePersonalGoalOnJoin', e.target.checked)}
               />
               참여 시 개인 목표 입력 필수
-              {isForcedPersonalGoalType(form.challengeType) && (
-                <span className="text-xs text-gray-500" title="personal_only / leader_personal 유형은 참여 시 개인 목표가 반드시 필요합니다.">(유형 정책으로 자동 고정)</span>
+              {isForcedPersonalGoalRequiredType(form.challengeType) && (
+                <span className="text-xs text-gray-500" title="personal_only / leader_personal 유형은 참여 시 개인 목표가 반드시 필요합니다.">(유형 정책으로 자동 필수)</span>
+              )}
+              {isForcedPersonalGoalDisabledType(form.challengeType) && (
+                <span className="text-xs text-gray-500" title="leader_only 유형은 리더 퀘스트 중심이므로 참여 개인 목표 입력을 요구하지 않습니다.">(유형 정책으로 비활성)</span>
               )}
             </label>
             <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -318,9 +331,14 @@ export const AdminChallengeCreatePage = () => {
             </label>
           </div>
 
-          {isForcedPersonalGoalType(form.challengeType) && (
+          {isForcedPersonalGoalRequiredType(form.challengeType) && (
             <p className="text-xs text-primary-700">
               선택한 챌린지 유형은 참여 시 개인 목표 입력이 필수로 자동 적용됩니다.
+            </p>
+          )}
+          {isForcedPersonalGoalDisabledType(form.challengeType) && (
+            <p className="text-xs text-gray-600">
+              리더 퀘스트형은 참여자가 리더 퀘스트를 수행하는 구조라 개인 목표 입력 필수를 설정할 수 없습니다.
             </p>
           )}
         </div>
