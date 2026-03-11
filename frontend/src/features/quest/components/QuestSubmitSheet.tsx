@@ -34,6 +34,7 @@ async function readVideoDuration(file: File): Promise<number> {
 export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSubmitSheetProps) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoPreviewUrlRef = useRef<string | null>(null);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -45,6 +46,10 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
   const [note, setNote] = useState('');
 
   const resetForm = () => {
+    if (videoPreviewUrlRef.current) {
+      URL.revokeObjectURL(videoPreviewUrlRef.current);
+      videoPreviewUrlRef.current = null;
+    }
     if (fileInputRef.current) fileInputRef.current.value = '';
     setImageFile(null);
     setImagePreview(null);
@@ -61,6 +66,13 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
       resetForm();
     }
   }, [isOpen]);
+
+  useEffect(() => () => {
+    if (videoPreviewUrlRef.current) {
+      URL.revokeObjectURL(videoPreviewUrlRef.current);
+      videoPreviewUrlRef.current = null;
+    }
+  }, []);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -91,9 +103,14 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
         toast.error(`영상은 ${maxDuration}초 이내만 업로드할 수 있어요.`);
         return;
       }
+      const previewUrl = URL.createObjectURL(file);
+      if (videoPreviewUrlRef.current) {
+        URL.revokeObjectURL(videoPreviewUrlRef.current);
+      }
+      videoPreviewUrlRef.current = previewUrl;
       setVideoDurationSec(duration);
       setVideoFile(file);
-      setVideoPreview(URL.createObjectURL(file));
+      setVideoPreview(previewUrl);
     } catch {
       toast.error('영상 길이를 확인할 수 없습니다. 다시 시도해주세요.');
     }
@@ -258,7 +275,16 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
                 <video src={videoPreview} controls className="w-full h-48 object-cover rounded-2xl" />
                 <button
                   type="button"
-                  onClick={() => { setVideoFile(null); setVideoPreview(null); setVideoDurationSec(null); }}
+                  onClick={() => {
+                    if (videoPreviewUrlRef.current) {
+                      URL.revokeObjectURL(videoPreviewUrlRef.current);
+                      videoPreviewUrlRef.current = null;
+                    }
+                    setVideoFile(null);
+                    setVideoPreview(null);
+                    setVideoDurationSec(null);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                  }}
                   className="absolute top-2 right-2 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center text-white"
                 >
                   <FiX className="w-4 h-4" />

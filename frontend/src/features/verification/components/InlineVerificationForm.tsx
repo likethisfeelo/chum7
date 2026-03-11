@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -42,6 +42,9 @@ function extractApiErrorMessage(error: any): string {
       return `입력값 오류(${first.path.join('.')}): ${first.message}`;
     }
   }
+  if (typeof error?.message === 'string' && error.message.startsWith('UPLOAD_PUT_FAILED_')) {
+    return '파일 업로드에 실패했습니다. 네트워크 상태를 확인해주세요.';
+  }
   return apiMessage || '인증에 실패했습니다';
 }
 
@@ -70,6 +73,7 @@ export const InlineVerificationForm = ({
 }: InlineVerificationFormProps) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaPreviewUrlRef = useRef<string | null>(null);
 
   const availableTypes = useMemo(() => {
     if (!allowedVerificationTypes || allowedVerificationTypes.length === 0) return ALL_TYPES;
@@ -92,11 +96,28 @@ export const InlineVerificationForm = ({
 
   const acceptsFile = selectedType === 'image' || selectedType === 'video';
 
+  useEffect(() => {
+    if (!availableTypes.includes(selectedType)) {
+      setSelectedType(availableTypes[0]);
+    }
+  }, [availableTypes, selectedType]);
+
+  useEffect(() => () => {
+    if (mediaPreviewUrlRef.current) {
+      URL.revokeObjectURL(mediaPreviewUrlRef.current);
+      mediaPreviewUrlRef.current = null;
+    }
+  }, []);
+
   const acceptAttr = selectedType === 'video' ? 'video/*' : 'image/*';
 
   const handleFocus = () => setIsExpanded(true);
 
   const resetMedia = () => {
+    if (mediaPreviewUrlRef.current) {
+      URL.revokeObjectURL(mediaPreviewUrlRef.current);
+      mediaPreviewUrlRef.current = null;
+    }
     setMediaFile(null);
     setMediaPreview(null);
     setVideoDurationSec(null);
@@ -136,6 +157,7 @@ export const InlineVerificationForm = ({
       try {
         const duration = await readVideoDuration(file);
         if (duration > 60) {
+          if (fileInputRef.current) fileInputRef.current.value = '';
           toast.error('영상은 60초 이내만 업로드할 수 있어요.');
           return;
         }
@@ -146,8 +168,13 @@ export const InlineVerificationForm = ({
       }
     }
 
+    const previewUrl = URL.createObjectURL(file);
+    if (mediaPreviewUrlRef.current) {
+      URL.revokeObjectURL(mediaPreviewUrlRef.current);
+    }
+    mediaPreviewUrlRef.current = previewUrl;
     setMediaFile(file);
-    setMediaPreview(URL.createObjectURL(file));
+    setMediaPreview(previewUrl);
   };
 
   const verificationMutation = useMutation({
