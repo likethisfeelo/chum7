@@ -23,6 +23,7 @@ interface VerificationStackProps extends StackProps {
   verificationsTable: Table;
   userChallengesTable: Table;
   challengesTable: Table;
+  userCheerTicketsTable: Table;
   plazaPostsTable: Table;
   plazaCommentsTable: Table;
   plazaReactionsTable: Table;
@@ -42,6 +43,7 @@ export class VerificationStack extends Stack {
       verificationsTable,
       userChallengesTable,
       challengesTable,
+      userCheerTicketsTable,
       plazaPostsTable,
       plazaCommentsTable,
       plazaReactionsTable,
@@ -55,6 +57,7 @@ export class VerificationStack extends Stack {
       VERIFICATIONS_TABLE: verificationsTable.tableName,
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
       CHALLENGES_TABLE: challengesTable.tableName,
+      USER_CHEER_TICKETS_TABLE: userCheerTicketsTable.tableName,
       PLAZA_POSTS_TABLE: plazaPostsTable.tableName,
       PLAZA_COMMENTS_TABLE: plazaCommentsTable.tableName,
       PLAZA_REACTIONS_TABLE: plazaReactionsTable.tableName,
@@ -83,6 +86,8 @@ export class VerificationStack extends Stack {
     });
     verificationsTable.grantReadWriteData(submitFn);
     userChallengesTable.grantReadWriteData(submitFn);
+    challengesTable.grantReadData(submitFn);
+    userCheerTicketsTable.grantReadWriteData(submitFn);
     apiGateway.addRoutes({
       path: '/verifications',
       methods: [HttpMethod.POST],

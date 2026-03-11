@@ -75,6 +75,7 @@ new VerificationStack(app, `chme-${stage}-verification`, {
   userChallengesTable: coreStack.userChallengesTable,
   uploadsBucket: coreStack.uploadsBucket,
   challengesTable: coreStack.challengesTable,
+  userCheerTicketsTable: coreStack.userCheerTicketsTable,
   plazaPostsTable: coreStack.plazaPostsTable,
   plazaCommentsTable: coreStack.plazaCommentsTable,
   plazaReactionsTable: coreStack.plazaReactionsTable,
