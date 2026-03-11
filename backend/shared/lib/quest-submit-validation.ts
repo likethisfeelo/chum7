@@ -1,10 +1,10 @@
 export function validateQuestSubmissionContent(quest: any, content: any): string | null {
   switch (quest.verificationType) {
     case 'image':
-      if (!content.imageUrl) return '이미지 URL이 필요합니다';
+      if (!content.imageUrl?.trim()) return '이미지 URL이 필요합니다';
       break;
     case 'video':
-      if (!content.videoUrl) return '영상 URL이 필요합니다';
+      if (!content.videoUrl?.trim()) return '영상 URL이 필요합니다';
       if (content.videoDurationSec === undefined) return '영상 길이 정보가 필요합니다';
       if (!Number.isFinite(content.videoDurationSec) || content.videoDurationSec < 0) {
         return '영상 길이 정보가 올바르지 않습니다';
@@ -16,17 +16,19 @@ export function validateQuestSubmissionContent(quest: any, content: any): string
         }
       }
       break;
-    case 'link':
-      if (!content.linkUrl) return 'URL이 필요합니다';
+    case 'link': {
+      const linkUrl = content.linkUrl?.trim();
+      if (!linkUrl) return 'URL이 필요합니다';
       if (quest.verificationConfig?.linkPattern) {
         try {
           const regex = new RegExp(quest.verificationConfig.linkPattern);
-          if (!regex.test(content.linkUrl)) return 'URL 형식이 올바르지 않습니다';
+          if (!regex.test(linkUrl)) return 'URL 형식이 올바르지 않습니다';
         } catch {
           // invalid regex, skip
         }
       }
       break;
+    }
     case 'text': {
       if (!content.textContent?.trim()) return '내용을 입력해 주세요';
       const maxChars = quest.verificationConfig?.maxChars ?? 2000;

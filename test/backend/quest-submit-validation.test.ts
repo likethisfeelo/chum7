@@ -39,4 +39,17 @@ describe('quest submit validateQuestSubmissionContent', () => {
     const message = validateQuestSubmissionContent(quest, { textContent: '   ' });
     expect(message).toBe('내용을 입력해 주세요');
   });
+
+  test('link quest rejects blank link url', () => {
+    const quest = { verificationType: 'link', verificationConfig: {} };
+    const message = validateQuestSubmissionContent(quest, { linkUrl: '   ' });
+    expect(message).toBe('URL이 필요합니다');
+  });
+
+  test('image quest rejects blank image url', () => {
+    const quest = { verificationType: 'image', verificationConfig: {} };
+    const message = validateQuestSubmissionContent(quest, { imageUrl: '   ' });
+    expect(message).toBe('이미지 URL이 필요합니다');
+  });
+
 });
