@@ -6,6 +6,9 @@ import { FiCamera, FiX, FiLink, FiFileText, FiVideo } from 'react-icons/fi';
 import { BottomSheet } from '@/shared/components/BottomSheet';
 import toast from 'react-hot-toast';
 
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
+
 interface QuestSubmitSheetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -81,6 +84,10 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
       toast.error('이미지 파일만 선택할 수 있어요.');
       return;
     }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      toast.error('이미지는 10MB 이내만 업로드할 수 있어요.');
+      return;
+    }
     setImageFile(file);
     const reader = new FileReader();
     reader.onload = () => setImagePreview(reader.result as string);
@@ -92,6 +99,10 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
     if (!file) return;
     if (!file.type.startsWith('video/')) {
       toast.error('영상 파일만 선택할 수 있어요.');
+      return;
+    }
+    if (file.size > MAX_VIDEO_SIZE_BYTES) {
+      toast.error('영상은 50MB 이내만 업로드할 수 있어요.');
       return;
     }
 
@@ -129,6 +140,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
         const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
           fileName: imageFile.name,
           fileType: imageFile.type,
+          fileSize: imageFile.size,
           challengeId,
         });
         const uploadResp = await fetch(uploadData.data.uploadUrl, {
@@ -149,6 +161,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
         const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
           fileName: videoFile.name,
           fileType: videoFile.type,
+          fileSize: videoFile.size,
           challengeId,
         });
         const uploadResp = await fetch(uploadData.data.uploadUrl, {
@@ -164,6 +177,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
 
       } else if (quest.verificationType === 'link') {
         if (!linkUrl.trim()) throw new Error('URL을 입력해주세요');
+        if (!linkUrl.trim().startsWith('https://')) throw new Error('URL은 https 형식만 허용됩니다');
         content = { linkUrl: linkUrl.trim() };
 
       } else if (quest.verificationType === 'text') {

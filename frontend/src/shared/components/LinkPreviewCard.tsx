@@ -18,13 +18,15 @@ function getHostLabel(inputUrl: string): string {
 export const LinkPreviewCard = ({ url, className }: LinkPreviewCardProps) => {
   const host = getHostLabel(url);
 
+  const isHttps = url.startsWith('https://');
+
   const { data } = useQuery({
     queryKey: ['link-preview', url],
     queryFn: async () => {
       const res = await apiClient.get('/verifications/link-preview', { params: { url } });
       return res.data?.data || null;
     },
-    enabled: Boolean(url),
+    enabled: Boolean(url) && isHttps,
     staleTime: 1000 * 60 * 30,
     retry: 1,
   });

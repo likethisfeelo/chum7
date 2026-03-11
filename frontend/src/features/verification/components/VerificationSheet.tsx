@@ -6,6 +6,9 @@ import { FiCamera, FiX } from 'react-icons/fi';
 import { BottomSheet } from '@/shared/components/BottomSheet';
 import toast from 'react-hot-toast';
 
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
+
 interface VerificationSheetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -94,6 +97,16 @@ export const VerificationSheet = ({
       return;
     }
 
+    if (file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE_BYTES) {
+      toast.error('이미지는 10MB 이내만 업로드할 수 있어요.');
+      return;
+    }
+
+    if (file.type.startsWith('video/') && file.size > MAX_VIDEO_SIZE_BYTES) {
+      toast.error('영상은 50MB 이내만 업로드할 수 있어요.');
+      return;
+    }
+
     setMediaFile(file);
     setMediaPreview(URL.createObjectURL(file));
   };
@@ -107,6 +120,7 @@ export const VerificationSheet = ({
         const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
           fileName: mediaFile.name,
           fileType: mediaFile.type,
+          fileSize: mediaFile.size,
           challengeId,
         });
 

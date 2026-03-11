@@ -13,6 +13,9 @@ interface InlineVerificationFormProps {
 
 type VerificationType = 'text' | 'image' | 'video' | 'link';
 
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
+
 const ALL_TYPES: VerificationType[] = ['text', 'image', 'video', 'link'];
 
 function toIsoFromLocalDateTime(localDateTime: string): string {
@@ -148,8 +151,18 @@ export const InlineVerificationForm = ({
       return;
     }
 
+    if (selectedType === 'image' && file.size > MAX_IMAGE_SIZE_BYTES) {
+      toast.error('이미지는 10MB 이내만 업로드할 수 있어요.');
+      return;
+    }
+
     if (selectedType === 'video' && !file.type.startsWith('video/')) {
       toast.error('영상 인증에서는 영상 파일만 업로드할 수 있어요.');
+      return;
+    }
+
+    if (selectedType === 'video' && file.size > MAX_VIDEO_SIZE_BYTES) {
+      toast.error('영상은 50MB 이내만 업로드할 수 있어요.');
       return;
     }
 
@@ -186,6 +199,7 @@ export const InlineVerificationForm = ({
         const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
           fileName: mediaFile.name,
           fileType: mediaFile.type,
+          fileSize: mediaFile.size,
           challengeId,
         });
 
@@ -268,6 +282,11 @@ export const InlineVerificationForm = ({
 
     if (selectedType === 'link' && !linkUrl.trim()) {
       toast.error('링크를 입력해주세요.');
+      return;
+    }
+
+    if (selectedType === 'link' && !linkUrl.trim().startsWith('https://')) {
+      toast.error('링크는 https 형식만 허용됩니다.');
       return;
     }
 

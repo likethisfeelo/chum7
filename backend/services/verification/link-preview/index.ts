@@ -4,8 +4,20 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 
 const querySchema = z.object({
-  url: z.string().url(),
+  url: z.string().url().refine((value) => value.startsWith('https://'), 'HTTPS_ONLY'),
 });
+
+type LinkPreview = {
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  siteName: string | null;
+  url: string;
+};
+
+const LINK_PREVIEW_CACHE = new Map<string, { data: LinkPreview; expiresAt: number }>();
+const LINK_PREVIEW_TTL_MS = 10 * 60 * 1000;
+const LINK_PREVIEW_CACHE_LIMIT = 500;
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
@@ -17,6 +29,20 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
     },
     body: JSON.stringify(body),
   };
+}
+
+function getAllowedDomainSuffixes(): string[] {
+  return (process.env.LINK_PREVIEW_ALLOWLIST || '')
+    .split(',')
+    .map((domain) => domain.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isHostAllowed(hostname: string): boolean {
+  const allowlist = getAllowedDomainSuffixes();
+  if (allowlist.length === 0) return true;
+  const host = hostname.toLowerCase();
+  return allowlist.some((domain) => host === domain || host.endsWith(`.${domain}`));
 }
 
 function isPrivateIPv4(ip: string): boolean {
@@ -43,14 +69,36 @@ function isBlockedAddress(address: string): boolean {
   return true;
 }
 
+function getCachedPreview(url: string): LinkPreview | null {
+  const cached = LINK_PREVIEW_CACHE.get(url);
+  if (!cached) return null;
+  if (cached.expiresAt < Date.now()) {
+    LINK_PREVIEW_CACHE.delete(url);
+    return null;
+  }
+  return cached.data;
+}
+
+function cachePreview(url: string, data: LinkPreview): void {
+  if (LINK_PREVIEW_CACHE.size >= LINK_PREVIEW_CACHE_LIMIT) {
+    const first = LINK_PREVIEW_CACHE.keys().next().value;
+    if (first) LINK_PREVIEW_CACHE.delete(first);
+  }
+  LINK_PREVIEW_CACHE.set(url, { data, expiresAt: Date.now() + LINK_PREVIEW_TTL_MS });
+}
+
 async function assertSafeOutboundUrl(rawUrl: string): Promise<URL> {
   const parsed = new URL(rawUrl);
-  if (!['http:', 'https:'].includes(parsed.protocol)) {
+  if (parsed.protocol !== 'https:') {
     throw new Error('UNSUPPORTED_PROTOCOL');
   }
 
   if (!parsed.hostname || parsed.hostname === 'localhost') {
     throw new Error('BLOCKED_HOST');
+  }
+
+  if (!isHostAllowed(parsed.hostname)) {
+    throw new Error('HOST_NOT_ALLOWED');
   }
 
   const addresses = await dns.lookup(parsed.hostname, { all: true });
@@ -105,6 +153,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const { url } = querySchema.parse(event.queryStringParameters || {});
+
+    const cached = getCachedPreview(url);
+    if (cached) {
+      return response(200, { success: true, data: cached, cached: true });
+    }
+
     const safeUrl = await assertSafeOutboundUrl(url);
 
     const controller = new AbortController();
@@ -121,41 +175,35 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         signal: controller.signal,
       });
       if (!res.ok) {
-        return response(200, { success: true, data: { title: null, description: null, image: null, siteName: null, url } });
+        const data: LinkPreview = { title: null, description: null, image: null, siteName: null, url };
+        cachePreview(url, data);
+        return response(200, { success: true, data });
       }
       html = await res.text();
     } finally {
       clearTimeout(timeout);
     }
 
-    const title = getTitle(html);
-    const description =
-      getMetaContent(html, 'og:description', 'property') ||
-      getMetaContent(html, 'description', 'name');
-    const siteName = getMetaContent(html, 'og:site_name', 'property');
-    const imageRaw = getMetaContent(html, 'og:image', 'property');
-    const image = toAbsoluteUrl(safeUrl, imageRaw);
+    const data: LinkPreview = {
+      title: getTitle(html),
+      description: getMetaContent(html, 'og:description', 'property') || getMetaContent(html, 'description', 'name'),
+      siteName: getMetaContent(html, 'og:site_name', 'property'),
+      image: toAbsoluteUrl(safeUrl, getMetaContent(html, 'og:image', 'property')),
+      url,
+    };
 
-    return response(200, {
-      success: true,
-      data: {
-        title,
-        description,
-        image,
-        siteName,
-        url,
-      },
-    });
+    cachePreview(url, data);
+    return response(200, { success: true, data });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return response(400, { error: 'VALIDATION_ERROR', message: 'url 쿼리 파라미터가 올바르지 않습니다' });
+      return response(400, { error: 'VALIDATION_ERROR', message: 'https URL 쿼리 파라미터가 필요합니다' });
     }
 
     if (error?.name === 'AbortError') {
       return response(200, { success: true, data: { title: null, description: null, image: null, siteName: null, timeout: true } });
     }
 
-    if (error?.message === 'UNSUPPORTED_PROTOCOL' || error?.message === 'BLOCKED_HOST') {
+    if (error?.message === 'UNSUPPORTED_PROTOCOL' || error?.message === 'BLOCKED_HOST' || error?.message === 'HOST_NOT_ALLOWED') {
       return response(400, { error: 'INVALID_URL', message: '허용되지 않은 URL입니다' });
     }
 
