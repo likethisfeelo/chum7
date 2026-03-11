@@ -39,7 +39,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
 
     if (!challengeRes.Item) return response(404, { error: 'CHALLENGE_NOT_FOUND' });
-    if (challengeRes.Item.creatorId !== requesterId) return response(403, { error: 'FORBIDDEN' });
+    const challengeOwnerId = challengeRes.Item.createdBy || challengeRes.Item.creatorId;
+    if (!challengeOwnerId || challengeOwnerId !== requesterId) return response(403, { error: 'FORBIDDEN' });
 
     const ucRes = await docClient.send(new GetCommand({
       TableName: process.env.USER_CHALLENGES_TABLE!,
