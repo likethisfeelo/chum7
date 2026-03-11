@@ -206,6 +206,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(404, { error: 'USER_NOT_FOUND', message: '존재하지 않는 사용자입니다' });
     }
 
+    if (error.name === 'InvalidParameterException') {
+      return response(400, {
+        error: 'INVALID_PARAMETER',
+        message: '이메일 인증이 완료된 계정에서만 비밀번호 재설정을 요청할 수 있습니다'
+      });
+    }
+
     if (error.name === 'CodeMismatchException') {
       return response(400, { error: 'INVALID_CONFIRMATION_CODE', message: '인증 코드가 올바르지 않습니다' });
     }

@@ -5,7 +5,6 @@ import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import {
   CognitoIdentityProviderClient,
   SignUpCommand,
-  AdminConfirmSignUpCommand,
   ConfirmSignUpCommand,
   ResendConfirmationCodeCommand
 } from '@aws-sdk/client-cognito-identity-provider';
@@ -102,18 +101,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const userId = signUpResult.UserSub!;
 
-    // dev에서는 기본 auto-confirm (AUTO_CONFIRM_SIGNUP=false이면 비활성화)
-    const shouldAutoConfirmInDev = process.env.STAGE === 'dev' && process.env.AUTO_CONFIRM_SIGNUP !== 'false';
-    if (shouldAutoConfirmInDev && process.env.USER_POOL_ID) {
-      try {
-        await cognitoClient.send(new AdminConfirmSignUpCommand({
-          UserPoolId: process.env.USER_POOL_ID,
-          Username: input.email
-        }));
-      } catch (confirmError) {
-        console.warn('Auto confirm sign-up failed in dev stage:', confirmError);
-      }
-    }
+    const requiresEmailVerification = true;
 
     const now = new Date().toISOString();
     const user = {
@@ -152,7 +140,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         email: user.email,
         name: user.name,
         animalIcon: user.animalIcon,
-        requiresEmailVerification: !shouldAutoConfirmInDev
+        requiresEmailVerification
       }
     });
 
