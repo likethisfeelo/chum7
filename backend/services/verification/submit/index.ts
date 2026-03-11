@@ -224,6 +224,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const allowedTypes = ['image', 'text', 'link', 'video'] as Array<'image' | 'text' | 'link' | 'video'>;
+    let challengeTargetTime24: string | null = null;
     if (process.env.CHALLENGES_TABLE) {
       const challengeResult = await docClient.send(new GetCommand({
         TableName: process.env.CHALLENGES_TABLE,
@@ -236,6 +237,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         if (sanitized.length > 0) {
           allowedTypes.splice(0, allowedTypes.length, ...sanitized);
         }
+      }
+      const rawTargetTime = challengeResult.Item?.targetTime;
+      if (typeof rawTargetTime === 'string' && /^\d{2}:\d{2}$/.test(rawTargetTime.trim())) {
+        challengeTargetTime24 = rawTargetTime.trim();
       }
     }
 
@@ -272,8 +277,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const verificationDate = input.verificationDate || practiceValidation.certDate;
 
     const personalTarget = userChallenge.personalTarget;
-    const derivedTargetTime = personalTarget?.time24
-      ? buildTargetDateTimeISO(verificationDate, personalTarget.time24, personalTarget.timezone || 'Asia/Seoul')
+    const effectiveTime24 = personalTarget?.time24 || challengeTargetTime24;
+    const effectiveTimezone = personalTarget?.timezone || timezone;
+    const derivedTargetTime = effectiveTime24
+      ? buildTargetDateTimeISO(verificationDate, effectiveTime24, effectiveTimezone)
       : undefined;
 
     if (personalTarget?.time24 && !derivedTargetTime && !input.targetTime) {
