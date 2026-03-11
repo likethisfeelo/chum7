@@ -148,7 +148,7 @@ async function checkIncompleteUsers(
 
   const incompleteUsers = result.Items.filter((uc: any) => {
     const progress = normalizeProgress(uc.progress);
-    const todayProgress = progress.find((p: any) => p.day === currentDay);
+    const todayProgress = progress.find((p: any) => Number(p?.day) === currentDay);
     return !todayProgress || todayProgress.status !== 'success';
   });
 
@@ -229,8 +229,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         TableName: process.env.CHALLENGES_TABLE,
         Key: { challengeId },
       }));
-      if (challengeResult.Item?.allowedVerificationTypes?.length) {
-        const sanitized = (challengeResult.Item.allowedVerificationTypes as string[])
+      const rawAllowedTypes = challengeResult.Item?.allowedVerificationTypes;
+      if (Array.isArray(rawAllowedTypes) && rawAllowedTypes.length > 0) {
+        const sanitized = rawAllowedTypes
           .filter((type) => ['image', 'text', 'link', 'video'].includes(type)) as Array<'image' | 'text' | 'link' | 'video'>;
         if (sanitized.length > 0) {
           allowedTypes.splice(0, allowedTypes.length, ...sanitized);
