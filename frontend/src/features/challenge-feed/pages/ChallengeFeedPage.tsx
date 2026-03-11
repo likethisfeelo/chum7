@@ -250,7 +250,9 @@ export const ChallengeFeedPage = () => {
                     <p className="text-xs text-gray-500">{item.isAnonymous ? '익명 참여자' : item.userName || '참여자'}</p>
                     <p className="text-xs text-gray-400">Day {item.day || '-'}</p>
                   </div>
-                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{item.todayNote || '내용 없음'}</p>
+                  {item.todayNote && (
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap">{item.todayNote}</p>
+                  )}
                   {item.verificationType === 'image' && item.imageUrl && (
                     <img src={item.imageUrl} alt="verification" className="mt-2 w-full rounded-lg border border-gray-100" />
                   )}

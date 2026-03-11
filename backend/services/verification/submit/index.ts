@@ -157,7 +157,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(400, { error: 'MISSING_LINK_URL', message: '링크 인증에는 linkUrl이 필요합니다' });
     }
 
-    if (!input.todayNote && !input.imageUrl && !input.videoUrl && !input.linkUrl) {
+    const hasTodayNote = Boolean(input.todayNote?.trim());
+    if (!hasTodayNote && !input.imageUrl && !input.videoUrl && !input.linkUrl) {
       return response(400, {
         error: 'EMPTY_VERIFICATION_CONTENT',
         message: '텍스트, 이미지, 영상, 링크 중 하나 이상은 필요합니다',
@@ -193,7 +194,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         Key: { challengeId: userChallenge.challengeId },
       }));
       if (challengeResult.Item?.allowedVerificationTypes?.length) {
-        allowedTypes.splice(0, allowedTypes.length, ...challengeResult.Item.allowedVerificationTypes);
+        const sanitized = (challengeResult.Item.allowedVerificationTypes as string[])
+          .filter((type) => ['image', 'text', 'link', 'video'].includes(type)) as Array<'image' | 'text' | 'link' | 'video'>;
+        if (sanitized.length > 0) {
+          allowedTypes.splice(0, allowedTypes.length, ...sanitized);
+        }
       }
     }
 
@@ -259,7 +264,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       videoUrl: input.videoUrl || (verificationType === 'video' ? input.imageUrl || null : null),
       videoDurationSec: input.videoDurationSec ?? null,
       linkUrl: input.linkUrl || null,
-      todayNote: input.todayNote || null,
+      todayNote: input.todayNote?.trim() || null,
       tomorrowPromise: input.tomorrowPromise || null,
       verificationDate,
       certDate: verificationDate,
