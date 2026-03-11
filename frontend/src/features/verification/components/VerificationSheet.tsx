@@ -122,6 +122,7 @@ export const VerificationSheet = ({
           fileType: mediaFile.type,
           fileSize: mediaFile.size,
           challengeId,
+          userChallengeId: userChallenge.userChallengeId,
         });
 
         const uploadResp = await fetch(uploadData.data.uploadUrl, {

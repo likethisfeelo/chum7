@@ -1,16 +1,20 @@
 // backend/services/verification/upload-url/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { z } from 'zod';
 
 const s3Client = new S3Client({});
+const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const uploadUrlSchema = z.object({
   fileName: z.string().min(1),
   fileType: z.string().regex(/^(image\/(jpeg|jpg|png|webp|gif)|video\/(mp4|webm|quicktime))$/),
   fileSize: z.number().int().positive().max(1024 * 1024 * 200),
-  challengeId: z.string().uuid()
+  challengeId: z.string().min(1).optional(),
+  userChallengeId: z.string().uuid().optional(),
 });
 
 type UploadUrlInput = z.infer<typeof uploadUrlSchema>;
@@ -20,6 +24,34 @@ const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
 
 function getMaxSizeBytes(fileType: string): number {
   return fileType.startsWith('video/') ? MAX_VIDEO_SIZE_BYTES : MAX_IMAGE_SIZE_BYTES;
+}
+
+
+function toSafePathSegment(raw: string): string {
+  const normalized = String(raw || '').trim();
+  if (!normalized) return 'unknown-challenge';
+  return normalized.replace(/[^a-zA-Z0-9-_.]/g, '-');
+}
+
+async function resolveChallengeId(input: UploadUrlInput, userId: string): Promise<string | null> {
+  if (input.challengeId?.trim()) return input.challengeId.trim();
+
+  if (!input.userChallengeId || !process.env.USER_CHALLENGES_TABLE) {
+    return null;
+  }
+
+  const result = await docClient.send(new GetCommand({
+    TableName: process.env.USER_CHALLENGES_TABLE,
+    Key: { userChallengeId: input.userChallengeId },
+  }));
+
+  const userChallenge = result.Item;
+  if (!userChallenge) return null;
+  if (userChallenge.userId && userChallenge.userId !== userId) return null;
+
+  return typeof userChallenge.challengeId === 'string' && userChallenge.challengeId.trim()
+    ? userChallenge.challengeId.trim()
+    : null;
 }
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
@@ -59,6 +91,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
+    if (!process.env.UPLOADS_BUCKET) {
+      return response(500, {
+        error: 'UPLOADS_BUCKET_NOT_CONFIGURED',
+        message: '업로드 설정이 올바르지 않습니다'
+      });
+    }
+
+    const resolvedChallengeId = await resolveChallengeId(input, userId);
+    const challengeSegment = toSafePathSegment(resolvedChallengeId || input.challengeId || 'unknown-challenge');
+
     // 파일 확장자 추출
     const fileExtension = input.fileType === 'video/quicktime'
       ? 'mov'
@@ -67,17 +109,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // S3 키 생성: userId/challengeId/timestamp-random.ext
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(7);
-    const key = `${userId}/${input.challengeId}/${timestamp}-${random}.${fileExtension}`;
+    const key = `${userId}/${challengeSegment}/${timestamp}-${random}.${fileExtension}`;
 
     // Presigned URL 생성
     const command = new PutObjectCommand({
-      Bucket: process.env.UPLOADS_BUCKET!,
+      Bucket: process.env.UPLOADS_BUCKET,
       Key: key,
       ContentType: input.fileType,
       ContentLength: input.fileSize,
       Metadata: {
         uploadedBy: userId,
-        challengeId: input.challengeId,
+        challengeId: resolvedChallengeId || input.challengeId || 'unknown-challenge',
         uploadedAt: new Date().toISOString()
       }
     });

@@ -102,10 +102,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const quest = questResult.Item;
-    const challengeResult = await docClient.send(new GetCommand({
-      TableName: process.env.CHALLENGES_TABLE!,
-      Key: { challengeId: quest.challengeId },
-    }));
+    const challengeResult = quest.challengeId
+      ? await docClient.send(new GetCommand({
+        TableName: process.env.CHALLENGES_TABLE!,
+        Key: { challengeId: quest.challengeId },
+      }))
+      : { Item: null };
 
     const requesterId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
     const isCreator = challengeResult.Item?.createdBy && challengeResult.Item.createdBy === requesterId;
