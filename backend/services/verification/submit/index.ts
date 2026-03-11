@@ -5,6 +5,7 @@ import { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand, QueryCom
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { calculateChallengeDay, isInvalidDayDelta, safeTimezone, validatePracticeAt } from '../../../shared/lib/challenge-quest-policy';
+import { inferVerificationType } from '../../../shared/lib/verification-type';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -29,15 +30,7 @@ const submitSchema = z.object({
 
 type SubmitInput = z.infer<typeof submitSchema>;
 
-function inferVerificationType(input: SubmitInput): 'text' | 'image' | 'video' | 'link' {
-  if (input.verificationType) return input.verificationType;
-  if (input.linkUrl) return 'link';
-  if (input.videoUrl) return 'video';
-  if (input.imageUrl) return 'image';
-  return 'text';
-}
-
-function response(statusCode: number, body: any): APIGatewayProxyResult {
+export function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
     statusCode,
     headers: {
@@ -122,7 +115,7 @@ async function checkIncompleteUsers(
     return { hasIncompletePeople: false, incompleteCount: 0 };
   }
 
-  const incompleteUsers = result.Items.filter(uc => {
+  const incompleteUsers = result.Items.filter((uc: any) => {
     const progress = uc.progress || [];
     const todayProgress = progress.find((p: any) => p.day === currentDay);
     return !todayProgress || todayProgress.status !== 'success';

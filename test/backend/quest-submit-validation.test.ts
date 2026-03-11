@@ -1,0 +1,27 @@
+import { validateQuestSubmissionContent } from '../../backend/shared/lib/quest-submit-validation';
+
+describe('quest submit validateQuestSubmissionContent', () => {
+  test('video quest requires videoDurationSec', () => {
+    const quest = { verificationType: 'video', verificationConfig: { maxDurationSeconds: 60 } };
+    const message = validateQuestSubmissionContent(quest, { videoUrl: 'https://example.com/video.mp4' });
+    expect(message).toBe('영상 길이 정보가 필요합니다');
+  });
+
+  test('video quest rejects over max duration', () => {
+    const quest = { verificationType: 'video', verificationConfig: { maxDurationSeconds: 45 } };
+    const message = validateQuestSubmissionContent(quest, {
+      videoUrl: 'https://example.com/video.mp4',
+      videoDurationSec: 46,
+    });
+    expect(message).toBe('영상은 45초 이내로 제출해 주세요');
+  });
+
+  test('video quest accepts valid duration', () => {
+    const quest = { verificationType: 'video', verificationConfig: { maxDurationSeconds: 45 } };
+    const message = validateQuestSubmissionContent(quest, {
+      videoUrl: 'https://example.com/video.mp4',
+      videoDurationSec: 30,
+    });
+    expect(message).toBeNull();
+  });
+});

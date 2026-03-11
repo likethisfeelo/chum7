@@ -22,6 +22,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { validateQuestSubmissionContent } from '../../../shared/lib/quest-submit-validation';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -45,44 +46,6 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
     headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     body: JSON.stringify(body),
   };
-}
-
-function validateContent(quest: any, content: any): string | null {
-  switch (quest.verificationType) {
-    case 'image':
-      if (!content.imageUrl) return '이미지 URL이 필요합니다';
-      break;
-    case 'video':
-      if (!content.videoUrl) return '영상 URL이 필요합니다';
-      if (content.videoDurationSec === undefined) return '영상 길이 정보가 필요합니다';
-      {
-        const maxDurationSeconds = quest.verificationConfig?.maxDurationSeconds ?? 60;
-        if (content.videoDurationSec > maxDurationSeconds) {
-          return `영상은 ${maxDurationSeconds}초 이내로 제출해 주세요`;
-        }
-      }
-      break;
-    case 'link':
-      if (!content.linkUrl) return 'URL이 필요합니다';
-      if (quest.verificationConfig?.linkPattern) {
-        try {
-          const regex = new RegExp(quest.verificationConfig.linkPattern);
-          if (!regex.test(content.linkUrl)) return 'URL 형식이 올바르지 않습니다';
-        } catch {
-          // 잘못된 regex 패턴이면 검증 스킵
-        }
-      }
-      break;
-    case 'text': {
-      if (!content.textContent) return '내용을 입력해 주세요';
-      const maxChars = quest.verificationConfig?.maxChars ?? 2000;
-      if (content.textContent.length > maxChars) {
-        return `내용은 ${maxChars}자 이내로 작성해 주세요`;
-      }
-      break;
-    }
-  }
-  return null;
 }
 
 function isTransactionConditionFailed(error: any): boolean {
@@ -118,7 +81,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (quest.startAt > now) return response(409, { error: 'QUEST_NOT_STARTED', message: '아직 시작되지 않은 퀘스트입니다' });
     if (quest.endAt && quest.endAt < now) return response(409, { error: 'QUEST_EXPIRED', message: '기간이 만료된 퀘스트입니다' });
 
-    const contentError = validateContent(quest, input.content);
+    const contentError = validateQuestSubmissionContent(quest, input.content);
     if (contentError) {
       return response(400, { error: 'INVALID_CONTENT', message: contentError });
     }
@@ -134,7 +97,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const previousAttempts = historyResult.Items ?? [];
     const attemptNumber = previousAttempts.length + 1;
-    const lastRejected = previousAttempts.find(s => s.status === 'rejected');
+    const lastRejected = previousAttempts.find((s: any) => s.status === 'rejected');
     const previousSubmissionId = lastRejected?.submissionId ?? null;
 
     const submissionId = uuidv4();
