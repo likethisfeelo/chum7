@@ -12,8 +12,12 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const submitSchema = z.object({
   userChallengeId: z.string().uuid(),
   day: z.number().min(1).max(7),
+  verificationType: z.enum(['text', 'image', 'video', 'link']).optional(),
   imageUrl: z.string().url().optional(),
-  todayNote: z.string().min(1).max(500),
+  videoUrl: z.string().url().optional(),
+  videoDurationSec: z.number().min(0).max(60).optional(),
+  linkUrl: z.string().url().optional(),
+  todayNote: z.string().max(500).optional(),
   tomorrowPromise: z.string().max(500).optional(),
   verificationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   performedAt: z.string().datetime().optional(),
@@ -24,6 +28,14 @@ const submitSchema = z.object({
 });
 
 type SubmitInput = z.infer<typeof submitSchema>;
+
+function inferVerificationType(input: SubmitInput): 'text' | 'image' | 'video' | 'link' {
+  if (input.verificationType) return input.verificationType;
+  if (input.linkUrl) return 'link';
+  if (input.videoUrl) return 'video';
+  if (input.imageUrl) return 'image';
+  return 'text';
+}
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
@@ -126,6 +138,32 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   try {
     const body = JSON.parse(event.body || '{}');
     const input: SubmitInput = submitSchema.parse(body);
+    const verificationType = inferVerificationType(input);
+
+    if (verificationType === 'image' && !input.imageUrl) {
+      return response(400, { error: 'MISSING_IMAGE_URL', message: '사진 인증에는 imageUrl이 필요합니다' });
+    }
+
+    if (verificationType === 'video') {
+      if (!input.videoUrl && !input.imageUrl) {
+        return response(400, { error: 'MISSING_VIDEO_URL', message: '영상 인증에는 videoUrl이 필요합니다' });
+      }
+      if (input.videoDurationSec !== undefined && input.videoDurationSec > 60) {
+        return response(400, { error: 'VIDEO_DURATION_EXCEEDED', message: '영상은 60초 이내만 허용됩니다' });
+      }
+    }
+
+    if (verificationType === 'link' && !input.linkUrl) {
+      return response(400, { error: 'MISSING_LINK_URL', message: '링크 인증에는 linkUrl이 필요합니다' });
+    }
+
+    const hasTodayNote = Boolean(input.todayNote?.trim());
+    if (!hasTodayNote && !input.imageUrl && !input.videoUrl && !input.linkUrl) {
+      return response(400, {
+        error: 'EMPTY_VERIFICATION_CONTENT',
+        message: '텍스트, 이미지, 영상, 링크 중 하나 이상은 필요합니다',
+      });
+    }
 
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
     if (!userId) {
@@ -147,6 +185,28 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const userChallenge = userChallengeResult.Item;
     if (userChallenge.userId && userChallenge.userId !== userId) {
       return response(403, { error: 'FORBIDDEN', message: '본인 챌린지만 인증할 수 있습니다' });
+    }
+
+    const allowedTypes = ['image', 'text', 'link', 'video'] as Array<'image' | 'text' | 'link' | 'video'>;
+    if (process.env.CHALLENGES_TABLE && userChallenge.challengeId) {
+      const challengeResult = await docClient.send(new GetCommand({
+        TableName: process.env.CHALLENGES_TABLE,
+        Key: { challengeId: userChallenge.challengeId },
+      }));
+      if (challengeResult.Item?.allowedVerificationTypes?.length) {
+        const sanitized = (challengeResult.Item.allowedVerificationTypes as string[])
+          .filter((type) => ['image', 'text', 'link', 'video'].includes(type)) as Array<'image' | 'text' | 'link' | 'video'>;
+        if (sanitized.length > 0) {
+          allowedTypes.splice(0, allowedTypes.length, ...sanitized);
+        }
+      }
+    }
+
+    if (!allowedTypes.includes(verificationType)) {
+      return response(400, {
+        error: 'UNSUPPORTED_VERIFICATION_TYPE',
+        message: `해당 챌린지에서는 ${verificationType} 인증이 허용되지 않습니다`,
+      });
     }
 
     const nowIso = new Date().toISOString();
@@ -199,8 +259,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       challengeId: userChallenge.challengeId,
       day: input.day,
       type: 'normal',
+      verificationType,
       imageUrl: input.imageUrl || null,
-      todayNote: input.todayNote,
+      videoUrl: input.videoUrl || (verificationType === 'video' ? input.imageUrl || null : null),
+      videoDurationSec: input.videoDurationSec ?? null,
+      linkUrl: input.linkUrl || null,
+      todayNote: input.todayNote?.trim() || null,
       tomorrowPromise: input.tomorrowPromise || null,
       verificationDate,
       certDate: verificationDate,

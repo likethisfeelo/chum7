@@ -31,6 +31,7 @@ const submitSchema = z.object({
   content: z.object({
     imageUrl: z.string().url().optional(),
     videoUrl: z.string().url().optional(),
+    videoDurationSec: z.number().min(0).max(60).optional(),
     thumbnailUrl: z.string().url().optional(),
     linkUrl: z.string().url().optional(),
     textContent: z.string().min(1).max(2000).optional(),
@@ -53,6 +54,13 @@ function validateContent(quest: any, content: any): string | null {
       break;
     case 'video':
       if (!content.videoUrl) return '영상 URL이 필요합니다';
+      if (content.videoDurationSec === undefined) return '영상 길이 정보가 필요합니다';
+      {
+        const maxDurationSeconds = quest.verificationConfig?.maxDurationSeconds ?? 60;
+        if (content.videoDurationSec > maxDurationSeconds) {
+          return `영상은 ${maxDurationSeconds}초 이내로 제출해 주세요`;
+        }
+      }
       break;
     case 'link':
       if (!content.linkUrl) return 'URL이 필요합니다';

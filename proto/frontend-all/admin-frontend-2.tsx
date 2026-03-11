@@ -12,6 +12,8 @@ interface Challenge {
   targetTime: string;
   badgeIcon: string;
   badgeName: string;
+  identityKeyword?: string;
+  allowedVerificationTypes?: Array<'image' | 'text' | 'link' | 'video'>;
   isActive: boolean;
   stats?: {
     totalParticipants: number;
@@ -199,6 +201,7 @@ const ChallengeModal = ({ challenge, onClose }: { challenge: Challenge | null; o
     identityKeyword: challenge?.identityKeyword || '',
     badgeIcon: challenge?.badgeIcon || '🏃',
     badgeName: challenge?.badgeName || '',
+    allowedVerificationTypes: challenge?.allowedVerificationTypes?.length ? challenge.allowedVerificationTypes : ['image', 'text', 'link', 'video'],
   });
 
   const saveMutation = useMutation({
@@ -224,6 +227,22 @@ const ChallengeModal = ({ challenge, onClose }: { challenge: Challenge | null; o
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     saveMutation.mutate(formData);
+  };
+
+
+  const toggleAllowedType = (type: 'image' | 'text' | 'link' | 'video') => {
+    setFormData((prev) => {
+      const current = prev.allowedVerificationTypes || [];
+      const exists = current.includes(type);
+      const next = exists ? current.filter((item) => item !== type) : [...current, type];
+
+      if (next.length === 0) {
+        alert('최소 1개 이상의 인증유형을 선택해주세요.');
+        return prev;
+      }
+
+      return { ...prev, allowedVerificationTypes: next };
+    });
   };
 
   return (
@@ -343,6 +362,30 @@ const ChallengeModal = ({ challenge, onClose }: { challenge: Challenge | null; o
             <p className="text-xs text-gray-500 mt-1">
               "나는 [키워드] 사람"으로 표시됩니다
             </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              허용 인증유형 *
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['image', 'text', 'link', 'video'] as const).map((type) => (
+                <label key={type} className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg">
+                  <input
+                    type="checkbox"
+                    checked={(formData.allowedVerificationTypes || []).includes(type)}
+                    onChange={() => toggleAllowedType(type)}
+                  />
+                  <span className="text-sm text-gray-700">
+                    {type === 'image' && '사진'}
+                    {type === 'text' && '텍스트'}
+                    {type === 'link' && '링크'}
+                    {type === 'video' && '영상 (60초 이하)'}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">기본값은 전체 허용이며 최소 1개 이상 선택해야 합니다.</p>
           </div>
 
           <div className="flex gap-3 pt-4">
