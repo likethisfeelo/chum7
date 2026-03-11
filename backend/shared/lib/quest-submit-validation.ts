@@ -6,6 +6,9 @@ export function validateQuestSubmissionContent(quest: any, content: any): string
     case 'video':
       if (!content.videoUrl) return '영상 URL이 필요합니다';
       if (content.videoDurationSec === undefined) return '영상 길이 정보가 필요합니다';
+      if (!Number.isFinite(content.videoDurationSec) || content.videoDurationSec < 0) {
+        return '영상 길이 정보가 올바르지 않습니다';
+      }
       {
         const maxDurationSeconds = quest.verificationConfig?.maxDurationSeconds ?? 60;
         if (content.videoDurationSec > maxDurationSeconds) {
@@ -25,9 +28,9 @@ export function validateQuestSubmissionContent(quest: any, content: any): string
       }
       break;
     case 'text': {
-      if (!content.textContent) return '내용을 입력해 주세요';
+      if (!content.textContent?.trim()) return '내용을 입력해 주세요';
       const maxChars = quest.verificationConfig?.maxChars ?? 2000;
-      if (content.textContent.length > maxChars) {
+      if (content.textContent.trim().length > maxChars) {
         return `내용은 ${maxChars}자 이내로 작성해 주세요`;
       }
       break;
