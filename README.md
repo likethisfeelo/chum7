@@ -83,6 +83,23 @@ Before deploying:
 - [ ] Confirm CloudFront distributions are active
 - [ ] Verify API Gateway custom domains
 
+
+## 🛠️ Maintenance Scripts
+
+### Backfill challenge layer policy
+
+Normalize `layerPolicy` for legacy challenges so `personal_only` and `leader_personal` always require personal goal on join.
+
+Dry-run:
+```bash
+CHALLENGES_TABLE=<table-name> npm run backfill:challenge-layer-policy
+```
+
+Apply updates:
+```bash
+CHALLENGES_TABLE=<table-name> npm run backfill:challenge-layer-policy -- --apply
+```
+
 ## 🔗 Links
 
 - DEV: https://test.chum7.com

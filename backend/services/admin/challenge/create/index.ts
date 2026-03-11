@@ -67,6 +67,16 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
+function resolveLayerPolicy(challengeType: string, layerPolicy: { requirePersonalGoalOnJoin: boolean; requirePersonalTargetOnJoin: boolean; allowExtraVisibilityToggle: boolean; }) {
+  const forceRequireGoal = challengeType === 'personal_only' || challengeType === 'leader_personal';
+
+  return {
+    requirePersonalGoalOnJoin: forceRequireGoal ? true : layerPolicy.requirePersonalGoalOnJoin,
+    requirePersonalTargetOnJoin: layerPolicy.requirePersonalTargetOnJoin,
+    allowExtraVisibilityToggle: layerPolicy.allowExtraVisibilityToggle,
+  };
+}
+
 function parseGroups(rawGroups: unknown): string[] {
   if (!rawGroups) return [];
 
@@ -139,6 +149,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const now = new Date().toISOString();
     const adminUserId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
 
+    // 챌린지 유형별 정책 정규화
+    const normalizedLayerPolicy = resolveLayerPolicy(input.challengeType, input.layerPolicy);
+
     // 현재 시각 기준 초기 lifecycle 결정
     const currentLifecycle = now >= input.recruitingStartAt ? 'recruiting' : 'draft';
 
@@ -161,11 +174,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       durationDays: input.durationDays,
       maxParticipants: input.maxParticipants ?? null,
       challengeType: input.challengeType,
-      layerPolicy: {
-        requirePersonalGoalOnJoin: input.layerPolicy.requirePersonalGoalOnJoin,
-        requirePersonalTargetOnJoin: input.layerPolicy.requirePersonalTargetOnJoin,
-        allowExtraVisibilityToggle: input.layerPolicy.allowExtraVisibilityToggle,
-      },
+      layerPolicy: normalizedLayerPolicy,
       defaultRemedyPolicy: input.defaultRemedyPolicy,
       personalQuestEnabled: input.personalQuestEnabled,
       personalQuestAutoApprove: input.personalQuestAutoApprove,

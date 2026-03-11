@@ -48,7 +48,7 @@ const INITIAL = {
   durationDays:      7,
   maxParticipants:   '' as string,   // '' = 무제한
   challengeType:     'leader_personal' as ChallengeType,
-  requirePersonalGoalOnJoin: false,
+  requirePersonalGoalOnJoin: true,
   requirePersonalTargetOnJoin: true,
   allowExtraVisibilityToggle: true,
   remedyType: 'open' as 'strict'|'limited'|'open',
@@ -58,6 +58,16 @@ const INITIAL = {
   personalQuestAutoApprove: true,
   allowedVerificationTypes: ['image', 'text', 'link', 'video'] as VerificationType[],
 };
+
+
+const isForcedPersonalGoalType = (challengeType: ChallengeType) =>
+  challengeType === 'personal_only' || challengeType === 'leader_personal';
+
+const normalizeJoinPolicyByType = (challengeType: ChallengeType, prev: typeof INITIAL) => ({
+  ...prev,
+  challengeType,
+  requirePersonalGoalOnJoin: isForcedPersonalGoalType(challengeType) ? true : prev.requirePersonalGoalOnJoin,
+});
 
 export const AdminChallengeCreatePage = () => {
   const navigate = useNavigate();
@@ -271,7 +281,7 @@ export const AdminChallengeCreatePage = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">챌린지 유형 *</label>
             <select
               value={form.challengeType}
-              onChange={e => set('challengeType', e.target.value as ChallengeType)}
+              onChange={(e) => setForm((prev) => normalizeJoinPolicyByType(e.target.value as ChallengeType, prev))}
               className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {CHALLENGE_TYPES.map((type) => (
@@ -285,8 +295,16 @@ export const AdminChallengeCreatePage = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={form.requirePersonalGoalOnJoin} onChange={e => set('requirePersonalGoalOnJoin', e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={form.requirePersonalGoalOnJoin}
+                disabled={isForcedPersonalGoalType(form.challengeType)}
+                onChange={(e) => set('requirePersonalGoalOnJoin', e.target.checked)}
+              />
               참여 시 개인 목표 입력 필수
+              {isForcedPersonalGoalType(form.challengeType) && (
+                <span className="text-xs text-gray-500">(선택한 유형에서 자동 고정)</span>
+              )}
             </label>
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={form.requirePersonalTargetOnJoin} onChange={e => set('requirePersonalTargetOnJoin', e.target.checked)} />
@@ -297,6 +315,12 @@ export const AdminChallengeCreatePage = () => {
               추가 기록 공개 전환 허용
             </label>
           </div>
+
+          {isForcedPersonalGoalType(form.challengeType) && (
+            <p className="text-xs text-primary-700">
+              선택한 챌린지 유형은 참여 시 개인 목표 입력이 필수로 자동 적용됩니다.
+            </p>
+          )}
         </div>
 
 

@@ -1,4 +1,5 @@
 import { JoinWizardChallenge, WizardFormState, WizardStepConfig } from './types';
+import { resolveJoinRequirements } from './requirements';
 
 export const TIME_STEP: WizardStepConfig = {
   id: 'time',
@@ -12,6 +13,15 @@ export const QUEST_STEP_REQUIRED: WizardStepConfig = {
   validate: (state: WizardFormState) => {
     if (!state.questTitle.trim()) return '퀘스트 제목을 입력해주세요';
     if (!state.questDescription.trim()) return '퀘스트 설명을 입력해주세요';
+    return null;
+  },
+};
+
+export const GOAL_STEP_REQUIRED: WizardStepConfig = {
+  id: 'quest',
+  required: true,
+  validate: (state: WizardFormState) => {
+    if (!state.questTitle.trim()) return '개인 목표를 입력해주세요';
     return null;
   },
 };
@@ -37,11 +47,18 @@ export const CONFIRM_STEP: WizardStepConfig = {
 };
 
 export const resolveWizardSteps = (challenge: JoinWizardChallenge): WizardStepConfig[] => {
+  const { requirePersonalGoalOnJoin } = resolveJoinRequirements(challenge);
   const steps: WizardStepConfig[] = [TIME_STEP];
 
-  if (challenge.personalQuestEnabled) {
+  if (challenge.personalQuestEnabled || requirePersonalGoalOnJoin) {
     const isRequiredQuest = challenge.challengeType === 'personal_only';
-    steps.push(isRequiredQuest ? QUEST_STEP_REQUIRED : QUEST_STEP_OPTIONAL);
+    if (isRequiredQuest && challenge.personalQuestEnabled) {
+      steps.push(QUEST_STEP_REQUIRED);
+    } else if (requirePersonalGoalOnJoin) {
+      steps.push(GOAL_STEP_REQUIRED);
+    } else {
+      steps.push(QUEST_STEP_OPTIONAL);
+    }
   }
 
   steps.push(CONFIRM_STEP);
