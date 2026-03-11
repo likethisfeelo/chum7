@@ -147,6 +147,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
       if (status === 'all') {
         delete expressionValues[':status'];
+      } else if (status === 'approved') {
+        expressionValues[':autoApproved'] = 'auto_approved';
+        filterExpression = '(#status = :status OR #status = :autoApproved)';
       }
 
       if (challengeId) {
