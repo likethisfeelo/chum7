@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBDocumentClient, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { resolveVerificationType } from '../../../shared/lib/verification-normalization';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -79,15 +80,16 @@ async function normalizeVerification(v: VerificationItem) {
   const imageUrl = await toRenderableMediaUrl(v.imageUrl || null);
   const videoUrl = await toRenderableMediaUrl(v.videoUrl || null);
 
-  const fallbackType = (() => {
-    if (v.linkUrl) return 'link';
-    if (v.videoUrl) return 'video';
-    if (v.imageUrl && /\.(mp4|webm|mov)(\?|$)/i.test(String(v.imageUrl))) return 'video';
-    if (v.imageUrl) return 'image';
-    return 'text';
-  })();
+  const linkUrlRaw = typeof v.linkUrl === 'string' ? v.linkUrl.trim() : '';
+  const videoUrlRaw = typeof v.videoUrl === 'string' ? v.videoUrl.trim() : '';
+  const imageUrlRaw = typeof v.imageUrl === 'string' ? v.imageUrl.trim() : '';
 
-  const verificationType = v.verificationType || fallbackType;
+  const verificationType = resolveVerificationType({
+    verificationType: v.verificationType,
+    imageUrl: imageUrlRaw,
+    videoUrl: videoUrlRaw,
+    linkUrl: linkUrlRaw,
+  });
   const mediaUrl = verificationType === 'video' ? (videoUrl || imageUrl) : imageUrl;
 
   return {
@@ -102,7 +104,7 @@ async function normalizeVerification(v: VerificationItem) {
     imageUrl: verificationType === 'image' ? mediaUrl : null,
     videoUrl: verificationType === 'video' ? mediaUrl : null,
     mediaUrl,
-    linkUrl: v.linkUrl || null,
+    linkUrl: linkUrlRaw || null,
     isAnonymous: Boolean(v.isAnonymous),
     isExtra: Boolean(v.isExtra),
     isPersonalOnly: Boolean(v.isPersonalOnly),
