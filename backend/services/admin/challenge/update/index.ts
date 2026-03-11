@@ -14,6 +14,7 @@ const updateChallengeSchema = z.object({
   identityKeyword: z.string().min(1).max(50).optional(),
   badgeIcon: z.string().min(1).max(10).optional(),
   badgeName: z.string().min(1).max(50).optional(),
+  allowedVerificationTypes: z.array(z.enum(['image', 'text', 'link', 'video'])).min(1).optional(),
 });
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {

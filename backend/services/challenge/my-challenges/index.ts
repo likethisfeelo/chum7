@@ -112,6 +112,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           lifecycle: challenge.lifecycle,
           challengeStartAt: challenge.challengeStartAt,
           recruitingEndAt: challenge.recruitingEndAt,
+          allowedVerificationTypes: Array.isArray(challenge.allowedVerificationTypes) && challenge.allowedVerificationTypes.length > 0
+            ? challenge.allowedVerificationTypes
+            : ['image', 'text', 'link', 'video'],
         } : null
       };
     });

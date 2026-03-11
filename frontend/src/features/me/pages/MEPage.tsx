@@ -327,7 +327,7 @@ export const MEPage = () => {
                             </span>
                           )}
                         </div>
-                        <InlineVerificationForm userChallenge={primaryUnverified} />
+                        <InlineVerificationForm userChallenge={primaryUnverified} allowedVerificationTypes={primaryUnverified.challenge?.allowedVerificationTypes} />
                       </motion.div>
                     )}
 
