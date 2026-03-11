@@ -73,6 +73,18 @@ function buildTargetDateTimeISO(verificationDate: string, time24: string, timezo
   return Number.isNaN(new Date(iso).getTime()) ? null : iso;
 }
 
+function normalizeProgress(progress: unknown): Array<Record<string, any>> {
+  if (Array.isArray(progress)) return progress;
+
+  if (progress && typeof progress === 'object') {
+    return Object.values(progress as Record<string, any>)
+      .filter((item) => item && typeof item === 'object')
+      .sort((a: any, b: any) => Number(a?.day || 0) - Number(b?.day || 0));
+  }
+
+  return [];
+}
+
 async function createCheerTicket(
   userId: string,
   challengeId: string,
@@ -128,7 +140,7 @@ async function checkIncompleteUsers(
   }
 
   const incompleteUsers = result.Items.filter((uc: any) => {
-    const progress = uc.progress || [];
+    const progress = normalizeProgress(uc.progress);
     const todayProgress = progress.find((p: any) => p.day === currentDay);
     return !todayProgress || todayProgress.status !== 'success';
   });
@@ -237,8 +249,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-    const progress = userChallenge.progress || [];
-    const dayProgress = progress.find((p: any) => p.day === input.day);
+    const progress = normalizeProgress(userChallenge.progress);
+    const dayProgress = progress.find((p: any) => Number(p?.day) === input.day);
     const isExtra = !!(dayProgress && dayProgress.status === 'success');
 
     const verificationDate = input.verificationDate || practiceValidation.certDate;
@@ -334,7 +346,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const updatedProgress = [...progress];
-    const existingIndex = updatedProgress.findIndex((p: any) => p.day === input.day);
+    const existingIndex = updatedProgress.findIndex((p: any) => Number(p?.day) === input.day);
 
     const newProgress = {
       day: input.day,
@@ -353,7 +365,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     let consecutiveDays = 0;
     for (let i = 1; i <= input.day; i++) {
-      const p = updatedProgress.find((pr: any) => pr.day === i);
+      const p = updatedProgress.find((pr: any) => Number(pr?.day) === i);
       if (p && p.status === 'success') {
         consecutiveDays++;
       } else {
