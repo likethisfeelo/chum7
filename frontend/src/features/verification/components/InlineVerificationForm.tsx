@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiCamera, FiX } from 'react-icons/fi';
+import { FiCamera, FiFileText, FiLink, FiVideo, FiX } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 interface InlineVerificationFormProps {
@@ -92,7 +92,6 @@ export const InlineVerificationForm = ({
   const [linkUrl, setLinkUrl] = useState('');
   const [formData, setFormData] = useState({
     todayNote: '',
-    tomorrowPromise: '',
     completedAt: toLocalDateTimeInputValue(new Date()),
   });
   const [extraVisibilityPrompt, setExtraVisibilityPrompt] = useState<{ verificationId: string } | null>(null);
@@ -132,7 +131,7 @@ export const InlineVerificationForm = ({
     resetMedia();
     setLinkUrl('');
     setSelectedType(availableTypes[0]);
-    setFormData({ todayNote: '', tomorrowPromise: '', completedAt: toLocalDateTimeInputValue(new Date()) });
+    setFormData({ todayNote: '', completedAt: toLocalDateTimeInputValue(new Date()) });
     setExtraVisibilityPrompt(null);
   };
 
@@ -191,7 +190,7 @@ export const InlineVerificationForm = ({
   };
 
   const verificationMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (payload?: { performedAtLocal?: string }) => {
       let uploadedUrl: string | undefined;
 
       if (acceptsFile && mediaFile) {
@@ -201,6 +200,7 @@ export const InlineVerificationForm = ({
           fileType: mediaFile.type,
           fileSize: mediaFile.size,
           challengeId,
+          userChallengeId: userChallenge.userChallengeId,
         });
 
         const uploadResp = await fetch(uploadData.data.uploadUrl, {
@@ -221,8 +221,7 @@ export const InlineVerificationForm = ({
         ...(selectedType === 'video' && uploadedUrl ? { videoUrl: uploadedUrl, videoDurationSec } : {}),
         ...(selectedType === 'link' && linkUrl.trim() ? { linkUrl: linkUrl.trim() } : {}),
         ...(formData.todayNote.trim() ? { todayNote: formData.todayNote.trim() } : {}),
-        tomorrowPromise: formData.tomorrowPromise,
-        performedAt: toIsoFromLocalDateTime(formData.completedAt),
+        performedAt: toIsoFromLocalDateTime(payload?.performedAtLocal || formData.completedAt),
         isPublic: true,
         isAnonymous: true,
       });
@@ -264,6 +263,9 @@ export const InlineVerificationForm = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    const nowLocalDateTime = toLocalDateTimeInputValue(new Date());
+    setFormData((prev) => ({ ...prev, completedAt: nowLocalDateTime }));
+
     if (selectedType === 'image' && !mediaFile) {
       toast.error('사진을 첨부해주세요.');
       return;
@@ -290,7 +292,7 @@ export const InlineVerificationForm = ({
       return;
     }
 
-    verificationMutation.mutate();
+    verificationMutation.mutate({ performedAtLocal: nowLocalDateTime });
   };
 
   const makeExtraPublic = async () => {
@@ -370,26 +372,6 @@ export const InlineVerificationForm = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-4 gap-2">
-              {availableTypes.map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => handleTypeChange(type)}
-                  className={`px-2 py-2 text-xs rounded-lg border transition-colors ${
-                    selectedType === type
-                      ? 'border-primary-500 bg-primary-50 text-primary-700 font-semibold'
-                      : 'border-gray-200 text-gray-600 hover:border-primary-200'
-                  }`}
-                >
-                  {type === 'text' && '텍스트'}
-                  {type === 'image' && '사진'}
-                  {type === 'video' && '영상'}
-                  {type === 'link' && '링크'}
-                </button>
-              ))}
-            </div>
-
             <div>
               <textarea
                 value={formData.todayNote}
@@ -456,16 +438,6 @@ export const InlineVerificationForm = ({
               />
             </div>
 
-            <div>
-              <textarea
-                value={formData.tomorrowPromise}
-                onChange={(e) => setFormData({ ...formData, tomorrowPromise: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl resize-none text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-                placeholder="내일의 다짐 🌅 (선택)"
-                rows={2}
-              />
-            </div>
-
             {extraVisibilityPrompt && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
                 <p className="text-xs text-amber-800">추가 기록(Extra)이 저장되었습니다. 지금 공개 피드로 전환할까요?</p>
@@ -482,6 +454,27 @@ export const InlineVerificationForm = ({
 
             <div className="flex items-center justify-between pt-1 border-t border-gray-100">
               <div className="flex items-center gap-1">
+                {availableTypes.map((type) => {
+                  const isActive = selectedType === type;
+                  const Icon = type === 'text' ? FiFileText : type === 'image' ? FiCamera : type === 'video' ? FiVideo : FiLink;
+                  const title = type === 'text' ? '텍스트' : type === 'image' ? '사진' : type === 'video' ? '영상' : '링크';
+
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => handleTypeChange(type)}
+                      className={`p-2 rounded-full transition-colors ${
+                        isActive
+                          ? 'text-primary-700 bg-primary-50 border border-primary-200'
+                          : 'text-gray-400 hover:text-primary-600 hover:bg-primary-50 border border-transparent'
+                      }`}
+                      title={`${title} 인증`}
+                    >
+                      <Icon className="w-5 h-5" />
+                    </button>
+                  );
+                })}
                 {acceptsFile && (
                   <button
                     type="button"

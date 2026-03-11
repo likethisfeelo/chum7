@@ -56,6 +56,7 @@ const INITIAL = {
   allowBulk: false,
   personalQuestEnabled: false,
   personalQuestAutoApprove: true,
+  joinApprovalRequired: true,
   allowedVerificationTypes: ['image', 'text', 'link', 'video'] as VerificationType[],
 };
 
@@ -131,6 +132,7 @@ export const AdminChallengeCreatePage = () => {
         },
         personalQuestEnabled: form.personalQuestEnabled,
         personalQuestAutoApprove: form.personalQuestAutoApprove,
+        joinApprovalRequired: form.joinApprovalRequired,
         allowedVerificationTypes: form.allowedVerificationTypes,
         layerPolicy: {
           requirePersonalGoalOnJoin: form.requirePersonalGoalOnJoin,
@@ -349,14 +351,19 @@ export const AdminChallengeCreatePage = () => {
               <input type="checkbox" checked={form.allowBulk} onChange={(e) => set('allowBulk', e.target.checked as any)} /> 몰아서 제출 허용
             </label>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="text-sm flex items-center gap-2">
               <input type="checkbox" checked={form.personalQuestEnabled} onChange={(e) => set('personalQuestEnabled', e.target.checked as any)} /> 개인 퀘스트 제안 사용
             </label>
             <label className="text-sm flex items-center gap-2">
               <input type="checkbox" checked={form.personalQuestAutoApprove} onChange={(e) => set('personalQuestAutoApprove', e.target.checked as any)} /> 개인 퀘스트 자동 승인
             </label>
+            <label className="text-sm flex items-center gap-2 md:col-span-2">
+              <input type="checkbox" checked={form.joinApprovalRequired} onChange={(e) => set('joinApprovalRequired', e.target.checked as any)} />
+              유료 챌린지 참여 신청 승인 필요 (해제 시 자동 참여 확정)
+            </label>
           </div>
+          <p className="text-xs text-gray-500">무료 챌린지는 자동 참여 확정이며, 이 설정은 유료 챌린지에만 적용됩니다.</p>
         </div>
 
         {/* 일정 */}
