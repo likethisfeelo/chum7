@@ -43,11 +43,14 @@ export function validatePracticeAt(practiceAt: string, uploadAtIso: string, time
     return { ok: false, errorCode: 'FUTURE_PRACTICE_TIME' };
   }
 
-  if (practiceMs < uploadMs - 16 * 60 * 60 * 1000) {
+  const practiceCertDate = certDateFromIso(practiceAt, timezone);
+  const uploadCertDate = certDateFromIso(uploadAtIso, timezone);
+
+  if (practiceCertDate < uploadCertDate) {
     return { ok: false, errorCode: 'PRACTICE_TOO_OLD' };
   }
 
-  return { ok: true, certDate: certDateFromIso(practiceAt, timezone) };
+  return { ok: true, certDate: practiceCertDate };
 }
 
 export function calculateChallengeDay(startDateIso: string, certDate: string, timezone?: string): number {
