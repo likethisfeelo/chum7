@@ -75,7 +75,9 @@ export const ChallengeDetailPage = () => {
 
   const joinMutation = useMutation({
     mutationFn: async (formState: WizardFormState) => {
+      const questTitle = formState.questTitle.trim();
       const response = await apiClient.post(`/challenges/${challengeId}/join`, {
+        personalGoal: questTitle || undefined,
         personalTarget: {
           hour12: formState.hour12,
           minute: formState.minute,
@@ -92,17 +94,25 @@ export const ChallengeDetailPage = () => {
     onSuccess: async ({ joinResult, formState }) => {
       const userChallengeId = joinResult?.data?.userChallengeId;
       const hasQuestInput = formState.questTitle.trim() && formState.questDescription.trim();
+      const proposalDeadline = joinResult?.data?.proposalDeadline;
+      const isProposalDeadlinePassed = proposalDeadline
+        ? new Date().getTime() > new Date(proposalDeadline).getTime()
+        : false;
 
       if (challenge?.personalQuestEnabled && hasQuestInput && userChallengeId) {
-        try {
-          await apiClient.post(`/challenges/${challengeId}/personal-quest`, {
-            userChallengeId,
-            title: formState.questTitle.trim(),
-            description: formState.questDescription.trim(),
-            verificationType: formState.questVerificationType,
-          });
-        } catch (e: any) {
-          toast.error(e?.response?.data?.message || '개인 퀘스트 제안 제출에 실패했습니다');
+        if (isProposalDeadlinePassed) {
+          toast('개인 퀘스트 제안 마감 시간이 지나 제안서는 저장되지 않았어요. 챌린지 참여는 완료되었습니다.');
+        } else {
+          try {
+            await apiClient.post(`/challenges/${challengeId}/personal-quest`, {
+              userChallengeId,
+              title: formState.questTitle.trim(),
+              description: formState.questDescription.trim(),
+              verificationType: formState.questVerificationType,
+            });
+          } catch (e: any) {
+            toast.error(e?.response?.data?.message || '개인 퀘스트 제안 제출에 실패했습니다');
+          }
         }
       }
 
