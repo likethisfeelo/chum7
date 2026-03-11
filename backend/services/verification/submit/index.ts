@@ -42,23 +42,35 @@ export function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
-function calculateDelta(targetTime: string, completedAt: string): number {
-  const target = new Date(targetTime).getTime();
-  const completed = new Date(completedAt).getTime();
+function parseIsoToMs(value: string): number | null {
+  const ms = new Date(value).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function calculateDelta(targetTime: string, completedAt: string): number | null {
+  const target = parseIsoToMs(targetTime);
+  const completed = parseIsoToMs(completedAt);
+  if (target === null || completed === null) return null;
+
   const diffMs = target - completed;
   return Math.floor(diffMs / 60000);
 }
 
-function buildTargetDateTimeISO(verificationDate: string, time24: string, timezone: string): string {
+function buildTargetDateTimeISO(verificationDate: string, time24: string, timezone: string): string | null {
   const [hh, mm] = time24.split(':').map(Number);
   const [y, m, d] = verificationDate.split('-').map(Number);
 
+  const hasInvalidParts = [hh, mm, y, m, d].some((v) => Number.isNaN(v));
+  if (hasInvalidParts) return null;
+
   if (timezone === 'Asia/Seoul') {
     const utcMs = Date.UTC(y, m - 1, d, hh - 9, mm, 0, 0);
-    return new Date(utcMs).toISOString();
+    const iso = new Date(utcMs).toISOString();
+    return Number.isNaN(new Date(iso).getTime()) ? null : iso;
   }
 
-  return new Date(Date.UTC(y, m - 1, d, hh, mm, 0, 0)).toISOString();
+  const iso = new Date(Date.UTC(y, m - 1, d, hh, mm, 0, 0)).toISOString();
+  return Number.isNaN(new Date(iso).getTime()) ? null : iso;
 }
 
 async function createCheerTicket(
@@ -235,6 +247,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const derivedTargetTime = personalTarget?.time24
       ? buildTargetDateTimeISO(verificationDate, personalTarget.time24, personalTarget.timezone || 'Asia/Seoul')
       : undefined;
+
+    if (personalTarget?.time24 && !derivedTargetTime && !input.targetTime) {
+      return response(400, {
+        error: 'INVALID_PERSONAL_TARGET_TIME',
+        message: '개인 목표시간 형식이 올바르지 않습니다. 다시 설정해주세요'
+      });
+    }
+
     const effectiveTargetTime = input.targetTime || derivedTargetTime;
 
     if (!effectiveTargetTime && !isExtra) {
@@ -245,6 +265,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const delta = isExtra ? null : calculateDelta(effectiveTargetTime!, performedAt);
+
+    if (!isExtra && delta === null) {
+      return response(400, {
+        error: 'INVALID_TARGET_TIME_FORMAT',
+        message: '인증 시각 또는 목표 시각 형식이 올바르지 않습니다'
+      });
+    }
+
     const isEarlyCompletion = !isExtra && (delta || 0) > 0;
 
     const verificationId = uuidv4();
