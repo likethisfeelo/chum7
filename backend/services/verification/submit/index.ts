@@ -17,7 +17,7 @@ const submitSchema = z.object({
   imageUrl: z.string().url().optional(),
   videoUrl: z.string().url().optional(),
   videoDurationSec: z.number().min(0).max(60).optional(),
-  linkUrl: z.string().url().optional(),
+  linkUrl: z.string().url().refine((url) => url.startsWith('https://'), 'HTTPS_ONLY').optional(),
   todayNote: z.string().max(500).optional(),
   tomorrowPromise: z.string().max(500).optional(),
   verificationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -148,6 +148,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     if (verificationType === 'link' && !input.linkUrl) {
       return response(400, { error: 'MISSING_LINK_URL', message: '링크 인증에는 linkUrl이 필요합니다' });
+    }
+
+    if (verificationType === 'link' && input.linkUrl && !input.linkUrl.startsWith('https://')) {
+      return response(400, { error: 'INVALID_LINK_URL', message: '링크는 https URL만 허용됩니다' });
     }
 
     const hasTodayNote = Boolean(input.todayNote?.trim());

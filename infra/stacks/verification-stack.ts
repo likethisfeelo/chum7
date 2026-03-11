@@ -140,6 +140,20 @@ export class VerificationStack extends Stack {
       authorizer,
     });
 
+    const linkPreviewFn = new NodejsFunction(this, 'LinkPreviewFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-verification-link-preview`,
+      entry: path.join(__dirname, '../../backend/services/verification/link-preview/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    apiGateway.addRoutes({
+      path: '/verifications/link-preview',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('LinkPreviewIntegration', linkPreviewFn),
+      authorizer,
+    });
+
     // 5. Remedy Verification (Day 6 보완) (protected)
     const remedyFn = new NodejsFunction(this, 'RemedyFn', {
       ...commonProps,

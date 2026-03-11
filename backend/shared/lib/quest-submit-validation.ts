@@ -19,6 +19,7 @@ export function validateQuestSubmissionContent(quest: any, content: any): string
     case 'link': {
       const linkUrl = content.linkUrl?.trim();
       if (!linkUrl) return 'URL이 필요합니다';
+      if (!linkUrl.startsWith('https://')) return 'URL은 https 형식만 허용됩니다';
       if (quest.verificationConfig?.linkPattern) {
         try {
           const regex = new RegExp(quest.verificationConfig.linkPattern);

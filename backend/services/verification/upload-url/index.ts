@@ -9,10 +9,18 @@ const s3Client = new S3Client({});
 const uploadUrlSchema = z.object({
   fileName: z.string().min(1),
   fileType: z.string().regex(/^(image\/(jpeg|jpg|png|webp|gif)|video\/(mp4|webm|quicktime))$/),
+  fileSize: z.number().int().positive().max(1024 * 1024 * 200),
   challengeId: z.string().uuid()
 });
 
 type UploadUrlInput = z.infer<typeof uploadUrlSchema>;
+
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
+
+function getMaxSizeBytes(fileType: string): number {
+  return fileType.startsWith('video/') ? MAX_VIDEO_SIZE_BYTES : MAX_IMAGE_SIZE_BYTES;
+}
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
@@ -40,6 +48,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const body = JSON.parse(event.body || '{}');
     const input: UploadUrlInput = uploadUrlSchema.parse(body);
 
+    const maxSizeBytes = getMaxSizeBytes(input.fileType);
+    if (input.fileSize > maxSizeBytes) {
+      return response(400, {
+        error: 'FILE_SIZE_EXCEEDED',
+        message: input.fileType.startsWith('video/')
+          ? '영상은 50MB 이내만 업로드할 수 있습니다'
+          : '이미지는 10MB 이내만 업로드할 수 있습니다',
+        maxSizeBytes,
+      });
+    }
+
     // 파일 확장자 추출
     const fileExtension = input.fileType === 'video/quicktime'
       ? 'mov'
@@ -55,6 +74,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       Bucket: process.env.UPLOADS_BUCKET!,
       Key: key,
       ContentType: input.fileType,
+      ContentLength: input.fileSize,
       Metadata: {
         uploadedBy: userId,
         challengeId: input.challengeId,

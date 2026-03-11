@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { Loading } from '@/shared/components/Loading';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
+import { LinkPreviewCard } from '@/shared/components/LinkPreviewCard';
 import { getRemedyType, getRemainingRemedyCount } from '@/features/challenge/utils/flowPolicy';
 
 function isSameKstDate(iso?: string | null): boolean {
@@ -260,14 +261,7 @@ export const ChallengeFeedPage = () => {
                     <video src={item.videoUrl} controls className="mt-2 w-full rounded-lg border border-gray-100" />
                   )}
                   {item.verificationType === 'link' && item.linkUrl && (
-                    <a
-                      href={item.linkUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 inline-flex text-sm text-primary-600 underline break-all"
-                    >
-                      {item.linkUrl}
-                    </a>
+                    <LinkPreviewCard url={item.linkUrl} />
                   )}
                 </article>
               ))}
