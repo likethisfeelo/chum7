@@ -74,15 +74,22 @@ function buildTargetDateTimeISO(verificationDate: string, time24: string, timezo
 }
 
 function normalizeProgress(progress: unknown): Array<Record<string, any>> {
-  if (Array.isArray(progress)) return progress;
+  const list = Array.isArray(progress)
+    ? progress
+    : progress && typeof progress === 'object'
+      ? Object.values(progress as Record<string, any>)
+      : [];
 
-  if (progress && typeof progress === 'object') {
-    return Object.values(progress as Record<string, any>)
-      .filter((item) => item && typeof item === 'object')
-      .sort((a: any, b: any) => Number(a?.day || 0) - Number(b?.day || 0));
-  }
+  return list
+    .filter((item) => item && typeof item === 'object')
+    .sort((a: any, b: any) => Number(a?.day || 0) - Number(b?.day || 0));
+}
 
-  return [];
+function resolveChallengeId(userChallenge: Record<string, any>): string | null {
+  const raw = userChallenge?.challengeId ?? userChallenge?.challenge?.challengeId ?? null;
+  if (typeof raw !== 'string') return null;
+  const normalized = raw.trim();
+  return normalized || null;
 }
 
 async function createCheerTicket(
@@ -208,11 +215,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(403, { error: 'FORBIDDEN', message: '본인 챌린지만 인증할 수 있습니다' });
     }
 
+    const challengeId = resolveChallengeId(userChallenge);
+    if (!challengeId) {
+      return response(400, {
+        error: 'MISSING_CHALLENGE_ID',
+        message: '챌린지 정보가 유효하지 않습니다. 다시 참여 후 시도해주세요',
+      });
+    }
+
     const allowedTypes = ['image', 'text', 'link', 'video'] as Array<'image' | 'text' | 'link' | 'video'>;
-    if (process.env.CHALLENGES_TABLE && userChallenge.challengeId) {
+    if (process.env.CHALLENGES_TABLE) {
       const challengeResult = await docClient.send(new GetCommand({
         TableName: process.env.CHALLENGES_TABLE,
-        Key: { challengeId: userChallenge.challengeId },
+        Key: { challengeId },
       }));
       if (challengeResult.Item?.allowedVerificationTypes?.length) {
         const sanitized = (challengeResult.Item.allowedVerificationTypes as string[])
@@ -293,7 +308,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       verificationId,
       userId,
       userChallengeId: input.userChallengeId,
-      challengeId: userChallenge.challengeId,
+      challengeId,
       day: input.day,
       type: 'normal',
       verificationType,
@@ -413,7 +428,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         if (!incompleteCheck.hasIncompletePeople) {
           await createCheerTicket(
             userId,
-            userChallenge.challengeId,
+            challengeId,
             verificationId,
             delta || 0,
             'early_completion'
@@ -430,7 +445,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       try {
         await createCheerTicket(
           userId,
-          userChallenge.challengeId,
+          challengeId,
           verificationId,
           delta || 0,
           'streak_3'
@@ -447,7 +462,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         for (let i = 0; i < 3; i++) {
           await createCheerTicket(
             userId,
-            userChallenge.challengeId,
+            challengeId,
             verificationId,
             delta || 0,
             'complete'
