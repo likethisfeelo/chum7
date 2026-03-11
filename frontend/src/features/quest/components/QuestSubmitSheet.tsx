@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion } from 'framer-motion';
@@ -45,6 +45,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
   const [note, setNote] = useState('');
 
   const resetForm = () => {
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setImageFile(null);
     setImagePreview(null);
     setVideoFile(null);
@@ -54,6 +55,12 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
     setTextContent('');
     setNote('');
   };
+
+  useEffect(() => {
+    if (!isOpen) {
+      resetForm();
+    }
+  }, [isOpen]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -80,6 +87,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
       const duration = await readVideoDuration(file);
       const maxDuration = quest?.verificationConfig?.maxDurationSeconds ?? 60;
       if (duration > maxDuration) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
         toast.error(`영상은 ${maxDuration}초 이내만 업로드할 수 있어요.`);
         return;
       }
@@ -106,15 +114,17 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
           fileType: imageFile.type,
           challengeId,
         });
-        await fetch(uploadData.data.uploadUrl, {
+        const uploadResp = await fetch(uploadData.data.uploadUrl, {
           method: 'PUT',
           body: imageFile,
           headers: { 'Content-Type': imageFile.type },
         });
+        if (!uploadResp.ok) throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
         content = { imageUrl: uploadData.data.fileUrl };
 
       } else if (quest.verificationType === 'video') {
         if (!videoFile) throw new Error('영상을 선택해주세요');
+        if (videoDurationSec === null || Number.isNaN(videoDurationSec)) throw new Error('영상 길이 확인 후 다시 시도해주세요');
 
         const challengeId = quest.challengeId ?? quest.challenge?.challengeId;
         if (!challengeId) throw new Error('챌린지 정보가 없어 업로드할 수 없습니다');
@@ -124,11 +134,12 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
           fileType: videoFile.type,
           challengeId,
         });
-        await fetch(uploadData.data.uploadUrl, {
+        const uploadResp = await fetch(uploadData.data.uploadUrl, {
           method: 'PUT',
           body: videoFile,
           headers: { 'Content-Type': videoFile.type },
         });
+        if (!uploadResp.ok) throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
         content = {
           videoUrl: uploadData.data.fileUrl,
           videoDurationSec: Number((videoDurationSec ?? 0).toFixed(2)),
@@ -164,6 +175,10 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
       const code = err.response?.data?.error;
       if (code === 'ALREADY_SUBMITTED') {
         toast.error('이미 제출한 퀘스트입니다');
+      } else if (typeof err?.message === 'string' && err.message.startsWith('UPLOAD_PUT_FAILED_')) {
+        toast.error('파일 업로드에 실패했습니다. 네트워크 상태를 확인해주세요.');
+      } else if (err?.message === '영상 길이 확인 후 다시 시도해주세요') {
+        toast.error(err.message);
       } else {
         toast.error(err.response?.data?.message || '제출에 실패했습니다');
       }
