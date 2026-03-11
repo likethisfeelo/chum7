@@ -1,12 +1,17 @@
 export type VerificationType = 'text' | 'image' | 'video' | 'link';
 
+const ALLOWED_TYPES = new Set<VerificationType>(['text', 'image', 'video', 'link']);
+
 export function inferVerificationType(input: {
-  verificationType?: VerificationType;
+  verificationType?: VerificationType | string | null;
   linkUrl?: string | null;
   videoUrl?: string | null;
   imageUrl?: string | null;
 }): VerificationType {
-  if (input.verificationType) return input.verificationType;
+  const explicitType = typeof input.verificationType === 'string' ? input.verificationType.trim() : '';
+  if (explicitType && ALLOWED_TYPES.has(explicitType as VerificationType)) {
+    return explicitType as VerificationType;
+  }
 
   const linkUrl = input.linkUrl?.trim();
   const videoUrl = input.videoUrl?.trim();

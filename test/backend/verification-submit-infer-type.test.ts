@@ -23,4 +23,10 @@ describe('verification submit inferVerificationType', () => {
     expect(inferVerificationType({ linkUrl: '   ' } as any)).toBe('text');
     expect(inferVerificationType({ videoUrl: '   ', imageUrl: ' https://a.com/i.jpg ' } as any)).toBe('image');
   });
+
+  test('ignores invalid explicit verificationType values and falls back', () => {
+    expect(inferVerificationType({ verificationType: 'unknown', imageUrl: 'https://a.com/i.jpg' } as any)).toBe('image');
+    expect(inferVerificationType({ verificationType: '   ', videoUrl: 'https://a.com/v.mp4' } as any)).toBe('video');
+  });
+
 });

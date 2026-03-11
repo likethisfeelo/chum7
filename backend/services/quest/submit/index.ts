@@ -22,7 +22,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { validateQuestSubmissionContent } from '../../../shared/lib/quest-submit-validation';
+import { normalizeQuestSubmissionContent, validateQuestSubmissionContent } from '../../../shared/lib/quest-submit-validation';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -81,7 +81,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (quest.startAt > now) return response(409, { error: 'QUEST_NOT_STARTED', message: '아직 시작되지 않은 퀘스트입니다' });
     if (quest.endAt && quest.endAt < now) return response(409, { error: 'QUEST_EXPIRED', message: '기간이 만료된 퀘스트입니다' });
 
-    const contentError = validateQuestSubmissionContent(quest, input.content);
+    const normalizedContent = normalizeQuestSubmissionContent(input.content);
+
+    const contentError = validateQuestSubmissionContent(quest, normalizedContent);
     if (contentError) {
       return response(400, { error: 'INVALID_CONTENT', message: contentError });
     }
@@ -112,7 +114,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       challengeId: quest.challengeId ?? null,
       userChallengeId: input.userChallengeId ?? null,
       verificationType: quest.verificationType,
-      content: input.content,
+      content: normalizedContent,
       status,
       rewardGranted: autoApprove,
       previousSubmissionId,
