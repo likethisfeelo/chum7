@@ -303,7 +303,7 @@ export const AdminChallengeCreatePage = () => {
               />
               참여 시 개인 목표 입력 필수
               {isForcedPersonalGoalType(form.challengeType) && (
-                <span className="text-xs text-gray-500">(선택한 유형에서 자동 고정)</span>
+                <span className="text-xs text-gray-500" title="personal_only / leader_personal 유형은 참여 시 개인 목표가 반드시 필요합니다.">(유형 정책으로 자동 고정)</span>
               )}
             </label>
             <label className="flex items-center gap-2 text-sm text-gray-700">

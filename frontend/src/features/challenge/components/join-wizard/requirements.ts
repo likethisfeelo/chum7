@@ -1,14 +1,5 @@
+import { resolveJoinRequirements as resolveSharedJoinRequirements } from '../../../../../../shared/join-requirements';
 import { JoinWizardChallenge } from './types';
 
-export const resolveJoinRequirements = (challenge: JoinWizardChallenge) => {
-  const challengeType = String(challenge.challengeType || 'leader_personal');
-  const layerPolicy = challenge.layerPolicy || {};
-
-  const defaultRequireGoal = challengeType === 'personal_only' || challengeType === 'leader_personal' || challengeType === 'mixed';
-  const defaultRequireTarget = challengeType !== 'leader_only';
-
-  return {
-    requirePersonalGoalOnJoin: layerPolicy.requirePersonalGoalOnJoin ?? defaultRequireGoal,
-    requirePersonalTargetOnJoin: layerPolicy.requirePersonalTargetOnJoin ?? defaultRequireTarget,
-  };
-};
+export const resolveJoinRequirements = (challenge: JoinWizardChallenge) =>
+  resolveSharedJoinRequirements(challenge.challengeType, challenge.layerPolicy);

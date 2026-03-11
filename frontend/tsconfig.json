@@ -23,9 +23,10 @@
     /* Path Alias */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@shared/*": ["../shared/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "../shared/**/*.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
