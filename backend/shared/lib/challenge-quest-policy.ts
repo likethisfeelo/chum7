@@ -43,7 +43,7 @@ export function validatePracticeAt(practiceAt: string, uploadAtIso: string, time
     return { ok: false, errorCode: 'FUTURE_PRACTICE_TIME' };
   }
 
-  if (practiceMs < uploadMs - 4 * 60 * 60 * 1000) {
+  if (practiceMs < uploadMs - 16 * 60 * 60 * 1000) {
     return { ok: false, errorCode: 'PRACTICE_TOO_OLD' };
   }
 
