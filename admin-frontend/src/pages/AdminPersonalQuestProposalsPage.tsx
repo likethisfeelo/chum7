@@ -47,12 +47,22 @@ export const AdminPersonalQuestProposalsPage = () => {
       .map((c: any) => ({ challengeId: c.challengeId, title: c.title ?? '제목 없음' }));
   }, [challengeData]);
 
-  const { data, refetch, isFetching } = useQuery({
+  const { data, refetch, isFetching, error } = useQuery({
     queryKey: ['admin-personal-proposals', challengeId, status],
     queryFn: async () => {
       if (!challengeId) return [];
       const res = await apiClient.get(`/admin/challenges/${challengeId}/personal-quest-proposals?status=${status}`);
-      return res.data.data || [];
+      const payload = res.data || {};
+
+      if (payload.success === false) {
+        throw new Error(payload.message || '개인 퀘스트 제안 목록 조회에 실패했습니다');
+      }
+
+      const raw = payload.data;
+      if (Array.isArray(raw)) return raw;
+      if (Array.isArray(raw?.items)) return raw.items;
+      if (Array.isArray(raw?.proposals)) return raw.proposals;
+      return [];
     },
     enabled: Boolean(challengeId),
   });
@@ -132,6 +142,13 @@ export const AdminPersonalQuestProposalsPage = () => {
       {/* 로딩 */}
       {isFetching && challengeId && (
         <div className="text-sm text-gray-500 py-4 text-center">불러오는 중...</div>
+      )}
+
+
+      {error && challengeId && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+          {(error as any)?.message || '개인 퀘스트 제안 목록 조회 중 오류가 발생했습니다'}
+        </div>
       )}
 
       {/* 빈 상태 */}
