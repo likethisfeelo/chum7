@@ -40,3 +40,18 @@ export function validateQuestSubmissionContent(quest: any, content: any): string
   }
   return null;
 }
+
+
+export function normalizeQuestSubmissionContent(content: any): Record<string, any> {
+  const normalized: Record<string, any> = {};
+
+  if (typeof content?.imageUrl === 'string') normalized.imageUrl = content.imageUrl.trim();
+  if (typeof content?.videoUrl === 'string') normalized.videoUrl = content.videoUrl.trim();
+  if (typeof content?.thumbnailUrl === 'string') normalized.thumbnailUrl = content.thumbnailUrl.trim();
+  if (typeof content?.linkUrl === 'string') normalized.linkUrl = content.linkUrl.trim();
+  if (typeof content?.textContent === 'string') normalized.textContent = content.textContent.trim();
+  if (typeof content?.note === 'string') normalized.note = content.note.trim();
+  if (content?.videoDurationSec !== undefined) normalized.videoDurationSec = content.videoDurationSec;
+
+  return normalized;
+}

@@ -1,4 +1,4 @@
-import { validateQuestSubmissionContent } from '../../backend/shared/lib/quest-submit-validation';
+import { normalizeQuestSubmissionContent, validateQuestSubmissionContent } from '../../backend/shared/lib/quest-submit-validation';
 
 describe('quest submit validateQuestSubmissionContent', () => {
   test('video quest requires videoDurationSec', () => {
@@ -51,5 +51,26 @@ describe('quest submit validateQuestSubmissionContent', () => {
     const message = validateQuestSubmissionContent(quest, { imageUrl: '   ' });
     expect(message).toBe('이미지 URL이 필요합니다');
   });
+});
 
+describe('quest submit normalizeQuestSubmissionContent', () => {
+  test('normalize trims url and text fields', () => {
+    const normalized = normalizeQuestSubmissionContent({
+      imageUrl: '  https://a.com/i.jpg  ',
+      videoUrl: '  https://a.com/v.mp4  ',
+      linkUrl: '  https://a.com  ',
+      textContent: '  hello  ',
+      note: '  note  ',
+      videoDurationSec: 12.3,
+    });
+
+    expect(normalized).toEqual({
+      imageUrl: 'https://a.com/i.jpg',
+      videoUrl: 'https://a.com/v.mp4',
+      linkUrl: 'https://a.com',
+      textContent: 'hello',
+      note: 'note',
+      videoDurationSec: 12.3,
+    });
+  });
 });
