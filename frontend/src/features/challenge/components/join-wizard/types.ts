@@ -19,6 +19,10 @@ export interface WizardStepConfig {
 
 export interface JoinWizardChallenge {
   challengeType?: string;
+  layerPolicy?: {
+    requirePersonalGoalOnJoin?: boolean;
+    requirePersonalTargetOnJoin?: boolean;
+  } | null;
   personalQuestEnabled?: boolean;
   personalQuestAutoApprove?: boolean;
   title?: string;
