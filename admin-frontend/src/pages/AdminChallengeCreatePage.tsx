@@ -302,6 +302,9 @@ export const AdminChallengeCreatePage = () => {
                 onChange={(e) => set('requirePersonalGoalOnJoin', e.target.checked)}
               />
               참여 시 개인 목표 입력 필수
+              {isForcedPersonalGoalType(form.challengeType) && (
+                <span className="text-xs text-gray-500" title="personal_only / leader_personal 유형은 참여 시 개인 목표가 반드시 필요합니다.">(유형 정책으로 자동 고정)</span>
+              )}
             </label>
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={form.requirePersonalTargetOnJoin} onChange={e => set('requirePersonalTargetOnJoin', e.target.checked)} />

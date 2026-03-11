@@ -4,6 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { resolveJoinRequirements } from '../../../shared/lib/join-requirements';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -19,6 +20,7 @@ const joinSchema = z.object({
   personalGoal: z.string().max(200).optional(),
   personalTarget: personalTargetSchema.optional(),
 });
+
 
 function to24Hour(hour12: number, meridiem: 'AM' | 'PM'): number {
   if (meridiem === 'AM') return hour12 === 12 ? 0 : hour12;
@@ -111,12 +113,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
 
-    const challengeType = String(challenge.challengeType || 'leader_personal');
-    const layerPolicy = challenge.layerPolicy || {};
-    const defaultRequireGoal = challengeType === 'personal_only' || challengeType === 'mixed';
-    const defaultRequireTarget = challengeType !== 'leader_only';
-    const requirePersonalGoalOnJoin = layerPolicy.requirePersonalGoalOnJoin ?? defaultRequireGoal;
-    const requirePersonalTargetOnJoin = layerPolicy.requirePersonalTargetOnJoin ?? defaultRequireTarget;
+    const { requirePersonalGoalOnJoin, requirePersonalTargetOnJoin } = resolveJoinRequirements(
+      challenge.challengeType,
+      challenge.layerPolicy,
+    );
 
     if (requirePersonalGoalOnJoin && !input.personalGoal?.trim()) {
       return response(400, { error: 'PERSONAL_GOAL_REQUIRED', message: '이 챌린지는 참여 시 개인 목표 입력이 필요합니다' });
