@@ -285,16 +285,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const effectiveTargetTime = input.targetTime || derivedTargetTime;
 
-    if (!effectiveTargetTime && !isExtra) {
-      return response(400, {
-        error: 'MISSING_TARGET_TIME',
-        message: '개인 목표시간 설정 또는 targetTime 입력이 필요합니다'
-      });
-    }
+    const delta = (isExtra || !effectiveTargetTime) ? null : calculateDelta(effectiveTargetTime, performedAt);
 
-    const delta = isExtra ? null : calculateDelta(effectiveTargetTime!, performedAt);
-
-    if (!isExtra && delta === null) {
+    if (effectiveTargetTime && !isExtra && delta === null) {
       return response(400, {
         error: 'INVALID_TARGET_TIME_FORMAT',
         message: '인증 시각 또는 목표 시각 형식이 올바르지 않습니다'

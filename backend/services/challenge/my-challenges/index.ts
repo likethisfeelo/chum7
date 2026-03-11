@@ -76,7 +76,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       const challenge = challengeMap.get(uc.challengeId);
       
       // 진행률 계산
-      const completedDays = uc.progress.filter((p: any) => p.status === 'success').length;
+      const progressList = Array.isArray(uc.progress) ? uc.progress : Object.values(uc.progress || {});
+      const completedDays = progressList.filter((p: any) => p?.status === 'success').length;
       const progressPercentage = Math.round((completedDays / 7) * 100);
 
       return {
@@ -92,8 +93,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         personalGoal: uc.personalGoal ?? null,
         personalTarget: uc.personalTarget ?? null,
         remedyPolicy: uc.remedyPolicy ?? null,
-        usedRemedyCount: (uc.progress || []).filter((p: any) => p?.remedied === true).length,
-        progress: uc.progress,
+        usedRemedyCount: progressList.filter((p: any) => p?.remedied === true).length,
+        progress: progressList,
         progressPercentage,
         completedDays,
         challenge: challenge ? {
