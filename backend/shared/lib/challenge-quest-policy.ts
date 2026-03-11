@@ -64,7 +64,7 @@ export function calculateChallengeDay(startDateIso: string, certDate: string, ti
 }
 
 export function isInvalidDayDelta(requestDay: number, calculatedDay: number): boolean {
-  return Math.abs(requestDay - calculatedDay) > 1;
+  return requestDay !== calculatedDay;
 }
 
 export function remedyScore(basePoints: number): number {

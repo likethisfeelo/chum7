@@ -4,7 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { remedyScore, safeTimezone, validatePracticeAt } from '../../../shared/lib/challenge-quest-policy';
+import { certDateFromIso, remedyScore, safeTimezone } from '../../../shared/lib/challenge-quest-policy';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -153,15 +153,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const nowIso = new Date().toISOString();
-    const practiceAt = input.practiceAt || input.completedAt || nowIso;
-    const timezone = safeTimezone((event.headers?.['x-user-timezone'] || event.headers?.['X-User-Timezone']) as string | undefined || userChallenge.timezone);
-    const practiceValidation = validatePracticeAt(practiceAt, nowIso, timezone);
-    if (!practiceValidation.ok) {
+    // practiceAt은 개인 기록용 - 미래 시간만 차단, 날짜 범위 제한 없음
+    const performedAt = input.practiceAt || input.completedAt || nowIso;
+    if (new Date(performedAt).getTime() > new Date(nowIso).getTime()) {
       return response(400, {
-        error: practiceValidation.errorCode,
-        message: practiceValidation.errorCode === 'FUTURE_PRACTICE_TIME' ? 'practiceAt이 uploadAt보다 미래입니다' : 'practiceAt이 허용 범위를 초과했습니다'
+        error: 'FUTURE_PRACTICE_TIME',
+        message: 'practiceAt이 uploadAt보다 미래입니다'
       });
     }
+    const timezone = safeTimezone((event.headers?.['x-user-timezone'] || event.headers?.['X-User-Timezone']) as string | undefined || userChallenge.timezone);
+    const certDate = certDateFromIso(nowIso, timezone); // REMEDY 업로드 날짜 기준
 
     const verificationId = uuidv4();
     const basePoints = Number(originalDayProgress.score || 10);
@@ -177,10 +178,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       imageUrl: input.imageUrl || null,
       todayNote: input.todayNote,
       tomorrowPromise: input.tomorrowPromise || null,
-      certDate: practiceValidation.certDate,
-      practiceAt,
-      completedAt: practiceAt,
+      certDate,
+      performedAt,
+      practiceAt: performedAt,
+      completedAt: performedAt,
       uploadAt: nowIso,
+      uploadedAt: nowIso,
       targetTime: null,
       delta: null,
       score: scoreEarned,
@@ -206,7 +209,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         day: input.originalDay,
         status: 'success',
         verificationId,
-        timestamp: practiceAt,
+        timestamp: nowIso,
         delta: 0,
         score: scoreEarned,
         remedied: true

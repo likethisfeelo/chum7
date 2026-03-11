@@ -159,7 +159,24 @@ export class VerificationStack extends Stack {
       authorizer,
     });
 
-    // 5. Remedy Verification (Day 6 보완) (protected)
+    // 5. Performed-at Update (수행 시간 수정) (protected)
+    const performedAtFn = new NodejsFunction(this, 'PerformedAtFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-verification-performed-at`,
+      entry: path.join(__dirname, '../../backend/services/verification/performed-at/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    verificationsTable.grantReadWriteData(performedAtFn);
+    userChallengesTable.grantReadData(performedAtFn);
+    apiGateway.addRoutes({
+      path: '/verifications/{verificationId}/performed-at',
+      methods: [HttpMethod.PATCH],
+      integration: new HttpLambdaIntegration('PerformedAtIntegration', performedAtFn),
+      authorizer,
+    });
+
+    // 6. Remedy Verification (Day 6 보완) (protected)
     const remedyFn = new NodejsFunction(this, 'RemedyFn', {
       ...commonProps,
       functionName: `chme-${stage}-verification-remedy`,
