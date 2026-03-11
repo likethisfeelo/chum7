@@ -73,6 +73,25 @@ function buildTargetDateTimeISO(verificationDate: string, time24: string, timezo
   return Number.isNaN(new Date(iso).getTime()) ? null : iso;
 }
 
+function normalizeProgress(progress: unknown): Array<Record<string, any>> {
+  const list = Array.isArray(progress)
+    ? progress
+    : progress && typeof progress === 'object'
+      ? Object.values(progress as Record<string, any>)
+      : [];
+
+  return list
+    .filter((item) => item && typeof item === 'object')
+    .sort((a: any, b: any) => Number(a?.day || 0) - Number(b?.day || 0));
+}
+
+function resolveChallengeId(userChallenge: Record<string, any>): string | null {
+  const raw = userChallenge?.challengeId ?? userChallenge?.challenge?.challengeId ?? null;
+  if (typeof raw !== 'string') return null;
+  const normalized = raw.trim();
+  return normalized || null;
+}
+
 async function createCheerTicket(
   userId: string,
   challengeId: string,
@@ -128,8 +147,8 @@ async function checkIncompleteUsers(
   }
 
   const incompleteUsers = result.Items.filter((uc: any) => {
-    const progress = uc.progress || [];
-    const todayProgress = progress.find((p: any) => p.day === currentDay);
+    const progress = normalizeProgress(uc.progress);
+    const todayProgress = progress.find((p: any) => Number(p?.day) === currentDay);
     return !todayProgress || todayProgress.status !== 'success';
   });
 
@@ -196,14 +215,23 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(403, { error: 'FORBIDDEN', message: '본인 챌린지만 인증할 수 있습니다' });
     }
 
+    const challengeId = resolveChallengeId(userChallenge);
+    if (!challengeId) {
+      return response(400, {
+        error: 'MISSING_CHALLENGE_ID',
+        message: '챌린지 정보가 유효하지 않습니다. 다시 참여 후 시도해주세요',
+      });
+    }
+
     const allowedTypes = ['image', 'text', 'link', 'video'] as Array<'image' | 'text' | 'link' | 'video'>;
-    if (process.env.CHALLENGES_TABLE && userChallenge.challengeId) {
+    if (process.env.CHALLENGES_TABLE) {
       const challengeResult = await docClient.send(new GetCommand({
         TableName: process.env.CHALLENGES_TABLE,
-        Key: { challengeId: userChallenge.challengeId },
+        Key: { challengeId },
       }));
-      if (challengeResult.Item?.allowedVerificationTypes?.length) {
-        const sanitized = (challengeResult.Item.allowedVerificationTypes as string[])
+      const rawAllowedTypes = challengeResult.Item?.allowedVerificationTypes;
+      if (Array.isArray(rawAllowedTypes) && rawAllowedTypes.length > 0) {
+        const sanitized = rawAllowedTypes
           .filter((type) => ['image', 'text', 'link', 'video'].includes(type)) as Array<'image' | 'text' | 'link' | 'video'>;
         if (sanitized.length > 0) {
           allowedTypes.splice(0, allowedTypes.length, ...sanitized);
@@ -237,8 +265,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-    const progress = userChallenge.progress || [];
-    const dayProgress = progress.find((p: any) => p.day === input.day);
+    const progress = normalizeProgress(userChallenge.progress);
+    const dayProgress = progress.find((p: any) => Number(p?.day) === input.day);
     const isExtra = !!(dayProgress && dayProgress.status === 'success');
 
     const verificationDate = input.verificationDate || practiceValidation.certDate;
@@ -281,7 +309,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       verificationId,
       userId,
       userChallengeId: input.userChallengeId,
-      challengeId: userChallenge.challengeId,
+      challengeId,
       day: input.day,
       type: 'normal',
       verificationType,
@@ -334,7 +362,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const updatedProgress = [...progress];
-    const existingIndex = updatedProgress.findIndex((p: any) => p.day === input.day);
+    const existingIndex = updatedProgress.findIndex((p: any) => Number(p?.day) === input.day);
 
     const newProgress = {
       day: input.day,
@@ -353,7 +381,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     let consecutiveDays = 0;
     for (let i = 1; i <= input.day; i++) {
-      const p = updatedProgress.find((pr: any) => pr.day === i);
+      const p = updatedProgress.find((pr: any) => Number(pr?.day) === i);
       if (p && p.status === 'success') {
         consecutiveDays++;
       } else {
@@ -401,7 +429,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         if (!incompleteCheck.hasIncompletePeople) {
           await createCheerTicket(
             userId,
-            userChallenge.challengeId,
+            challengeId,
             verificationId,
             delta || 0,
             'early_completion'
@@ -418,7 +446,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       try {
         await createCheerTicket(
           userId,
-          userChallenge.challengeId,
+          challengeId,
           verificationId,
           delta || 0,
           'streak_3'
@@ -435,7 +463,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         for (let i = 0; i < 3; i++) {
           await createCheerTicket(
             userId,
-            userChallenge.challengeId,
+            challengeId,
             verificationId,
             delta || 0,
             'complete'
