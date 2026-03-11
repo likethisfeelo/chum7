@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion } from 'framer-motion';
-import { FiCamera, FiX, FiLink, FiFileText } from 'react-icons/fi';
+import { FiCamera, FiX, FiLink, FiFileText, FiVideo } from 'react-icons/fi';
 import { BottomSheet } from '@/shared/components/BottomSheet';
 import toast from 'react-hot-toast';
 
@@ -13,36 +13,95 @@ interface QuestSubmitSheetProps {
   onSuccess?: () => void;
 }
 
+async function readVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      const duration = Number(video.duration || 0);
+      URL.revokeObjectURL(url);
+      resolve(duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('VIDEO_DURATION_READ_FAILED'));
+    };
+    video.src = url;
+  });
+}
+
 export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSubmitSheetProps) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [imageFile, setImageFile]       = useState<File | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [linkUrl, setLinkUrl]           = useState('');
-  const [textContent, setTextContent]   = useState('');
-  const [note, setNote]                 = useState('');
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [videoDurationSec, setVideoDurationSec] = useState<number | null>(null);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [textContent, setTextContent] = useState('');
+  const [note, setNote] = useState('');
 
   const resetForm = () => {
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setImageFile(null);
     setImagePreview(null);
+    setVideoFile(null);
+    setVideoPreview(null);
+    setVideoDurationSec(null);
     setLinkUrl('');
     setTextContent('');
     setNote('');
   };
 
+  useEffect(() => {
+    if (!isOpen) {
+      resetForm();
+    }
+  }, [isOpen]);
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('이미지 파일만 선택할 수 있어요.');
+      return;
+    }
     setImageFile(file);
     const reader = new FileReader();
     reader.onload = () => setImagePreview(reader.result as string);
     reader.readAsDataURL(file);
   };
 
+  const handleVideoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('video/')) {
+      toast.error('영상 파일만 선택할 수 있어요.');
+      return;
+    }
+
+    try {
+      const duration = await readVideoDuration(file);
+      const maxDuration = quest?.verificationConfig?.maxDurationSeconds ?? 60;
+      if (duration > maxDuration) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        toast.error(`영상은 ${maxDuration}초 이내만 업로드할 수 있어요.`);
+        return;
+      }
+      setVideoDurationSec(duration);
+      setVideoFile(file);
+      setVideoPreview(URL.createObjectURL(file));
+    } catch {
+      toast.error('영상 길이를 확인할 수 없습니다. 다시 시도해주세요.');
+    }
+  };
+
   const submitMutation = useMutation({
     mutationFn: async () => {
-      let content: Record<string, string> = {};
+      let content: Record<string, string | number> = {};
 
       if (quest.verificationType === 'image') {
         if (!imageFile) throw new Error('이미지를 선택해주세요');
@@ -55,12 +114,36 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
           fileType: imageFile.type,
           challengeId,
         });
-        await fetch(uploadData.data.uploadUrl, {
+        const uploadResp = await fetch(uploadData.data.uploadUrl, {
           method: 'PUT',
           body: imageFile,
           headers: { 'Content-Type': imageFile.type },
         });
+        if (!uploadResp.ok) throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
         content = { imageUrl: uploadData.data.fileUrl };
+
+      } else if (quest.verificationType === 'video') {
+        if (!videoFile) throw new Error('영상을 선택해주세요');
+        if (videoDurationSec === null || Number.isNaN(videoDurationSec)) throw new Error('영상 길이 확인 후 다시 시도해주세요');
+
+        const challengeId = quest.challengeId ?? quest.challenge?.challengeId;
+        if (!challengeId) throw new Error('챌린지 정보가 없어 업로드할 수 없습니다');
+
+        const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
+          fileName: videoFile.name,
+          fileType: videoFile.type,
+          challengeId,
+        });
+        const uploadResp = await fetch(uploadData.data.uploadUrl, {
+          method: 'PUT',
+          body: videoFile,
+          headers: { 'Content-Type': videoFile.type },
+        });
+        if (!uploadResp.ok) throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
+        content = {
+          videoUrl: uploadData.data.fileUrl,
+          videoDurationSec: Number((videoDurationSec ?? 0).toFixed(2)),
+        };
 
       } else if (quest.verificationType === 'link') {
         if (!linkUrl.trim()) throw new Error('URL을 입력해주세요');
@@ -92,6 +175,10 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
       const code = err.response?.data?.error;
       if (code === 'ALREADY_SUBMITTED') {
         toast.error('이미 제출한 퀘스트입니다');
+      } else if (typeof err?.message === 'string' && err.message.startsWith('UPLOAD_PUT_FAILED_')) {
+        toast.error('파일 업로드에 실패했습니다. 네트워크 상태를 확인해주세요.');
+      } else if (err?.message === '영상 길이 확인 후 다시 시도해주세요') {
+        toast.error(err.message);
       } else {
         toast.error(err.response?.data?.message || '제출에 실패했습니다');
       }
@@ -106,7 +193,8 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
   if (!quest) return null;
 
   const isResubmit = quest.mySubmission?.status === 'rejected';
-  const maxChars   = quest.verificationConfig?.maxChars ?? 2000;
+  const maxChars = quest.verificationConfig?.maxChars ?? 2000;
+  const maxDuration = quest.verificationConfig?.maxDurationSeconds ?? 60;
 
   return (
     <BottomSheet
@@ -115,7 +203,6 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
       title={isResubmit ? '퀘스트 재제출 🔄' : '퀘스트 제출 📝'}
     >
       <form onSubmit={handleSubmit} className="px-6 pb-8 space-y-5">
-        {/* 퀘스트 정보 */}
         <div className="flex items-center gap-3 p-4 bg-primary-50 rounded-2xl">
           <span className="text-3xl">{quest.icon || '📋'}</span>
           <div className="flex-1 min-w-0">
@@ -124,7 +211,6 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
           </div>
         </div>
 
-        {/* 거절 사유 (재제출 시) */}
         {isResubmit && quest.mySubmission?.reviewNote && (
           <div className="p-4 bg-red-50 border border-red-200 rounded-2xl">
             <p className="text-sm font-semibold text-red-700 mb-1">거절 사유</p>
@@ -132,7 +218,6 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
           </div>
         )}
 
-        {/* 인증 방식별 UI */}
         {quest.verificationType === 'image' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -160,6 +245,39 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
               </button>
             )}
             <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleImageSelect} className="hidden" />
+          </div>
+        )}
+
+        {quest.verificationType === 'video' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <FiVideo className="inline w-4 h-4 mr-1" />인증 영상 <span className="text-red-500">*</span>
+            </label>
+            {videoPreview ? (
+              <div className="relative">
+                <video src={videoPreview} controls className="w-full h-48 object-cover rounded-2xl" />
+                <button
+                  type="button"
+                  onClick={() => { setVideoFile(null); setVideoPreview(null); setVideoDurationSec(null); }}
+                  className="absolute top-2 right-2 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center text-white"
+                >
+                  <FiX className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full h-40 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-primary-400 hover:bg-primary-50 transition-colors"
+              >
+                <FiVideo className="w-8 h-8 text-gray-400" />
+                <span className="text-sm text-gray-500">영상 파일을 선택해주세요</span>
+              </button>
+            )}
+            <input ref={fileInputRef} type="file" accept="video/*" capture="environment" onChange={handleVideoSelect} className="hidden" />
+            <p className="text-xs text-gray-400 mt-1">
+              최대 {maxDuration}초{videoDurationSec !== null ? ` · 선택 영상 ${videoDurationSec.toFixed(1)}초` : ''}
+            </p>
           </div>
         )}
 
@@ -200,7 +318,6 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
           </div>
         )}
 
-        {/* 한 줄 메모 (공통, 선택) */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             한 줄 메모 ✍️ (선택)
