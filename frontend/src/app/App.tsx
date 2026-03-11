@@ -23,6 +23,7 @@ import { UseTicketPage } from '@/features/cheer/pages/UseTicketPage';
 import { QuestBoardPage } from '@/features/quest/pages/QuestBoardPage';
 import { MyQuestSubmissionsPage } from '@/features/quest/pages/MyQuestSubmissionsPage';
 import { ParticipantFlowPlanPage } from '@/features/planning/pages/ParticipantFlowPlanPage';
+import { GentleChallengeMockupPage } from '@/features/mockup/pages/GentleChallengeMockupPage';
 import { AdminDocsPage } from '@/features/admin/pages/AdminDocsPage';
 import { AdminAccessDeniedPage } from '@/features/admin/pages/AdminAccessDeniedPage';
 
@@ -290,6 +291,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/design-mockup/gentle-challenge" element={<GentleChallengeMockupPage />} />
 
         <Route path="/earth" element={<Navigate to="/outer-space" replace />} />
 
