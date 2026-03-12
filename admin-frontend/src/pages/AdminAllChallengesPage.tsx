@@ -5,6 +5,15 @@ import { lifecycleLabel, transitionLabel } from '@/utils/lifecycle';
 
 type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
 
+type VerificationType = 'image' | 'text' | 'link' | 'video';
+
+const VERIFICATION_TYPE_OPTIONS: { value: VerificationType; label: string }[] = [
+  { value: 'image', label: '📸 사진' },
+  { value: 'text',  label: '✍️ 텍스트' },
+  { value: 'link',  label: '🔗 URL' },
+  { value: 'video', label: '🎥 영상' },
+];
+
 type Quest = {
   questId: string;
   title: string;
@@ -33,6 +42,10 @@ export const AdminAllChallengesPage = () => {
   const [editingQuestId, setEditingQuestId] = useState('');
   const [questEditForm, setQuestEditForm] = useState({ title: '', description: '', rewardPoints: 0, displayOrder: 0 });
   const [questSaving, setQuestSaving] = useState(false);
+
+  const [editingVerificationTypes, setEditingVerificationTypes] = useState(false);
+  const [verificationTypeForm, setVerificationTypeForm] = useState<VerificationType[]>([]);
+  const [verificationTypeSaving, setVerificationTypeSaving] = useState(false);
 
   const { data: challengesData, isLoading, error, refetch } = useQuery({
     queryKey: ['admin-all-challenges', submittedReason],
@@ -66,6 +79,37 @@ export const AdminAllChallengesPage = () => {
     () => (currentLifecycle ? ALLOWED_TRANSITIONS[currentLifecycle] : []),
     [currentLifecycle],
   );
+
+  const handleStartEditVerificationTypes = () => {
+    const current: VerificationType[] = Array.isArray(selectedChallenge?.allowedVerificationTypes) && selectedChallenge.allowedVerificationTypes.length > 0
+      ? selectedChallenge.allowedVerificationTypes
+      : ['image', 'text', 'link', 'video'];
+    setVerificationTypeForm(current);
+    setEditingVerificationTypes(true);
+  };
+
+  const handleSaveVerificationTypes = async () => {
+    if (!selectedChallengeId || verificationTypeForm.length === 0) return;
+    setVerificationTypeSaving(true);
+    try {
+      await apiClient.put(`/admin/challenges/${selectedChallengeId}`, {
+        allowedVerificationTypes: verificationTypeForm,
+      });
+      await refetch();
+      setEditingVerificationTypes(false);
+      alert('인증 유형 제한이 저장되었습니다.');
+    } catch (e: any) {
+      alert(e?.response?.data?.message || '저장에 실패했습니다.');
+    } finally {
+      setVerificationTypeSaving(false);
+    }
+  };
+
+  const toggleVerificationType = (v: VerificationType) => {
+    setVerificationTypeForm(prev =>
+      prev.includes(v) ? prev.filter(t => t !== v) : [...prev, v]
+    );
+  };
 
   const handleSearch = () => {
     const trimmedReason = reason.trim();
@@ -169,6 +213,7 @@ export const AdminAllChallengesPage = () => {
           onChange={(e) => {
             setSelectedChallengeId(e.target.value);
             setEditingQuestId('');
+            setEditingVerificationTypes(false);
           }}
           className="w-full px-3 py-2.5 border border-gray-300 rounded-xl"
         >
@@ -188,6 +233,63 @@ export const AdminAllChallengesPage = () => {
           <p className="text-sm text-gray-600">생성자 ID: {selectedChallenge.createdBy || '-'}</p>
           <p className="text-sm text-gray-600">생성자 이름: {selectedChallenge.createdByName || '-'}</p>
           <p className="text-sm text-gray-600">챌린지 ID: {selectedChallenge.challengeId}</p>
+
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-orange-900">인증 유형 제한</p>
+              <span className="text-xs text-orange-700">
+                현재: {(Array.isArray(selectedChallenge.allowedVerificationTypes) && selectedChallenge.allowedVerificationTypes.length > 0
+                  ? selectedChallenge.allowedVerificationTypes
+                  : ['image', 'text', 'link', 'video']
+                ).join(', ')}
+              </span>
+            </div>
+            {editingVerificationTypes ? (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {VERIFICATION_TYPE_OPTIONS.map(opt => (
+                    <label key={opt.value} className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={verificationTypeForm.includes(opt.value)}
+                        onChange={() => toggleVerificationType(opt.value)}
+                        className="rounded"
+                      />
+                      <span className="text-sm">{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {verificationTypeForm.length === 0 && (
+                  <p className="text-xs text-red-600">최소 1가지 유형을 선택해야 합니다.</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveVerificationTypes}
+                    disabled={verificationTypeSaving || verificationTypeForm.length === 0}
+                    className="px-3 py-1.5 rounded-lg bg-orange-600 text-white text-sm disabled:opacity-50"
+                  >
+                    {verificationTypeSaving ? '저장 중...' : '저장'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingVerificationTypes(false)}
+                    className="px-3 py-1.5 rounded-lg bg-gray-300 text-gray-800 text-sm"
+                  >
+                    취소
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={handleStartEditVerificationTypes}
+                className="px-3 py-1.5 rounded-lg bg-orange-500 text-white text-sm"
+              >
+                인증 유형 수정
+              </button>
+            )}
+          </div>
 
           <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 space-y-2">
             <p className="text-sm font-semibold text-indigo-900">응급 상태 변경</p>
