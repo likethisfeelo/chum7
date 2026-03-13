@@ -8,7 +8,7 @@ import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import { Table } from "aws-cdk-lib/aws-dynamodb";
-import { EventType, IBucket } from "aws-cdk-lib/aws-s3";
+import { Bucket, EventType, IBucket } from "aws-cdk-lib/aws-s3";
 import { LambdaDestination } from "aws-cdk-lib/aws-s3-notifications";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
@@ -181,10 +181,15 @@ export class VerificationStack extends Stack {
       memorySize: 256,
     });
     uploadsBucket.grantRead(mediaValidationFn);
-    uploadsBucket.addEventNotification(
+
+    const uploadsNotificationBucket = Bucket.fromBucketName(
+      this,
+      "UploadsNotificationBucket",
+      uploadsBucket.bucketName,
+    );
+    uploadsNotificationBucket.addEventNotification(
       EventType.OBJECT_CREATED,
       new LambdaDestination(mediaValidationFn),
-      { prefix: "" },
     );
 
     const mediaValidationLogGroup = new logs.LogGroup(
