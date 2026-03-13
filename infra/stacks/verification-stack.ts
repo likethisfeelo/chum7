@@ -187,6 +187,110 @@ export class VerificationStack extends Stack {
       { prefix: "" },
     );
 
+    const mediaValidationLogGroup = new logs.LogGroup(
+      this,
+      "MediaValidationLogGroup",
+      {
+        logGroupName: `/aws/lambda/${mediaValidationFn.functionName}`,
+        retention: logs.RetentionDays.ONE_MONTH,
+      },
+    );
+
+    new logs.MetricFilter(this, "MediaValidationInvalidMetricFilter", {
+      logGroup: mediaValidationLogGroup,
+      metricNamespace: "CHME/Verification",
+      metricName: "MediaValidationInvalidCount",
+      filterPattern: logs.FilterPattern.all(
+        logs.FilterPattern.stringValue(
+          "$.eventType",
+          "=",
+          "media_validation_result",
+        ),
+        logs.FilterPattern.stringValue("$.status", "=", "invalid"),
+      ),
+      metricValue: "1",
+      defaultValue: 0,
+    });
+
+    new logs.MetricFilter(this, "MediaValidationErrorMetricFilter", {
+      logGroup: mediaValidationLogGroup,
+      metricNamespace: "CHME/Verification",
+      metricName: "MediaValidationErrorCount",
+      filterPattern: logs.FilterPattern.stringValue(
+        "$.eventType",
+        "=",
+        "media_validation_error",
+      ),
+      metricValue: "1",
+      defaultValue: 0,
+    });
+
+    const mediaValidationAlertTopic = new sns.Topic(
+      this,
+      "MediaValidationAlertTopic",
+      {
+        topicName: `chme-${stage}-media-validation-alerts`,
+      },
+    );
+
+    if (plazaConvertFailureAlertEmail) {
+      mediaValidationAlertTopic.addSubscription(
+        new subscriptions.EmailSubscription(plazaConvertFailureAlertEmail),
+      );
+    }
+
+    const mediaValidationInvalidAlarm = new cloudwatch.Alarm(
+      this,
+      "MediaValidationInvalidAlarm",
+      {
+        alarmName: `chme-${stage}-media-validation-invalid-alarm`,
+        metric: new cloudwatch.Metric({
+          namespace: "CHME/Verification",
+          metricName: "MediaValidationInvalidCount",
+          statistic: "sum",
+          period: Duration.minutes(15),
+        }),
+        threshold: 5,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      },
+    );
+    mediaValidationInvalidAlarm.addAlarmAction(
+      new cwActions.SnsAction(mediaValidationAlertTopic),
+    );
+
+    const mediaValidationErrorAlarm = new cloudwatch.Alarm(
+      this,
+      "MediaValidationErrorAlarm",
+      {
+        alarmName: `chme-${stage}-media-validation-error-alarm`,
+        metric: new cloudwatch.Metric({
+          namespace: "CHME/Verification",
+          metricName: "MediaValidationErrorCount",
+          statistic: "sum",
+          period: Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      },
+    );
+    mediaValidationErrorAlarm.addAlarmAction(
+      new cwActions.SnsAction(mediaValidationAlertTopic),
+    );
+
+    new CfnOutput(this, "MediaValidationAlertTopicArnOutput", {
+      value: mediaValidationAlertTopic.topicArn,
+      description: "SNS topic for media validation alerts.",
+      exportName: `chme-${stage}-media-validation-alert-topic-arn`,
+    });
+
     const linkPreviewFn = new NodejsFunction(this, "LinkPreviewFn", {
       ...commonProps,
       functionName: `chme-${stage}-verification-link-preview`,

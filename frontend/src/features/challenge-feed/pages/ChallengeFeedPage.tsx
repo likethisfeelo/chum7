@@ -223,6 +223,30 @@ export const ChallengeFeedPage = () => {
       ),
     [myChallengeVerifications],
   );
+  const hasPendingVideoValidation = useMemo(
+    () =>
+      [...challengeVerifications, ...myChallengeVerifications].some(
+        (item: any) =>
+          item.verificationType === "video" &&
+          item.mediaValidationStatus === "pending",
+      ),
+    [challengeVerifications, myChallengeVerifications],
+  );
+
+  useEffect(() => {
+    if (!hasPendingVideoValidation || !challengeId) return;
+
+    const timer = window.setInterval(() => {
+      queryClient.invalidateQueries({
+        queryKey: ["challenge-feed-verifications", challengeId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["challenge-feed-my-verifications", challengeId],
+      });
+    }, 15000);
+
+    return () => window.clearInterval(timer);
+  }, [hasPendingVideoValidation, challengeId, queryClient]);
 
   if (!challengeId) {
     return (
