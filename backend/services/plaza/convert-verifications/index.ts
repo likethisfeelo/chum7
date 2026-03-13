@@ -4,14 +4,13 @@ import { DynamoDBDocumentClient, PutCommand, QueryCommand, UpdateCommand } from 
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-function previousDayRangeUtc() {
+function conversionCursorWindowUtc() {
   const now = new Date();
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
-  const start = new Date(end);
-  start.setUTCDate(start.getUTCDate() - 1);
+  const end = now.toISOString();
+  const start = "1970-01-01T00:00:00.000Z";
   return {
-    startIso: start.toISOString(),
-    endIso: end.toISOString(),
+    startIso: start,
+    endIso: end,
     convertedAt: now.toISOString(),
   };
 }
@@ -20,7 +19,7 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
   const verificationsTable = process.env.VERIFICATIONS_TABLE!;
   const plazaPostsTable = process.env.PLAZA_POSTS_TABLE!;
 
-  const { startIso, endIso, convertedAt } = previousDayRangeUtc();
+  const { startIso, endIso, convertedAt } = conversionCursorWindowUtc();
   let lastEvaluatedKey: Record<string, any> | undefined;
 
   let scannedCount = 0;
@@ -36,11 +35,9 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
       const page = await ddb.send(new QueryCommand({
         TableName: verificationsTable,
         IndexName: 'isPublic-createdAt-index',
-        KeyConditionExpression: 'isPublic = :isPublic AND createdAt BETWEEN :start AND :end',
+        KeyConditionExpression: 'isPublic = :isPublic',
         ExpressionAttributeValues: {
           ':isPublic': 'true',
-          ':start': startIso,
-          ':end': endIso,
         },
         ExclusiveStartKey: lastEvaluatedKey,
         Limit: 100,
@@ -88,8 +85,9 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
             commentCount: 0,
             bookmarkCount: 0,
             isActive: true,
-            createdAt: convertedAt,
-            originalCreatedAt: item.createdAt,
+            createdAt: item.createdAt || convertedAt,
+            originalCreatedAt: item.createdAt || null,
+            convertedAt,
           },
           ConditionExpression: 'attribute_not_exists(plazaPostId)',
         })).catch((error: any) => {

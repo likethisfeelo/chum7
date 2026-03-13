@@ -514,6 +514,8 @@ export const handler = async (
       .filter((p: any) => p.status === "success")
       .reduce((sum: number, p: any) => sum + (p.score || 0), 0);
 
+    const nextDay = Math.min(8, input.day + 1);
+
     await docClient.send(
       new UpdateCommand({
         TableName: process.env.USER_CHALLENGES_TABLE!,
@@ -522,7 +524,7 @@ export const handler = async (
           "SET progress = :progress, currentDay = :currentDay, score = :score, consecutiveDays = :consecutiveDays, updatedAt = :updatedAt",
         ExpressionAttributeValues: {
           ":progress": updatedProgress,
-          ":currentDay": input.day,
+          ":currentDay": nextDay,
           ":score": totalScore,
           ":consecutiveDays": consecutiveDays,
           ":updatedAt": nowIso,
