@@ -1,22 +1,25 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import { resolveVerificationType } from '../../../shared/lib/verification-normalization';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import {
+  DynamoDBDocumentClient,
+  QueryCommand,
+  ScanCommand,
+} from "@aws-sdk/lib-dynamodb";
+import { resolveVerificationType } from "../../../shared/lib/verification-normalization";
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 type VerificationItem = Record<string, any>;
 
-type ListMode = 'scan' | 'mine' | 'public';
+type ListMode = "scan" | "mine" | "public";
 
 type ParsedNextToken = {
   mode: ListMode;
   startKey: Record<string, any>;
 };
-
 
 const s3Client = new S3Client({});
 
@@ -25,23 +28,27 @@ function extractUploadsKey(url?: string | null): string | null {
   const raw = String(url).trim();
   if (!raw) return null;
 
-  if (raw.startsWith('/uploads/')) return raw.slice('/uploads/'.length);
-  if (raw.startsWith('uploads/')) return raw.slice('uploads/'.length);
+  if (raw.startsWith("/uploads/")) return raw.slice("/uploads/".length);
+  if (raw.startsWith("uploads/")) return raw.slice("uploads/".length);
 
-  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
     try {
       const parsed = new URL(raw);
-      if (parsed.pathname.startsWith('/uploads/')) return parsed.pathname.slice('/uploads/'.length);
+      if (parsed.pathname.startsWith("/uploads/"))
+        return parsed.pathname.slice("/uploads/".length);
     } catch {
       return null;
     }
   }
 
-  if (raw.includes('/') && !raw.startsWith('http')) return raw.replace(/^\/+/, '');
+  if (raw.includes("/") && !raw.startsWith("http"))
+    return raw.replace(/^\/+/, "");
   return null;
 }
 
-async function toRenderableMediaUrl(url?: string | null): Promise<string | null> {
+async function toRenderableMediaUrl(
+  url?: string | null,
+): Promise<string | null> {
   if (!url) return null;
   const key = extractUploadsKey(url);
   if (!key || !process.env.UPLOADS_BUCKET) return url;
@@ -53,7 +60,7 @@ async function toRenderableMediaUrl(url?: string | null): Promise<string | null>
       { expiresIn: 3600 },
     );
   } catch (error) {
-    console.error('Failed to sign verification media url:', error);
+    console.error("Failed to sign verification media url:", error);
     return url;
   }
 }
@@ -62,16 +69,16 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
     statusCode,
     headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Credentials': true,
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Credentials": true,
     },
     body: JSON.stringify(body),
   };
 }
 
 function isPublicVerification(v: VerificationItem): boolean {
-  const isPublic = v.isPublic === 'true' || v.isPublic === true;
+  const isPublic = v.isPublic === "true" || v.isPublic === true;
   const isPersonalOnly = v.isPersonalOnly === true;
   return isPublic && !isPersonalOnly;
 }
@@ -80,9 +87,9 @@ async function normalizeVerification(v: VerificationItem) {
   const imageUrl = await toRenderableMediaUrl(v.imageUrl || null);
   const videoUrl = await toRenderableMediaUrl(v.videoUrl || null);
 
-  const linkUrlRaw = typeof v.linkUrl === 'string' ? v.linkUrl.trim() : '';
-  const videoUrlRaw = typeof v.videoUrl === 'string' ? v.videoUrl.trim() : '';
-  const imageUrlRaw = typeof v.imageUrl === 'string' ? v.imageUrl.trim() : '';
+  const linkUrlRaw = typeof v.linkUrl === "string" ? v.linkUrl.trim() : "";
+  const videoUrlRaw = typeof v.videoUrl === "string" ? v.videoUrl.trim() : "";
+  const imageUrlRaw = typeof v.imageUrl === "string" ? v.imageUrl.trim() : "";
 
   const verificationType = resolveVerificationType({
     verificationType: v.verificationType,
@@ -90,7 +97,8 @@ async function normalizeVerification(v: VerificationItem) {
     videoUrl: videoUrlRaw,
     linkUrl: linkUrlRaw,
   });
-  const mediaUrl = verificationType === 'video' ? (videoUrl || imageUrl) : imageUrl;
+  const mediaUrl =
+    verificationType === "video" ? videoUrl || imageUrl : imageUrl;
 
   return {
     verificationId: v.verificationId,
@@ -101,8 +109,8 @@ async function normalizeVerification(v: VerificationItem) {
     day: v.day,
     verificationType,
     todayNote: v.todayNote,
-    imageUrl: verificationType === 'image' ? mediaUrl : null,
-    videoUrl: verificationType === 'video' ? mediaUrl : null,
+    imageUrl: verificationType === "image" ? mediaUrl : null,
+    videoUrl: verificationType === "video" ? mediaUrl : null,
     mediaUrl,
     linkUrl: linkUrlRaw || null,
     isAnonymous: Boolean(v.isAnonymous),
@@ -113,6 +121,9 @@ async function normalizeVerification(v: VerificationItem) {
     performedAt: v.performedAt || v.practiceAt || null,
     certDate: v.certDate || v.verificationDate || null,
     scoreEarned: v.scoreEarned ?? v.score ?? 0,
+    mediaValidationStatus: v.mediaValidationStatus || null,
+    mediaValidationReason: v.mediaValidationReason || null,
+    mediaValidatedAt: v.mediaValidatedAt || null,
   };
 }
 
@@ -120,9 +131,16 @@ function parseNextToken(nextToken?: string): ParsedNextToken | null {
   if (!nextToken) return null;
 
   try {
-    const decoded = JSON.parse(Buffer.from(nextToken, 'base64').toString('utf-8'));
-    if (!decoded || typeof decoded !== 'object' || !decoded.mode || !decoded.startKey) {
-      throw new Error('INVALID_NEXT_TOKEN');
+    const decoded = JSON.parse(
+      Buffer.from(nextToken, "base64").toString("utf-8"),
+    );
+    if (
+      !decoded ||
+      typeof decoded !== "object" ||
+      !decoded.mode ||
+      !decoded.startKey
+    ) {
+      throw new Error("INVALID_NEXT_TOKEN");
     }
 
     return {
@@ -130,29 +148,35 @@ function parseNextToken(nextToken?: string): ParsedNextToken | null {
       startKey: decoded.startKey,
     } as ParsedNextToken;
   } catch {
-    throw new Error('INVALID_NEXT_TOKEN');
+    throw new Error("INVALID_NEXT_TOKEN");
   }
 }
 
 function toNextToken(mode: ListMode, startKey?: Record<string, any>) {
   if (!startKey) return null;
-  return Buffer.from(JSON.stringify({ mode, startKey }), 'utf-8').toString('base64');
+  return Buffer.from(JSON.stringify({ mode, startKey }), "utf-8").toString(
+    "base64",
+  );
 }
 
 function matchesExtraFilter(v: VerificationItem, isExtra?: string) {
-  if (isExtra === 'true' && !v.isExtra) return false;
-  if (isExtra === 'false' && v.isExtra) return false;
+  if (isExtra === "true" && !v.isExtra) return false;
+  if (isExtra === "false" && v.isExtra) return false;
   return true;
 }
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const handler = async (
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> => {
   try {
-    const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string | undefined;
+    const userId = event.requestContext.authorizer?.jwt?.claims?.sub as
+      | string
+      | undefined;
 
     const query = event.queryStringParameters || {};
     const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
-    const isPublic = query.isPublic === 'true';
-    const mine = query.mine === 'true';
+    const isPublic = query.isPublic === "true";
+    const mine = query.mine === "true";
     const isExtra = query.isExtra;
 
     let parsedNextToken: ParsedNextToken | null = null;
@@ -160,37 +184,37 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       parsedNextToken = parseNextToken(query.nextToken);
     } catch {
       return response(400, {
-        error: 'INVALID_NEXT_TOKEN',
-        message: 'nextToken 형식이 올바르지 않습니다',
+        error: "INVALID_NEXT_TOKEN",
+        message: "nextToken 형식이 올바르지 않습니다",
       });
     }
 
     if (mine && !userId) {
       return response(401, {
-        error: 'UNAUTHORIZED',
-        message: 'mine=true 조회는 인증이 필요합니다',
+        error: "UNAUTHORIZED",
+        message: "mine=true 조회는 인증이 필요합니다",
       });
     }
 
-    const mode: ListMode = mine ? 'mine' : isPublic ? 'public' : 'scan';
+    const mode: ListMode = mine ? "mine" : isPublic ? "public" : "scan";
     if (parsedNextToken && parsedNextToken.mode !== mode) {
       return response(400, {
-        error: 'INVALID_NEXT_TOKEN',
-        message: 'nextToken이 현재 조회 조건과 일치하지 않습니다',
+        error: "INVALID_NEXT_TOKEN",
+        message: "nextToken이 현재 조회 조건과 일치하지 않습니다",
       });
     }
 
     let items: VerificationItem[] = [];
     let nextToken: string | null = null;
 
-    if (mode === 'mine') {
+    if (mode === "mine") {
       const result = await docClient.send(
         new QueryCommand({
           TableName: process.env.VERIFICATIONS_TABLE!,
-          IndexName: 'userId-index',
-          KeyConditionExpression: 'userId = :userId',
+          IndexName: "userId-index",
+          KeyConditionExpression: "userId = :userId",
           ExpressionAttributeValues: {
-            ':userId': userId,
+            ":userId": userId,
           },
           ScanIndexForward: false,
           Limit: Math.max(limit * 2, 40),
@@ -198,10 +222,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         }),
       );
 
-      items = (result.Items || []).filter((v) => matchesExtraFilter(v, isExtra));
+      items = (result.Items || []).filter((v) =>
+        matchesExtraFilter(v, isExtra),
+      );
       items = items.slice(0, limit);
       nextToken = toNextToken(mode, result.LastEvaluatedKey);
-    } else if (mode === 'public') {
+    } else if (mode === "public") {
       let cursor: Record<string, any> | undefined = parsedNextToken?.startKey;
       const merged: VerificationItem[] = [];
 
@@ -209,10 +235,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         const result = await docClient.send(
           new QueryCommand({
             TableName: process.env.VERIFICATIONS_TABLE!,
-            IndexName: 'isPublic-createdAt-index',
-            KeyConditionExpression: 'isPublic = :isPublic',
+            IndexName: "isPublic-createdAt-index",
+            KeyConditionExpression: "isPublic = :isPublic",
             ExpressionAttributeValues: {
-              ':isPublic': 'true',
+              ":isPublic": "true",
             },
             ScanIndexForward: false,
             Limit: Math.max(limit * 2, 40),
@@ -220,7 +246,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           }),
         );
 
-        const filtered = (result.Items || []).filter((v) => isPublicVerification(v) && matchesExtraFilter(v, isExtra));
+        const filtered = (result.Items || []).filter(
+          (v) => isPublicVerification(v) && matchesExtraFilter(v, isExtra),
+        );
         merged.push(...filtered);
 
         cursor = result.LastEvaluatedKey;
@@ -239,8 +267,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
 
       items = (result.Items || []).filter((v: VerificationItem) => {
-        if (isExtra === 'true' && !v.isExtra) return false;
-        if (isExtra === 'false' && v.isExtra) return false;
+        if (isExtra === "true" && !v.isExtra) return false;
+        if (isExtra === "false" && v.isExtra) return false;
         return true;
       });
 
@@ -263,10 +291,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       },
     });
   } catch (error: any) {
-    console.error('List verification error:', error);
+    console.error("List verification error:", error);
     return response(500, {
-      error: 'INTERNAL_SERVER_ERROR',
-      message: '서버 오류가 발생했습니다',
+      error: "INTERNAL_SERVER_ERROR",
+      message: "서버 오류가 발생했습니다",
     });
   }
 };
