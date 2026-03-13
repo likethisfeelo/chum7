@@ -1,22 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
-import { motion, AnimatePresence } from 'framer-motion';
-import { FiCamera, FiFileText, FiLink, FiVideo, FiX } from 'react-icons/fi';
-import toast from 'react-hot-toast';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api-client";
+import { motion, AnimatePresence } from "framer-motion";
+import { FiCamera, FiFileText, FiLink, FiVideo, FiX } from "react-icons/fi";
+import toast from "react-hot-toast";
 
 interface InlineVerificationFormProps {
   userChallenge: any;
   allowedVerificationTypes?: string[];
   onSuccess?: (data: any) => void;
+  openVideoPickerSignal?: number;
 }
 
-type VerificationType = 'text' | 'image' | 'video' | 'link';
+type VerificationType = "text" | "image" | "video" | "link";
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
-const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
+const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024;
 
-const ALL_TYPES: VerificationType[] = ['text', 'image', 'video', 'link'];
+const ALL_TYPES: VerificationType[] = ["text", "image", "video", "link"];
 
 function toIsoFromLocalDateTime(localDateTime: string): string {
   if (!localDateTime) return new Date().toISOString();
@@ -26,14 +27,15 @@ function toIsoFromLocalDateTime(localDateTime: string): string {
 }
 
 function toLocalDateTimeInputValue(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
+  const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function getSuccessToastMessage(payload: any): string {
-  if (payload?.isExtra) return payload.message || '추가 기록이 저장되었어요 📝';
-  if (payload?.type === 'remedy') return payload.message || '보완 인증이 완료되었어요 💪';
-  return payload?.message || '핵심 인증이 완료됐어요 ✅';
+  if (payload?.isExtra) return payload.message || "추가 기록이 저장되었어요 📝";
+  if (payload?.type === "remedy")
+    return payload.message || "보완 인증이 완료되었어요 💪";
+  return payload?.message || "핵심 인증이 완료됐어요 ✅";
 }
 
 function extractApiErrorMessage(error: any): string {
@@ -42,20 +44,23 @@ function extractApiErrorMessage(error: any): string {
   if (Array.isArray(details) && details.length > 0) {
     const first = details[0];
     if (first?.path?.length && first?.message) {
-      return `입력값 오류(${first.path.join('.')}): ${first.message}`;
+      return `입력값 오류(${first.path.join(".")}): ${first.message}`;
     }
   }
-  if (typeof error?.message === 'string' && error.message.startsWith('UPLOAD_PUT_FAILED_')) {
-    return '파일 업로드에 실패했습니다. 네트워크 상태를 확인해주세요.';
+  if (
+    typeof error?.message === "string" &&
+    error.message.startsWith("UPLOAD_PUT_FAILED_")
+  ) {
+    return "파일 업로드에 실패했습니다. 네트워크 상태를 확인해주세요.";
   }
-  return apiMessage || '인증에 실패했습니다';
+  return apiMessage || "인증에 실패했습니다";
 }
 
 async function readVideoDuration(file: File): Promise<number> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
-    const video = document.createElement('video');
-    video.preload = 'metadata';
+    const video = document.createElement("video");
+    video.preload = "metadata";
     video.onloadedmetadata = () => {
       const duration = Number(video.duration || 0);
       URL.revokeObjectURL(url);
@@ -63,9 +68,45 @@ async function readVideoDuration(file: File): Promise<number> {
     };
     video.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error('VIDEO_DURATION_READ_FAILED'));
+      reject(new Error("VIDEO_DURATION_READ_FAILED"));
     };
     video.src = url;
+  });
+}
+
+async function uploadFileWithProgress(
+  uploadUrl: string,
+  file: File,
+  onProgress: (value: number) => void,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    xhr.open("PUT", uploadUrl);
+    xhr.setRequestHeader("Content-Type", file.type);
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      const progress = Math.min(
+        100,
+        Math.round((event.loaded / event.total) * 100),
+      );
+      onProgress(progress);
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress(100);
+        resolve();
+        return;
+      }
+      reject(new Error(`UPLOAD_PUT_FAILED_${xhr.status}`));
+    };
+
+    xhr.onerror = () => reject(new Error("UPLOAD_PUT_FAILED_NETWORK"));
+    xhr.onabort = () => reject(new Error("UPLOAD_PUT_ABORTED"));
+
+    xhr.send(file);
   });
 }
 
@@ -73,30 +114,44 @@ export const InlineVerificationForm = ({
   userChallenge,
   allowedVerificationTypes,
   onSuccess,
+  openVideoPickerSignal,
 }: InlineVerificationFormProps) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaPreviewUrlRef = useRef<string | null>(null);
 
   const availableTypes = useMemo(() => {
-    if (!allowedVerificationTypes || allowedVerificationTypes.length === 0) return ALL_TYPES;
-    const filtered = ALL_TYPES.filter((t) => allowedVerificationTypes.includes(t));
+    if (!allowedVerificationTypes || allowedVerificationTypes.length === 0)
+      return ALL_TYPES;
+    const filtered = ALL_TYPES.filter((t) =>
+      allowedVerificationTypes.includes(t),
+    );
     return filtered.length ? filtered : ALL_TYPES;
   }, [allowedVerificationTypes]);
 
   const [isExpanded, setIsExpanded] = useState(false);
-  const [selectedType, setSelectedType] = useState<VerificationType>(availableTypes[0]);
+  const [selectedType, setSelectedType] = useState<VerificationType>(
+    availableTypes[0],
+  );
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [videoDurationSec, setVideoDurationSec] = useState<number | null>(null);
-  const [linkUrl, setLinkUrl] = useState('');
+  const [linkUrl, setLinkUrl] = useState("");
   const [formData, setFormData] = useState({
-    todayNote: '',
+    todayNote: "",
     completedAt: toLocalDateTimeInputValue(new Date()),
   });
-  const [extraVisibilityPrompt, setExtraVisibilityPrompt] = useState<{ verificationId: string } | null>(null);
+  const [extraVisibilityPrompt, setExtraVisibilityPrompt] = useState<{
+    verificationId: string;
+  } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(
+    null,
+  );
+  const [trimStartSec, setTrimStartSec] = useState<number>(0);
+  const [trimEndSec, setTrimEndSec] = useState<number>(0);
 
-  const acceptsFile = selectedType === 'image' || selectedType === 'video';
+  const acceptsFile = selectedType === "image" || selectedType === "video";
 
   useEffect(() => {
     if (!availableTypes.includes(selectedType)) {
@@ -104,14 +159,26 @@ export const InlineVerificationForm = ({
     }
   }, [availableTypes, selectedType]);
 
-  useEffect(() => () => {
-    if (mediaPreviewUrlRef.current) {
-      URL.revokeObjectURL(mediaPreviewUrlRef.current);
-      mediaPreviewUrlRef.current = null;
-    }
-  }, []);
+  useEffect(() => {
+    if (!openVideoPickerSignal) return;
+    if (!availableTypes.includes("video")) return;
 
-  const acceptAttr = selectedType === 'video' ? 'video/*' : 'image/*';
+    setIsExpanded(true);
+    setSelectedType("video");
+    setTimeout(() => fileInputRef.current?.click(), 80);
+  }, [openVideoPickerSignal, availableTypes]);
+
+  useEffect(
+    () => () => {
+      if (mediaPreviewUrlRef.current) {
+        URL.revokeObjectURL(mediaPreviewUrlRef.current);
+        mediaPreviewUrlRef.current = null;
+      }
+    },
+    [],
+  );
+
+  const acceptAttr = selectedType === "video" ? "video/*" : "image/*";
 
   const handleFocus = () => setIsExpanded(true);
 
@@ -123,62 +190,73 @@ export const InlineVerificationForm = ({
     setMediaFile(null);
     setMediaPreview(null);
     setVideoDurationSec(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    setTrimStartSec(0);
+    setTrimEndSec(0);
+    setUploadErrorMessage(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleCollapse = () => {
     setIsExpanded(false);
     resetMedia();
-    setLinkUrl('');
+    setLinkUrl("");
     setSelectedType(availableTypes[0]);
-    setFormData({ todayNote: '', completedAt: toLocalDateTimeInputValue(new Date()) });
+    setFormData({
+      todayNote: "",
+      completedAt: toLocalDateTimeInputValue(new Date()),
+    });
     setExtraVisibilityPrompt(null);
+    setUploadProgress(0);
   };
 
   const handleTypeChange = (next: VerificationType) => {
     setSelectedType(next);
     resetMedia();
-    if (next !== 'link') setLinkUrl('');
+    if (next !== "link") setLinkUrl("");
   };
 
   const handleMediaSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (selectedType === 'image' && !file.type.startsWith('image/')) {
-      toast.error('사진 인증에서는 이미지 파일만 업로드할 수 있어요.');
+    if (selectedType === "image" && !file.type.startsWith("image/")) {
+      toast.error("사진 인증에서는 이미지 파일만 업로드할 수 있어요.");
       return;
     }
 
-    if (selectedType === 'image' && file.size > MAX_IMAGE_SIZE_BYTES) {
-      toast.error('이미지는 10MB 이내만 업로드할 수 있어요.');
+    if (selectedType === "image" && file.size > MAX_IMAGE_SIZE_BYTES) {
+      toast.error("이미지는 10MB 이내만 업로드할 수 있어요.");
       return;
     }
 
-    if (selectedType === 'video' && !file.type.startsWith('video/')) {
-      toast.error('영상 인증에서는 영상 파일만 업로드할 수 있어요.');
+    if (selectedType === "video" && !file.type.startsWith("video/")) {
+      toast.error("영상 인증에서는 영상 파일만 업로드할 수 있어요.");
       return;
     }
 
-    if (selectedType === 'video' && file.size > MAX_VIDEO_SIZE_BYTES) {
-      toast.error('영상은 50MB 이내만 업로드할 수 있어요.');
+    if (selectedType === "video" && file.size > MAX_VIDEO_SIZE_BYTES) {
+      toast.error("영상은 500MB 이내만 업로드할 수 있어요.");
       return;
     }
 
-    if (selectedType === 'video') {
+    if (selectedType === "video") {
       try {
         const duration = await readVideoDuration(file);
         if (duration > 60) {
-          if (fileInputRef.current) fileInputRef.current.value = '';
-          toast.error('영상은 60초 이내만 업로드할 수 있어요.');
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          toast.error("영상은 60초 이내만 업로드할 수 있어요.");
           return;
         }
         setVideoDurationSec(duration);
+        setTrimStartSec(0);
+        setTrimEndSec(Math.min(duration, 60));
       } catch {
-        toast.error('영상 길이를 확인할 수 없습니다. 다시 시도해주세요.');
+        toast.error("영상 길이를 확인할 수 없습니다. 다시 시도해주세요.");
         return;
       }
     }
+
+    setUploadErrorMessage(null);
 
     const previewUrl = URL.createObjectURL(file);
     if (mediaPreviewUrlRef.current) {
@@ -192,36 +270,66 @@ export const InlineVerificationForm = ({
   const verificationMutation = useMutation({
     mutationFn: async (payload?: { performedAtLocal?: string }) => {
       let uploadedUrl: string | undefined;
+      let uploadedObjectKey: string | undefined;
 
       if (acceptsFile && mediaFile) {
-        const challengeId = userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
-        const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
-          fileName: mediaFile.name,
-          fileType: mediaFile.type,
-          fileSize: mediaFile.size,
-          challengeId,
-          userChallengeId: userChallenge.userChallengeId,
-        });
+        setUploadErrorMessage(null);
+        const challengeId =
+          userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
+        const { data: uploadData } = await apiClient.post(
+          "/verifications/upload-url",
+          {
+            fileName: mediaFile.name,
+            fileType: mediaFile.type,
+            fileSize: mediaFile.size,
+            challengeId,
+            userChallengeId: userChallenge.userChallengeId,
+            ...(selectedType === "video"
+              ? {
+                  mediaKind: "video",
+                  trimStartSec,
+                  trimEndSec,
+                  videoDurationSec,
+                }
+              : { mediaKind: "image" }),
+          },
+        );
 
-        const uploadResp = await fetch(uploadData.data.uploadUrl, {
-          method: 'PUT',
-          body: mediaFile,
-          headers: { 'Content-Type': mediaFile.type },
-        });
-
-        if (!uploadResp.ok) throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
+        setUploadProgress(1);
+        await uploadFileWithProgress(
+          uploadData.data.uploadUrl,
+          mediaFile,
+          setUploadProgress,
+        );
         uploadedUrl = uploadData.data.fileUrl;
+        uploadedObjectKey = uploadData.data.key;
       }
 
-      const response = await apiClient.post('/verifications', {
+      const response = await apiClient.post("/verifications", {
         userChallengeId: userChallenge.userChallengeId,
         day: Math.max(1, Number(userChallenge.currentDay || 1)),
         verificationType: selectedType,
-        ...(selectedType === 'image' && uploadedUrl ? { imageUrl: uploadedUrl } : {}),
-        ...(selectedType === 'video' && uploadedUrl ? { videoUrl: uploadedUrl, videoDurationSec } : {}),
-        ...(selectedType === 'link' && linkUrl.trim() ? { linkUrl: linkUrl.trim() } : {}),
-        ...(formData.todayNote.trim() ? { todayNote: formData.todayNote.trim() } : {}),
-        performedAt: toIsoFromLocalDateTime(payload?.performedAtLocal || formData.completedAt),
+        ...(selectedType === "image" && uploadedUrl
+          ? { imageUrl: uploadedUrl }
+          : {}),
+        ...(selectedType === "video" && uploadedUrl
+          ? {
+              videoUrl: uploadedUrl,
+              videoDurationSec,
+              trimStartSec,
+              trimEndSec,
+              videoObjectKey: uploadedObjectKey,
+            }
+          : {}),
+        ...(selectedType === "link" && linkUrl.trim()
+          ? { linkUrl: linkUrl.trim() }
+          : {}),
+        ...(formData.todayNote.trim()
+          ? { todayNote: formData.todayNote.trim() }
+          : {}),
+        performedAt: toIsoFromLocalDateTime(
+          payload?.performedAtLocal || formData.completedAt,
+        ),
         isPublic: true,
         isAnonymous: true,
       });
@@ -229,23 +337,37 @@ export const InlineVerificationForm = ({
       return response.data;
     },
     onSuccess: async (data) => {
-      queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
+      queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
 
       const payload = data?.data || {};
       const feedback = [
         payload?.scoreEarned !== undefined ? `+${payload.scoreEarned}점` : null,
         payload?.consecutiveDays ? `연속 ${payload.consecutiveDays}일` : null,
-        payload?.delta !== null && payload?.delta !== undefined ? `델타 ${payload.delta}분` : null,
-      ].filter(Boolean).join(' · ');
+        payload?.delta !== null && payload?.delta !== undefined
+          ? `델타 ${payload.delta}분`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
 
-      toast.success(feedback ? `${getSuccessToastMessage(payload)} (${feedback})` : getSuccessToastMessage(payload));
+      toast.success(
+        feedback
+          ? `${getSuccessToastMessage(payload)} (${feedback})`
+          : getSuccessToastMessage(payload),
+      );
 
       if (payload?.newBadges?.length) {
-        toast(`새 뱃지: ${payload.newBadges.join(', ')}`, { icon: '🏅' });
+        toast(`새 뱃지: ${payload.newBadges.join(", ")}`, { icon: "🏅" });
       }
       if (payload?.cheerOpportunity?.cheerTicketGranted) {
-        toast('응원권 1장을 획득했어요 🎟', { icon: '🎉' });
+        toast("응원권 1장을 획득했어요 🎟", { icon: "🎉" });
       }
+
+      if (selectedType === "video") {
+        toast("영상 메타데이터 검증이 잠시 후 완료됩니다.", { icon: "🎬" });
+      }
+
+      setUploadProgress(0);
 
       if (payload.isExtra && payload.verificationId) {
         setExtraVisibilityPrompt({ verificationId: payload.verificationId });
@@ -256,7 +378,15 @@ export const InlineVerificationForm = ({
       if (onSuccess) onSuccess(data);
     },
     onError: (error: any) => {
-      toast.error(extractApiErrorMessage(error));
+      setUploadProgress(0);
+      const message = extractApiErrorMessage(error);
+      if (
+        typeof error?.message === "string" &&
+        error.message.startsWith("UPLOAD_PUT_FAILED_")
+      ) {
+        setUploadErrorMessage(message);
+      }
+      toast.error(message);
     },
   });
 
@@ -266,32 +396,39 @@ export const InlineVerificationForm = ({
     const nowLocalDateTime = toLocalDateTimeInputValue(new Date());
     setFormData((prev) => ({ ...prev, completedAt: nowLocalDateTime }));
 
-    if (selectedType === 'image' && !mediaFile) {
-      toast.error('사진을 첨부해주세요.');
+    if (selectedType === "image" && !mediaFile) {
+      toast.error("사진을 첨부해주세요.");
       return;
     }
 
-    if (selectedType === 'video') {
+    if (selectedType === "video") {
       if (!mediaFile) {
-        toast.error('영상을 첨부해주세요.');
+        toast.error("영상을 첨부해주세요.");
         return;
       }
       if ((videoDurationSec || 0) > 60) {
-        toast.error('영상은 60초 이내만 업로드할 수 있어요.');
+        toast.error("영상은 60초 이내만 업로드할 수 있어요.");
         return;
       }
     }
 
-    if (selectedType === 'link' && !linkUrl.trim()) {
-      toast.error('링크를 입력해주세요.');
+    if (selectedType === "link" && !linkUrl.trim()) {
+      toast.error("링크를 입력해주세요.");
       return;
     }
 
-    if (selectedType === 'link' && !linkUrl.trim().startsWith('https://')) {
-      toast.error('링크는 https 형식만 허용됩니다.');
+    if (selectedType === "link" && !linkUrl.trim().startsWith("https://")) {
+      toast.error("링크는 https 형식만 허용됩니다.");
       return;
     }
 
+    verificationMutation.mutate({ performedAtLocal: nowLocalDateTime });
+  };
+
+  const handleRetryUpload = () => {
+    if (verificationMutation.isPending) return;
+    const nowLocalDateTime = toLocalDateTimeInputValue(new Date());
+    setFormData((prev) => ({ ...prev, completedAt: nowLocalDateTime }));
     verificationMutation.mutate({ performedAtLocal: nowLocalDateTime });
   };
 
@@ -302,12 +439,17 @@ export const InlineVerificationForm = ({
       return;
     }
     try {
-      await apiClient.patch(`/verifications/${extraVisibilityPrompt.verificationId}/visibility`, { isPersonalOnly: false });
-      toast.success('추가 기록을 공개 피드로 전환했어요 🌍');
-      queryClient.invalidateQueries({ queryKey: ['verifications', 'mine-extra'] });
-      queryClient.invalidateQueries({ queryKey: ['verifications', 'public'] });
+      await apiClient.patch(
+        `/verifications/${extraVisibilityPrompt.verificationId}/visibility`,
+        { isPersonalOnly: false },
+      );
+      toast.success("추가 기록을 공개 피드로 전환했어요 🌍");
+      queryClient.invalidateQueries({
+        queryKey: ["verifications", "mine-extra"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["verifications", "public"] });
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || '공개 전환에 실패했습니다');
+      toast.error(error?.response?.data?.message || "공개 전환에 실패했습니다");
     } finally {
       handleCollapse();
       if (onSuccess) onSuccess(null);
@@ -315,7 +457,7 @@ export const InlineVerificationForm = ({
   };
 
   const safeDay = Math.max(1, Number(userChallenge.currentDay || 1));
-  const badgeIcon = userChallenge.challenge?.badgeIcon || '🎯';
+  const badgeIcon = userChallenge.challenge?.badgeIcon || "🎯";
 
   return (
     <div className="relative">
@@ -328,12 +470,16 @@ export const InlineVerificationForm = ({
           >
             오늘의 인증을 남겨보세요... (Day {safeDay})
           </div>
-          {availableTypes.some((t) => t === 'image' || t === 'video') && (
+          {availableTypes.some((t) => t === "image" || t === "video") && (
             <button
               type="button"
               onClick={() => {
                 setIsExpanded(true);
-                const defaultMediaType = availableTypes.includes('image') ? 'image' : availableTypes.includes('video') ? 'video' : availableTypes[0];
+                const defaultMediaType = availableTypes.includes("image")
+                  ? "image"
+                  : availableTypes.includes("video")
+                    ? "video"
+                    : availableTypes[0];
                 setSelectedType(defaultMediaType);
                 setTimeout(() => fileInputRef.current?.click(), 100);
               }}
@@ -359,7 +505,9 @@ export const InlineVerificationForm = ({
               <div className="flex items-center gap-2">
                 <span className="text-xl">{badgeIcon}</span>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900 leading-tight">{userChallenge.challenge?.title}</p>
+                  <p className="text-sm font-semibold text-gray-900 leading-tight">
+                    {userChallenge.challenge?.title}
+                  </p>
                   <p className="text-xs text-primary-600">Day {safeDay} / 7</p>
                 </div>
               </div>
@@ -375,14 +523,16 @@ export const InlineVerificationForm = ({
             <div>
               <textarea
                 value={formData.todayNote}
-                onChange={(e) => setFormData({ ...formData, todayNote: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, todayNote: e.target.value })
+                }
                 className="w-full px-3 py-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-primary-400 text-sm"
                 placeholder="소감(선택)을 남겨보세요 ✍️"
                 rows={3}
               />
             </div>
 
-            {selectedType === 'link' && (
+            {selectedType === "link" && (
               <div>
                 <input
                   type="url"
@@ -399,10 +549,18 @@ export const InlineVerificationForm = ({
               <div>
                 {mediaPreview ? (
                   <div className="relative">
-                    {selectedType === 'video' ? (
-                      <video src={mediaPreview} controls className="w-full h-40 object-cover rounded-xl" />
+                    {selectedType === "video" ? (
+                      <video
+                        src={mediaPreview}
+                        controls
+                        className="w-full h-40 object-cover rounded-xl"
+                      />
                     ) : (
-                      <img src={mediaPreview} alt="Preview" className="w-full h-40 object-cover rounded-xl" />
+                      <img
+                        src={mediaPreview}
+                        alt="Preview"
+                        className="w-full h-40 object-cover rounded-xl"
+                      />
                     )}
                     <button
                       type="button"
@@ -413,8 +571,52 @@ export const InlineVerificationForm = ({
                     </button>
                   </div>
                 ) : null}
-                {selectedType === 'video' && videoDurationSec !== null && (
-                  <p className="mt-1 text-xs text-gray-500">영상 길이: {videoDurationSec.toFixed(1)}초 (최대 60초)</p>
+                {selectedType === "video" && videoDurationSec !== null && (
+                  <div className="mt-2 space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                    <p className="text-xs text-gray-600">
+                      영상 길이: {videoDurationSec.toFixed(1)}초 · 트림
+                      범위(미리보기): {trimStartSec.toFixed(1)}s ~{" "}
+                      {trimEndSec.toFixed(1)}s
+                    </p>
+                    <label className="block text-[11px] text-gray-500">
+                      시작점
+                    </label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={Math.max(0, videoDurationSec - 0.1)}
+                      step={0.1}
+                      value={trimStartSec}
+                      onChange={(e) => {
+                        const nextStart = Number(e.target.value);
+                        const maxEnd = Math.min(
+                          videoDurationSec,
+                          nextStart + 60,
+                        );
+                        setTrimStartSec(nextStart);
+                        setTrimEndSec((prev) =>
+                          Math.max(nextStart + 0.1, Math.min(prev, maxEnd)),
+                        );
+                      }}
+                      className="w-full"
+                    />
+                    <label className="block text-[11px] text-gray-500">
+                      끝점
+                    </label>
+                    <input
+                      type="range"
+                      min={Math.min(videoDurationSec, trimStartSec + 0.1)}
+                      max={Math.min(videoDurationSec, trimStartSec + 60)}
+                      step={0.1}
+                      value={trimEndSec}
+                      onChange={(e) => setTrimEndSec(Number(e.target.value))}
+                      className="w-full"
+                    />
+                    <p className="text-[11px] text-gray-500">
+                      선택 구간: {(trimEndSec - trimStartSec).toFixed(1)}초
+                      (최대 60초)
+                    </p>
+                  </div>
                 )}
                 <input
                   ref={fileInputRef}
@@ -427,12 +629,49 @@ export const InlineVerificationForm = ({
               </div>
             )}
 
+            {verificationMutation.isPending &&
+            acceptsFile &&
+            mediaFile &&
+            uploadProgress > 0 ? (
+              <div className="space-y-1">
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary-500 transition-all"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-gray-500">
+                  업로드 중... {uploadProgress}%
+                </p>
+              </div>
+            ) : null}
+
+            {uploadErrorMessage &&
+            acceptsFile &&
+            mediaFile &&
+            !verificationMutation.isPending ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2">
+                <p className="text-xs text-red-700">{uploadErrorMessage}</p>
+                <button
+                  type="button"
+                  onClick={handleRetryUpload}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-red-300 text-red-700 bg-white"
+                >
+                  업로드 재시도
+                </button>
+              </div>
+            ) : null}
+
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">실천한 시간 ⏰</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                실천한 시간 ⏰
+              </label>
               <input
                 type="datetime-local"
                 value={formData.completedAt}
-                onChange={(e) => setFormData({ ...formData, completedAt: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, completedAt: e.target.value })
+                }
                 max={toLocalDateTimeInputValue(new Date())}
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
               />
@@ -440,12 +679,26 @@ export const InlineVerificationForm = ({
 
             {extraVisibilityPrompt && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-                <p className="text-xs text-amber-800">추가 기록(Extra)이 저장되었습니다. 지금 공개 피드로 전환할까요?</p>
+                <p className="text-xs text-amber-800">
+                  추가 기록(Extra)이 저장되었습니다. 지금 공개 피드로
+                  전환할까요?
+                </p>
                 <div className="flex gap-2">
-                  <button type="button" onClick={makeExtraPublic} className="px-3 py-1.5 text-xs rounded-lg bg-amber-600 text-white">
+                  <button
+                    type="button"
+                    onClick={makeExtraPublic}
+                    className="px-3 py-1.5 text-xs rounded-lg bg-amber-600 text-white"
+                  >
                     지금 공개
                   </button>
-                  <button type="button" onClick={() => { handleCollapse(); if (onSuccess) onSuccess(null); }} className="px-3 py-1.5 text-xs rounded-lg border border-amber-300 text-amber-700 bg-white">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleCollapse();
+                      if (onSuccess) onSuccess(null);
+                    }}
+                    className="px-3 py-1.5 text-xs rounded-lg border border-amber-300 text-amber-700 bg-white"
+                  >
                     나중에
                   </button>
                 </div>
@@ -456,8 +709,22 @@ export const InlineVerificationForm = ({
               <div className="flex items-center gap-1">
                 {availableTypes.map((type) => {
                   const isActive = selectedType === type;
-                  const Icon = type === 'text' ? FiFileText : type === 'image' ? FiCamera : type === 'video' ? FiVideo : FiLink;
-                  const title = type === 'text' ? '텍스트' : type === 'image' ? '사진' : type === 'video' ? '영상' : '링크';
+                  const Icon =
+                    type === "text"
+                      ? FiFileText
+                      : type === "image"
+                        ? FiCamera
+                        : type === "video"
+                          ? FiVideo
+                          : FiLink;
+                  const title =
+                    type === "text"
+                      ? "텍스트"
+                      : type === "image"
+                        ? "사진"
+                        : type === "video"
+                          ? "영상"
+                          : "링크";
 
                   return (
                     <button
@@ -465,14 +732,14 @@ export const InlineVerificationForm = ({
                       type="button"
                       onClick={() => {
                         handleTypeChange(type);
-                        if (type === 'image' || type === 'video') {
+                        if (type === "image" || type === "video") {
                           setTimeout(() => fileInputRef.current?.click(), 50);
                         }
                       }}
                       className={`p-2 rounded-full transition-colors ${
                         isActive
-                          ? 'text-primary-700 bg-primary-50 border border-primary-200'
-                          : 'text-gray-400 hover:text-primary-600 hover:bg-primary-50 border border-transparent'
+                          ? "text-primary-700 bg-primary-50 border border-primary-200"
+                          : "text-gray-400 hover:text-primary-600 hover:bg-primary-50 border border-transparent"
                       }`}
                       title={`${title} 인증`}
                     >
@@ -484,10 +751,13 @@ export const InlineVerificationForm = ({
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 type="submit"
-                disabled={verificationMutation.isPending}
+                disabled={
+                  verificationMutation.isPending ||
+                  (acceptsFile && uploadProgress > 0 && uploadProgress < 100)
+                }
                 className="px-5 py-2 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 transition-colors disabled:opacity-50"
               >
-                {verificationMutation.isPending ? '제출 중...' : '인증하기 🎉'}
+                {verificationMutation.isPending ? "제출 중..." : "인증하기 🎉"}
               </motion.button>
             </div>
           </motion.form>
