@@ -9,7 +9,7 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
 import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
 import {
-  countParticipatedDays,
+  getChallengeProgressSummary,
   getLatestCompletedProgressEntry,
   getProgressEntryByDay,
   isVerificationDayCompleted,
@@ -109,8 +109,8 @@ function getChallengeDay(challenge: any): number {
   return Math.max(storedCurrentDay, syncedCurrentDay);
 }
 
-function getParticipatedDaysCount(challenge: any): number {
-  return countParticipatedDays(challenge?.progress);
+function getChallengeProgressMeta(challenge: any): { participatedDays: number; completionRate: number } {
+  return getChallengeProgressSummary(challenge?.progress, getDurationDays(challenge));
 }
 
 function hasBacklogBeforeToday(challenge: any): boolean {
@@ -437,7 +437,7 @@ export const MEPage = () => {
                               <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <span className="text-xs text-primary-600">Day {getChallengeDay(challenge)} / {getDurationDays(challenge)}</span>
-                                <span className="text-xs text-gray-400">참여 {getParticipatedDaysCount(challenge)}일</span>
+                                <span className="text-xs text-gray-400">참여 {participatedDays}일 · 진행률 {completionRate}%</span>
                                 {challenge.personalTarget && (
                                   <span className="text-xs text-gray-400">목표 {formatPersonalTarget(challenge)}</span>
                                 )}
@@ -451,7 +451,8 @@ export const MEPage = () => {
                               인증하기
                             </button>
                           </motion.div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
 
@@ -463,7 +464,7 @@ export const MEPage = () => {
                           const progress = challenge.progress || [];
                           const currentDay = getChallengeDay(challenge);
                           const durationDays = getDurationDays(challenge);
-                          const participatedDays = getParticipatedDaysCount(challenge);
+                          const { participatedDays, completionRate } = getChallengeProgressMeta(challenge);
                           const uid = challenge.userChallengeId;
                           const isExpanded = expandedCards.has(uid);
 
@@ -486,7 +487,7 @@ export const MEPage = () => {
                                 <span className="text-2xl flex-shrink-0">{challenge.challenge?.badgeIcon || '🎯'}</span>
                                 <div className="flex-1 min-w-0">
                                   <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
-                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · 경과 Day {currentDay} / {durationDays} · 참여 {participatedDays}일</p>
+                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · 경과 Day {currentDay} / {durationDays} · 참여 {participatedDays}일 · 진행률 {completionRate}%</p>
                                 </div>
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                   <span className="text-xl font-bold text-gray-800">{challenge.score || 0}</span>
