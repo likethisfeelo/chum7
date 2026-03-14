@@ -2,7 +2,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
-import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
+import { calculateEffectiveCurrentDay, isChallengePeriodEnded, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 import { normalizeProgress } from '../../../shared/lib/progress';
 
 const dynamoClient = new DynamoDBClient({});
@@ -85,12 +85,23 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       const progressPercentage = Math.max(0, Math.min(100, Math.round((completedDays / durationDays) * 100)));
 
       const effectiveCurrentDay = calculateEffectiveCurrentDay(uc, nowIso, durationDays);
+      const challengeLifecycle = challenge?.lifecycle;
+      const shouldAutoFinalize =
+        uc.status !== 'completed' &&
+        uc.status !== 'failed' &&
+        (challengeLifecycle === 'completed' || challengeLifecycle === 'archived' || isChallengePeriodEnded(effectiveCurrentDay, durationDays, uc.status));
+      const normalizedStatus = shouldAutoFinalize
+        ? (completedDays >= durationDays ? 'completed' : 'failed')
+        : uc.status;
+      const normalizedPhase = shouldAutoFinalize
+        ? normalizedStatus
+        : uc.phase;
 
       return {
         userChallengeId: uc.userChallengeId,
         challengeId: uc.challengeId,
-        phase: uc.phase,
-        status: uc.status,
+        phase: normalizedPhase,
+        status: normalizedStatus,
         currentDay: effectiveCurrentDay,
         startDate: uc.startDate,
         durationDays,
