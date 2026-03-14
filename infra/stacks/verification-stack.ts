@@ -407,7 +407,7 @@ export class VerificationStack extends Stack {
       authorizer,
     });
 
-    // 8. Plaza conversion job (EventBridge daily 04:00)
+    // 8. Plaza conversion job (EventBridge hourly)
     const plazaConvertFn = new NodejsFunction(this, "PlazaConvertFn", {
       ...commonProps,
       functionName: `chme-${stage}-plaza-convert-verifications`,
@@ -423,7 +423,7 @@ export class VerificationStack extends Stack {
     verificationsTable.grantReadWriteData(plazaConvertFn);
     plazaPostsTable.grantReadWriteData(plazaConvertFn);
     new Rule(this, "PlazaConvertRule", {
-      schedule: Schedule.cron({ minute: "0", hour: "4" }),
+      schedule: Schedule.rate(Duration.hours(1)),
       targets: [new LambdaFunction(plazaConvertFn)],
     });
 

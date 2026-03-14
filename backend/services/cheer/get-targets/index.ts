@@ -2,6 +2,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -92,48 +93,69 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // 3. 같은 그룹의 다른 사용자 조회
     const immediateTargets: any[] = [];
     const schedulableTargets: any[] = [];
+    const nowIso = new Date().toISOString();
+    const challengeCache = new Map<string, any>();
+    const processedGroupIds = new Set<string>();
+    const seenImmediateTargetKeys = new Set<string>();
 
     for (const uc of userChallenges) {
+      const groupId = typeof uc.groupId === 'string' ? uc.groupId : '';
+      if (!groupId || processedGroupIds.has(groupId)) continue;
+      processedGroupIds.add(groupId);
+
       // 같은 그룹 멤버 조회
       const groupResult = await docClient.send(new QueryCommand({
         TableName: process.env.USER_CHALLENGES_TABLE!,
         IndexName: 'groupId-index',
         KeyConditionExpression: 'groupId = :groupId',
         ExpressionAttributeValues: {
-          ':groupId': uc.groupId
+          ':groupId': groupId
         }
       }));
 
       const groupMembers = groupResult.Items || [];
-      const currentDay = uc.currentDay;
 
       for (const member of groupMembers) {
-        // 본인 제외
-        if (member.userId === userId) continue;
+        // 본인/비활성 제외
+        if (member.userId === userId || member.status !== 'active') continue;
+
+        const challengeId = typeof member.challengeId === 'string' ? member.challengeId : '';
+        if (!challengeId) continue;
+
+        let challenge = challengeCache.get(challengeId);
+        if (challenge === undefined) {
+          const challengeResult = await docClient.send(new GetCommand({
+            TableName: process.env.CHALLENGES_TABLE!,
+            Key: { challengeId }
+          }));
+          challenge = challengeResult.Item || null;
+          challengeCache.set(challengeId, challenge);
+        }
+
+        const durationDays = resolveDurationDays(challenge?.durationDays, member.progress);
+        const currentDay = calculateEffectiveCurrentDay(member, nowIso, durationDays);
 
         // 현재 Day의 인증 상태 확인
-        const progress = member.progress || [];
-        const todayProgress = progress.find((p: any) => p.day === currentDay);
+        const progress = Array.isArray(member.progress) ? member.progress : Object.values(member.progress || {});
+        const todayProgress = progress.find((p: any) => Number(p?.day) === currentDay);
 
         // 미완료자
         if (!todayProgress || todayProgress.status !== 'success') {
-          // 챌린지 정보 조회
-          const challengeResult = await docClient.send(new GetCommand({
-            TableName: process.env.CHALLENGES_TABLE!,
-            Key: { challengeId: member.challengeId }
-          }));
-
-          const challenge = challengeResult.Item;
-
           const target = {
             userId: member.userId,
-            challengeId: member.challengeId,
+            challengeId,
             animalIcon: '🐼', // TODO: 실제 아이콘 조회
             challengeTitle: challenge?.title || 'Unknown',
             currentDay,
             targetTime: challenge?.targetTime || '07:00',
             status: 'in_progress'
           };
+
+          const targetKey = `${target.challengeId}:${target.userId}:${target.currentDay}`;
+          if (seenImmediateTargetKeys.has(targetKey)) {
+            continue;
+          }
+          seenImmediateTargetKeys.add(targetKey);
 
           // 즉시 응원 가능 대상
           immediateTargets.push(target);

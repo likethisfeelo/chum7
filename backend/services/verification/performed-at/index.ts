@@ -2,6 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
+import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -68,8 +69,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(404, { error: 'USER_CHALLENGE_NOT_FOUND', message: '챌린지 참여정보를 찾을 수 없습니다' });
     }
 
-    const currentDay = Number(userChallenge.currentDay || 1);
-    if (currentDay > 7 || userChallenge.status === 'completed' || userChallenge.status === 'failed') {
+    const durationDays = resolveDurationDays(undefined, userChallenge.progress);
+    const effectiveCurrentDay = calculateEffectiveCurrentDay(
+      userChallenge,
+      new Date().toISOString(),
+      durationDays,
+    );
+
+    if (effectiveCurrentDay > durationDays || userChallenge.status === 'completed' || userChallenge.status === 'failed') {
       return response(400, { error: 'CHALLENGE_PERIOD_ENDED', message: '챌린지 기간 내에만 수행 시간을 수정할 수 있습니다' });
     }
 

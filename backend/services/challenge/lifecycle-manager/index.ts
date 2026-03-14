@@ -20,6 +20,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { sendNotification } from '../../../shared/lib/notification';
+import { calculateSyncedCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -265,6 +266,82 @@ async function finalizeUserChallenges(challengeId: string, durationDays: number)
   } while (lastKey);
 }
 
+async function syncActiveUserChallengeDays(challengeId: string, durationDays: number, nowIso: string): Promise<void> {
+  let lastKey: any = undefined;
+  let updatedCount = 0;
+
+  do {
+    const result: any = await docClient.send(
+      new QueryCommand({
+        TableName: USER_CHALLENGES_TABLE,
+        IndexName: 'challengeId-index',
+        KeyConditionExpression: 'challengeId = :cid',
+        FilterExpression: 'phase = :phase AND #status = :status',
+        ExpressionAttributeNames: {
+          '#status': 'status',
+        },
+        ExpressionAttributeValues: {
+          ':cid': challengeId,
+          ':phase': 'active',
+          ':status': 'active',
+        },
+        ExclusiveStartKey: lastKey,
+      })
+    );
+
+    for (const uc of result.Items ?? []) {
+      if (!uc.startDate) continue;
+
+      const nextDay = calculateSyncedCurrentDay(
+        uc.startDate,
+        nowIso,
+        uc.timezone,
+        durationDays,
+      );
+      const maxDay = Math.max(1, durationDays) + 1;
+      const rawCurrentDay = Number(uc.currentDay);
+      const currentDay = Number.isFinite(rawCurrentDay)
+        ? Math.max(1, Math.min(maxDay, Math.floor(rawCurrentDay)))
+        : 1;
+      const hasCorruptedHighDay = Number.isFinite(rawCurrentDay) && rawCurrentDay > maxDay;
+
+      if (!Number.isFinite(nextDay) || (!hasCorruptedHighDay && nextDay <= currentDay)) continue;
+
+      try {
+        await docClient.send(
+          new UpdateCommand({
+            TableName: USER_CHALLENGES_TABLE,
+            Key: { userChallengeId: uc.userChallengeId },
+            UpdateExpression: 'SET currentDay = :day, updatedAt = :now',
+            ConditionExpression: 'phase = :phase AND #status = :status AND (attribute_not_exists(currentDay) OR currentDay < :day OR currentDay > :maxDay)',
+            ExpressionAttributeNames: {
+              '#status': 'status',
+            },
+            ExpressionAttributeValues: {
+              ':day': nextDay,
+              ':now': nowIso,
+              ':phase': 'active',
+              ':status': 'active',
+              ':maxDay': maxDay,
+            },
+          })
+        );
+        updatedCount += 1;
+      } catch (err: any) {
+        if (err?.name !== 'ConditionalCheckFailedException') {
+          throw err;
+        }
+      }
+    }
+
+    lastKey = result.LastEvaluatedKey;
+  } while (lastKey);
+
+  if (updatedCount > 0) {
+    console.log(`[lifecycle-manager] Synced currentDay for ${updatedCount} participants in challenge ${challengeId}`);
+  }
+}
+
 async function expirePendingProposals(challenge: any): Promise<void> {
   if (!challenge.personalQuestEnabled || challenge.personalQuestAutoApprove) return;
 
@@ -419,13 +496,26 @@ export const handler = async (): Promise<void> => {
         }
 
         if (rule.from === 'active' && rule.to === 'completed') {
-          await finalizeUserChallenges(challenge.challengeId, challenge.durationDays ?? 7);
+          await finalizeUserChallenges(challenge.challengeId, resolveDurationDays(challenge.durationDays, undefined));
         }
       } catch (err: any) {
         if (err.name !== 'ConditionalCheckFailedException') {
           console.error(`[lifecycle-manager] Error transitioning ${challenge.challengeId}:`, err);
         }
       }
+    }
+  }
+
+  const activeChallenges = await queryChallengesByLifecycle('active');
+  for (const challenge of activeChallenges) {
+    try {
+      await syncActiveUserChallengeDays(
+        challenge.challengeId,
+        resolveDurationDays(challenge.durationDays, undefined),
+        now,
+      );
+    } catch (err) {
+      console.error(`[lifecycle-manager] Error syncing currentDay for ${challenge.challengeId}:`, err);
     }
   }
 
