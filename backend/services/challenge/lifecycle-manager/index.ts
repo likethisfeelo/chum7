@@ -488,15 +488,29 @@ export const handler = async (): Promise<void> => {
   const now = new Date().toISOString();
   console.log(`[lifecycle-manager] Running at ${now}`);
 
+  const transitionSummary: Array<{
+    from: string;
+    to: string;
+    candidates: number;
+    transitioned: number;
+    conditionalSkipped: number;
+    failed: number;
+  }> = [];
+
   for (const rule of TRANSITION_RULES) {
     const challenges = await queryChallengesByLifecycle(rule.from);
     const targets = challenges.filter((c) => rule.condition(c, now));
 
     console.log(`[lifecycle-manager] ${rule.from} → ${rule.to}: ${targets.length} candidates`);
 
+    let transitioned = 0;
+    let conditionalSkipped = 0;
+    let failed = 0;
+
     for (const challenge of targets) {
       try {
         await transitionChallenge(challenge.challengeId, rule.from, rule.to);
+        transitioned += 1;
         console.log(`[lifecycle-manager] Transitioned ${challenge.challengeId}: ${rule.from} → ${rule.to}`);
 
         if (rule.from === 'recruiting' && rule.to === 'preparing') {
@@ -513,12 +527,27 @@ export const handler = async (): Promise<void> => {
           await finalizeUserChallenges(challenge.challengeId, resolveDurationDays(challenge.durationDays, undefined));
         }
       } catch (err: any) {
-        if (err.name !== 'ConditionalCheckFailedException') {
-          console.error(`[lifecycle-manager] Error transitioning ${challenge.challengeId}:`, err);
+        if (err.name === 'ConditionalCheckFailedException') {
+          conditionalSkipped += 1;
+          continue;
         }
+
+        failed += 1;
+        console.error(`[lifecycle-manager] Error transitioning ${challenge.challengeId}:`, err);
       }
     }
+
+    transitionSummary.push({
+      from: rule.from,
+      to: rule.to,
+      candidates: targets.length,
+      transitioned,
+      conditionalSkipped,
+      failed,
+    });
   }
+
+  console.log(`[lifecycle-manager] transition summary ${JSON.stringify(transitionSummary)}`);
 
   const activeChallenges = await queryChallengesByLifecycle('active');
   for (const challenge of activeChallenges) {

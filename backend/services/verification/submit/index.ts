@@ -18,6 +18,7 @@ import {
 } from "../../../shared/lib/challenge-quest-policy";
 import { inferVerificationType } from "../../../shared/lib/verification-type";
 import { isValidTrimRange } from "../../../shared/lib/trim-validation";
+import { normalizeProgress } from "../../../shared/lib/progress";
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -101,18 +102,6 @@ function buildTargetDateTimeISO(
 
   const iso = new Date(Date.UTC(y, m - 1, d, hh, mm, 0, 0)).toISOString();
   return Number.isNaN(new Date(iso).getTime()) ? null : iso;
-}
-
-function normalizeProgress(progress: unknown): Array<Record<string, any>> {
-  const list = Array.isArray(progress)
-    ? progress
-    : progress && typeof progress === "object"
-      ? Object.values(progress as Record<string, any>)
-      : [];
-
-  return list
-    .filter((item) => item && typeof item === "object")
-    .sort((a: any, b: any) => Number(a?.day || 0) - Number(b?.day || 0));
 }
 
 function resolveChallengeId(userChallenge: Record<string, any>): string | null {

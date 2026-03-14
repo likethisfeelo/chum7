@@ -3,6 +3,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
 import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
+import { normalizeProgress } from '../../../shared/lib/progress';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -79,7 +80,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       const durationDays = resolveDurationDays(challenge?.durationDays, uc.progress);
 
       // 진행률 계산
-      const progressList = Array.isArray(uc.progress) ? uc.progress : Object.values(uc.progress || {});
+      const progressList = normalizeProgress(uc.progress);
       const completedDays = progressList.filter((p: any) => p?.status === 'success').length;
       const progressPercentage = Math.max(0, Math.min(100, Math.round((completedDays / durationDays) * 100)));
 
@@ -92,6 +93,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         status: uc.status,
         currentDay: effectiveCurrentDay,
         startDate: uc.startDate,
+        durationDays,
         score: uc.score,
         cheerCount: uc.cheerCount,
         consecutiveDays: uc.consecutiveDays,
@@ -120,6 +122,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           allowedVerificationTypes: Array.isArray(challenge.allowedVerificationTypes) && challenge.allowedVerificationTypes.length > 0
             ? challenge.allowedVerificationTypes
             : ['image', 'text', 'link', 'video'],
+          durationDays,
         } : null
       };
     });
