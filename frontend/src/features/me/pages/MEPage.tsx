@@ -49,8 +49,61 @@ function getMinutesUntilTarget(challenge: any): number {
   return (targetMinutes - nowMinutes + 24 * 60) % (24 * 60);
 }
 
+function getDateOnly(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function parseChallengeStartDate(challenge: any): Date | null {
+  const start = challenge?.startDate || challenge?.challenge?.startDate || challenge?.challenge?.challengeStartAt;
+  if (!start || typeof start !== 'string') return null;
+
+  const dateOnlyMatch = start.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, y, m, d] = dateOnlyMatch;
+    return new Date(Number(y), Number(m) - 1, Number(d));
+  }
+
+  const parsed = new Date(start);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return getDateOnly(parsed);
+}
+
+function getDurationDays(challenge: any): number {
+  const raw = Number(challenge?.challenge?.durationDays);
+  if (Number.isFinite(raw) && raw > 0) return Math.floor(raw);
+  const progressLength = Array.isArray(challenge?.progress) ? challenge.progress.length : 0;
+  if (progressLength > 0) return progressLength;
+  return 7;
+}
+
 function getChallengeDay(challenge: any): number {
-  return Math.max(1, Number(challenge.currentDay || 1));
+  const durationDays = getDurationDays(challenge);
+  const maxDay = durationDays + 1;
+  const storedCurrentDay = Math.max(1, Math.min(maxDay, Number(challenge.currentDay || 1)));
+
+  const lifecycle = String(challenge?.challenge?.lifecycle || '').toLowerCase();
+  const phase = String(challenge?.phase || '').toLowerCase();
+  const status = String(challenge?.status || '').toLowerCase();
+  const canSyncElapsedDay =
+    (lifecycle === 'active' || phase === 'active') &&
+    (status === '' || status === 'active');
+
+  if (!canSyncElapsedDay) return storedCurrentDay;
+
+  const startDate = parseChallengeStartDate(challenge);
+  if (!startDate) return storedCurrentDay;
+
+  const today = getDateOnly(new Date());
+  const diffMs = today.getTime() - startDate.getTime();
+  const elapsed = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+  const syncedCurrentDay = Math.max(1, Math.min(maxDay, elapsed));
+
+  return Math.max(storedCurrentDay, syncedCurrentDay);
+}
+
+function getParticipatedDaysCount(challenge: any): number {
+  const progress = Array.isArray(challenge?.progress) ? challenge.progress : [];
+  return progress.filter((item: any) => isCompletedStatus(item?.status)).length;
 }
 
 function isCompletedStatus(status?: string): boolean {
@@ -60,7 +113,7 @@ function isCompletedStatus(status?: string): boolean {
 function hasBacklogBeforeToday(challenge: any): boolean {
   const progress = challenge.progress || [];
   const challengeDay = getChallengeDay(challenge);
-  const todayIndex = Math.max(0, Math.min(6, challengeDay - 1));
+  const todayIndex = Math.max(0, Math.min(getDurationDays(challenge) - 1, challengeDay - 1));
 
   for (let i = 0; i < todayIndex; i += 1) {
     const status = progress[i]?.status;
@@ -246,7 +299,7 @@ export const MEPage = () => {
   // 미인증 챌린지: personalTarget 시간 기준으로 현재와 가장 가까운 순 정렬
   const unverifiedChallenges = useMemo(
     () => activeChallenges
-      .filter((c: any) => !isTodayVerified(c) && getChallengeDay(c) <= 7)
+      .filter((c: any) => !isTodayVerified(c) && getChallengeDay(c) <= getDurationDays(c))
       .sort((a: any, b: any) => {
         const minuteDiff = getMinutesUntilTarget(a) - getMinutesUntilTarget(b);
         if (minuteDiff !== 0) return minuteDiff;
@@ -262,7 +315,7 @@ export const MEPage = () => {
 
   // 오늘 인증 완료 챌린지
   const verifiedTodayChallenges = useMemo(
-    () => activeChallenges.filter((c: any) => isTodayVerified(c) || getChallengeDay(c) > 7),
+    () => activeChallenges.filter((c: any) => isTodayVerified(c) || getChallengeDay(c) > getDurationDays(c)),
     [activeChallenges],
   );
 
@@ -385,7 +438,8 @@ export const MEPage = () => {
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
                               <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-xs text-primary-600">Day {getChallengeDay(challenge)} / 7</span>
+                                <span className="text-xs text-primary-600">Day {getChallengeDay(challenge)} / {getDurationDays(challenge)}</span>
+                                <span className="text-xs text-gray-400">참여 {getParticipatedDaysCount(challenge)}일</span>
                                 {challenge.personalTarget && (
                                   <span className="text-xs text-gray-400">목표 {formatPersonalTarget(challenge)}</span>
                                 )}
@@ -410,6 +464,8 @@ export const MEPage = () => {
                         {verifiedTodayChallenges.map((challenge: any, index: number) => {
                           const progress = challenge.progress || [];
                           const currentDay = getChallengeDay(challenge);
+                          const durationDays = getDurationDays(challenge);
+                          const participatedDays = getParticipatedDaysCount(challenge);
                           const uid = challenge.userChallengeId;
                           const isExpanded = expandedCards.has(uid);
 
@@ -435,7 +491,7 @@ export const MEPage = () => {
                                 <span className="text-2xl flex-shrink-0">{challenge.challenge?.badgeIcon || '🎯'}</span>
                                 <div className="flex-1 min-w-0">
                                   <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
-                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · Day {currentDay} / 7</p>
+                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · 경과 Day {currentDay} / {durationDays} · 참여 {participatedDays}일</p>
                                 </div>
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                   <span className="text-xl font-bold text-gray-800">{challenge.score || 0}</span>
@@ -467,7 +523,7 @@ export const MEPage = () => {
                               {isExpanded && (
                                 <div className="pt-1">
                                   <p className="text-xs text-primary-500 text-right mb-2">탭하면 피드로 이동 →</p>
-                                  {Array.from({ length: 7 }, (_, i) => {
+                                  {Array.from({ length: durationDays }, (_, i) => {
                                     const p = progress[i];
                                     const status = p?.status || (i < currentDay - 1 ? 'skipped' : 'pending');
                                     const isPending = status === 'pending';
@@ -475,7 +531,7 @@ export const MEPage = () => {
                                     const timeStr = formatVerificationTime(p?.timestamp);
                                     const note = verif?.todayNote || '';
                                     const dotColor = (DAY_STATUS_COLORS[status] || 'bg-gray-200').split(' ')[0];
-                                    const isLastItem = i === 6;
+                                    const isLastItem = i === durationDays - 1;
                                     return (
                                       <div key={i} className="flex items-start gap-3">
                                         {/* 왼쪽: 점 + 세로선 */}
