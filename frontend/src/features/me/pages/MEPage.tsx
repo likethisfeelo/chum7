@@ -9,7 +9,7 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
 import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
 import {
-  getChallengeProgressSummary,
+  getChallengeDisplayMeta,
   getLatestCompletedProgressEntry,
   getProgressEntryByDay,
   isChallengePeriodCompleted,
@@ -102,10 +102,6 @@ function getChallengeDay(challenge: any): number {
   const syncedCurrentDay = Math.max(1, Math.min(maxDay, elapsed));
 
   return Math.max(storedCurrentDay, syncedCurrentDay);
-}
-
-function getChallengeProgressMeta(challenge: any): { participatedDays: number; completionRate: number } {
-  return getChallengeProgressSummary(challenge?.progress, resolveChallengeDurationDays(challenge));
 }
 
 function hasBacklogBeforeToday(challenge: any): boolean {
@@ -420,9 +416,7 @@ export const MEPage = () => {
                       <div className="space-y-2">
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">오늘 인증 예정</p>
                         {otherUnverified.map((challenge: any, index: number) => {
-                          const challengeDay = getChallengeDay(challenge);
-                          const durationDays = resolveChallengeDurationDays(challenge);
-                          const { participatedDays, completionRate } = getChallengeProgressMeta(challenge);
+                          const { currentDay: challengeDay, durationDays, participatedDays, completionRate } = getChallengeDisplayMeta(challenge);
                           return (
                           <motion.div
                             key={challenge.userChallengeId}
@@ -461,9 +455,7 @@ export const MEPage = () => {
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">인증 완료</p>
                         {verifiedTodayChallenges.map((challenge: any, index: number) => {
                           const progress = challenge.progress || [];
-                          const currentDay = getChallengeDay(challenge);
-                          const durationDays = resolveChallengeDurationDays(challenge);
-                          const { participatedDays, completionRate } = getChallengeProgressMeta(challenge);
+                          const { currentDay: challengeDay, durationDays, participatedDays, completionRate } = getChallengeDisplayMeta(challenge);
                           const uid = challenge.userChallengeId;
                           const isExpanded = expandedCards.has(uid);
 
@@ -486,7 +478,7 @@ export const MEPage = () => {
                                 <span className="text-2xl flex-shrink-0">{challenge.challenge?.badgeIcon || '🎯'}</span>
                                 <div className="flex-1 min-w-0">
                                   <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
-                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · 경과 Day {currentDay} / {durationDays} · 참여 {participatedDays}일 · 진행률 {completionRate}%</p>
+                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · 경과 Day {challengeDay} / {durationDays} · 참여 {participatedDays}일 · 진행률 {completionRate}%</p>
                                 </div>
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                   <span className="text-xl font-bold text-gray-800">{challenge.score || 0}</span>

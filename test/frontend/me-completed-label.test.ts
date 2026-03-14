@@ -11,5 +11,6 @@ describe('ME completed tab failed label', () => {
     expect(src).toContain('종료(미달성)');
     expect(src).toContain('border-gray-300');
     expect(src).toContain('isFailedChallengeState(challenge)');
+    expect(src).toContain('getChallengeDisplayMeta(challenge)');
   });
 });
