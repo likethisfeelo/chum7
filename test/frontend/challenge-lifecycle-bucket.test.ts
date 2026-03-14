@@ -1,5 +1,6 @@
 import {
   countParticipatedDays,
+  getChallengeProgressSummary,
   getChallengeStatusLabel,
   getLatestCompletedProgressEntry,
   getProgressEntryByDay,
@@ -89,6 +90,12 @@ describe('challengeLifecycle resolveChallengeBucket', () => {
     expect(isCompletedVerificationStatus('failed')).toBe(true);
     expect(isCompletedVerificationStatus('pending')).toBe(false);
     expect(isCompletedVerificationStatus(undefined)).toBe(false);
+  });
+
+  test('challenge progress summary returns bounded completion rate', () => {
+    const progress = [{ status: 'success' }, { status: 'failed' }, { status: 'pending' }];
+    expect(getChallengeProgressSummary(progress, 7)).toEqual({ participatedDays: 2, completionRate: 29 });
+    expect(getChallengeProgressSummary(progress, 0)).toEqual({ participatedDays: 2, completionRate: 100 });
   });
 
 });

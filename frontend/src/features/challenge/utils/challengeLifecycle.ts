@@ -41,6 +41,13 @@ export function countParticipatedDays(progress: any): number {
   return completedDaySet.size;
 }
 
+export function getChallengeProgressSummary(progress: any, durationDays: number): { participatedDays: number; completionRate: number } {
+  const participatedDays = countParticipatedDays(progress);
+  const safeDuration = Number.isFinite(Number(durationDays)) && Number(durationDays) > 0 ? Math.floor(Number(durationDays)) : 1;
+  const completionRate = Math.min(100, Math.max(0, Math.round((participatedDays / safeDuration) * 100)));
+  return { participatedDays, completionRate };
+}
+
 export function getProgressEntryByDay(progress: any, day: number): any | undefined {
   const list = Array.isArray(progress) ? progress : [];
   const targetDay = Number(day);
