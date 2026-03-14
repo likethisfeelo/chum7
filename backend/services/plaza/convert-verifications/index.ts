@@ -1,8 +1,10 @@
 import { EventBridgeEvent } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { resolvePlazaFallbackContent } from '../../../shared/lib/plaza-convert-content';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
 
 function conversionCursorWindowUtc() {
   const now = new Date();
@@ -25,7 +27,10 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
   let scannedCount = 0;
   let convertedCount = 0;
   let skipTypeCount = 0;
-  let skipNoTodayNoteCount = 0;
+  let skipNoTodayNoteCount = 0; // legacy metric field kept for dashboard compatibility (always 0 with fallback content)
+  let fallbackFromTomorrowPromiseCount = 0;
+  let fallbackGeneratedDayCount = 0;
+  let fallbackGeneratedDefaultCount = 0;
   let skipAlreadyConvertedCount = 0;
   let conditionalDuplicateCount = 0;
   let pageCount = 0;
@@ -52,10 +57,11 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
           skipTypeCount += 1;
           continue;
         }
-        if (!item.todayNote) {
-          skipNoTodayNoteCount += 1;
-          continue;
-        }
+        const fallback = resolvePlazaFallbackContent(item);
+        const fallbackContent = fallback.content;
+        if (fallback.source === 'tomorrowPromise') fallbackFromTomorrowPromiseCount += 1;
+        if (fallback.source === 'generatedDay') fallbackGeneratedDayCount += 1;
+        if (fallback.source === 'generatedDefault') fallbackGeneratedDefaultCount += 1;
         if (item.isConvertedToPlaza === true) {
           skipAlreadyConvertedCount += 1;
           continue;
@@ -71,7 +77,7 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
             challengeTitle: item.challengeTitle || '챌린지 기록',
             challengeCategory: item.challengeCategory || null,
             currentDay: item.day || null,
-            content: item.todayNote,
+            content: fallbackContent,
             leaderId: null,
             leaderName: null,
             leaderMessage: null,
@@ -121,6 +127,9 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
       convertedCount,
       skipTypeCount,
       skipNoTodayNoteCount,
+      fallbackFromTomorrowPromiseCount,
+      fallbackGeneratedDayCount,
+      fallbackGeneratedDefaultCount,
       skipAlreadyConvertedCount,
       conditionalDuplicateCount,
     }));
@@ -145,6 +154,9 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
       convertedCount,
       skipTypeCount,
       skipNoTodayNoteCount,
+      fallbackFromTomorrowPromiseCount,
+      fallbackGeneratedDayCount,
+      fallbackGeneratedDefaultCount,
       skipAlreadyConvertedCount,
       conditionalDuplicateCount,
     }));

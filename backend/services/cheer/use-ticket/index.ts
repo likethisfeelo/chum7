@@ -4,6 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -112,6 +113,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
+    const challengeResult = await docClient.send(new GetCommand({
+      TableName: process.env.CHALLENGES_TABLE!,
+      Key: { challengeId }
+    }));
+    const challenge = challengeResult.Item;
+    const challengeDurationDays = resolveDurationDays(challenge?.durationDays, undefined);
+
     const parsedDelta = Number(ticket.delta);
     if (!Number.isFinite(parsedDelta) || !Number.isInteger(parsedDelta) || parsedDelta < 0) {
       return response(400, {
@@ -167,10 +175,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const participants = (participantsResult.Items || []).filter((uc: any) => uc.userId !== userId && uc.status === 'active');
 
+    const nowIsoForSync = nowISO;
     const targets = participants.filter((member: any) => {
-      const progress = member.progress || [];
-      const currentDay = member.currentDay || 1;
-      const todayProgress = progress.find((p: any) => p.day === currentDay);
+      const memberDurationDays = resolveDurationDays(challengeDurationDays, member.progress);
+      const currentDay = calculateEffectiveCurrentDay(member, nowIsoForSync, memberDurationDays);
+      const progress = Array.isArray(member.progress) ? member.progress : Object.values(member.progress || {});
+      const todayProgress = progress.find((p: any) => Number(p?.day) === currentDay);
       return !todayProgress || todayProgress.status !== 'success';
     });
 

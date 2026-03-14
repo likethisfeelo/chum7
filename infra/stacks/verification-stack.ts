@@ -407,7 +407,7 @@ export class VerificationStack extends Stack {
       authorizer,
     });
 
-    // 8. Plaza conversion job (EventBridge daily 04:00)
+    // 8. Plaza conversion job (EventBridge hourly)
     const plazaConvertFn = new NodejsFunction(this, "PlazaConvertFn", {
       ...commonProps,
       functionName: `chme-${stage}-plaza-convert-verifications`,
@@ -423,8 +423,32 @@ export class VerificationStack extends Stack {
     verificationsTable.grantReadWriteData(plazaConvertFn);
     plazaPostsTable.grantReadWriteData(plazaConvertFn);
     new Rule(this, "PlazaConvertRule", {
-      schedule: Schedule.cron({ minute: "0", hour: "4" }),
+      schedule: Schedule.rate(Duration.hours(1)),
       targets: [new LambdaFunction(plazaConvertFn)],
+    });
+
+    const plazaConvertRunNowFn = new NodejsFunction(this, "PlazaConvertRunNowFn", {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-plaza-convert-run-now`,
+      entry: path.join(
+        __dirname,
+        "../../backend/services/admin/plaza/convert-run-now/index.ts",
+      ),
+      handler: "handler",
+      environment: commonEnv,
+      timeout: Duration.minutes(2),
+      memorySize: 512,
+    });
+    verificationsTable.grantReadWriteData(plazaConvertRunNowFn);
+    plazaPostsTable.grantReadWriteData(plazaConvertRunNowFn);
+    apiGateway.addRoutes({
+      path: "/admin/plaza/convert/run-now",
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration(
+        "AdminPlazaConvertRunNowIntegration",
+        plazaConvertRunNowFn,
+      ),
+      authorizer,
     });
 
     // 8-1. Observability for conversion job
@@ -460,6 +484,45 @@ export class VerificationStack extends Stack {
         "plaza_convert_summary",
       ),
       metricValue: "$.skipNoTodayNoteCount",
+      defaultValue: 0,
+    });
+
+    new logs.MetricFilter(this, "PlazaConvertFallbackTomorrowPromiseMetricFilter", {
+      logGroup: plazaConvertLogGroup,
+      metricNamespace: "CHME/Plaza",
+      metricName: "ConvertFallbackTomorrowPromiseCount",
+      filterPattern: logs.FilterPattern.stringValue(
+        "$.eventType",
+        "=",
+        "plaza_convert_summary",
+      ),
+      metricValue: "$.fallbackFromTomorrowPromiseCount",
+      defaultValue: 0,
+    });
+
+    new logs.MetricFilter(this, "PlazaConvertFallbackGeneratedDayMetricFilter", {
+      logGroup: plazaConvertLogGroup,
+      metricNamespace: "CHME/Plaza",
+      metricName: "ConvertFallbackGeneratedDayCount",
+      filterPattern: logs.FilterPattern.stringValue(
+        "$.eventType",
+        "=",
+        "plaza_convert_summary",
+      ),
+      metricValue: "$.fallbackGeneratedDayCount",
+      defaultValue: 0,
+    });
+
+    new logs.MetricFilter(this, "PlazaConvertFallbackGeneratedDefaultMetricFilter", {
+      logGroup: plazaConvertLogGroup,
+      metricNamespace: "CHME/Plaza",
+      metricName: "ConvertFallbackGeneratedDefaultCount",
+      filterPattern: logs.FilterPattern.stringValue(
+        "$.eventType",
+        "=",
+        "plaza_convert_summary",
+      ),
+      metricValue: "$.fallbackGeneratedDefaultCount",
       defaultValue: 0,
     });
 
@@ -519,6 +582,31 @@ export class VerificationStack extends Stack {
         new subscriptions.EmailSubscription(plazaConvertFailureAlertEmail),
       );
     }
+
+    const fallbackGeneratedDefaultAlarm = new cloudwatch.Alarm(
+      this,
+      "PlazaConvertFallbackGeneratedDefaultAlarm",
+      {
+        alarmName: `chme-${stage}-plaza-convert-fallback-default-alarm`,
+        metric: new cloudwatch.Metric({
+          namespace: "CHME/Plaza",
+          metricName: "ConvertFallbackGeneratedDefaultCount",
+          statistic: "sum",
+          period: Duration.hours(1),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription:
+          "Alarm when plaza conversion falls back to default generated content.",
+      },
+    );
+    fallbackGeneratedDefaultAlarm.addAlarmAction(
+      new cwActions.SnsAction(convertFailureTopic),
+    );
 
     const convertFailureEventAlarm = new cloudwatch.Alarm(
       this,
