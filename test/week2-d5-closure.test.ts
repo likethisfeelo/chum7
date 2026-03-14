@@ -42,4 +42,10 @@ describe('week2 d5 closure guards', () => {
     expect(badgeStack).not.toContain("path: '/badges/grant'");
     expect(profileBadgePage).toContain("apiClient.get('/users/me/badges')");
   });
+
+  test('cheer targets guards against batch-get 100 key limit', () => {
+    const getTargets = read('backend/services/cheer/get-targets/index.ts');
+    expect(getTargets).toContain('function chunkArray<T>(items: T[], size: number): T[][]');
+    expect(getTargets).toContain('const userIdChunks = chunkArray(uncachedUserIds, 100);');
+  });
 });

@@ -26,6 +26,16 @@ function calculatePredictedTime(targetTime: string, delta: number): string {
   return target.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
 }
 
+function chunkArray<T>(items: T[], size: number): T[][] {
+  if (size <= 0) return [items];
+
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string;
@@ -122,15 +132,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
       const uncachedUserIds = memberUserIds.filter((id) => !userIconCache.has(id));
       if (uncachedUserIds.length > 0) {
-        const usersResult = await docClient.send(new BatchGetCommand({
-          RequestItems: {
-            [process.env.USERS_TABLE!]: {
-              Keys: uncachedUserIds.map((id) => ({ userId: id })),
-            }
-          }
-        }));
+        const users: any[] = [];
+        const userIdChunks = chunkArray(uncachedUserIds, 100);
 
-        const users = usersResult.Responses?.[process.env.USERS_TABLE!] || [];
+        for (const userIdChunk of userIdChunks) {
+          const usersResult = await docClient.send(new BatchGetCommand({
+            RequestItems: {
+              [process.env.USERS_TABLE!]: {
+                Keys: userIdChunk.map((id) => ({ userId: id })),
+              }
+            }
+          }));
+
+          users.push(...(usersResult.Responses?.[process.env.USERS_TABLE!] || []));
+        }
+
         const iconByUserId = new Map(users.map((u: any) => [u.userId, typeof u.animalIcon === 'string' ? u.animalIcon : '🐰']));
         for (const uid of uncachedUserIds) {
           userIconCache.set(uid, iconByUserId.get(uid) || '🐰');
