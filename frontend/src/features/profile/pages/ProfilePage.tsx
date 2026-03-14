@@ -5,7 +5,13 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { FiSettings, FiLogOut, FiChevronRight } from 'react-icons/fi';
 import toast from 'react-hot-toast';
-import { getChallengeStatusLabel, resolveChallengeBucket } from '@/features/challenge/utils/challengeLifecycle';
+import {
+  getChallengeProgressSummary,
+  getChallengeStatusLabel,
+  resolveChallengeBucket,
+  resolveChallengeDay,
+  resolveChallengeDurationDays,
+} from '@/features/challenge/utils/challengeLifecycle';
 
 
 type ChallengeFilter = 'active' | 'preparing' | 'completed';
@@ -150,28 +156,34 @@ export const ProfilePage = () => {
             <p className="text-sm text-gray-500 px-1 py-2">해당 상태의 챌린지가 없습니다.</p>
           ) : (
             <div className="space-y-2">
-              {filteredChallenges.map((item: any) => (
-                <button
-                  key={item.userChallengeId}
-                  type="button"
-                  onClick={() => {
-                    const bucket = resolveChallengeBucket(item);
-                    if (bucket === 'active') {
-                      navigate(`/challenge-feed/${item.challengeId}`);
-                      return;
-                    }
+              {filteredChallenges.map((item: any) => {
+                const durationDays = resolveChallengeDurationDays(item);
+                const currentDay = resolveChallengeDay(item);
+                const { participatedDays, completionRate } = getChallengeProgressSummary(item?.progress, durationDays);
+                return (
+                  <button
+                    key={item.userChallengeId}
+                    type="button"
+                    onClick={() => {
+                      const bucket = resolveChallengeBucket(item);
+                      if (bucket === 'active') {
+                        navigate(`/challenge-feed/${item.challengeId}`);
+                        return;
+                      }
 
-                    navigate(`/challenges/${item.challengeId}`);
-                  }}
-                  className="w-full text-left border border-gray-200 rounded-xl p-3 hover:bg-gray-50 transition-colors"
-                >
-                  <p className="font-semibold text-gray-900">{item.challenge?.title}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    상태: {getChallengeStatusLabel(item)}
-                    {item.startDate ? ` · 시작일: ${item.startDate}` : ''}
-                  </p>
-                </button>
-              ))}
+                      navigate(`/challenges/${item.challengeId}`);
+                    }}
+                    className="w-full text-left border border-gray-200 rounded-xl p-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <p className="font-semibold text-gray-900">{item.challenge?.title}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      상태: {getChallengeStatusLabel(item)}
+                      {item.startDate ? ` · 시작일: ${item.startDate}` : ''}
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-1">Day {currentDay} / {durationDays} · 참여 {participatedDays}일 · 진행률 {completionRate}%</p>
+                  </button>
+                );
+              })}
             </div>
           )}
         </section>
