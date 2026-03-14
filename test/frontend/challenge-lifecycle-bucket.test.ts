@@ -3,6 +3,7 @@ import {
   getChallengeStatusLabel,
   getLatestCompletedProgressEntry,
   getProgressEntryByDay,
+  isCompletedVerificationStatus,
   isVerificationDayCompleted,
   resolveChallengeBucket,
   resolveChallengeDay,
@@ -80,6 +81,14 @@ describe('challengeLifecycle resolveChallengeBucket', () => {
     const latest = getLatestCompletedProgressEntry(progress);
     expect(latest?.day).toBe(4);
     expect(latest?.entry?.status).toBe('success');
+  });
+
+  test('completed status helper is case-insensitive and strict', () => {
+    expect(isCompletedVerificationStatus('SUCCESS')).toBe(true);
+    expect(isCompletedVerificationStatus('remedy')).toBe(true);
+    expect(isCompletedVerificationStatus('failed')).toBe(true);
+    expect(isCompletedVerificationStatus('pending')).toBe(false);
+    expect(isCompletedVerificationStatus(undefined)).toBe(false);
   });
 
 });

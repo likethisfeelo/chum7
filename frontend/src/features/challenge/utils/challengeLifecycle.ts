@@ -16,10 +16,14 @@ export function resolveProgressDay(item: any, fallbackIndex?: number): number | 
   return null;
 }
 
+export function isCompletedVerificationStatus(status: any): boolean {
+  const key = String(status || '').toLowerCase();
+  return key === 'success' || key === 'remedy' || key === 'failed';
+}
+
 export function isVerificationDayCompleted(progress: any, day: number): boolean {
   const target = getProgressEntryByDay(progress, day);
-  const status = String(target?.status || '').toLowerCase();
-  return status === 'success' || status === 'remedy' || status === 'failed';
+  return isCompletedVerificationStatus(target?.status);
 }
 
 export function countParticipatedDays(progress: any): number {
@@ -29,8 +33,7 @@ export function countParticipatedDays(progress: any): number {
   list.forEach((item: any, index: number) => {
     const day = resolveProgressDay(item, index);
     if (!day) return;
-    const status = String(item?.status || '').toLowerCase();
-    if (status === 'success' || status === 'remedy' || status === 'failed') {
+    if (isCompletedVerificationStatus(item?.status)) {
       completedDaySet.add(day);
     }
   });
@@ -60,8 +63,7 @@ export function getLatestCompletedProgressEntry(progress: any): { entry: any; da
   list.forEach((item: any, index: number) => {
     const day = resolveProgressDay(item, index);
     if (!day) return;
-    const status = String(item?.status || '').toLowerCase();
-    if (status !== 'success' && status !== 'remedy' && status !== 'failed') return;
+    if (!isCompletedVerificationStatus(item?.status)) return;
     if (!latest || day >= latest.day) {
       latest = { entry: item, day };
     }
