@@ -19,7 +19,7 @@ import {
 import { inferVerificationType } from "../../../shared/lib/verification-type";
 import { isValidTrimRange } from "../../../shared/lib/trim-validation";
 import { normalizeProgress } from "../../../shared/lib/progress";
-import { grantBadges } from "../../badge/grant/index";
+import { grantBadges } from "../../../shared/lib/badge-grant";
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);

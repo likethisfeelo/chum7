@@ -1,13 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
-import { evaluateBadgeIds } from '../../../shared/lib/badge';
-
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
-
-const BADGES_TABLE = process.env.BADGES_TABLE!;
+import { grantBadges, GrantBadgeInput } from '../../../shared/lib/badge-grant';
 
 const grantBadgeSchema = z.object({
   userId: z.string().min(1),
@@ -18,7 +11,7 @@ const grantBadgeSchema = z.object({
   isRemedy: z.boolean().optional().default(false),
 });
 
-type GrantBadgeInput = z.infer<typeof grantBadgeSchema>;
+type GrantBadgeRequest = z.infer<typeof grantBadgeSchema>;
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
@@ -32,45 +25,11 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
-export async function grantBadges(input: GrantBadgeInput): Promise<string[]> {
-  if (!BADGES_TABLE) return [];
-
-  const badgeIds = evaluateBadgeIds(input);
-  const grantedAt = new Date().toISOString();
-  const granted: string[] = [];
-
-  for (const badgeId of badgeIds) {
-    try {
-      await docClient.send(new PutCommand({
-        TableName: BADGES_TABLE,
-        Item: {
-          badgeId,
-          userId: input.userId,
-          challengeId: input.challengeId,
-          verificationId: input.verificationId,
-          grantedAt,
-          sourceDay: input.day,
-          sourceConsecutiveDays: input.consecutiveDays,
-          createdAt: grantedAt,
-        },
-        ConditionExpression: 'attribute_not_exists(badgeId) AND attribute_not_exists(userId)',
-      }));
-      granted.push(badgeId);
-    } catch (error: any) {
-      if (error?.name !== 'ConditionalCheckFailedException') {
-        console.error('[badge-grant] failed to grant badge', { badgeId, userId: input.userId, error });
-      }
-    }
-  }
-
-  return granted;
-}
-
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = JSON.parse(event.body || '{}');
-    const input = grantBadgeSchema.parse(body);
-    const granted = await grantBadges(input);
+    const input: GrantBadgeRequest = grantBadgeSchema.parse(body);
+    const granted = await grantBadges(input as GrantBadgeInput);
 
     return response(200, {
       success: true,
