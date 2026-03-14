@@ -192,3 +192,17 @@
 완화 방안:
 - migration/response adapter 동시 운영 기간 확보
 - P2는 feature flag로 분리 배포
+
+
+
+## 7. Week 2 마감 상태 (업데이트)
+
+- 상태: **거의 완료 (D5 검증 진행 중/마감 단계)**
+- 완료 항목:
+  - Cheer P0 엔드포인트 stack 연결(`GET /cheer/targets`, `POST /cheer/use-ticket`)
+  - Badge 저장/조회 레이어 구현 및 verification submit 연동
+  - Profile 뱃지 컬렉션의 `GET /users/me/badges` 연동
+- 마감 체크:
+  - 회귀 가드 테스트(`week2-p0-readiness`, `week2-d5-closure`)로 핵심 배선 누락 방지
+  - 배포 환경에서 티켓 발송/수신 및 3일·7일 뱃지 실데이터 검증만 남음
+
