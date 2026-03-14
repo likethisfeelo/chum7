@@ -20,7 +20,8 @@ function normalizeStoredCurrentDay(value: unknown, durationDays: number): number
 export function clampDay(day: number, durationDays: number): number {
   const normalizedDurationDays = normalizeDurationDays(durationDays);
   const maxDay = normalizedDurationDays + 1;
-  return Math.max(1, Math.min(maxDay, day));
+  const normalizedDay = Number.isFinite(day) ? Math.floor(day) : 1;
+  return Math.max(1, Math.min(maxDay, normalizedDay));
 }
 
 export function calculateSyncedCurrentDay(
@@ -31,8 +32,16 @@ export function calculateSyncedCurrentDay(
 ): number {
   const tz = safeTimezone(timezone);
   const certDate = certDateFromIso(nowIso, tz);
-  const calculatedDay = calculateChallengeDay(startDateIso, certDate, tz);
-  return clampDay(calculatedDay, durationDays);
+
+  try {
+    const calculatedDay = calculateChallengeDay(startDateIso, certDate, tz);
+    if (!Number.isFinite(calculatedDay)) {
+      return 1;
+    }
+    return clampDay(calculatedDay, durationDays);
+  } catch {
+    return 1;
+  }
 }
 
 
@@ -82,13 +91,14 @@ export function calculateEffectiveCurrentDay(
 
   const startDate = userChallenge.startDate as string;
 
-  return Math.max(
-    storedCurrentDay,
-    calculateSyncedCurrentDay(
-      startDate,
-      nowIso,
-      userChallenge.timezone,
-      normalizedDurationDays,
-    ),
+  const syncedCurrentDay = calculateSyncedCurrentDay(
+    startDate,
+    nowIso,
+    userChallenge.timezone,
+    normalizedDurationDays,
   );
+
+  if (!Number.isFinite(syncedCurrentDay)) return storedCurrentDay;
+
+  return Math.max(storedCurrentDay, syncedCurrentDay);
 }

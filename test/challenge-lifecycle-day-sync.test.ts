@@ -117,6 +117,27 @@ describe('challenge lifecycle currentDay sync helpers', () => {
     expect(inactive).toBe(8);
   });
 
+
+  test('clampDay returns bounded value even when day input is NaN', () => {
+    expect(clampDay(Number.NaN as unknown as number, 7)).toBe(1);
+  });
+
+  test('calculateEffectiveCurrentDay falls back to stored day when startDate is invalid', () => {
+    const day = calculateEffectiveCurrentDay(
+      {
+        currentDay: 2,
+        phase: 'active',
+        status: 'active',
+        startDate: 'invalid-date',
+        timezone: 'Asia/Seoul',
+      },
+      '2026-01-02T15:30:00.000Z',
+      7,
+    );
+
+    expect(day).toBe(2);
+  });
+
   test('calculateSyncedCurrentDay clamps beyond challenge duration', () => {
     const day = calculateSyncedCurrentDay(
       '2026-01-01T00:00:00.000Z',
