@@ -1,6 +1,15 @@
 import { calculateChallengeDay, certDateFromIso, safeTimezone } from './challenge-quest-policy';
 
 
+
+function normalizeDurationDays(value: unknown, fallback = 7): number {
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.floor(parsed);
+  }
+  return Math.max(1, Math.floor(Number(fallback) || 7));
+}
+
 function normalizeStoredCurrentDay(value: unknown, durationDays: number): number {
   const parsed = Number(value);
   const maxDay = Math.max(1, durationDays) + 1;
@@ -9,7 +18,8 @@ function normalizeStoredCurrentDay(value: unknown, durationDays: number): number
 }
 
 export function clampDay(day: number, durationDays: number): number {
-  const maxDay = Math.max(1, durationDays) + 1;
+  const normalizedDurationDays = normalizeDurationDays(durationDays);
+  const maxDay = normalizedDurationDays + 1;
   return Math.max(1, Math.min(maxDay, day));
 }
 
@@ -31,9 +41,9 @@ export function resolveDurationDays(
   userChallengeProgress: unknown,
   fallback = 7,
 ): number {
-  const fromChallenge = Number(challengeDurationDays);
-  if (Number.isFinite(fromChallenge) && fromChallenge > 0) {
-    return fromChallenge;
+  const challengeCandidate = Number(challengeDurationDays);
+  if (Number.isFinite(challengeCandidate) && challengeCandidate > 0) {
+    return Math.floor(challengeCandidate);
   }
 
   const fromProgress = Array.isArray(userChallengeProgress)
@@ -46,7 +56,7 @@ export function resolveDurationDays(
     return fromProgress;
   }
 
-  return fallback;
+  return normalizeDurationDays(undefined, fallback);
 }
 
 export function calculateEffectiveCurrentDay(
@@ -60,7 +70,8 @@ export function calculateEffectiveCurrentDay(
   nowIso: string,
   durationDays: number,
 ): number {
-  const storedCurrentDay = normalizeStoredCurrentDay(userChallenge.currentDay, durationDays);
+  const normalizedDurationDays = normalizeDurationDays(durationDays);
+  const storedCurrentDay = normalizeStoredCurrentDay(userChallenge.currentDay, normalizedDurationDays);
   const canSync =
     userChallenge.phase === 'active' &&
     userChallenge.status === 'active' &&
@@ -77,7 +88,7 @@ export function calculateEffectiveCurrentDay(
       startDate,
       nowIso,
       userChallenge.timezone,
-      durationDays,
+      normalizedDurationDays,
     ),
   );
 }

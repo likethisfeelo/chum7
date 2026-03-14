@@ -34,8 +34,10 @@ describe('challenge lifecycle currentDay sync helpers', () => {
 
   test('resolveDurationDays prefers challenge duration then progress length', () => {
     expect(resolveDurationDays(10, [{ day: 1 }], 7)).toBe(10);
+    expect(resolveDurationDays('10', [{ day: 1 }], 7)).toBe(10);
     expect(resolveDurationDays(undefined, [{ day: 1 }, { day: 2 }], 7)).toBe(2);
     expect(resolveDurationDays(undefined, { a: { day: 1 }, b: { day: 2 } }, 7)).toBe(2);
+    expect(resolveDurationDays(0, [{ day: 1 }, { day: 2 }], 7)).toBe(2);
     expect(resolveDurationDays(undefined, null, 7)).toBe(7);
   });
 
