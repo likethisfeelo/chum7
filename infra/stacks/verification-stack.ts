@@ -343,6 +343,28 @@ export class VerificationStack extends Stack {
       authorizer,
     });
 
+    // 5-1. Extra Verification Visibility Update (protected)
+    const visibilityFn = new NodejsFunction(this, "VisibilityFn", {
+      ...commonProps,
+      functionName: `chme-${stage}-verification-visibility`,
+      entry: path.join(
+        __dirname,
+        "../../backend/services/verification/visibility/index.ts",
+      ),
+      handler: "handler",
+      environment: commonEnv,
+    });
+    verificationsTable.grantReadWriteData(visibilityFn);
+    apiGateway.addRoutes({
+      path: "/verifications/{verificationId}/visibility",
+      methods: [HttpMethod.PATCH],
+      integration: new HttpLambdaIntegration(
+        "VerificationVisibilityIntegration",
+        visibilityFn,
+      ),
+      authorizer,
+    });
+
     // 6. Remedy Verification (Day 6 보완) (protected)
     const remedyFn = new NodejsFunction(this, "RemedyFn", {
       ...commonProps,
