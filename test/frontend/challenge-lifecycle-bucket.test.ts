@@ -1,9 +1,12 @@
 import {
   countParticipatedDays,
   getChallengeStatusLabel,
+  getProgressEntryByDay,
   isVerificationDayCompleted,
   resolveChallengeBucket,
   resolveChallengeDay,
+  resolveProgressDay,
+  resolveVerificationStatusForDay,
 } from '../../frontend/src/features/challenge/utils/challengeLifecycle';
 
 describe('challengeLifecycle resolveChallengeBucket', () => {
@@ -52,6 +55,17 @@ describe('challengeLifecycle resolveChallengeBucket', () => {
     expect(isVerificationDayCompleted(progress, 1)).toBe(true);
     expect(isVerificationDayCompleted(progress, 2)).toBe(false);
     expect(countParticipatedDays(progress)).toBe(2);
+  });
+
+  test('progress day helpers resolve day and status safely', () => {
+    expect(resolveProgressDay({ day: 3 })).toBe(3);
+    expect(resolveProgressDay({}, 1)).toBe(2);
+    expect(resolveProgressDay({})).toBeNull();
+
+    const progress = [{ status: 'success' }, { day: 3, status: 'pending' }];
+    expect(getProgressEntryByDay(progress, 1)?.status).toBe('success');
+    expect(resolveVerificationStatusForDay(progress, 2, 3)).toBe('skipped');
+    expect(resolveVerificationStatusForDay(progress, 3, 3)).toBe('pending');
   });
 
 });

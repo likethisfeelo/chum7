@@ -9,6 +9,13 @@ export function resolveChallengeDay(item: any): number {
   return Math.max(1, Math.min(maxDay, Math.floor(rawCurrentDay)));
 }
 
+export function resolveProgressDay(item: any, fallbackIndex?: number): number | null {
+  const parsedDay = Number(item?.day);
+  if (Number.isFinite(parsedDay)) return Math.max(1, Math.floor(parsedDay));
+  if (typeof fallbackIndex === 'number' && Number.isFinite(fallbackIndex)) return Math.max(1, Math.floor(fallbackIndex) + 1);
+  return null;
+}
+
 export function isVerificationDayCompleted(progress: any, day: number): boolean {
   const target = getProgressEntryByDay(progress, day);
   const status = String(target?.status || '').toLowerCase();
@@ -20,8 +27,8 @@ export function countParticipatedDays(progress: any): number {
   const completedDaySet = new Set<number>();
 
   list.forEach((item: any, index: number) => {
-    const parsedDay = Number(item?.day);
-    const day = Number.isFinite(parsedDay) ? Math.floor(parsedDay) : index + 1;
+    const day = resolveProgressDay(item, index);
+    if (!day) return;
     const status = String(item?.status || '').toLowerCase();
     if (status === 'success' || status === 'remedy' || status === 'failed') {
       completedDaySet.add(day);
@@ -37,8 +44,7 @@ export function getProgressEntryByDay(progress: any, day: number): any | undefin
   let target: any | undefined;
 
   list.forEach((item: any, index: number) => {
-    const parsedDay = Number(item?.day);
-    const itemDay = Number.isFinite(parsedDay) ? Math.floor(parsedDay) : index + 1;
+    const itemDay = resolveProgressDay(item, index);
     if (itemDay === targetDay) {
       target = item;
     }
