@@ -18,6 +18,7 @@ describe('week2 d5 closure guards', () => {
     const submit = read('backend/services/verification/submit/index.ts');
     const grant = read('backend/shared/lib/badge-grant.ts');
     const list = read('backend/services/badge/list/index.ts');
+    const grantHandler = read('backend/services/badge/grant/index.ts');
 
     expect(submit).toContain('const newBadges = await grantBadges({');
     expect(submit).toContain('newBadges,');
@@ -27,6 +28,10 @@ describe('week2 d5 closure guards', () => {
 
     expect(list).toContain("IndexName: 'userId-index'");
     expect(list).toContain('badges,');
+
+    expect(grantHandler).toContain("error: 'UNAUTHORIZED'");
+    expect(grantHandler).toContain("error: 'FORBIDDEN'");
+    expect(grantHandler).toContain('input.userId !== authUserId');
   });
 
   test('badge API and profile badge UI route remain connected', () => {

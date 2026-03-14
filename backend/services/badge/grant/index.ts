@@ -27,8 +27,24 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
+    const authUserId = event.requestContext.authorizer?.jwt?.claims?.sub as string | undefined;
+    if (!authUserId) {
+      return response(401, {
+        error: 'UNAUTHORIZED',
+        message: '인증이 필요합니다',
+      });
+    }
+
     const body = JSON.parse(event.body || '{}');
     const input: GrantBadgeRequest = grantBadgeSchema.parse(body);
+
+    if (input.userId !== authUserId) {
+      return response(403, {
+        error: 'FORBIDDEN',
+        message: '본인 계정에만 뱃지를 지급할 수 있습니다',
+      });
+    }
+
     const granted = await grantBadges(input as GrantBadgeInput);
 
     return response(200, {
