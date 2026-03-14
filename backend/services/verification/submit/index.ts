@@ -18,6 +18,8 @@ import {
 } from "../../../shared/lib/challenge-quest-policy";
 import { inferVerificationType } from "../../../shared/lib/verification-type";
 import { isValidTrimRange } from "../../../shared/lib/trim-validation";
+import { normalizeProgress } from "../../../shared/lib/progress";
+import { grantBadges } from "../../../shared/lib/badge-grant";
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -101,18 +103,6 @@ function buildTargetDateTimeISO(
 
   const iso = new Date(Date.UTC(y, m - 1, d, hh, mm, 0, 0)).toISOString();
   return Number.isNaN(new Date(iso).getTime()) ? null : iso;
-}
-
-function normalizeProgress(progress: unknown): Array<Record<string, any>> {
-  const list = Array.isArray(progress)
-    ? progress
-    : progress && typeof progress === "object"
-      ? Object.values(progress as Record<string, any>)
-      : [];
-
-  return list
-    .filter((item) => item && typeof item === "object")
-    .sort((a: any, b: any) => Number(a?.day || 0) - Number(b?.day || 0));
 }
 
 function resolveChallengeId(userChallenge: Record<string, any>): string | null {
@@ -566,8 +556,6 @@ export const handler = async (
       }
     }
 
-    const newBadges: string[] = [];
-
     if (consecutiveDays === 3) {
       try {
         await createCheerTicket(
@@ -581,7 +569,6 @@ export const handler = async (
       } catch (cheerError) {
         console.error("Streak cheer ticket error:", cheerError);
       }
-      newBadges.push("3-day-streak");
     }
 
     if (input.day === 7 && consecutiveDays === 7) {
@@ -599,8 +586,16 @@ export const handler = async (
       } catch (cheerError) {
         console.error("Complete cheer ticket error:", cheerError);
       }
-      newBadges.push("7-day-master");
     }
+
+    const newBadges = await grantBadges({
+      userId,
+      challengeId,
+      verificationId,
+      day: input.day,
+      consecutiveDays,
+      isRemedy: false,
+    });
 
     const message = isEarlyCompletion
       ? `Day ${input.day} 완료! 목표보다 ${delta}분 일찍!`

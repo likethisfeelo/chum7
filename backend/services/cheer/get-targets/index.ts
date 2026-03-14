@@ -1,7 +1,7 @@
 // backend/services/cheer/get-targets/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, GetCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
 import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 
 const dynamoClient = new DynamoDBClient({});
@@ -24,6 +24,16 @@ function calculatePredictedTime(targetTime: string, delta: number): string {
   const target = new Date(targetTime);
   target.setMinutes(target.getMinutes() - delta);
   return target.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  if (size <= 0) return [items];
+
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -95,6 +105,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const schedulableTargets: any[] = [];
     const nowIso = new Date().toISOString();
     const challengeCache = new Map<string, any>();
+    const userIconCache = new Map<string, string>();
     const processedGroupIds = new Set<string>();
     const seenImmediateTargetKeys = new Set<string>();
 
@@ -114,6 +125,33 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }));
 
       const groupMembers = groupResult.Items || [];
+
+      const memberUserIds = [...new Set(groupMembers
+        .map((member: any) => typeof member.userId === 'string' ? member.userId : '')
+        .filter((id: string) => !!id))];
+
+      const uncachedUserIds = memberUserIds.filter((id) => !userIconCache.has(id));
+      if (uncachedUserIds.length > 0) {
+        const users: any[] = [];
+        const userIdChunks = chunkArray(uncachedUserIds, 100);
+
+        for (const userIdChunk of userIdChunks) {
+          const usersResult = await docClient.send(new BatchGetCommand({
+            RequestItems: {
+              [process.env.USERS_TABLE!]: {
+                Keys: userIdChunk.map((id) => ({ userId: id })),
+              }
+            }
+          }));
+
+          users.push(...(usersResult.Responses?.[process.env.USERS_TABLE!] || []));
+        }
+
+        const iconByUserId = new Map(users.map((u: any) => [u.userId, typeof u.animalIcon === 'string' ? u.animalIcon : '🐰']));
+        for (const uid of uncachedUserIds) {
+          userIconCache.set(uid, iconByUserId.get(uid) || '🐰');
+        }
+      }
 
       for (const member of groupMembers) {
         // 본인/비활성 제외
@@ -144,7 +182,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           const target = {
             userId: member.userId,
             challengeId,
-            animalIcon: '🐼', // TODO: 실제 아이콘 조회
+            animalIcon: userIconCache.get(member.userId) || '🐰',
             challengeTitle: challenge?.title || 'Unknown',
             currentDay,
             targetTime: challenge?.targetTime || '07:00',

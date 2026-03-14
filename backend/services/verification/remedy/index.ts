@@ -5,6 +5,7 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { certDateFromIso, remedyScore, safeTimezone } from '../../../shared/lib/challenge-quest-policy';
+import { normalizeProgress } from '../../../shared/lib/progress';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -108,7 +109,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    const progress = userChallenge.progress || [];
+    const progress = normalizeProgress(userChallenge.progress);
     const failedDays = progress.filter((p: any) => p.status !== 'success' && p.day <= 5);
     if (failedDays.length === 0) {
       return response(400, {
@@ -137,7 +138,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-    const originalDayProgress = progress.find((p: any) => p.day === input.originalDay);
+    const originalDayProgress = progress.find((p: any) => Number(p.day) === input.originalDay);
     if (!originalDayProgress || originalDayProgress.status === 'success') {
       return response(400, {
         error: 'REMEDY_TARGET_INVALID',
@@ -202,7 +203,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
 
     const updatedProgress = [...progress];
-    const originalIndex = updatedProgress.findIndex((p: any) => p.day === input.originalDay);
+    const originalIndex = updatedProgress.findIndex((p: any) => Number(p.day) === input.originalDay);
 
     if (originalIndex >= 0) {
       updatedProgress[originalIndex] = {

@@ -5,41 +5,14 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { FiSettings, FiLogOut, FiChevronRight } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import {
+  getChallengeDisplayMeta,
+  getChallengeStatusLabel,
+  resolveChallengeBucket,
+} from '@/features/challenge/utils/challengeLifecycle';
 
 
 type ChallengeFilter = 'active' | 'preparing' | 'completed';
-
-type ChallengeBucket = 'active' | 'preparing' | 'completed' | 'other';
-
-const resolveChallengeBucket = (item: any): ChallengeBucket => {
-  const userStatus = String(item?.status || '').toLowerCase();
-  const userPhase = String(item?.phase || '').toLowerCase();
-  const lifecycle = String(item?.challenge?.lifecycle || '').toLowerCase();
-
-  if (userPhase === 'in_progress' || userPhase === 'active') {
-    return 'active';
-  }
-
-  if (userStatus === 'completed' || userPhase === 'completed' || lifecycle === 'completed') {
-    return 'completed';
-  }
-
-  if (userStatus === 'active' || userStatus === 'in_progress') {
-    if (userPhase === 'preparing' || lifecycle === 'recruiting' || lifecycle === 'preparing') {
-      return 'preparing';
-    }
-    return 'active';
-  }
-
-  return 'other';
-};
-
-const getChallengeStatusLabel = (item: any): string => {
-  const bucket = resolveChallengeBucket(item);
-  if (bucket === 'preparing') return '준비중';
-  if (bucket === 'completed') return '완주';
-  return '진행중';
-};
 
 export const ProfilePage = () => {
   const navigate = useNavigate();
@@ -181,28 +154,32 @@ export const ProfilePage = () => {
             <p className="text-sm text-gray-500 px-1 py-2">해당 상태의 챌린지가 없습니다.</p>
           ) : (
             <div className="space-y-2">
-              {filteredChallenges.map((item: any) => (
-                <button
-                  key={item.userChallengeId}
-                  type="button"
-                  onClick={() => {
-                    const bucket = resolveChallengeBucket(item);
-                    if (bucket === 'active') {
-                      navigate(`/challenge-feed/${item.challengeId}`);
-                      return;
-                    }
+              {filteredChallenges.map((item: any) => {
+                const { currentDay, durationDays, participatedDays, completionRate } = getChallengeDisplayMeta(item);
+                return (
+                  <button
+                    key={item.userChallengeId}
+                    type="button"
+                    onClick={() => {
+                      const bucket = resolveChallengeBucket(item);
+                      if (bucket === 'active') {
+                        navigate(`/challenge-feed/${item.challengeId}`);
+                        return;
+                      }
 
-                    navigate(`/challenges/${item.challengeId}`);
-                  }}
-                  className="w-full text-left border border-gray-200 rounded-xl p-3 hover:bg-gray-50 transition-colors"
-                >
-                  <p className="font-semibold text-gray-900">{item.challenge?.title}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    상태: {getChallengeStatusLabel(item)}
-                    {item.startDate ? ` · 시작일: ${item.startDate}` : ''}
-                  </p>
-                </button>
-              ))}
+                      navigate(`/challenges/${item.challengeId}`);
+                    }}
+                    className="w-full text-left border border-gray-200 rounded-xl p-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <p className="font-semibold text-gray-900">{item.challenge?.title}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      상태: {getChallengeStatusLabel(item)}
+                      {item.startDate ? ` · 시작일: ${item.startDate}` : ''}
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-1">Day {currentDay} / {durationDays} · 참여 {participatedDays}일 · 진행률 {completionRate}%</p>
+                  </button>
+                );
+              })}
             </div>
           )}
         </section>

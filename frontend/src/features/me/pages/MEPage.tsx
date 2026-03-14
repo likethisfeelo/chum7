@@ -8,6 +8,17 @@ import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
 import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
+import {
+  getChallengeDisplayMeta,
+  getLatestCompletedProgressEntry,
+  getProgressEntryByDay,
+  isChallengePeriodCompleted,
+  isFailedChallengeState,
+  isVerificationDayCompleted,
+  resolveChallengeBucket,
+  resolveChallengeDurationDays,
+  resolveVerificationStatusForDay,
+} from '@/features/challenge/utils/challengeLifecycle';
 import toast from 'react-hot-toast';
 
 type METab = 'active' | 'pending' | 'completed';
@@ -68,16 +79,8 @@ function parseChallengeStartDate(challenge: any): Date | null {
   return getDateOnly(parsed);
 }
 
-function getDurationDays(challenge: any): number {
-  const raw = Number(challenge?.challenge?.durationDays);
-  if (Number.isFinite(raw) && raw > 0) return Math.floor(raw);
-  const progressLength = Array.isArray(challenge?.progress) ? challenge.progress.length : 0;
-  if (progressLength > 0) return progressLength;
-  return 7;
-}
-
 function getChallengeDay(challenge: any): number {
-  const durationDays = getDurationDays(challenge);
+  const durationDays = resolveChallengeDurationDays(challenge);
   const maxDay = durationDays + 1;
   const storedCurrentDay = Math.max(1, Math.min(maxDay, Number(challenge.currentDay || 1)));
 
@@ -101,23 +104,14 @@ function getChallengeDay(challenge: any): number {
   return Math.max(storedCurrentDay, syncedCurrentDay);
 }
 
-function getParticipatedDaysCount(challenge: any): number {
-  const progress = Array.isArray(challenge?.progress) ? challenge.progress : [];
-  return progress.filter((item: any) => isCompletedStatus(item?.status)).length;
-}
-
-function isCompletedStatus(status?: string): boolean {
-  return status === 'success' || status === 'remedy' || status === 'failed';
-}
-
 function hasBacklogBeforeToday(challenge: any): boolean {
   const progress = challenge.progress || [];
   const challengeDay = getChallengeDay(challenge);
-  const todayIndex = Math.max(0, Math.min(getDurationDays(challenge) - 1, challengeDay - 1));
+  const durationDays = resolveChallengeDurationDays(challenge);
+  const todayDay = Math.max(1, Math.min(durationDays, challengeDay));
 
-  for (let i = 0; i < todayIndex; i += 1) {
-    const status = progress[i]?.status;
-    if (!isCompletedStatus(status)) {
+  for (let day = 1; day < todayDay; day += 1) {
+    if (!isVerificationDayCompleted(progress, day)) {
       return true;
     }
   }
@@ -146,10 +140,8 @@ function formatVerificationTime(iso: string | undefined | null): string {
 }
 
 function isTodayVerified(challenge: any): boolean {
-  const progress = challenge.progress || [];
   const currentDay = getChallengeDay(challenge);
-  const status = progress[currentDay - 1]?.status;
-  return status === 'success' || status === 'remedy' || status === 'failed';
+  return isVerificationDayCompleted(challenge?.progress, currentDay);
 }
 
 const getProposalStatusMeta = (status?: string) => {
@@ -178,9 +170,9 @@ export const MEPage = () => {
   const challenges = data?.challenges || [];
 
   const { data: completedChallengesData } = useQuery({
-    queryKey: ['my-challenges-completed'],
+    queryKey: ['my-challenges-completed', 'all'],
     queryFn: async () => {
-      const response = await apiClient.get('/challenges/my?status=completed');
+      const response = await apiClient.get('/challenges/my?status=all');
       return response.data.data;
     },
   });
@@ -279,27 +271,24 @@ export const MEPage = () => {
   };
 
   const pendingChallenges = useMemo(
-    () => challenges.filter((challenge: any) => {
-      const lifecycle = String(challenge.challenge?.lifecycle || '');
-      return lifecycle === 'recruiting' || lifecycle === 'preparing' || challenge.phase === 'preparing';
-    }),
+    () => challenges.filter((challenge: any) => resolveChallengeBucket(challenge) === 'preparing'),
     [challenges],
   );
 
   const activeChallenges = useMemo(
-    () => challenges.filter((challenge: any) => String(challenge.challenge?.lifecycle || '') === 'active'),
+    () => challenges.filter((challenge: any) => resolveChallengeBucket(challenge) === 'active'),
     [challenges],
   );
 
   const completedChallenges = useMemo(
-    () => completedChallengesData?.challenges || [],
+    () => (completedChallengesData?.challenges || []).filter((challenge: any) => resolveChallengeBucket(challenge) === 'completed'),
     [completedChallengesData],
   );
 
   // 미인증 챌린지: personalTarget 시간 기준으로 현재와 가장 가까운 순 정렬
   const unverifiedChallenges = useMemo(
     () => activeChallenges
-      .filter((c: any) => !isTodayVerified(c) && getChallengeDay(c) <= getDurationDays(c))
+      .filter((c: any) => !isTodayVerified(c) && getChallengeDay(c) <= resolveChallengeDurationDays(c))
       .sort((a: any, b: any) => {
         const minuteDiff = getMinutesUntilTarget(a) - getMinutesUntilTarget(b);
         if (minuteDiff !== 0) return minuteDiff;
@@ -315,7 +304,7 @@ export const MEPage = () => {
 
   // 오늘 인증 완료 챌린지
   const verifiedTodayChallenges = useMemo(
-    () => activeChallenges.filter((c: any) => isTodayVerified(c) || getChallengeDay(c) > getDurationDays(c)),
+    () => activeChallenges.filter((c: any) => isTodayVerified(c) || isChallengePeriodCompleted(c)),
     [activeChallenges],
   );
 
@@ -426,7 +415,9 @@ export const MEPage = () => {
                     {otherUnverified.length > 0 && (
                       <div className="space-y-2">
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">오늘 인증 예정</p>
-                        {otherUnverified.map((challenge: any, index: number) => (
+                        {otherUnverified.map((challenge: any, index: number) => {
+                          const { currentDay: challengeDay, durationDays, participatedDays, completionRate } = getChallengeDisplayMeta(challenge);
+                          return (
                           <motion.div
                             key={challenge.userChallengeId}
                             initial={{ opacity: 0, y: 12 }}
@@ -438,8 +429,8 @@ export const MEPage = () => {
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
                               <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-xs text-primary-600">Day {getChallengeDay(challenge)} / {getDurationDays(challenge)}</span>
-                                <span className="text-xs text-gray-400">참여 {getParticipatedDaysCount(challenge)}일</span>
+                                <span className="text-xs text-primary-600">Day {challengeDay} / {durationDays}</span>
+                                <span className="text-xs text-gray-400">참여 {participatedDays}일 · 진행률 {completionRate}%</span>
                                 {challenge.personalTarget && (
                                   <span className="text-xs text-gray-400">목표 {formatPersonalTarget(challenge)}</span>
                                 )}
@@ -453,7 +444,8 @@ export const MEPage = () => {
                               인증하기
                             </button>
                           </motion.div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
 
@@ -463,17 +455,12 @@ export const MEPage = () => {
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">인증 완료</p>
                         {verifiedTodayChallenges.map((challenge: any, index: number) => {
                           const progress = challenge.progress || [];
-                          const currentDay = getChallengeDay(challenge);
-                          const durationDays = getDurationDays(challenge);
-                          const participatedDays = getParticipatedDaysCount(challenge);
+                          const { currentDay: challengeDay, durationDays, participatedDays, completionRate } = getChallengeDisplayMeta(challenge);
                           const uid = challenge.userChallengeId;
                           const isExpanded = expandedCards.has(uid);
 
                           // 가장 최근 인증된 날 (접힌 상태에서 표시할 행)
-                          const lastVerifiedEntry = [...progress]
-                            .map((p: any, i: number) => ({ ...p, i }))
-                            .filter((p: any) => ['success', 'remedy', 'failed'].includes(p.status))
-                            .sort((a: any, b: any) => b.i - a.i)[0];
+                          const lastVerified = getLatestCompletedProgressEntry(progress);
 
                           return (
                             <motion.div
@@ -491,7 +478,7 @@ export const MEPage = () => {
                                 <span className="text-2xl flex-shrink-0">{challenge.challenge?.badgeIcon || '🎯'}</span>
                                 <div className="flex-1 min-w-0">
                                   <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
-                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · 경과 Day {currentDay} / {durationDays} · 참여 {participatedDays}일</p>
+                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · 경과 Day {challengeDay} / {durationDays} · 참여 {participatedDays}일 · 진행률 {completionRate}%</p>
                                 </div>
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                   <span className="text-xl font-bold text-gray-800">{challenge.score || 0}</span>
@@ -501,8 +488,8 @@ export const MEPage = () => {
                               </div>
 
                               {/* 접힌 상태: 최근 인증 날 행 1줄 */}
-                              {!isExpanded && lastVerifiedEntry && (() => {
-                                const p = lastVerifiedEntry;
+                              {!isExpanded && lastVerified && (() => {
+                                const p = lastVerified.entry;
                                 const verif = p.verificationId ? verificationMap.get(p.verificationId) : undefined;
                                 const timeStr = formatVerificationTime(p.timestamp);
                                 const note = verif?.todayNote || '';
@@ -511,7 +498,7 @@ export const MEPage = () => {
                                   <div className="flex items-center gap-2.5 pt-1">
                                     <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dotColor}`} />
                                     <p className="text-xs text-gray-500 truncate flex-1 min-w-0">
-                                      <span className="font-semibold text-gray-700">{p.i + 1}일차</span>
+                                      <span className="font-semibold text-gray-700">{lastVerified.day}일차</span>
                                       {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
                                       {note && <span className="text-gray-400"> · {note}</span>}
                                     </p>
@@ -524,8 +511,9 @@ export const MEPage = () => {
                                 <div className="pt-1">
                                   <p className="text-xs text-primary-500 text-right mb-2">탭하면 피드로 이동 →</p>
                                   {Array.from({ length: durationDays }, (_, i) => {
-                                    const p = progress[i];
-                                    const status = p?.status || (i < currentDay - 1 ? 'skipped' : 'pending');
+                                    const day = i + 1;
+                                    const p = getProgressEntryByDay(progress, day);
+                                    const status = resolveVerificationStatusForDay(progress, day, challengeDay);
                                     const isPending = status === 'pending';
                                     const verif = p?.verificationId ? verificationMap.get(p.verificationId) : undefined;
                                     const timeStr = formatVerificationTime(p?.timestamp);
@@ -533,7 +521,7 @@ export const MEPage = () => {
                                     const dotColor = (DAY_STATUS_COLORS[status] || 'bg-gray-200').split(' ')[0];
                                     const isLastItem = i === durationDays - 1;
                                     return (
-                                      <div key={i} className="flex items-start gap-3">
+                                      <div key={day} className="flex items-start gap-3">
                                         {/* 왼쪽: 점 + 세로선 */}
                                         <div className="flex flex-col items-center flex-shrink-0" style={{ width: 16 }}>
                                           <div className={`w-2.5 h-2.5 rounded-full mt-1 ${dotColor}`} />
@@ -544,10 +532,10 @@ export const MEPage = () => {
                                         {/* 오른쪽: 텍스트 */}
                                         <div className="flex-1 min-w-0 pb-2.5">
                                           {isPending ? (
-                                            <p className="text-xs text-gray-300 mt-0.5">{i + 1}일차</p>
+                                            <p className="text-xs text-gray-300 mt-0.5">{day}일차</p>
                                           ) : (
                                             <p className="text-xs text-gray-500 truncate mt-0.5">
-                                              <span className="font-semibold text-gray-700">{i + 1}일차</span>
+                                              <span className="font-semibold text-gray-700">{day}일차</span>
                                               {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
                                               {note && <span className="text-gray-400"> · {note}</span>}
                                             </p>
@@ -662,12 +650,19 @@ export const MEPage = () => {
                 {completedChallenges.length === 0 ? (
                   <EmptyState icon="🏆" title="완료한 챌린지가 없어요" description="7일 챌린지를 완주하면 여기에 표시돼요" />
                 ) : completedChallenges.map((challenge: any) => (
-                  <div key={challenge.userChallengeId || challenge.challengeId} className="bg-white rounded-2xl p-5 border border-emerald-200 space-y-3">
+                  <div
+                    key={challenge.userChallengeId || challenge.challengeId}
+                    className={`bg-white rounded-2xl p-5 border space-y-3 ${isFailedChallengeState(challenge) ? 'border-gray-300' : 'border-emerald-200'}`}
+                  >
                     <div className="flex items-start gap-3">
                       <span className="text-2xl">{challenge.challenge?.badgeIcon || challenge.badgeIcon || '🏆'}</span>
                       <div>
                         <p className="font-semibold text-gray-900">{challenge.challenge?.title || challenge.title}</p>
-                        <p className="text-xs text-emerald-700 mt-0.5">완주 완료 🎉</p>
+                        {isFailedChallengeState(challenge) ? (
+                          <p className="text-xs text-gray-600 mt-0.5">종료(미달성)</p>
+                        ) : (
+                          <p className="text-xs text-emerald-700 mt-0.5">완주 완료 🎉</p>
+                        )}
                       </div>
                     </div>
                     <button

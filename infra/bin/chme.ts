@@ -13,6 +13,7 @@ import { QuestStack } from '../stacks/quest-stack';
 import { BulletinStack } from '../stacks/bulletin-stack';
 import { ChallengeBoardStack } from '../stacks/challenge-board-stack';
 import { FrontendStack } from '../stacks/frontend-stack';
+import { BadgeStack } from '../stacks/badge-stack';
 
 import { devConfig } from '../config/dev';
 import { prodConfig } from '../config/prod';
@@ -76,6 +77,7 @@ new VerificationStack(app, `chme-${stage}-verification`, {
   uploadsBucket: coreStack.uploadsBucket,
   challengesTable: coreStack.challengesTable,
   userCheerTicketsTable: coreStack.userCheerTicketsTable,
+  badgesTable: coreStack.badgesTable,
   plazaPostsTable: coreStack.plazaPostsTable,
   plazaCommentsTable: coreStack.plazaCommentsTable,
   plazaReactionsTable: coreStack.plazaReactionsTable,
@@ -92,9 +94,18 @@ new CheerStack(app, `chme-${stage}-cheer`, {
   cheerDeadLettersTable: coreStack.cheerDeadLettersTable,
   userCheerTicketsTable: coreStack.userCheerTicketsTable,
   userChallengesTable: coreStack.userChallengesTable,
+  usersTable: coreStack.usersTable,
   challengesTable: coreStack.challengesTable,
   snsTopic: coreStack.snsTopic,
   eventBus: coreStack.eventBus,
+});
+
+new BadgeStack(app, `chme-${stage}-badge`, {
+  env,
+  stage,
+  apiGateway: apiStack.apiGateway,
+  authorizer: apiStack.cognitoAuthorizer,
+  badgesTable: coreStack.badgesTable,
 });
 
 new AdminStack(app, `chme-${stage}-admin`, {
