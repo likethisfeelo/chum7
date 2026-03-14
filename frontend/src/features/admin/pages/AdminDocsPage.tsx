@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { apiClient } from '@/lib/api-client';
 
 type DocSection = {
   title: string;
@@ -130,6 +131,11 @@ export const AdminDocsPage = () => {
   const [maxRetries, setMaxRetries] = useState(7);
   const [orchestratorArn, setOrchestratorArn] = useState('');
   const [executionName, setExecutionName] = useState('');
+  const [isPlazaRefreshing, setIsPlazaRefreshing] = useState(false);
+  const [plazaRefreshResult, setPlazaRefreshResult] = useState<{
+    converted?: number;
+    window?: { startIso?: string; endIso?: string };
+  } | null>(null);
 
   const generatedCommand = useMemo(
     () =>
@@ -168,6 +174,25 @@ export const AdminDocsPage = () => {
     }
   };
 
+  const handlePlazaRefreshNow = async () => {
+    if (isPlazaRefreshing) {
+      return;
+    }
+
+    setIsPlazaRefreshing(true);
+    try {
+      const response = await apiClient.post('/admin/plaza/convert/run-now');
+      const result = response.data?.data?.data || response.data?.data || null;
+      setPlazaRefreshResult(result);
+      toast.success('광장 변환 수동 실행을 완료했어요.');
+    } catch (error: any) {
+      const message = error?.response?.data?.message || '광장 변환 수동 실행에 실패했습니다.';
+      toast.error(message);
+    } finally {
+      setIsPlazaRefreshing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4">
@@ -186,6 +211,36 @@ export const AdminDocsPage = () => {
               <li key={item}>{item}</li>
             ))}
           </ul>
+        </section>
+
+        <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 space-y-3">
+          <h2 className="font-bold text-sky-900">Plaza 수동 새로고침 (관리자)</h2>
+          <p className="text-xs text-sky-800">
+            정시 배치(1시간) 대기 없이 지금 즉시 광장 변환을 실행합니다.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handlePlazaRefreshNow}
+              disabled={isPlazaRefreshing}
+              className="rounded-lg bg-sky-600 text-white text-sm px-4 py-2 hover:bg-sky-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isPlazaRefreshing ? '실행 중...' : '광장 데이터 지금 새로고침'}
+            </button>
+
+            {plazaRefreshResult && (
+              <span className="text-xs text-sky-900">
+                최근 결과: converted {plazaRefreshResult.converted ?? 0}
+              </span>
+            )}
+          </div>
+
+          {plazaRefreshResult?.window && (
+            <p className="text-xs text-sky-800">
+              window: {plazaRefreshResult.window.startIso || '-'} ~ {plazaRefreshResult.window.endIso || '-'}
+            </p>
+          )}
         </section>
 
         <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 space-y-3">
