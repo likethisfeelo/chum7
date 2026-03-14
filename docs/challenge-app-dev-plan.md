@@ -232,7 +232,7 @@
 |---|---|---|---|
 | progress 포맷 정규화 | 반영됨 | 구 데이터 object 포맷 잔존 | API 응답 adapter 관측 로그 추가 |
 | my-challenges 정합성 | 반영됨 | edge case에서 완료/실패 버킷 오표시 가능성 | 샘플 계정 회귀 시나리오 자동화 |
-| ME/Today/Profile 버킷 통일 | 진행 중 | Profile/ME/Today 공통 유틸 적용 확대 중 | 잔여 화면 분기 제거 및 라벨 통일 |
+| ME/Today/Profile 버킷 통일 | 반영됨 | 일부 레거시 데이터에서 표기 이슈 가능성 | 샘플 계정 회귀 시나리오 자동화로 재검증 |
 
 **P1 Exit 조건:**
 - 동일 userChallenge가 ME/Today/Profile에서 동일 bucket으로 노출
