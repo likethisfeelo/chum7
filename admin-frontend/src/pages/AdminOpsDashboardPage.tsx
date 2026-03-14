@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 
@@ -22,6 +22,16 @@ export const AdminOpsDashboardPage = () => {
     refetchInterval: 30000,
   });
   const unreadCount = Array.isArray(notifications) ? notifications.filter((n: any) => !n.isRead).length : 0;
+
+
+  const plazaRenewalMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post('/admin/plaza/convert/run-now');
+      return res.data;
+    },
+  });
+
+  const plazaRenewalResult = plazaRenewalMutation.data?.data?.data || plazaRenewalMutation.data?.data || null;
 
   if (isLoading) {
     return <div className="p-6 text-gray-500">운영 지표를 불러오는 중...</div>;
@@ -84,6 +94,14 @@ export const AdminOpsDashboardPage = () => {
           </button>
           <button
             type="button"
+            onClick={() => plazaRenewalMutation.mutate()}
+            disabled={plazaRenewalMutation.isPending}
+            className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-50"
+          >
+            {plazaRenewalMutation.isPending ? '광장 리뉴얼 실행 중...' : '광장 리뉴얼 실행'}
+          </button>
+          <button
+            type="button"
             onClick={() => refetch()}
             disabled={isFetching}
             className="px-4 py-2 rounded-lg bg-gray-900 text-white disabled:opacity-50"
@@ -105,6 +123,21 @@ export const AdminOpsDashboardPage = () => {
           </div>
         ))}
       </section>
+      <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
+        <h2 className="font-bold text-gray-900">광장 리뉴얼(즉시 변환)</h2>
+        <p className="text-sm text-gray-600">공개 인증을 광장 피드 포스트로 즉시 변환합니다. 필요 시 수동 실행하세요.</p>
+        {plazaRenewalMutation.isError && (
+          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            실행 실패: {String((plazaRenewalMutation.error as any)?.response?.data?.message || (plazaRenewalMutation.error as any)?.message || '알 수 없는 오류')}
+          </div>
+        )}
+        {plazaRenewalMutation.isSuccess && (
+          <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+            실행 완료 · 변환 건수: {Number(plazaRenewalResult?.converted || 0)}건
+          </div>
+        )}
+      </section>
+
 
       <section className="bg-white border border-gray-200 rounded-xl p-4">
         <h2 className="font-bold text-gray-900 mb-4">최근 7일 인증 추세</h2>

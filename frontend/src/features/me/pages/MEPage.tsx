@@ -272,7 +272,16 @@ export const MEPage = () => {
   const unverifiedChallenges = useMemo(
     () => activeChallenges
       .filter((c: any) => !isTodayVerified(c) && getChallengeDay(c) <= 7)
-      .sort((a: any, b: any) => getMinutesUntilTarget(a) - getMinutesUntilTarget(b)),
+      .sort((a: any, b: any) => {
+        const minuteDiff = getMinutesUntilTarget(a) - getMinutesUntilTarget(b);
+        if (minuteDiff !== 0) return minuteDiff;
+
+        // 동일 목표 시간대라면 더 많이 진행된 챌린지 Day를 우선 노출
+        const dayDiff = getChallengeDay(b) - getChallengeDay(a);
+        if (dayDiff !== 0) return dayDiff;
+
+        return String(a.userChallengeId || '').localeCompare(String(b.userChallengeId || ''));
+      }),
     [activeChallenges],
   );
 
