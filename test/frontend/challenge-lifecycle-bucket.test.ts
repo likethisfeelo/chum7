@@ -1,5 +1,6 @@
 import {
   countParticipatedDays,
+  resolveChallengeDurationDays,
   getChallengeProgressSummary,
   getChallengeStatusLabel,
   getLatestCompletedProgressEntry,
@@ -96,6 +97,13 @@ describe('challengeLifecycle resolveChallengeBucket', () => {
     const progress = [{ status: 'success' }, { status: 'failed' }, { status: 'pending' }];
     expect(getChallengeProgressSummary(progress, 7)).toEqual({ participatedDays: 2, completionRate: 29 });
     expect(getChallengeProgressSummary(progress, 0)).toEqual({ participatedDays: 2, completionRate: 100 });
+  });
+
+  test('resolveChallengeDurationDays prefers explicit duration then progress length', () => {
+    expect(resolveChallengeDurationDays({ durationDays: 10, progress: [{}, {}] })).toBe(10);
+    expect(resolveChallengeDurationDays({ challenge: { durationDays: 5 }, progress: [{}, {}, {}] })).toBe(5);
+    expect(resolveChallengeDurationDays({ progress: [{}, {}, {}] })).toBe(3);
+    expect(resolveChallengeDurationDays({})).toBe(7);
   });
 
 });

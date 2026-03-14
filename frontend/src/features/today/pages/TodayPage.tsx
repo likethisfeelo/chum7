@@ -7,7 +7,7 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import toast from 'react-hot-toast';
-import { getChallengeProgressSummary, isVerificationDayCompleted, resolveChallengeBucket, resolveChallengeDay } from '@/features/challenge/utils/challengeLifecycle';
+import { getChallengeProgressSummary, isVerificationDayCompleted, resolveChallengeBucket, resolveChallengeDay, resolveChallengeDurationDays } from '@/features/challenge/utils/challengeLifecycle';
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
 
@@ -111,7 +111,7 @@ export const TodayPage = () => {
               {activeChallenges.map((challenge: any) => {
                 const progress = challenge.progress || [];
                 const currentDay = resolveChallengeDay(challenge);
-                const durationDays = Number(challenge.durationDays || challenge.challenge?.durationDays || 7);
+                const durationDays = resolveChallengeDurationDays(challenge);
                 const isChallengeCompleted = Number(currentDay) > Math.max(1, durationDays);
                 const todayDone = isChallengeCompleted || isVerificationDayCompleted(progress, currentDay);
                 const { participatedDays, completionRate } = getChallengeProgressSummary(progress, durationDays);

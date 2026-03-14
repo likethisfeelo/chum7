@@ -1,8 +1,15 @@
 export type ChallengeBucket = 'active' | 'preparing' | 'completed' | 'other';
 
+export function resolveChallengeDurationDays(item: any): number {
+  const durationDays = Number(item?.durationDays || item?.challenge?.durationDays || 0);
+  if (Number.isFinite(durationDays) && durationDays > 0) return Math.floor(durationDays);
+  const progressLength = Array.isArray(item?.progress) ? item.progress.length : 0;
+  if (progressLength > 0) return progressLength;
+  return 7;
+}
+
 export function resolveChallengeDay(item: any): number {
-  const durationDays = Number(item?.durationDays || item?.challenge?.durationDays || 7);
-  const safeDurationDays = Number.isFinite(durationDays) && durationDays > 0 ? Math.floor(durationDays) : 7;
+  const safeDurationDays = resolveChallengeDurationDays(item);
   const rawCurrentDay = Number(item?.currentDay || 1);
   const maxDay = safeDurationDays + 1;
   if (!Number.isFinite(rawCurrentDay)) return 1;

@@ -14,6 +14,7 @@ import {
   getProgressEntryByDay,
   isVerificationDayCompleted,
   resolveChallengeBucket,
+  resolveChallengeDurationDays,
   resolveVerificationStatusForDay,
 } from '@/features/challenge/utils/challengeLifecycle';
 import toast from 'react-hot-toast';
@@ -76,16 +77,8 @@ function parseChallengeStartDate(challenge: any): Date | null {
   return getDateOnly(parsed);
 }
 
-function getDurationDays(challenge: any): number {
-  const raw = Number(challenge?.challenge?.durationDays);
-  if (Number.isFinite(raw) && raw > 0) return Math.floor(raw);
-  const progressLength = Array.isArray(challenge?.progress) ? challenge.progress.length : 0;
-  if (progressLength > 0) return progressLength;
-  return 7;
-}
-
 function getChallengeDay(challenge: any): number {
-  const durationDays = getDurationDays(challenge);
+  const durationDays = resolveChallengeDurationDays(challenge);
   const maxDay = durationDays + 1;
   const storedCurrentDay = Math.max(1, Math.min(maxDay, Number(challenge.currentDay || 1)));
 
@@ -110,13 +103,13 @@ function getChallengeDay(challenge: any): number {
 }
 
 function getChallengeProgressMeta(challenge: any): { participatedDays: number; completionRate: number } {
-  return getChallengeProgressSummary(challenge?.progress, getDurationDays(challenge));
+  return getChallengeProgressSummary(challenge?.progress, resolveChallengeDurationDays(challenge));
 }
 
 function hasBacklogBeforeToday(challenge: any): boolean {
   const progress = challenge.progress || [];
   const challengeDay = getChallengeDay(challenge);
-  const durationDays = getDurationDays(challenge);
+  const durationDays = resolveChallengeDurationDays(challenge);
   const todayDay = Math.max(1, Math.min(durationDays, challengeDay));
 
   for (let day = 1; day < todayDay; day += 1) {
@@ -297,7 +290,7 @@ export const MEPage = () => {
   // 미인증 챌린지: personalTarget 시간 기준으로 현재와 가장 가까운 순 정렬
   const unverifiedChallenges = useMemo(
     () => activeChallenges
-      .filter((c: any) => !isTodayVerified(c) && getChallengeDay(c) <= getDurationDays(c))
+      .filter((c: any) => !isTodayVerified(c) && getChallengeDay(c) <= resolveChallengeDurationDays(c))
       .sort((a: any, b: any) => {
         const minuteDiff = getMinutesUntilTarget(a) - getMinutesUntilTarget(b);
         if (minuteDiff !== 0) return minuteDiff;
@@ -313,7 +306,7 @@ export const MEPage = () => {
 
   // 오늘 인증 완료 챌린지
   const verifiedTodayChallenges = useMemo(
-    () => activeChallenges.filter((c: any) => isTodayVerified(c) || getChallengeDay(c) > getDurationDays(c)),
+    () => activeChallenges.filter((c: any) => isTodayVerified(c) || getChallengeDay(c) > resolveChallengeDurationDays(c)),
     [activeChallenges],
   );
 
@@ -426,7 +419,7 @@ export const MEPage = () => {
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">오늘 인증 예정</p>
                         {otherUnverified.map((challenge: any, index: number) => {
                           const challengeDay = getChallengeDay(challenge);
-                          const durationDays = getDurationDays(challenge);
+                          const durationDays = resolveChallengeDurationDays(challenge);
                           const { participatedDays, completionRate } = getChallengeProgressMeta(challenge);
                           return (
                           <motion.div
@@ -467,7 +460,7 @@ export const MEPage = () => {
                         {verifiedTodayChallenges.map((challenge: any, index: number) => {
                           const progress = challenge.progress || [];
                           const currentDay = getChallengeDay(challenge);
-                          const durationDays = getDurationDays(challenge);
+                          const durationDays = resolveChallengeDurationDays(challenge);
                           const { participatedDays, completionRate } = getChallengeProgressMeta(challenge);
                           const uid = challenge.userChallengeId;
                           const isExpanded = expandedCards.has(uid);
