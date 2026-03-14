@@ -127,8 +127,11 @@ export const AdminOpsDashboardPage = () => {
         <h2 className="font-bold text-gray-900">광장 리뉴얼(즉시 변환)</h2>
         <p className="text-sm text-gray-600">공개 인증을 광장 피드 포스트로 즉시 변환합니다. 필요 시 수동 실행하세요.</p>
         {plazaRenewalMutation.isError && (
-          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-            실행 실패: {String((plazaRenewalMutation.error as any)?.response?.data?.message || (plazaRenewalMutation.error as any)?.message || '알 수 없는 오류')}
+          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-1">
+            <p>실행 실패: {String((plazaRenewalMutation.error as any)?.response?.data?.message || (plazaRenewalMutation.error as any)?.message || '알 수 없는 오류')}</p>
+            {(plazaRenewalMutation.error as any)?.response?.data?.detail && (
+              <p className="text-xs text-red-600 font-mono break-all">{String((plazaRenewalMutation.error as any).response.data.detail)}</p>
+            )}
           </div>
         )}
         {plazaRenewalMutation.isSuccess && (
