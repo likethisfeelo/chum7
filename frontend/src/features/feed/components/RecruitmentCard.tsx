@@ -73,7 +73,7 @@ export function RecruitmentCard({
   post,
   likeCount,
   isReacting,
-  commentCount,
+  commentCount: _commentCount,
   commentHook,
   recommendations,
   onReact,
@@ -158,7 +158,7 @@ export function RecruitmentCard({
       <RecommendationInline
         postId={post.plazaPostId}
         recommendations={recommendations}
-        onDismiss={(pid, item) => onDismissRecommendation(item)}
+        onDismiss={(_pid, item) => onDismissRecommendation(item)}
       />
     </article>
   );
