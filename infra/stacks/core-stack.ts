@@ -132,8 +132,13 @@ export class CoreStack extends Stack {
       sortKey: { name: 'challengeStartAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
-    // NOTE: lifecycle-index는 Stage 2에서 추가 예정
-    // (category-index 삭제 후 별도 deploy로 추가)
+    // GSI: lifecycle 상태별 챌린지 조회 (lifecycle-manager에서 사용)
+    this.challengesTable.addGlobalSecondaryIndex({
+      indexName: 'lifecycle-index',
+      partitionKey: { name: 'lifecycle', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
 
     this.userChallengesTable = new Table(this, 'UserChallengesTable', {
       tableName: `chme-${stage}-user-challenges`,
