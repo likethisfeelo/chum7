@@ -12,6 +12,8 @@ describe('week2 p0 readiness guards', () => {
     expect(stack).toContain("path: '/cheer/use-ticket'");
     expect(stack).toContain('GetTargetsFn');
     expect(stack).toContain('UseTicketFn');
+    expect(stack).toContain('USERS_TABLE');
+    expect(stack).toContain('usersTable.grantReadData(getTargetsFn)');
   });
 
   test('badge stack and core table wiring exist', () => {

@@ -94,6 +94,7 @@ new CheerStack(app, `chme-${stage}-cheer`, {
   cheerDeadLettersTable: coreStack.cheerDeadLettersTable,
   userCheerTicketsTable: coreStack.userCheerTicketsTable,
   userChallengesTable: coreStack.userChallengesTable,
+  usersTable: coreStack.usersTable,
   challengesTable: coreStack.challengesTable,
   snsTopic: coreStack.snsTopic,
   eventBus: coreStack.eventBus,
