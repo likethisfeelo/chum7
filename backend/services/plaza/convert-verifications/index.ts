@@ -25,7 +25,7 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
   let scannedCount = 0;
   let convertedCount = 0;
   let skipTypeCount = 0;
-  let skipNoTodayNoteCount = 0;
+  let skipNoTodayNoteCount = 0; // legacy metric name: includes no-convertible-content skips
   let skipAlreadyConvertedCount = 0;
   let conditionalDuplicateCount = 0;
   let pageCount = 0;
@@ -52,7 +52,14 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
           skipTypeCount += 1;
           continue;
         }
-        if (!item.todayNote) {
+        const normalizedTodayNote = typeof item.todayNote === 'string' ? item.todayNote.trim() : '';
+        const normalizedTomorrowPromise = typeof item.tomorrowPromise === 'string' ? item.tomorrowPromise.trim() : '';
+        const fallbackContent =
+          normalizedTodayNote ||
+          normalizedTomorrowPromise ||
+          (item.day ? `Day ${item.day} 인증을 완료했어요.` : '인증을 완료했어요.');
+
+        if (!fallbackContent) {
           skipNoTodayNoteCount += 1;
           continue;
         }
@@ -71,7 +78,7 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
             challengeTitle: item.challengeTitle || '챌린지 기록',
             challengeCategory: item.challengeCategory || null,
             currentDay: item.day || null,
-            content: item.todayNote,
+            content: fallbackContent,
             leaderId: null,
             leaderName: null,
             leaderMessage: null,
