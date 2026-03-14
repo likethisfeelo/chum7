@@ -57,15 +57,15 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
           skipTypeCount += 1;
           continue;
         }
+        if (item.isConvertedToPlaza === true) {
+          skipAlreadyConvertedCount += 1;
+          continue;
+        }
         const fallback = resolvePlazaFallbackContent(item);
         const fallbackContent = fallback.content;
         if (fallback.source === 'tomorrowPromise') fallbackFromTomorrowPromiseCount += 1;
         if (fallback.source === 'generatedDay') fallbackGeneratedDayCount += 1;
         if (fallback.source === 'generatedDefault') fallbackGeneratedDefaultCount += 1;
-        if (item.isConvertedToPlaza === true) {
-          skipAlreadyConvertedCount += 1;
-          continue;
-        }
 
         const plazaPostId = `courtyard-${item.verificationId}`;
 
@@ -77,6 +77,7 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
             challengeTitle: item.challengeTitle || '챌린지 기록',
             challengeCategory: item.challengeCategory || null,
             currentDay: item.day || null,
+            imageUrl: item.imageUrl || item.videoUrl || null,
             content: fallbackContent,
             leaderId: null,
             leaderName: null,
