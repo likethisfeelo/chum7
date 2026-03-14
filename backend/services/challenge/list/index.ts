@@ -24,6 +24,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const category = params.category; // 'health', 'habit', 'self-development', etc.
     const sortBy = params.sortBy || 'popular'; // 'popular', 'latest', 'completion'
     const limit = parseInt(params.limit || '20');
+    const lifecycleFilter = params.lifecycle || null; // 'recruiting', 'active', 'preparing', etc.
 
     let items;
 
@@ -51,6 +52,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // 조회 불가/비활성 챌린지 숨김 (admin 콘솔 포함 공통 정책)
     items = items.filter((item: any) => item?.isVisible !== false && item?.isActive !== false);
 
+    // lifecycle 필터
+    if (lifecycleFilter) {
+      items = items.filter((item: any) => item?.lifecycle === lifecycleFilter);
+    }
+
     // 정렬
     if (sortBy === 'popular') {
       items.sort((a, b) => (b.stats?.totalParticipants || 0) - (a.stats?.totalParticipants || 0));
@@ -67,7 +73,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         total: items.length,
         filters: {
           category: category || 'all',
-          sortBy
+          sortBy,
+          lifecycle: lifecycleFilter || 'all'
         }
       }
     });

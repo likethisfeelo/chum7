@@ -69,7 +69,8 @@ export const AdminQuestCreatePage = () => {
     const loadChallenges = async () => {
       setChallengeLoading(true);
       try {
-        const res = await apiClient.get('/challenges?sortBy=latest&limit=100');
+        // 내 챌린지(생성자 본인) 전용 admin 엔드포인트 사용 — lifecycle 무관 전체 조회
+        const res = await apiClient.get('/admin/challenges/mine');
         const challenges = res.data?.data?.challenges ?? [];
         if (!mounted) return;
         setChallengeOptions(

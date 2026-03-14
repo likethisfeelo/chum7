@@ -121,7 +121,7 @@ export const ChallengeFeedPage = () => {
       enabled: Boolean(challengeId),
       queryFn: async () => {
         const response = await apiClient.get(
-          "/verifications?isPublic=true&limit=100",
+          `/verifications?isPublic=true&limit=50&challengeId=${challengeId}`,
         );
         return response.data?.data?.verifications || [];
       },
@@ -133,7 +133,7 @@ export const ChallengeFeedPage = () => {
       enabled: Boolean(challengeId),
       queryFn: async () => {
         const response = await apiClient.get(
-          "/verifications?mine=true&limit=100",
+          `/verifications?mine=true&limit=50&challengeId=${challengeId}`,
         );
         return response.data?.data?.verifications || [];
       },
@@ -178,20 +178,15 @@ export const ChallengeFeedPage = () => {
     };
   }, [boardData]);
 
+  // API에서 이미 challengeId 필터링됨 - 추가 클라이언트 필터 불필요
   const challengeVerifications = useMemo(
-    () =>
-      (verificationData || []).filter(
-        (v: any) => v.challengeId === challengeId,
-      ),
-    [verificationData, challengeId],
+    () => verificationData || [],
+    [verificationData],
   );
 
   const myChallengeVerifications = useMemo(
-    () =>
-      (myVerificationData || []).filter(
-        (v: any) => v.challengeId === challengeId,
-      ),
-    [myVerificationData, challengeId],
+    () => myVerificationData || [],
+    [myVerificationData],
   );
 
   const todayCompletedCount = useMemo(
@@ -297,13 +292,22 @@ export const ChallengeFeedPage = () => {
             <p className="text-sm text-gray-700 line-clamp-3">
               {boardSummary.summary}
             </p>
-            <button
-              type="button"
-              onClick={() => navigate(`/challenge-board/${challengeId}`)}
-              className="mt-3 text-xs font-semibold text-primary-700"
-            >
-              보드 전체 보기 →
-            </button>
+            <div className="mt-3 flex items-center gap-4">
+              <button
+                type="button"
+                onClick={() => navigate(`/challenge-board/${challengeId}`)}
+                className="text-xs font-semibold text-primary-700"
+              >
+                보드 전체 보기 →
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(`/quests?challengeId=${challengeId}`)}
+                className="text-xs font-semibold text-amber-700"
+              >
+                퀘스트 보드 📋
+              </button>
+            </div>
           </section>
 
           {(!iDidTodayVerification || hasInvalidMyVideo) && userChallenge && (

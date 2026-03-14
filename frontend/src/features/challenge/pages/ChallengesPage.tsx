@@ -27,9 +27,17 @@ const slideVariants = {
   exit: { opacity: 0, scale: 0.97 },
 };
 
+type LifecycleTab = 'recruiting' | 'active';
+
+const LIFECYCLE_TABS: { value: LifecycleTab; label: string }[] = [
+  { value: 'recruiting', label: '모집중' },
+  { value: 'active', label: '진행중' },
+];
+
 export const ChallengesPage = () => {
   const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [lifecycleTab, setLifecycleTab] = useState<LifecycleTab>('recruiting');
 
   const currentCategory = CHALLENGE_CATEGORIES[currentIndex];
 
@@ -43,16 +51,16 @@ export const ChallengesPage = () => {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['challenges', currentCategory.slug],
+    queryKey: ['challenges', currentCategory.slug, lifecycleTab],
     queryFn: async () => {
-      const response = await apiClient.get(`/challenges?category=${currentCategory.slug}`);
+      const response = await apiClient.get(
+        `/challenges?category=${currentCategory.slug}&lifecycle=${lifecycleTab}`,
+      );
       return response.data.data;
     },
   });
 
-  const challenges = (data?.challenges || []).filter(
-    (c: any) => String(c.lifecycle) === 'recruiting',
-  );
+  const challenges = data?.challenges || [];
 
   const activeBanner = bannersData?.find((b) => b.slug === currentCategory.slug);
   const fallback = DEFAULT_BANNERS[currentCategory.slug];
@@ -78,6 +86,21 @@ export const ChallengesPage = () => {
       <div className="sticky top-0 bg-white border-b border-gray-200 z-10 px-6 py-4">
         <h1 className="text-2xl font-bold text-gray-900">챌린지 🎯</h1>
         <p className="text-sm text-gray-500 mt-0.5">7일간의 짧고 강렬한 도전</p>
+        <div className="flex gap-2 mt-3">
+          {LIFECYCLE_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setLifecycleTab(tab.value)}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                lifecycleTab === tab.value
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Swipeable Category Banner + Challenge List */}
@@ -186,7 +209,9 @@ export const ChallengesPage = () => {
 
           {/* Section label */}
           <div className="px-4 mt-4 mb-2">
-            <span className="text-sm text-gray-400">모집 중인 챌린지</span>
+            <span className="text-sm text-gray-400">
+              {lifecycleTab === 'recruiting' ? '모집 중인 챌린지' : '진행 중인 챌린지'}
+            </span>
           </div>
 
           {/* Challenge List */}
