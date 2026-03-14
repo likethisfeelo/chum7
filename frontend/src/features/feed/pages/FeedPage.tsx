@@ -39,7 +39,7 @@ const FILTER_TABS: Array<{ key: PlazaFilter; label: string }> = [
   { key: 'all', label: '전체' },
   { key: 'recruiting', label: '모집 중' },
   { key: 'ongoing', label: '진행 중' },
-  { key: 'records', label: '완주 기록' },
+  { key: 'records', label: '인증 기록' },
 ];
 
 function mapFilterToApi(filter: PlazaFilter): 'all' | 'recruiting' | 'in_progress' | 'completed' {

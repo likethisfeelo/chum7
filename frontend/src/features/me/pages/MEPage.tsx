@@ -49,33 +49,8 @@ function getMinutesUntilTarget(challenge: any): number {
   return (targetMinutes - nowMinutes + 24 * 60) % (24 * 60);
 }
 
-function getDateOnly(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function parseChallengeStartDate(challenge: any): Date | null {
-  const start = challenge?.startDate || challenge?.challenge?.startDate || challenge?.challenge?.startAt;
-  if (!start || typeof start !== 'string') return null;
-
-  const dateOnlyMatch = start.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (dateOnlyMatch) {
-    const [, y, m, d] = dateOnlyMatch;
-    return new Date(Number(y), Number(m) - 1, Number(d));
-  }
-
-  const parsed = new Date(start);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return getDateOnly(parsed);
-}
-
 function getChallengeDay(challenge: any): number {
-  const startDate = parseChallengeStartDate(challenge);
-  if (!startDate) return Math.max(1, Number(challenge.currentDay || 1));
-
-  const today = getDateOnly(new Date());
-  const diffMs = today.getTime() - startDate.getTime();
-  const elapsed = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  return Math.max(1, elapsed + 1);
+  return Math.max(1, Number(challenge.currentDay || 1));
 }
 
 function isCompletedStatus(status?: string): boolean {
