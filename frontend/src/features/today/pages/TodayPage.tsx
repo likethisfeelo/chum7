@@ -7,7 +7,7 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import toast from 'react-hot-toast';
-import { resolveChallengeBucket } from '@/features/challenge/utils/challengeLifecycle';
+import { isVerificationDayCompleted, resolveChallengeBucket, resolveChallengeDay } from '@/features/challenge/utils/challengeLifecycle';
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
 
@@ -110,11 +110,10 @@ export const TodayPage = () => {
             <div className="space-y-2">
               {activeChallenges.map((challenge: any) => {
                 const progress = challenge.progress || [];
-                const currentDay = challenge.currentDay || 1;
+                const currentDay = resolveChallengeDay(challenge);
                 const durationDays = Number(challenge.durationDays || challenge.challenge?.durationDays || 7);
-                const todayProgress = progress.find((p: any) => Number(p?.day) === Number(currentDay));
                 const isChallengeCompleted = Number(currentDay) > Math.max(1, durationDays);
-                const todayDone = isChallengeCompleted || todayProgress?.status === 'success';
+                const todayDone = isChallengeCompleted || isVerificationDayCompleted(progress, currentDay);
                 return (
                   <div key={challenge.userChallengeId} className="flex items-center justify-between gap-3 py-1">
                     <div className="flex items-center gap-2">
