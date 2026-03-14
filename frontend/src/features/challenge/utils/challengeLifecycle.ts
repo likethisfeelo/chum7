@@ -9,6 +9,15 @@ export function getDateOnly(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+
+export function resolveChallengeId(challenge: any): string {
+  return String(challenge?.challengeId || challenge?.challenge?.challengeId || '');
+}
+
+export function resolveUserChallengeId(challenge: any): string {
+  return String(challenge?.userChallengeId || resolveChallengeId(challenge));
+}
+
 export function parseChallengeStartDateFromUserChallenge(challenge: any): Date | null {
   const start = challenge?.startDate || challenge?.challenge?.startDate || challenge?.challenge?.challengeStartAt;
   if (!start || typeof start !== 'string') return null;

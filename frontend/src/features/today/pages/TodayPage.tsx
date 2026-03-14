@@ -7,13 +7,15 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import toast from 'react-hot-toast';
-import { isVerificationDayCompleted, resolveChallengeBucket, resolveChallengeDay, resolveChallengeDurationDays } from '@/features/challenge/utils/challengeLifecycle';
+import {
+  isVerificationDayCompleted,
+  resolveChallengeBucket,
+  resolveChallengeDay,
+  resolveChallengeDurationDays,
+  resolveUserChallengeId,
+} from '@/features/challenge/utils/challengeLifecycle';
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
-
-function getChallengeId(challenge: any): string {
-  return String(challenge?.challengeId || challenge?.challenge?.challengeId || challenge?.userChallengeId || '');
-}
 
 function getTodayRowStatusMeta(isChallengeEnded: boolean, todayDone: boolean): { label: string; className: string } {
   if (isChallengeEnded) {
@@ -140,7 +142,7 @@ export const TodayPage = () => {
                 const isChallengeEnded = currentDay > durationDays;
                 const todayDone = isChallengeEnded || isVerificationDayCompleted(progress[currentDay - 1]?.status);
                 const statusMeta = getTodayRowStatusMeta(isChallengeEnded, todayDone);
-                const challengeId = getChallengeId(challenge);
+                const challengeId = resolveUserChallengeId(challenge);
                 return (
                   <div key={challengeId || challenge.userChallengeId} className="flex items-center justify-between gap-3 py-1">
                     <div className="flex items-center gap-2">

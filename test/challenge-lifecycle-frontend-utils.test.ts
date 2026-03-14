@@ -4,6 +4,8 @@ import {
   resolveChallengeBucket,
   resolveChallengeDay,
   resolveChallengeDurationDays,
+  resolveChallengeId,
+  resolveUserChallengeId,
 } from '../frontend/src/features/challenge/utils/challengeLifecycle';
 
 describe('frontend challengeLifecycle utils', () => {
@@ -90,6 +92,18 @@ describe('frontend challengeLifecycle utils', () => {
 
     expect(isVerificationDayCompleted('SUCCESS')).toBe(true);
     expect(countParticipatedDays(challenge)).toBe(3);
+  });
+
+
+
+  test('resolveChallengeId prefers top-level then nested challenge id', () => {
+    expect(resolveChallengeId({ challengeId: 'top-level-id', challenge: { challengeId: 'nested-id' } })).toBe('top-level-id');
+    expect(resolveChallengeId({ challenge: { challengeId: 'nested-id' } })).toBe('nested-id');
+  });
+
+  test('resolveUserChallengeId falls back to challenge id when userChallengeId missing', () => {
+    expect(resolveUserChallengeId({ userChallengeId: 'user-challenge-id', challengeId: 'challenge-id' })).toBe('user-challenge-id');
+    expect(resolveUserChallengeId({ challengeId: 'challenge-id' })).toBe('challenge-id');
   });
 
   test('countParticipatedDays and completion status include success/remedy/failed', () => {

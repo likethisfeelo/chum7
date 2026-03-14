@@ -5,13 +5,12 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { FiSettings, FiLogOut, FiChevronRight } from 'react-icons/fi';
 import toast from 'react-hot-toast';
-import { resolveChallengeBucket } from '@/features/challenge/utils/challengeLifecycle';
+import { resolveChallengeBucket, resolveChallengeId, resolveUserChallengeId } from '@/features/challenge/utils/challengeLifecycle';
 
 
 type ChallengeFilter = 'active' | 'preparing' | 'completed';
 
 
-const getChallengeId = (item: any): string => String(item?.challengeId || item?.challenge?.challengeId || '');
 
 const isFailedChallenge = (item: any): boolean => {
   const status = String(item?.status || '').toLowerCase();
@@ -167,18 +166,18 @@ export const ProfilePage = () => {
             <div className="space-y-2">
               {filteredChallenges.map((item: any) => (
                 <button
-                  key={item.userChallengeId || getChallengeId(item)}
+                  key={resolveUserChallengeId(item)}
                   type="button"
                   onClick={() => {
                     const bucket = resolveChallengeBucket(item);
                     if (bucket === 'active') {
-                      const challengeId = getChallengeId(item);
+                      const challengeId = resolveChallengeId(item);
                       if (!challengeId) return;
                       navigate(`/challenge-feed/${challengeId}`);
                       return;
                     }
 
-                    const challengeId = getChallengeId(item);
+                    const challengeId = resolveChallengeId(item);
                     if (!challengeId) return;
                     navigate(`/challenges/${challengeId}`);
                   }}
