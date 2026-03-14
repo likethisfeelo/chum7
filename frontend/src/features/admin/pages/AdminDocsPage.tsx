@@ -12,6 +12,8 @@ type DocSection = {
 
 type StageType = 'dev' | 'prod';
 
+type ChallengeLifecycleType = 'recruiting' | 'active' | 'completed' | 'archived';
+
 const SPRINT_LOCKS = [
   '1) Today UX 운영형 보강 (period UX + sender 관점 노출 강화)',
   '2) Materializer 운영자동화(실패 세그먼트 재실행 + 알림 연동)',
@@ -136,6 +138,16 @@ export const AdminDocsPage = () => {
     converted?: number;
     window?: { startIso?: string; endIso?: string };
   } | null>(null);
+  const [adminChallengeId, setAdminChallengeId] = useState('');
+  const [adminLifecycle, setAdminLifecycle] = useState<ChallengeLifecycleType>('active');
+  const [adminChallengeResult, setAdminChallengeResult] = useState<any | null>(null);
+  const [isAdminActionLoading, setIsAdminActionLoading] = useState(false);
+  const [opsChecklist, setOpsChecklist] = useState({
+    lifecycleSummary: false,
+    badgeWriteAlarm: false,
+    cheerTicketTtl: false,
+    badgeFallbackUi: false,
+  });
 
   const generatedCommand = useMemo(
     () =>
@@ -171,6 +183,42 @@ export const AdminDocsPage = () => {
       toast.success('백필 명령어를 복사했어요.');
     } catch {
       toast.error('명령어 복사에 실패했습니다.');
+    }
+  };
+
+
+  const runAdminChallengeAction = async (
+    action: 'toggle' | 'confirmStart' | 'lifecycle' | 'listPersonalQuest' | 'statsOverview',
+  ) => {
+    const challengeId = adminChallengeId.trim();
+    if (action !== 'statsOverview' && !challengeId) {
+      toast.error('challengeId를 입력해주세요.');
+      return;
+    }
+
+    setIsAdminActionLoading(true);
+    try {
+      let response;
+      if (action === 'toggle') {
+        response = await apiClient.patch(`/admin/challenges/${challengeId}/toggle`);
+      } else if (action === 'confirmStart') {
+        response = await apiClient.post(`/admin/challenges/${challengeId}/confirm-start`);
+      } else if (action === 'lifecycle') {
+        response = await apiClient.put(`/admin/challenges/${challengeId}/lifecycle`, { lifecycle: adminLifecycle });
+      } else if (action === 'listPersonalQuest') {
+        response = await apiClient.get(`/admin/challenges/${challengeId}/personal-quest-proposals`);
+      } else {
+        response = await apiClient.get('/admin/stats/overview');
+      }
+
+      const payload = response?.data?.data ?? response?.data ?? null;
+      setAdminChallengeResult({ action, payload });
+      toast.success('관리자 작업 요청을 완료했어요.');
+    } catch (error: any) {
+      const message = error?.response?.data?.message || '관리자 작업 요청에 실패했습니다.';
+      toast.error(message);
+    } finally {
+      setIsAdminActionLoading(false);
     }
   };
 
@@ -362,6 +410,63 @@ export const AdminDocsPage = () => {
             </button>
           </div>
         </section>
+
+        <section className="rounded-2xl border border-violet-200 bg-violet-50 p-4 space-y-3">
+          <h2 className="font-bold text-violet-900">P2 관리자 라우팅 빠른 점검 패널</h2>
+          <p className="text-xs text-violet-800">결제/환불 제외 범위에서 남은 라우팅과 운영 검증을 빠르게 확인합니다.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label className="space-y-1 md:col-span-2">
+              <span className="text-xs text-gray-700">challengeId</span>
+              <input
+                value={adminChallengeId}
+                onChange={(e) => setAdminChallengeId(e.target.value)}
+                placeholder="ch_..."
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-gray-700">lifecycle</span>
+              <select
+                value={adminLifecycle}
+                onChange={(e) => setAdminLifecycle(e.target.value as ChallengeLifecycleType)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="recruiting">recruiting</option>
+                <option value="active">active</option>
+                <option value="completed">completed</option>
+                <option value="archived">archived</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => void runAdminChallengeAction('toggle')} disabled={isAdminActionLoading} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-violet-700 disabled:opacity-60">챌린지 활성 토글</button>
+            <button type="button" onClick={() => void runAdminChallengeAction('confirmStart')} disabled={isAdminActionLoading} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-violet-700 disabled:opacity-60">시작 확정</button>
+            <button type="button" onClick={() => void runAdminChallengeAction('lifecycle')} disabled={isAdminActionLoading} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-violet-700 disabled:opacity-60">라이프사이클 전환</button>
+            <button type="button" onClick={() => void runAdminChallengeAction('listPersonalQuest')} disabled={isAdminActionLoading} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-violet-700 disabled:opacity-60">개인 퀘스트 제안 조회</button>
+            <button type="button" onClick={() => void runAdminChallengeAction('statsOverview')} disabled={isAdminActionLoading} className="rounded-lg bg-violet-600 px-3 py-2 text-xs text-white disabled:opacity-60">운영 통계 조회</button>
+          </div>
+
+          {adminChallengeResult && (
+            <pre className="overflow-x-auto rounded-xl bg-gray-900 text-gray-100 text-xs p-3">{JSON.stringify(adminChallengeResult, null, 2)}</pre>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <h2 className="font-bold text-amber-900">운영 체크리스트 & CloudWatch 점검</h2>
+          <p className="text-xs text-amber-800">릴리즈 전 확인 항목을 Admin에서 체크하고 로그/알람 링크를 따라 점검하세요.</p>
+          <div className="space-y-1 text-sm text-amber-900">
+            <label className="flex items-center gap-2"><input type="checkbox" checked={opsChecklist.lifecycleSummary} onChange={(e) => setOpsChecklist((prev) => ({ ...prev, lifecycleSummary: e.target.checked }))} /> lifecycle transition summary 로그 확인</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={opsChecklist.badgeWriteAlarm} onChange={(e) => setOpsChecklist((prev) => ({ ...prev, badgeWriteAlarm: e.target.checked }))} /> badgesTable 쓰기 실패 알람 확인</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={opsChecklist.cheerTicketTtl} onChange={(e) => setOpsChecklist((prev) => ({ ...prev, cheerTicketTtl: e.target.checked }))} /> cheer 티켓 TTL/재처리 점검</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={opsChecklist.badgeFallbackUi} onChange={(e) => setOpsChecklist((prev) => ({ ...prev, badgeFallbackUi: e.target.checked }))} /> /users/me/badges fallback UI 확인</label>
+          </div>
+          <div className="text-xs text-amber-800">
+            참고 문서: docs/challenge-app-dev-plan.md §8.5, docs/cheer-stats-materializer-runbook.md
+          </div>
+        </section>
+
 
         {DOC_SECTIONS.map((section) => (
           <section key={section.title} className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">

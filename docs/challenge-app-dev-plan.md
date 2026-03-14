@@ -253,6 +253,7 @@
 4. **Sprint D5**: 통합 회귀 + 릴리즈 체크리스트 업데이트
 
 ### 8.5 운영 체크리스트(릴리즈 전)
+- Admin Docs(/admin/docs) 운영 체크 패널로 점검 수행
 - CloudWatch에서 lifecycle `transition summary`/오류 로그 확인
 - badgesTable 쓰기 실패(조건식 제외) 알림 룰 확인
 - cheer 티켓 만료(TTL) 및 발송 실패 재처리 플로우 점검
