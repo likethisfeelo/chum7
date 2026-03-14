@@ -1,4 +1,4 @@
-import { calculateEffectiveCurrentDay, calculateSyncedCurrentDay, clampDay, resolveDurationDays } from '../backend/shared/lib/challenge-day-sync';
+import { calculateEffectiveCurrentDay, calculateSyncedCurrentDay, clampDay, isChallengePeriodEnded, resolveDurationDays } from '../backend/shared/lib/challenge-day-sync';
 
 describe('challenge lifecycle currentDay sync helpers', () => {
   test('clampDay bounds to 1..duration+1', () => {
@@ -136,6 +136,14 @@ describe('challenge lifecycle currentDay sync helpers', () => {
     );
 
     expect(day).toBe(2);
+  });
+
+
+  test('isChallengePeriodEnded reflects day and terminal status', () => {
+    expect(isChallengePeriodEnded(8, 7, 'active')).toBe(true);
+    expect(isChallengePeriodEnded(7, 7, 'completed')).toBe(true);
+    expect(isChallengePeriodEnded(7, 7, 'failed')).toBe(true);
+    expect(isChallengePeriodEnded(7, 7, 'active')).toBe(false);
   });
 
   test('calculateSyncedCurrentDay clamps beyond challenge duration', () => {

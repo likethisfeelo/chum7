@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
-import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
+import { calculateEffectiveCurrentDay, isChallengePeriodEnded, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -76,7 +76,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       durationDays,
     );
 
-    if (effectiveCurrentDay > durationDays || userChallenge.status === 'completed' || userChallenge.status === 'failed') {
+    if (isChallengePeriodEnded(effectiveCurrentDay, durationDays, userChallenge.status)) {
       return response(400, { error: 'CHALLENGE_PERIOD_ENDED', message: '챌린지 기간 내에만 공개 전환할 수 있습니다' });
     }
 

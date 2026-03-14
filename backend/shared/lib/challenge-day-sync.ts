@@ -102,3 +102,12 @@ export function calculateEffectiveCurrentDay(
 
   return Math.max(storedCurrentDay, syncedCurrentDay);
 }
+
+
+export function isChallengePeriodEnded(
+  effectiveCurrentDay: number,
+  durationDays: number,
+  status: unknown,
+): boolean {
+  return effectiveCurrentDay > durationDays || status === 'completed' || status === 'failed';
+}
