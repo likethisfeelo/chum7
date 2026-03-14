@@ -8,6 +8,13 @@ import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
 import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
+import {
+  countParticipatedDays,
+  isVerificationDayCompleted,
+  resolveChallengeBucket,
+  resolveChallengeDay,
+  resolveChallengeDurationDays,
+} from '@/features/challenge/utils/challengeLifecycle';
 import toast from 'react-hot-toast';
 
 type METab = 'active' | 'pending' | 'completed';
@@ -49,18 +56,15 @@ function getMinutesUntilTarget(challenge: any): number {
   return (targetMinutes - nowMinutes + 24 * 60) % (24 * 60);
 }
 
-function getChallengeDay(challenge: any): number {
-  return Math.max(1, Number(challenge.currentDay || 1));
-}
 
 function isCompletedStatus(status?: string): boolean {
-  return status === 'success' || status === 'remedy' || status === 'failed';
+  return isVerificationDayCompleted(status);
 }
 
 function hasBacklogBeforeToday(challenge: any): boolean {
   const progress = challenge.progress || [];
-  const challengeDay = getChallengeDay(challenge);
-  const todayIndex = Math.max(0, Math.min(6, challengeDay - 1));
+  const challengeDay = resolveChallengeDay(challenge);
+  const todayIndex = Math.max(0, Math.min(resolveChallengeDurationDays(challenge) - 1, challengeDay - 1));
 
   for (let i = 0; i < todayIndex; i += 1) {
     const status = progress[i]?.status;
@@ -94,7 +98,7 @@ function formatVerificationTime(iso: string | undefined | null): string {
 
 function isTodayVerified(challenge: any): boolean {
   const progress = challenge.progress || [];
-  const currentDay = getChallengeDay(challenge);
+  const currentDay = resolveChallengeDay(challenge);
   const status = progress[currentDay - 1]?.status;
   return status === 'success' || status === 'remedy' || status === 'failed';
 }
@@ -128,6 +132,14 @@ export const MEPage = () => {
     queryKey: ['my-challenges-completed'],
     queryFn: async () => {
       const response = await apiClient.get('/challenges/my?status=completed');
+      return response.data.data;
+    },
+  });
+
+  const { data: failedChallengesData } = useQuery({
+    queryKey: ['my-challenges-failed'],
+    queryFn: async () => {
+      const response = await apiClient.get('/challenges/my?status=failed');
       return response.data.data;
     },
   });
@@ -226,33 +238,42 @@ export const MEPage = () => {
   };
 
   const pendingChallenges = useMemo(
-    () => challenges.filter((challenge: any) => {
-      const lifecycle = String(challenge.challenge?.lifecycle || '');
-      return lifecycle === 'recruiting' || lifecycle === 'preparing' || challenge.phase === 'preparing';
-    }),
+    () => challenges.filter((challenge: any) => resolveChallengeBucket(challenge) === 'pending'),
     [challenges],
   );
 
   const activeChallenges = useMemo(
-    () => challenges.filter((challenge: any) => String(challenge.challenge?.lifecycle || '') === 'active'),
+    () => challenges.filter((challenge: any) => resolveChallengeBucket(challenge) === 'active'),
     [challenges],
   );
 
-  const completedChallenges = useMemo(
-    () => completedChallengesData?.challenges || [],
-    [completedChallengesData],
-  );
+  const completedChallenges = useMemo(() => {
+    const merged = [
+      ...(completedChallengesData?.challenges || []),
+      ...(failedChallengesData?.challenges || []),
+      ...challenges.filter((challenge: any) => resolveChallengeBucket(challenge) === 'completed'),
+    ];
+
+    const deduped = new Map<string, any>();
+    merged.forEach((item: any) => {
+      const key = String(item?.userChallengeId || item?.challengeId || '');
+      if (!key) return;
+      if (!deduped.has(key)) deduped.set(key, item);
+    });
+
+    return Array.from(deduped.values());
+  }, [completedChallengesData, failedChallengesData, challenges]);
 
   // 미인증 챌린지: personalTarget 시간 기준으로 현재와 가장 가까운 순 정렬
   const unverifiedChallenges = useMemo(
     () => activeChallenges
-      .filter((c: any) => !isTodayVerified(c) && getChallengeDay(c) <= 7)
+      .filter((c: any) => !isTodayVerified(c) && resolveChallengeDay(c) <= resolveChallengeDurationDays(c))
       .sort((a: any, b: any) => {
         const minuteDiff = getMinutesUntilTarget(a) - getMinutesUntilTarget(b);
         if (minuteDiff !== 0) return minuteDiff;
 
         // 동일 목표 시간대라면 더 많이 진행된 챌린지 Day를 우선 노출
-        const dayDiff = getChallengeDay(b) - getChallengeDay(a);
+        const dayDiff = resolveChallengeDay(b) - resolveChallengeDay(a);
         if (dayDiff !== 0) return dayDiff;
 
         return String(a.userChallengeId || '').localeCompare(String(b.userChallengeId || ''));
@@ -262,7 +283,7 @@ export const MEPage = () => {
 
   // 오늘 인증 완료 챌린지
   const verifiedTodayChallenges = useMemo(
-    () => activeChallenges.filter((c: any) => isTodayVerified(c) || getChallengeDay(c) > 7),
+    () => activeChallenges.filter((c: any) => isTodayVerified(c) || resolveChallengeDay(c) > resolveChallengeDurationDays(c)),
     [activeChallenges],
   );
 
@@ -385,7 +406,8 @@ export const MEPage = () => {
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
                               <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-xs text-primary-600">Day {getChallengeDay(challenge)} / 7</span>
+                                <span className="text-xs text-primary-600">Day {resolveChallengeDay(challenge)} / {resolveChallengeDurationDays(challenge)}</span>
+                                <span className="text-xs text-gray-400">참여 {countParticipatedDays(challenge)}일</span>
                                 {challenge.personalTarget && (
                                   <span className="text-xs text-gray-400">목표 {formatPersonalTarget(challenge)}</span>
                                 )}
@@ -409,7 +431,9 @@ export const MEPage = () => {
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">인증 완료</p>
                         {verifiedTodayChallenges.map((challenge: any, index: number) => {
                           const progress = challenge.progress || [];
-                          const currentDay = getChallengeDay(challenge);
+                          const currentDay = resolveChallengeDay(challenge);
+                          const durationDays = resolveChallengeDurationDays(challenge);
+                          const participatedDays = countParticipatedDays(challenge);
                           const uid = challenge.userChallengeId;
                           const isExpanded = expandedCards.has(uid);
 
@@ -435,7 +459,7 @@ export const MEPage = () => {
                                 <span className="text-2xl flex-shrink-0">{challenge.challenge?.badgeIcon || '🎯'}</span>
                                 <div className="flex-1 min-w-0">
                                   <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
-                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · Day {currentDay} / 7</p>
+                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · 경과 Day {currentDay} / {durationDays} · 참여 {participatedDays}일</p>
                                 </div>
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                   <span className="text-xl font-bold text-gray-800">{challenge.score || 0}</span>
@@ -467,7 +491,7 @@ export const MEPage = () => {
                               {isExpanded && (
                                 <div className="pt-1">
                                   <p className="text-xs text-primary-500 text-right mb-2">탭하면 피드로 이동 →</p>
-                                  {Array.from({ length: 7 }, (_, i) => {
+                                  {Array.from({ length: durationDays }, (_, i) => {
                                     const p = progress[i];
                                     const status = p?.status || (i < currentDay - 1 ? 'skipped' : 'pending');
                                     const isPending = status === 'pending';
@@ -475,7 +499,7 @@ export const MEPage = () => {
                                     const timeStr = formatVerificationTime(p?.timestamp);
                                     const note = verif?.todayNote || '';
                                     const dotColor = (DAY_STATUS_COLORS[status] || 'bg-gray-200').split(' ')[0];
-                                    const isLastItem = i === 6;
+                                    const isLastItem = i === durationDays - 1;
                                     return (
                                       <div key={i} className="flex items-start gap-3">
                                         {/* 왼쪽: 점 + 세로선 */}
@@ -606,12 +630,12 @@ export const MEPage = () => {
                 {completedChallenges.length === 0 ? (
                   <EmptyState icon="🏆" title="완료한 챌린지가 없어요" description="7일 챌린지를 완주하면 여기에 표시돼요" />
                 ) : completedChallenges.map((challenge: any) => (
-                  <div key={challenge.userChallengeId || challenge.challengeId} className="bg-white rounded-2xl p-5 border border-emerald-200 space-y-3">
+                  <div key={challenge.userChallengeId || challenge.challengeId} className={`bg-white rounded-2xl p-5 border space-y-3 ${String(challenge.status || '').toLowerCase() === 'failed' ? 'border-rose-200' : 'border-emerald-200'}`}>
                     <div className="flex items-start gap-3">
                       <span className="text-2xl">{challenge.challenge?.badgeIcon || challenge.badgeIcon || '🏆'}</span>
                       <div>
                         <p className="font-semibold text-gray-900">{challenge.challenge?.title || challenge.title}</p>
-                        <p className="text-xs text-emerald-700 mt-0.5">완주 완료 🎉</p>
+                        <p className={`text-xs mt-0.5 ${String(challenge.status || '').toLowerCase() === 'failed' ? 'text-rose-700' : 'text-emerald-700'}`}>{String(challenge.status || '').toLowerCase() === 'failed' ? '종료(미달성)' : '완주 완료 🎉'}</p>
                       </div>
                     </div>
                     <button

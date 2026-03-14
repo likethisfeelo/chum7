@@ -44,6 +44,7 @@ const QA_CHECKLIST = [
       'ME에서 개인퀘스트 상태칩(pending/rejected/revision_pending/approved/expired) 분기를 확인',
       'VerificationSheet 성공 피드백(점수/연속일/delta/뱃지/응원권) 및 extra 공개전환 동작 확인',
       'RemedyPage에서 실패 Day 선택, 정책 차단(strict), 제한횟수(limited) 동작 확인',
+      '챌린지 시작/완료 전이 시 ME 탭 분류(준비중→진행중→완료)와 상태 라벨이 일치하는지 확인',
     ],
   },
 ];
@@ -185,6 +186,14 @@ export const ParticipantFlowPlanPage = () => {
                     >
                       레메디 페이지 테스트
                     </button>
+                  </div>
+
+
+                  <div className="rounded-xl bg-gray-50 p-3">
+                    <p className="text-gray-500">Flow E · 시작/완료 라이프사이클 점검</p>
+                    <p className="font-semibold text-gray-900 mt-1">lifecycle: {String(challenge.lifecycle || '-')} · phase: {String(item.phase || '-')} · status: {String(item.status || '-')}</p>
+                    <p className="text-xs text-gray-500 mt-1">기획 기준: preparing/recruiting은 준비중, active는 진행중, completed/failed는 완료 탭으로 분류되는지 확인</p>
+                    <button onClick={() => navigate('/me')} className="mt-2 px-3 py-1.5 text-xs rounded-lg border border-emerald-200 text-emerald-700 bg-emerald-50">ME에서 시작/완료 분류 확인</button>
                   </div>
                 </div>
               </article>

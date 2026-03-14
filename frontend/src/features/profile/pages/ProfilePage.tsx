@@ -5,38 +5,14 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { FiSettings, FiLogOut, FiChevronRight } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import { resolveChallengeBucket } from '@/features/challenge/utils/challengeLifecycle';
 
 
 type ChallengeFilter = 'active' | 'preparing' | 'completed';
 
-type ChallengeBucket = 'active' | 'preparing' | 'completed' | 'other';
-
-const resolveChallengeBucket = (item: any): ChallengeBucket => {
-  const userStatus = String(item?.status || '').toLowerCase();
-  const userPhase = String(item?.phase || '').toLowerCase();
-  const lifecycle = String(item?.challenge?.lifecycle || '').toLowerCase();
-
-  if (userPhase === 'in_progress' || userPhase === 'active') {
-    return 'active';
-  }
-
-  if (userStatus === 'completed' || userPhase === 'completed' || lifecycle === 'completed') {
-    return 'completed';
-  }
-
-  if (userStatus === 'active' || userStatus === 'in_progress') {
-    if (userPhase === 'preparing' || lifecycle === 'recruiting' || lifecycle === 'preparing') {
-      return 'preparing';
-    }
-    return 'active';
-  }
-
-  return 'other';
-};
-
 const getChallengeStatusLabel = (item: any): string => {
   const bucket = resolveChallengeBucket(item);
-  if (bucket === 'preparing') return '준비중';
+  if (bucket === 'pending') return '준비중';
   if (bucket === 'completed') return '완주';
   return '진행중';
 };
@@ -72,7 +48,7 @@ export const ProfilePage = () => {
   const challengeItems = myChallenges?.challenges ?? [];
 
   const summary = useMemo(() => {
-    const preparing = challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'preparing').length;
+    const preparing = challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'pending').length;
     const active = challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'active').length;
     const completed = challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'completed').length;
     const receivedCheer = challengeItems.reduce((acc: number, item: any) => acc + Number(item.cheerCount ?? 0), 0);
@@ -81,7 +57,7 @@ export const ProfilePage = () => {
 
   const filteredChallenges = useMemo(() => {
     if (challengeFilter === 'preparing') {
-      return challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'preparing');
+      return challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'pending');
     }
     if (challengeFilter === 'active') {
       return challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'active');
