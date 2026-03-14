@@ -22,11 +22,11 @@ export function normalizeProgress(progress: unknown): ProgressRecord[] {
 
   const normalized = list
     .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
-    .map((item) => ({
+    .map((item): ProgressRecord => ({
       day: toSafeNumber(item.day),
       status:
         item.status === 'success' || item.status === 'failed'
-          ? item.status
+          ? (item.status as 'success' | 'failed')
           : null,
       verificationId:
         typeof item.verificationId === 'string' ? item.verificationId : undefined,

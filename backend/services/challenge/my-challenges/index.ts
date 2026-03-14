@@ -2,8 +2,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
-import { calculateEffectiveCurrentDay, isChallengePeriodEnded, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
+import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 import { normalizeProgress } from '../../../shared/lib/progress';
+import { resolveNormalizedChallengeState } from '../../../shared/lib/challenge-state';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -61,7 +62,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // 2. 챌린지 상세 정보 가져오기 (Batch Get)
-    const challengeIds = [...new Set(userChallenges.map(uc => uc.challengeId))];
+    const challengeIds = [...new Set(userChallenges.map((uc: any) => uc.challengeId))];
     const challengesResult = await docClient.send(new BatchGetCommand({
       RequestItems: {
         [process.env.CHALLENGES_TABLE!]: {
@@ -71,12 +72,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
 
     const challenges = challengesResult.Responses?.[process.env.CHALLENGES_TABLE!] || [];
-    const challengeMap = new Map(challenges.map(c => [c.challengeId, c]));
+    const challengeMap = new Map(challenges.map((c: any) => [c.challengeId, c]));
 
     // 3. 데이터 결합
     const nowIso = new Date().toISOString();
-    const enrichedChallenges = userChallenges.map(uc => {
-      const challenge = challengeMap.get(uc.challengeId);
+    const enrichedChallenges = userChallenges.map((uc: any) => {
+      const challenge = challengeMap.get(uc.challengeId) as any;
       const durationDays = resolveDurationDays(challenge?.durationDays, uc.progress);
 
       // 진행률 계산
@@ -85,17 +86,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       const progressPercentage = Math.max(0, Math.min(100, Math.round((completedDays / durationDays) * 100)));
 
       const effectiveCurrentDay = calculateEffectiveCurrentDay(uc, nowIso, durationDays);
-      const challengeLifecycle = challenge?.lifecycle;
-      const shouldAutoFinalize =
-        uc.status !== 'completed' &&
-        uc.status !== 'failed' &&
-        (challengeLifecycle === 'completed' || challengeLifecycle === 'archived' || isChallengePeriodEnded(effectiveCurrentDay, durationDays, uc.status));
-      const normalizedStatus = shouldAutoFinalize
-        ? (completedDays >= durationDays ? 'completed' : 'failed')
-        : uc.status;
-      const normalizedPhase = shouldAutoFinalize
-        ? normalizedStatus
-        : uc.phase;
+      const { status: normalizedStatus, phase: normalizedPhase } = resolveNormalizedChallengeState({
+        status: uc.status,
+        phase: uc.phase,
+        challengeLifecycle: challenge?.lifecycle,
+        effectiveCurrentDay,
+        durationDays,
+        completedDays,
+      });
 
       return {
         userChallengeId: uc.userChallengeId,
@@ -144,9 +142,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         challenges: enrichedChallenges,
         total: enrichedChallenges.length,
         summary: {
-          active: enrichedChallenges.filter(c => c.status === 'active').length,
-          completed: enrichedChallenges.filter(c => c.status === 'completed').length,
-          failed: enrichedChallenges.filter(c => c.status === 'failed').length
+          active: enrichedChallenges.filter((c: any) => c.status === 'active').length,
+          completed: enrichedChallenges.filter((c: any) => c.status === 'completed').length,
+          failed: enrichedChallenges.filter((c: any) => c.status === 'failed').length
         }
       }
     });
