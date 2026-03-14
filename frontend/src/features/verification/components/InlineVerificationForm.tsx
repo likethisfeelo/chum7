@@ -19,6 +19,36 @@ const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024;
 
 const ALL_TYPES: VerificationType[] = ["text", "image", "video", "link"];
 
+
+function getDateOnly(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function parseChallengeStartDate(userChallenge: any): Date | null {
+  const start = userChallenge?.startDate || userChallenge?.challenge?.startDate || userChallenge?.challenge?.startAt;
+  if (!start || typeof start !== "string") return null;
+
+  const dateOnlyMatch = start.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, y, m, d] = dateOnlyMatch;
+    return new Date(Number(y), Number(m) - 1, Number(d));
+  }
+
+  const parsed = new Date(start);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return getDateOnly(parsed);
+}
+
+function getChallengeDay(userChallenge: any): number {
+  const startDate = parseChallengeStartDate(userChallenge);
+  if (!startDate) return Math.max(1, Number(userChallenge.currentDay || 1));
+
+  const today = getDateOnly(new Date());
+  const diffMs = today.getTime() - startDate.getTime();
+  const elapsed = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return Math.max(1, elapsed + 1);
+}
+
 function toIsoFromLocalDateTime(localDateTime: string): string {
   if (!localDateTime) return new Date().toISOString();
   const parsed = new Date(localDateTime);
@@ -307,7 +337,7 @@ export const InlineVerificationForm = ({
 
       const response = await apiClient.post("/verifications", {
         userChallengeId: userChallenge.userChallengeId,
-        day: Math.max(1, Number(userChallenge.currentDay || 1)),
+        day: getChallengeDay(userChallenge),
         verificationType: selectedType,
         ...(selectedType === "image" && uploadedUrl
           ? { imageUrl: uploadedUrl }
@@ -456,7 +486,7 @@ export const InlineVerificationForm = ({
     }
   };
 
-  const safeDay = Math.max(1, Number(userChallenge.currentDay || 1));
+  const safeDay = getChallengeDay(userChallenge);
   const badgeIcon = userChallenge.challenge?.badgeIcon || "🎯";
 
   return (
