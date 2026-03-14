@@ -43,8 +43,58 @@ function getCurrentMinutes(): number {
   return now.getHours() * 60 + now.getMinutes();
 }
 
-function getTimeDistance(challenge: any): number {
-  return Math.abs(getPersonalTargetMinutes(challenge) - getCurrentMinutes());
+function getMinutesUntilTarget(challenge: any): number {
+  const nowMinutes = getCurrentMinutes();
+  const targetMinutes = getPersonalTargetMinutes(challenge);
+  return (targetMinutes - nowMinutes + 24 * 60) % (24 * 60);
+}
+
+function getDateOnly(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function parseChallengeStartDate(challenge: any): Date | null {
+  const start = challenge?.startDate || challenge?.challenge?.startDate || challenge?.challenge?.startAt;
+  if (!start || typeof start !== 'string') return null;
+
+  const dateOnlyMatch = start.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, y, m, d] = dateOnlyMatch;
+    return new Date(Number(y), Number(m) - 1, Number(d));
+  }
+
+  const parsed = new Date(start);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return getDateOnly(parsed);
+}
+
+function getChallengeDay(challenge: any): number {
+  const startDate = parseChallengeStartDate(challenge);
+  if (!startDate) return Math.max(1, Number(challenge.currentDay || 1));
+
+  const today = getDateOnly(new Date());
+  const diffMs = today.getTime() - startDate.getTime();
+  const elapsed = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return Math.max(1, elapsed + 1);
+}
+
+function isCompletedStatus(status?: string): boolean {
+  return status === 'success' || status === 'remedy' || status === 'failed';
+}
+
+function hasBacklogBeforeToday(challenge: any): boolean {
+  const progress = challenge.progress || [];
+  const challengeDay = getChallengeDay(challenge);
+  const todayIndex = Math.max(0, Math.min(6, challengeDay - 1));
+
+  for (let i = 0; i < todayIndex; i += 1) {
+    const status = progress[i]?.status;
+    if (!isCompletedStatus(status)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function formatPersonalTarget(challenge: any): string {
@@ -69,9 +119,9 @@ function formatVerificationTime(iso: string | undefined | null): string {
 
 function isTodayVerified(challenge: any): boolean {
   const progress = challenge.progress || [];
-  const currentDay = challenge.currentDay || 1;
+  const currentDay = getChallengeDay(challenge);
   const status = progress[currentDay - 1]?.status;
-  return status === 'success' || status === 'remedy';
+  return status === 'success' || status === 'remedy' || status === 'failed';
 }
 
 const getProposalStatusMeta = (status?: string) => {
@@ -221,14 +271,14 @@ export const MEPage = () => {
   // 미인증 챌린지: personalTarget 시간 기준으로 현재와 가장 가까운 순 정렬
   const unverifiedChallenges = useMemo(
     () => activeChallenges
-      .filter((c: any) => !isTodayVerified(c) && (c.currentDay || 1) <= 7)
-      .sort((a: any, b: any) => getTimeDistance(a) - getTimeDistance(b)),
+      .filter((c: any) => !isTodayVerified(c) && getChallengeDay(c) <= 7)
+      .sort((a: any, b: any) => getMinutesUntilTarget(a) - getMinutesUntilTarget(b)),
     [activeChallenges],
   );
 
   // 오늘 인증 완료 챌린지
   const verifiedTodayChallenges = useMemo(
-    () => activeChallenges.filter((c: any) => isTodayVerified(c) || (c.currentDay || 1) > 7),
+    () => activeChallenges.filter((c: any) => isTodayVerified(c) || getChallengeDay(c) > 7),
     [activeChallenges],
   );
 
@@ -240,9 +290,13 @@ export const MEPage = () => {
 
   const isEmpty = activeChallenges.length === 0 && pendingChallenges.length === 0 && completedChallenges.length === 0;
 
-  // 대표 인증 챌린지 (최상단 인라인 폼)
-  const primaryUnverified = unverifiedChallenges[0] ?? null;
-  const otherUnverified = unverifiedChallenges.slice(1);
+  // 대표 인증 챌린지 (최상단 인라인 폼): 오늘 이전 밀린 인증이 없는 챌린지만 우선 노출
+  const primaryCandidateChallenges = useMemo(
+    () => unverifiedChallenges.filter((challenge: any) => !hasBacklogBeforeToday(challenge)),
+    [unverifiedChallenges],
+  );
+  const primaryUnverified = primaryCandidateChallenges[0] ?? null;
+  const otherUnverified = unverifiedChallenges.filter((challenge: any) => challenge.userChallengeId !== primaryUnverified?.userChallengeId);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -347,7 +401,7 @@ export const MEPage = () => {
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
                               <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-xs text-primary-600">Day {challenge.currentDay || 1} / 7</span>
+                                <span className="text-xs text-primary-600">Day {getChallengeDay(challenge)} / 7</span>
                                 {challenge.personalTarget && (
                                   <span className="text-xs text-gray-400">목표 {formatPersonalTarget(challenge)}</span>
                                 )}
@@ -371,7 +425,7 @@ export const MEPage = () => {
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">인증 완료</p>
                         {verifiedTodayChallenges.map((challenge: any, index: number) => {
                           const progress = challenge.progress || [];
-                          const currentDay = challenge.currentDay || 1;
+                          const currentDay = getChallengeDay(challenge);
                           const uid = challenge.userChallengeId;
                           const isExpanded = expandedCards.has(uid);
 
