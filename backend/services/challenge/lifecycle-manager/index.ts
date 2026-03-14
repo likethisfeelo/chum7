@@ -269,6 +269,11 @@ async function finalizeUserChallenges(challengeId: string, durationDays: number)
 async function syncActiveUserChallengeDays(challengeId: string, durationDays: number, nowIso: string): Promise<void> {
   let lastKey: any = undefined;
   let updatedCount = 0;
+  let scannedCount = 0;
+  let skippedNoStartDateCount = 0;
+  let skippedAlreadyUpToDateCount = 0;
+  let correctedCorruptedHighDayCount = 0;
+  let conditionalRaceSkipCount = 0;
 
   do {
     const result: any = await docClient.send(
@@ -290,7 +295,11 @@ async function syncActiveUserChallengeDays(challengeId: string, durationDays: nu
     );
 
     for (const uc of result.Items ?? []) {
-      if (!uc.startDate) continue;
+      scannedCount += 1;
+      if (!uc.startDate) {
+        skippedNoStartDateCount += 1;
+        continue;
+      }
 
       const nextDay = calculateSyncedCurrentDay(
         uc.startDate,
@@ -304,8 +313,12 @@ async function syncActiveUserChallengeDays(challengeId: string, durationDays: nu
         ? Math.max(1, Math.min(maxDay, Math.floor(rawCurrentDay)))
         : 1;
       const hasCorruptedHighDay = Number.isFinite(rawCurrentDay) && rawCurrentDay > maxDay;
+      if (hasCorruptedHighDay) correctedCorruptedHighDayCount += 1;
 
-      if (!Number.isFinite(nextDay) || (!hasCorruptedHighDay && nextDay <= currentDay)) continue;
+      if (!Number.isFinite(nextDay) || (!hasCorruptedHighDay && nextDay <= currentDay)) {
+        skippedAlreadyUpToDateCount += 1;
+        continue;
+      }
 
       try {
         await docClient.send(
@@ -331,15 +344,16 @@ async function syncActiveUserChallengeDays(challengeId: string, durationDays: nu
         if (err?.name !== 'ConditionalCheckFailedException') {
           throw err;
         }
+        conditionalRaceSkipCount += 1;
       }
     }
 
     lastKey = result.LastEvaluatedKey;
   } while (lastKey);
 
-  if (updatedCount > 0) {
-    console.log(`[lifecycle-manager] Synced currentDay for ${updatedCount} participants in challenge ${challengeId}`);
-  }
+  console.log(
+    `[lifecycle-manager] currentDay sync summary challenge=${challengeId} scanned=${scannedCount} updated=${updatedCount} skippedNoStartDate=${skippedNoStartDateCount} skippedUpToDate=${skippedAlreadyUpToDateCount} correctedCorruptedHighDay=${correctedCorruptedHighDayCount} conditionalRaceSkip=${conditionalRaceSkipCount}`
+  );
 }
 
 async function expirePendingProposals(challenge: any): Promise<void> {
