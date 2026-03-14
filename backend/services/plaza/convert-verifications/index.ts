@@ -1,8 +1,10 @@
 import { EventBridgeEvent } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { buildPlazaFallbackContent } from '../../../shared/lib/plaza-convert-content';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
 
 function conversionCursorWindowUtc() {
   const now = new Date();
@@ -52,12 +54,7 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
           skipTypeCount += 1;
           continue;
         }
-        const normalizedTodayNote = typeof item.todayNote === 'string' ? item.todayNote.trim() : '';
-        const normalizedTomorrowPromise = typeof item.tomorrowPromise === 'string' ? item.tomorrowPromise.trim() : '';
-        const fallbackContent =
-          normalizedTodayNote ||
-          normalizedTomorrowPromise ||
-          (item.day ? `Day ${item.day} 인증을 완료했어요.` : '인증을 완료했어요.');
+        const fallbackContent = buildPlazaFallbackContent(item);
 
         if (!fallbackContent) {
           skipNoTodayNoteCount += 1;
