@@ -111,14 +111,16 @@ export const TodayPage = () => {
               {activeChallenges.map((challenge: any) => {
                 const progress = challenge.progress || [];
                 const currentDay = resolveChallengeDay(challenge);
-                const todayDone = isVerificationDayCompleted(progress[currentDay - 1]?.status);
+                const durationDays = resolveChallengeDurationDays(challenge);
+                const isChallengeEnded = currentDay > durationDays;
+                const todayDone = isChallengeEnded || isVerificationDayCompleted(progress[currentDay - 1]?.status);
                 return (
                   <div key={challenge.userChallengeId} className="flex items-center justify-between gap-3 py-1">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{challenge.challenge?.badgeIcon || '🎯'}</span>
                       <div>
                         <p className="text-sm font-semibold text-gray-900">{challenge.challenge?.title}</p>
-                        <p className="text-xs text-gray-500">Day {currentDay} / {resolveChallengeDurationDays(challenge)}</p>
+                        <p className="text-xs text-gray-500">Day {currentDay} / {durationDays}</p>
                       </div>
                     </div>
                     {todayDone ? (
