@@ -10,10 +10,18 @@ import { resolveChallengeBucket } from '@/features/challenge/utils/challengeLife
 
 type ChallengeFilter = 'active' | 'preparing' | 'completed';
 
+
+const getChallengeId = (item: any): string => String(item?.challengeId || item?.challenge?.challengeId || '');
+
+const isFailedChallenge = (item: any): boolean => {
+  const status = String(item?.status || '').toLowerCase();
+  return status === 'failed';
+};
+
 const getChallengeStatusLabel = (item: any): string => {
   const bucket = resolveChallengeBucket(item);
   if (bucket === 'pending') return '준비중';
-  if (bucket === 'completed') return '완주';
+  if (bucket === 'completed') return isFailedChallenge(item) ? '종료(미달성)' : '완주';
   return '진행중';
 };
 
@@ -159,16 +167,20 @@ export const ProfilePage = () => {
             <div className="space-y-2">
               {filteredChallenges.map((item: any) => (
                 <button
-                  key={item.userChallengeId}
+                  key={item.userChallengeId || getChallengeId(item)}
                   type="button"
                   onClick={() => {
                     const bucket = resolveChallengeBucket(item);
                     if (bucket === 'active') {
-                      navigate(`/challenge-feed/${item.challengeId}`);
+                      const challengeId = getChallengeId(item);
+                      if (!challengeId) return;
+                      navigate(`/challenge-feed/${challengeId}`);
                       return;
                     }
 
-                    navigate(`/challenges/${item.challengeId}`);
+                    const challengeId = getChallengeId(item);
+                    if (!challengeId) return;
+                    navigate(`/challenges/${challengeId}`);
                   }}
                   className="w-full text-left border border-gray-200 rounded-xl p-3 hover:bg-gray-50 transition-colors"
                 >
