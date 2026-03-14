@@ -38,6 +38,7 @@ export class CoreStack extends Stack {
   public readonly cheersTable: Table;
   public readonly userCheerTicketsTable: Table;
   public readonly cheerDeadLettersTable: Table;
+  public readonly badgesTable: Table;
 
   // Quest board tables
   public readonly questsTable: Table;
@@ -248,6 +249,21 @@ export class CoreStack extends Stack {
       indexName: 'userId-status-index',
       partitionKey: { name: 'userId', type: AttributeType.STRING },
       sortKey: { name: 'status', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    this.badgesTable = new Table(this, 'BadgesTable', {
+      tableName: `chme-${stage}-badges`,
+      partitionKey: { name: 'badgeId', type: AttributeType.STRING },
+      sortKey: { name: 'userId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      removalPolicy,
+    });
+    this.badgesTable.addGlobalSecondaryIndex({
+      indexName: 'userId-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'grantedAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
 

@@ -19,6 +19,7 @@ import {
 import { inferVerificationType } from "../../../shared/lib/verification-type";
 import { isValidTrimRange } from "../../../shared/lib/trim-validation";
 import { normalizeProgress } from "../../../shared/lib/progress";
+import { grantBadges } from "../../badge/grant/index";
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -555,8 +556,6 @@ export const handler = async (
       }
     }
 
-    const newBadges: string[] = [];
-
     if (consecutiveDays === 3) {
       try {
         await createCheerTicket(
@@ -570,7 +569,6 @@ export const handler = async (
       } catch (cheerError) {
         console.error("Streak cheer ticket error:", cheerError);
       }
-      newBadges.push("3-day-streak");
     }
 
     if (input.day === 7 && consecutiveDays === 7) {
@@ -588,8 +586,16 @@ export const handler = async (
       } catch (cheerError) {
         console.error("Complete cheer ticket error:", cheerError);
       }
-      newBadges.push("7-day-master");
     }
+
+    const newBadges = await grantBadges({
+      userId,
+      challengeId,
+      verificationId,
+      day: input.day,
+      consecutiveDays,
+      isRemedy: false,
+    });
 
     const message = isEarlyCompletion
       ? `Day ${input.day} 완료! 목표보다 ${delta}분 일찍!`
