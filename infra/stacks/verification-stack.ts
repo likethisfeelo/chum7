@@ -559,6 +559,31 @@ export class VerificationStack extends Stack {
       );
     }
 
+    const fallbackGeneratedDefaultAlarm = new cloudwatch.Alarm(
+      this,
+      "PlazaConvertFallbackGeneratedDefaultAlarm",
+      {
+        alarmName: `chme-${stage}-plaza-convert-fallback-default-alarm`,
+        metric: new cloudwatch.Metric({
+          namespace: "CHME/Plaza",
+          metricName: "ConvertFallbackGeneratedDefaultCount",
+          statistic: "sum",
+          period: Duration.hours(1),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription:
+          "Alarm when plaza conversion falls back to default generated content.",
+      },
+    );
+    fallbackGeneratedDefaultAlarm.addAlarmAction(
+      new cwActions.SnsAction(convertFailureTopic),
+    );
+
     const convertFailureEventAlarm = new cloudwatch.Alarm(
       this,
       "PlazaConvertFailureEventAlarm",
