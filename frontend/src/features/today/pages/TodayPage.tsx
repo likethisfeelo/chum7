@@ -8,12 +8,9 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import {
-  getChallengeProgressSummary,
-  isChallengePeriodCompleted,
+  getChallengeDisplayMeta,
   isVerificationDayCompleted,
   resolveChallengeBucket,
-  resolveChallengeDay,
-  resolveChallengeDurationDays,
 } from '@/features/challenge/utils/challengeLifecycle';
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
@@ -117,11 +114,8 @@ export const TodayPage = () => {
             <div className="space-y-2">
               {activeChallenges.map((challenge: any) => {
                 const progress = challenge.progress || [];
-                const currentDay = resolveChallengeDay(challenge);
-                const durationDays = resolveChallengeDurationDays(challenge);
-                const isChallengeCompleted = isChallengePeriodCompleted(challenge);
+                const { currentDay, durationDays, isChallengeCompleted, participatedDays, completionRate } = getChallengeDisplayMeta(challenge);
                 const todayDone = isChallengeCompleted || isVerificationDayCompleted(progress, currentDay);
-                const { participatedDays, completionRate } = getChallengeProgressSummary(progress, durationDays);
                 return (
                   <div key={challenge.userChallengeId} className="flex items-center justify-between gap-3 py-1">
                     <div className="flex items-center gap-2">

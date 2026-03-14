@@ -61,6 +61,20 @@ export function getChallengeProgressSummary(progress: any, durationDays: number)
   return { participatedDays, completionRate };
 }
 
+export function getChallengeDisplayMeta(item: any): {
+  currentDay: number;
+  durationDays: number;
+  participatedDays: number;
+  completionRate: number;
+  isChallengeCompleted: boolean;
+} {
+  const durationDays = resolveChallengeDurationDays(item);
+  const currentDay = resolveChallengeDay(item);
+  const { participatedDays, completionRate } = getChallengeProgressSummary(item?.progress, durationDays);
+  const isChallengeCompleted = isChallengePeriodCompleted(item);
+  return { currentDay, durationDays, participatedDays, completionRate, isChallengeCompleted };
+}
+
 export function getProgressEntryByDay(progress: any, day: number): any | undefined {
   const list = Array.isArray(progress) ? progress : [];
   const targetDay = Number(day);

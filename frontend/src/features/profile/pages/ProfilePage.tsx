@@ -6,11 +6,9 @@ import { apiClient } from '@/lib/api-client';
 import { FiSettings, FiLogOut, FiChevronRight } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import {
-  getChallengeProgressSummary,
+  getChallengeDisplayMeta,
   getChallengeStatusLabel,
   resolveChallengeBucket,
-  resolveChallengeDay,
-  resolveChallengeDurationDays,
 } from '@/features/challenge/utils/challengeLifecycle';
 
 
@@ -157,9 +155,7 @@ export const ProfilePage = () => {
           ) : (
             <div className="space-y-2">
               {filteredChallenges.map((item: any) => {
-                const durationDays = resolveChallengeDurationDays(item);
-                const currentDay = resolveChallengeDay(item);
-                const { participatedDays, completionRate } = getChallengeProgressSummary(item?.progress, durationDays);
+                const { currentDay, durationDays, participatedDays, completionRate } = getChallengeDisplayMeta(item);
                 return (
                   <button
                     key={item.userChallengeId}

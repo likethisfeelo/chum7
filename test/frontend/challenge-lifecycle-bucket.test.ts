@@ -1,6 +1,7 @@
 import {
   countParticipatedDays,
   resolveChallengeDurationDays,
+  getChallengeDisplayMeta,
   getChallengeProgressSummary,
   getChallengeStatusLabel,
   getLatestCompletedProgressEntry,
@@ -118,6 +119,17 @@ describe('challengeLifecycle resolveChallengeBucket', () => {
     expect(isChallengePeriodCompleted({ currentDay: 8, durationDays: 7 })).toBe(true);
     expect(isChallengePeriodCompleted({ currentDay: 7, durationDays: 7 })).toBe(false);
     expect(isChallengePeriodCompleted({ currentDay: 5, progress: [{}, {}] })).toBe(true);
+  });
+
+  test('getChallengeDisplayMeta aggregates normalized lifecycle values', () => {
+    const meta = getChallengeDisplayMeta({ currentDay: 3, durationDays: 7, progress: [{ day: 1, status: 'success' }, { day: 3, status: 'failed' }] });
+    expect(meta).toEqual({
+      currentDay: 3,
+      durationDays: 7,
+      participatedDays: 2,
+      completionRate: 29,
+      isChallengeCompleted: false,
+    });
   });
 
 });
