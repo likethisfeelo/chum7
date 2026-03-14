@@ -463,6 +463,45 @@ export class VerificationStack extends Stack {
       defaultValue: 0,
     });
 
+    new logs.MetricFilter(this, "PlazaConvertFallbackTomorrowPromiseMetricFilter", {
+      logGroup: plazaConvertLogGroup,
+      metricNamespace: "CHME/Plaza",
+      metricName: "ConvertFallbackTomorrowPromiseCount",
+      filterPattern: logs.FilterPattern.stringValue(
+        "$.eventType",
+        "=",
+        "plaza_convert_summary",
+      ),
+      metricValue: "$.fallbackFromTomorrowPromiseCount",
+      defaultValue: 0,
+    });
+
+    new logs.MetricFilter(this, "PlazaConvertFallbackGeneratedDayMetricFilter", {
+      logGroup: plazaConvertLogGroup,
+      metricNamespace: "CHME/Plaza",
+      metricName: "ConvertFallbackGeneratedDayCount",
+      filterPattern: logs.FilterPattern.stringValue(
+        "$.eventType",
+        "=",
+        "plaza_convert_summary",
+      ),
+      metricValue: "$.fallbackGeneratedDayCount",
+      defaultValue: 0,
+    });
+
+    new logs.MetricFilter(this, "PlazaConvertFallbackGeneratedDefaultMetricFilter", {
+      logGroup: plazaConvertLogGroup,
+      metricNamespace: "CHME/Plaza",
+      metricName: "ConvertFallbackGeneratedDefaultCount",
+      filterPattern: logs.FilterPattern.stringValue(
+        "$.eventType",
+        "=",
+        "plaza_convert_summary",
+      ),
+      metricValue: "$.fallbackGeneratedDefaultCount",
+      defaultValue: 0,
+    });
+
     new logs.MetricFilter(this, "PlazaConvertSkipTypeMetricFilter", {
       logGroup: plazaConvertLogGroup,
       metricNamespace: "CHME/Plaza",
