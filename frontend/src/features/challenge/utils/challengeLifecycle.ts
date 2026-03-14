@@ -103,7 +103,7 @@ export function resolveChallengeBucket(item: any): ChallengeBucket {
   const userPhase = String(item?.phase || '').toLowerCase();
   const lifecycle = String(item?.challenge?.lifecycle || '').toLowerCase();
 
-  if (userStatus === 'failed' || userPhase === 'failed' || lifecycle === 'archived') {
+  if (isFailedChallengeState(item) || lifecycle === 'archived') {
     return 'completed';
   }
 
