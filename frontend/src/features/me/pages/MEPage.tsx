@@ -12,6 +12,7 @@ import {
   getChallengeProgressSummary,
   getLatestCompletedProgressEntry,
   getProgressEntryByDay,
+  isChallengePeriodCompleted,
   isFailedChallengeState,
   isVerificationDayCompleted,
   resolveChallengeBucket,
@@ -307,7 +308,7 @@ export const MEPage = () => {
 
   // 오늘 인증 완료 챌린지
   const verifiedTodayChallenges = useMemo(
-    () => activeChallenges.filter((c: any) => isTodayVerified(c) || getChallengeDay(c) > resolveChallengeDurationDays(c)),
+    () => activeChallenges.filter((c: any) => isTodayVerified(c) || isChallengePeriodCompleted(c)),
     [activeChallenges],
   );
 

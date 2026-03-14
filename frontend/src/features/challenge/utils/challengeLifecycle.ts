@@ -16,6 +16,12 @@ export function resolveChallengeDay(item: any): number {
   return Math.max(1, Math.min(maxDay, Math.floor(rawCurrentDay)));
 }
 
+export function isChallengePeriodCompleted(item: any): boolean {
+  const currentDay = resolveChallengeDay(item);
+  const durationDays = resolveChallengeDurationDays(item);
+  return currentDay > Math.max(1, durationDays);
+}
+
 export function resolveProgressDay(item: any, fallbackIndex?: number): number | null {
   const parsedDay = Number(item?.day);
   if (Number.isFinite(parsedDay)) return Math.max(1, Math.floor(parsedDay));
