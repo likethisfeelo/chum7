@@ -513,7 +513,7 @@ export const MEPage = () => {
                                   {Array.from({ length: durationDays }, (_, i) => {
                                     const day = i + 1;
                                     const p = getProgressEntryByDay(progress, day);
-                                    const status = resolveVerificationStatusForDay(progress, day, currentDay);
+                                    const status = resolveVerificationStatusForDay(progress, day, challengeDay);
                                     const isPending = status === 'pending';
                                     const verif = p?.verificationId ? verificationMap.get(p.verificationId) : undefined;
                                     const timeStr = formatVerificationTime(p?.timestamp);
