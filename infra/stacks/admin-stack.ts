@@ -118,6 +118,22 @@ export class AdminStack extends Stack {
       authorizer,
     });
 
+    // 3-1. Toggle Challenge Active Status (Admin) (protected)
+    const toggleChallengeFn = new NodejsFunction(this, 'ToggleChallengeFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-challenge-toggle`,
+      entry: path.join(__dirname, '../../backend/services/admin/challenge/toggle/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadWriteData(toggleChallengeFn);
+    apiGateway.addRoutes({
+      path: '/admin/challenges/{challengeId}/toggle',
+      methods: [HttpMethod.PATCH],
+      integration: new HttpLambdaIntegration('AdminToggleChallengeIntegration', toggleChallengeFn),
+      authorizer,
+    });
+
     // 4a. Confirm Start (Admin) - requireStartConfirmation=true 챌린지 수동 시작 확인
     const confirmStartFn = new NodejsFunction(this, 'ConfirmStartFn', {
       ...commonProps,

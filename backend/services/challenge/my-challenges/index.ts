@@ -3,6 +3,8 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
 import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
+import { normalizeProgress } from '../../../shared/lib/progress';
+import { resolveNormalizedChallengeState } from '../../../shared/lib/challenge-state';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -60,7 +62,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // 2. 챌린지 상세 정보 가져오기 (Batch Get)
-    const challengeIds = [...new Set(userChallenges.map(uc => uc.challengeId))];
+    const challengeIds = [...new Set(userChallenges.map((uc: any) => uc.challengeId))];
     const challengesResult = await docClient.send(new BatchGetCommand({
       RequestItems: {
         [process.env.CHALLENGES_TABLE!]: {
@@ -70,28 +72,37 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
 
     const challenges = challengesResult.Responses?.[process.env.CHALLENGES_TABLE!] || [];
-    const challengeMap = new Map(challenges.map(c => [c.challengeId, c]));
+    const challengeMap = new Map(challenges.map((c: any) => [c.challengeId, c]));
 
     // 3. 데이터 결합
     const nowIso = new Date().toISOString();
-    const enrichedChallenges = userChallenges.map(uc => {
-      const challenge = challengeMap.get(uc.challengeId);
+    const enrichedChallenges = userChallenges.map((uc: any) => {
+      const challenge = challengeMap.get(uc.challengeId) as any;
       const durationDays = resolveDurationDays(challenge?.durationDays, uc.progress);
 
       // 진행률 계산
-      const progressList = Array.isArray(uc.progress) ? uc.progress : Object.values(uc.progress || {});
+      const progressList = normalizeProgress(uc.progress);
       const completedDays = progressList.filter((p: any) => p?.status === 'success').length;
       const progressPercentage = Math.max(0, Math.min(100, Math.round((completedDays / durationDays) * 100)));
 
       const effectiveCurrentDay = calculateEffectiveCurrentDay(uc, nowIso, durationDays);
+      const { status: normalizedStatus, phase: normalizedPhase } = resolveNormalizedChallengeState({
+        status: uc.status,
+        phase: uc.phase,
+        challengeLifecycle: challenge?.lifecycle,
+        effectiveCurrentDay,
+        durationDays,
+        completedDays,
+      });
 
       return {
         userChallengeId: uc.userChallengeId,
         challengeId: uc.challengeId,
-        phase: uc.phase,
-        status: uc.status,
+        phase: normalizedPhase,
+        status: normalizedStatus,
         currentDay: effectiveCurrentDay,
         startDate: uc.startDate,
+        durationDays,
         score: uc.score,
         cheerCount: uc.cheerCount,
         consecutiveDays: uc.consecutiveDays,
@@ -120,6 +131,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           allowedVerificationTypes: Array.isArray(challenge.allowedVerificationTypes) && challenge.allowedVerificationTypes.length > 0
             ? challenge.allowedVerificationTypes
             : ['image', 'text', 'link', 'video'],
+          durationDays,
         } : null
       };
     });
@@ -130,9 +142,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         challenges: enrichedChallenges,
         total: enrichedChallenges.length,
         summary: {
-          active: enrichedChallenges.filter(c => c.status === 'active').length,
-          completed: enrichedChallenges.filter(c => c.status === 'completed').length,
-          failed: enrichedChallenges.filter(c => c.status === 'failed').length
+          active: enrichedChallenges.filter((c: any) => c.status === 'active').length,
+          completed: enrichedChallenges.filter((c: any) => c.status === 'completed').length,
+          failed: enrichedChallenges.filter((c: any) => c.status === 'failed').length
         }
       }
     });

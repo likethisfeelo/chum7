@@ -24,6 +24,7 @@ interface CheerStackProps extends StackProps {
   cheerDeadLettersTable: Table;
   userCheerTicketsTable: Table;
   userChallengesTable: Table;
+  usersTable: Table;
   challengesTable: Table;
   snsTopic: Topic;
   eventBus: EventBus;
@@ -33,13 +34,14 @@ export class CheerStack extends Stack {
   constructor(scope: Construct, id: string, props: CheerStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, authorizer, cheersTable, cheerDeadLettersTable, userCheerTicketsTable, userChallengesTable, challengesTable, snsTopic, eventBus } = props;
+    const { stage, apiGateway, authorizer, cheersTable, cheerDeadLettersTable, userCheerTicketsTable, userChallengesTable, usersTable, challengesTable, snsTopic, eventBus } = props;
 
     const commonEnv = {
       STAGE: stage,
       CHEERS_TABLE: cheersTable.tableName,
       USER_CHEER_TICKETS_TABLE: userCheerTicketsTable.tableName,
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
+      USERS_TABLE: usersTable.tableName,
       CHALLENGES_TABLE: challengesTable.tableName,
       SNS_TOPIC_ARN: snsTopic.topicArn,
       EVENT_BUS_NAME: eventBus.eventBusName,
@@ -173,6 +175,7 @@ export class CheerStack extends Stack {
       environment: commonEnv,
     });
     userChallengesTable.grantReadData(getTargetsFn);
+    usersTable.grantReadData(getTargetsFn);
     challengesTable.grantReadData(getTargetsFn);
     cheersTable.grantReadData(getTargetsFn);
     apiGateway.addRoutes({
