@@ -427,6 +427,30 @@ export class VerificationStack extends Stack {
       targets: [new LambdaFunction(plazaConvertFn)],
     });
 
+    const plazaConvertRunNowFn = new NodejsFunction(this, "PlazaConvertRunNowFn", {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-plaza-convert-run-now`,
+      entry: path.join(
+        __dirname,
+        "../../backend/services/admin/plaza/convert-run-now/index.ts",
+      ),
+      handler: "handler",
+      environment: commonEnv,
+      timeout: Duration.minutes(2),
+      memorySize: 512,
+    });
+    verificationsTable.grantReadWriteData(plazaConvertRunNowFn);
+    plazaPostsTable.grantReadWriteData(plazaConvertRunNowFn);
+    apiGateway.addRoutes({
+      path: "/admin/plaza/convert/run-now",
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration(
+        "AdminPlazaConvertRunNowIntegration",
+        plazaConvertRunNowFn,
+      ),
+      authorizer,
+    });
+
     // 8-1. Observability for conversion job
     const plazaConvertLogGroup = new logs.LogGroup(
       this,
