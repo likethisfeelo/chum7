@@ -27,7 +27,7 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
   let scannedCount = 0;
   let convertedCount = 0;
   let skipTypeCount = 0;
-  let skipNoTodayNoteCount = 0; // legacy metric name: includes no-convertible-content skips
+  let skipNoTodayNoteCount = 0; // legacy metric field kept for dashboard compatibility (always 0 with fallback content)
   let skipAlreadyConvertedCount = 0;
   let conditionalDuplicateCount = 0;
   let pageCount = 0;
@@ -55,11 +55,6 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
           continue;
         }
         const fallbackContent = buildPlazaFallbackContent(item);
-
-        if (!fallbackContent) {
-          skipNoTodayNoteCount += 1;
-          continue;
-        }
         if (item.isConvertedToPlaza === true) {
           skipAlreadyConvertedCount += 1;
           continue;

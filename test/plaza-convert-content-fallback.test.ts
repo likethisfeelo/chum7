@@ -31,6 +31,13 @@ describe('buildPlazaFallbackContent', () => {
     expect(content).toBe('Day 5 인증을 완료했어요.');
   });
 
+
+  test('always returns non-empty content string', () => {
+    const content = buildPlazaFallbackContent({});
+    expect(typeof content).toBe('string');
+    expect(content.length).toBeGreaterThan(0);
+  });
+
   test('uses generic message when day is invalid', () => {
     const content = buildPlazaFallbackContent({
       todayNote: null,
