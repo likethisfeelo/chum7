@@ -424,7 +424,11 @@ export const MEPage = () => {
                     {otherUnverified.length > 0 && (
                       <div className="space-y-2">
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">오늘 인증 예정</p>
-                        {otherUnverified.map((challenge: any, index: number) => (
+                        {otherUnverified.map((challenge: any, index: number) => {
+                          const challengeDay = getChallengeDay(challenge);
+                          const durationDays = getDurationDays(challenge);
+                          const { participatedDays, completionRate } = getChallengeProgressMeta(challenge);
+                          return (
                           <motion.div
                             key={challenge.userChallengeId}
                             initial={{ opacity: 0, y: 12 }}
@@ -436,7 +440,7 @@ export const MEPage = () => {
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
                               <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-xs text-primary-600">Day {getChallengeDay(challenge)} / {getDurationDays(challenge)}</span>
+                                <span className="text-xs text-primary-600">Day {challengeDay} / {durationDays}</span>
                                 <span className="text-xs text-gray-400">참여 {participatedDays}일 · 진행률 {completionRate}%</span>
                                 {challenge.personalTarget && (
                                   <span className="text-xs text-gray-400">목표 {formatPersonalTarget(challenge)}</span>
