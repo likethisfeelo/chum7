@@ -7,6 +7,7 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import toast from 'react-hot-toast';
+import { resolveChallengeBucket } from '@/features/challenge/utils/challengeLifecycle';
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
 
@@ -85,9 +86,7 @@ export const TodayPage = () => {
   const unreadCheers = cheers?.filter((c: any) => !c.isRead) || [];
 
   const activeChallenges = useMemo(
-    () => (myChallengesData?.challenges || []).filter(
-      (c: any) => String(c.challenge?.lifecycle || '') === 'active'
-    ),
+    () => (myChallengesData?.challenges || []).filter((c: any) => resolveChallengeBucket(c) === 'active'),
     [myChallengesData]
   );
 
@@ -112,14 +111,21 @@ export const TodayPage = () => {
               {activeChallenges.map((challenge: any) => {
                 const progress = challenge.progress || [];
                 const currentDay = challenge.currentDay || 1;
-                const todayDone = progress[currentDay - 1]?.status === 'success';
+                const durationDays = Number(challenge.durationDays || challenge.challenge?.durationDays || 7);
+                const todayProgress = progress.find((p: any) => Number(p?.day) === Number(currentDay));
+                const isChallengeCompleted = Number(currentDay) > Math.max(1, durationDays);
+                const todayDone = isChallengeCompleted || todayProgress?.status === 'success';
                 return (
                   <div key={challenge.userChallengeId} className="flex items-center justify-between gap-3 py-1">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{challenge.challenge?.badgeIcon || '🎯'}</span>
                       <div>
                         <p className="text-sm font-semibold text-gray-900">{challenge.challenge?.title}</p>
-                        <p className="text-xs text-gray-500">Day {currentDay} / 7</p>
+                        {isChallengeCompleted ? (
+                          <p className="text-xs text-emerald-600">🏁 챌린지 완료</p>
+                        ) : (
+                          <p className="text-xs text-gray-500">Day {currentDay} / {durationDays}</p>
+                        )}
                       </div>
                     </div>
                     {todayDone ? (

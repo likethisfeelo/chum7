@@ -8,6 +8,7 @@ import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
 import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
+import { resolveChallengeBucket } from '@/features/challenge/utils/challengeLifecycle';
 import toast from 'react-hot-toast';
 
 type METab = 'active' | 'pending' | 'completed';
@@ -279,15 +280,12 @@ export const MEPage = () => {
   };
 
   const pendingChallenges = useMemo(
-    () => challenges.filter((challenge: any) => {
-      const lifecycle = String(challenge.challenge?.lifecycle || '');
-      return lifecycle === 'recruiting' || lifecycle === 'preparing' || challenge.phase === 'preparing';
-    }),
+    () => challenges.filter((challenge: any) => resolveChallengeBucket(challenge) === 'preparing'),
     [challenges],
   );
 
   const activeChallenges = useMemo(
-    () => challenges.filter((challenge: any) => String(challenge.challenge?.lifecycle || '') === 'active'),
+    () => challenges.filter((challenge: any) => resolveChallengeBucket(challenge) === 'active'),
     [challenges],
   );
 
