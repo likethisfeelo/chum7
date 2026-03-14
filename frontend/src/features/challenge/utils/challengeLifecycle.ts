@@ -53,6 +53,23 @@ export function getProgressEntryByDay(progress: any, day: number): any | undefin
   return target;
 }
 
+export function getLatestCompletedProgressEntry(progress: any): { entry: any; day: number } | null {
+  const list = Array.isArray(progress) ? progress : [];
+  let latest: { entry: any; day: number } | null = null;
+
+  list.forEach((item: any, index: number) => {
+    const day = resolveProgressDay(item, index);
+    if (!day) return;
+    const status = String(item?.status || '').toLowerCase();
+    if (status !== 'success' && status !== 'remedy' && status !== 'failed') return;
+    if (!latest || day >= latest.day) {
+      latest = { entry: item, day };
+    }
+  });
+
+  return latest;
+}
+
 export function resolveVerificationStatusForDay(progress: any, day: number, currentDay: number): string {
   const entry = getProgressEntryByDay(progress, day);
   if (entry?.status) return String(entry.status).toLowerCase();

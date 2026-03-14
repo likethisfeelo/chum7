@@ -10,10 +10,10 @@ import { InlineVerificationForm } from '@/features/verification/components/Inlin
 import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
 import {
   countParticipatedDays,
+  getLatestCompletedProgressEntry,
   getProgressEntryByDay,
   isVerificationDayCompleted,
   resolveChallengeBucket,
-  resolveProgressDay,
   resolveVerificationStatusForDay,
 } from '@/features/challenge/utils/challengeLifecycle';
 import toast from 'react-hot-toast';
@@ -468,9 +468,7 @@ export const MEPage = () => {
                           const isExpanded = expandedCards.has(uid);
 
                           // 가장 최근 인증된 날 (접힌 상태에서 표시할 행)
-                          const lastVerifiedEntry = [...progress]
-                            .filter((p: any) => ['success', 'remedy', 'failed'].includes(String(p?.status || '').toLowerCase()))
-                            .sort((a: any, b: any) => (resolveProgressDay(b) || 0) - (resolveProgressDay(a) || 0))[0];
+                          const lastVerified = getLatestCompletedProgressEntry(progress);
 
                           return (
                             <motion.div
@@ -498,8 +496,8 @@ export const MEPage = () => {
                               </div>
 
                               {/* 접힌 상태: 최근 인증 날 행 1줄 */}
-                              {!isExpanded && lastVerifiedEntry && (() => {
-                                const p = lastVerifiedEntry;
+                              {!isExpanded && lastVerified && (() => {
+                                const p = lastVerified.entry;
                                 const verif = p.verificationId ? verificationMap.get(p.verificationId) : undefined;
                                 const timeStr = formatVerificationTime(p.timestamp);
                                 const note = verif?.todayNote || '';
@@ -508,7 +506,7 @@ export const MEPage = () => {
                                   <div className="flex items-center gap-2.5 pt-1">
                                     <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dotColor}`} />
                                     <p className="text-xs text-gray-500 truncate flex-1 min-w-0">
-                                      <span className="font-semibold text-gray-700">{resolveProgressDay(p) || 1}일차</span>
+                                      <span className="font-semibold text-gray-700">{lastVerified.day}일차</span>
                                       {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
                                       {note && <span className="text-gray-400"> · {note}</span>}
                                     </p>

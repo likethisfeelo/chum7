@@ -1,6 +1,7 @@
 import {
   countParticipatedDays,
   getChallengeStatusLabel,
+  getLatestCompletedProgressEntry,
   getProgressEntryByDay,
   isVerificationDayCompleted,
   resolveChallengeBucket,
@@ -66,6 +67,19 @@ describe('challengeLifecycle resolveChallengeBucket', () => {
     expect(getProgressEntryByDay(progress, 1)?.status).toBe('success');
     expect(resolveVerificationStatusForDay(progress, 2, 3)).toBe('skipped');
     expect(resolveVerificationStatusForDay(progress, 3, 3)).toBe('pending');
+  });
+
+  test('latest completed progress entry prefers highest resolved day', () => {
+    const progress = [
+      { status: 'success' },
+      { day: 5, status: 'pending' },
+      { status: 'failed' },
+      { day: 4, status: 'success' },
+    ];
+
+    const latest = getLatestCompletedProgressEntry(progress);
+    expect(latest?.day).toBe(4);
+    expect(latest?.entry?.status).toBe('success');
   });
 
 });
