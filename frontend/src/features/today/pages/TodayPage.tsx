@@ -11,6 +11,31 @@ import { isVerificationDayCompleted, resolveChallengeBucket, resolveChallengeDay
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
 
+function getChallengeId(challenge: any): string {
+  return String(challenge?.challengeId || challenge?.challenge?.challengeId || challenge?.userChallengeId || '');
+}
+
+function getTodayRowStatusMeta(isChallengeEnded: boolean, todayDone: boolean): { label: string; className: string } {
+  if (isChallengeEnded) {
+    return {
+      label: '🏁 챌린지 완료',
+      className: 'text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-lg',
+    };
+  }
+
+  if (todayDone) {
+    return {
+      label: '✅ 인증 완료',
+      className: 'text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg',
+    };
+  }
+
+  return {
+    label: '⏳ 대기',
+    className: 'text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg',
+  };
+}
+
 export const TodayPage = () => {
   const queryClient = useQueryClient();
   const [replyDraftByCheer, setReplyDraftByCheer] = useState<Record<string, string>>({});
@@ -114,8 +139,10 @@ export const TodayPage = () => {
                 const durationDays = resolveChallengeDurationDays(challenge);
                 const isChallengeEnded = currentDay > durationDays;
                 const todayDone = isChallengeEnded || isVerificationDayCompleted(progress[currentDay - 1]?.status);
+                const statusMeta = getTodayRowStatusMeta(isChallengeEnded, todayDone);
+                const challengeId = getChallengeId(challenge);
                 return (
-                  <div key={challenge.userChallengeId} className="flex items-center justify-between gap-3 py-1">
+                  <div key={challengeId || challenge.userChallengeId} className="flex items-center justify-between gap-3 py-1">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{challenge.challenge?.badgeIcon || '🎯'}</span>
                       <div>
@@ -123,11 +150,7 @@ export const TodayPage = () => {
                         <p className="text-xs text-gray-500">Day {currentDay} / {durationDays}</p>
                       </div>
                     </div>
-                    {todayDone ? (
-                      <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg">✅ 완료</span>
-                    ) : (
-                      <span className="text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg">⏳ 대기</span>
-                    )}
+                    <span className={statusMeta.className}>{statusMeta.label}</span>
                   </div>
                 );
               })}
