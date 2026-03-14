@@ -179,9 +179,9 @@ export const MEPage = () => {
   const challenges = data?.challenges || [];
 
   const { data: completedChallengesData } = useQuery({
-    queryKey: ['my-challenges-completed'],
+    queryKey: ['my-challenges-completed', 'all'],
     queryFn: async () => {
-      const response = await apiClient.get('/challenges/my?status=completed');
+      const response = await apiClient.get('/challenges/my?status=all');
       return response.data.data;
     },
   });
@@ -290,7 +290,7 @@ export const MEPage = () => {
   );
 
   const completedChallenges = useMemo(
-    () => completedChallengesData?.challenges || [],
+    () => (completedChallengesData?.challenges || []).filter((challenge: any) => resolveChallengeBucket(challenge) === 'completed'),
     [completedChallengesData],
   );
 
@@ -660,12 +660,19 @@ export const MEPage = () => {
                 {completedChallenges.length === 0 ? (
                   <EmptyState icon="🏆" title="완료한 챌린지가 없어요" description="7일 챌린지를 완주하면 여기에 표시돼요" />
                 ) : completedChallenges.map((challenge: any) => (
-                  <div key={challenge.userChallengeId || challenge.challengeId} className="bg-white rounded-2xl p-5 border border-emerald-200 space-y-3">
+                  <div
+                    key={challenge.userChallengeId || challenge.challengeId}
+                    className={`bg-white rounded-2xl p-5 border space-y-3 ${(String(challenge.status || '').toLowerCase() === 'failed' || String(challenge.phase || '').toLowerCase() === 'failed') ? 'border-gray-300' : 'border-emerald-200'}`}
+                  >
                     <div className="flex items-start gap-3">
                       <span className="text-2xl">{challenge.challenge?.badgeIcon || challenge.badgeIcon || '🏆'}</span>
                       <div>
                         <p className="font-semibold text-gray-900">{challenge.challenge?.title || challenge.title}</p>
-                        <p className="text-xs text-emerald-700 mt-0.5">완주 완료 🎉</p>
+                        {(String(challenge.status || '').toLowerCase() === 'failed' || String(challenge.phase || '').toLowerCase() === 'failed') ? (
+                          <p className="text-xs text-gray-600 mt-0.5">종료(미달성)</p>
+                        ) : (
+                          <p className="text-xs text-emerald-700 mt-0.5">완주 완료 🎉</p>
+                        )}
                       </div>
                     </div>
                     <button
