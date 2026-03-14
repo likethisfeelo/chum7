@@ -58,6 +58,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     });
   } catch (error: any) {
     console.error("admin/plaza/convert-run-now error", error);
-    return response(500, { error: "INTERNAL_SERVER_ERROR", message: "작업 실행 중 오류가 발생했습니다." });
+    return response(500, { error: "INTERNAL_SERVER_ERROR", message: "작업 실행 중 오류가 발생했습니다.", detail: error?.message || String(error) });
   }
 };
