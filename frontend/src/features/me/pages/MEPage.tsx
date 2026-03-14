@@ -12,6 +12,7 @@ import {
   getChallengeProgressSummary,
   getLatestCompletedProgressEntry,
   getProgressEntryByDay,
+  isFailedChallengeState,
   isVerificationDayCompleted,
   resolveChallengeBucket,
   resolveChallengeDurationDays,
@@ -658,13 +659,13 @@ export const MEPage = () => {
                 ) : completedChallenges.map((challenge: any) => (
                   <div
                     key={challenge.userChallengeId || challenge.challengeId}
-                    className={`bg-white rounded-2xl p-5 border space-y-3 ${(String(challenge.status || '').toLowerCase() === 'failed' || String(challenge.phase || '').toLowerCase() === 'failed') ? 'border-gray-300' : 'border-emerald-200'}`}
+                    className={`bg-white rounded-2xl p-5 border space-y-3 ${isFailedChallengeState(challenge) ? 'border-gray-300' : 'border-emerald-200'}`}
                   >
                     <div className="flex items-start gap-3">
                       <span className="text-2xl">{challenge.challenge?.badgeIcon || challenge.badgeIcon || '🏆'}</span>
                       <div>
                         <p className="font-semibold text-gray-900">{challenge.challenge?.title || challenge.title}</p>
-                        {(String(challenge.status || '').toLowerCase() === 'failed' || String(challenge.phase || '').toLowerCase() === 'failed') ? (
+                        {isFailedChallengeState(challenge) ? (
                           <p className="text-xs text-gray-600 mt-0.5">종료(미달성)</p>
                         ) : (
                           <p className="text-xs text-emerald-700 mt-0.5">완주 완료 🎉</p>

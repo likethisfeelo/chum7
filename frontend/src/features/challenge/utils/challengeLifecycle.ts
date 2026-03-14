@@ -92,6 +92,12 @@ export function resolveVerificationStatusForDay(progress: any, day: number, curr
   return day < Number(currentDay) ? 'skipped' : 'pending';
 }
 
+export function isFailedChallengeState(item: any): boolean {
+  const status = String(item?.status || '').toLowerCase();
+  const phase = String(item?.phase || '').toLowerCase();
+  return status === 'failed' || phase === 'failed';
+}
+
 export function resolveChallengeBucket(item: any): ChallengeBucket {
   const userStatus = String(item?.status || '').toLowerCase();
   const userPhase = String(item?.phase || '').toLowerCase();

@@ -6,6 +6,7 @@ import {
   getLatestCompletedProgressEntry,
   getProgressEntryByDay,
   isCompletedVerificationStatus,
+  isFailedChallengeState,
   isVerificationDayCompleted,
   resolveChallengeBucket,
   resolveChallengeDay,
@@ -104,6 +105,12 @@ describe('challengeLifecycle resolveChallengeBucket', () => {
     expect(resolveChallengeDurationDays({ challenge: { durationDays: 5 }, progress: [{}, {}, {}] })).toBe(5);
     expect(resolveChallengeDurationDays({ progress: [{}, {}, {}] })).toBe(3);
     expect(resolveChallengeDurationDays({})).toBe(7);
+  });
+
+  test('failed challenge state helper checks status/phase', () => {
+    expect(isFailedChallengeState({ status: 'failed' })).toBe(true);
+    expect(isFailedChallengeState({ phase: 'FAILED' })).toBe(true);
+    expect(isFailedChallengeState({ status: 'active', phase: 'in_progress' })).toBe(false);
   });
 
 });
