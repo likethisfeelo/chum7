@@ -46,4 +46,12 @@ describe('challengeLifecycle resolveChallengeBucket', () => {
     ];
     expect(countParticipatedDays(progress)).toBe(3);
   });
+
+  test('helpers fallback to index when progress.day is missing', () => {
+    const progress = [{ status: 'success' }, { status: 'pending' }, { status: 'failed' }];
+    expect(isVerificationDayCompleted(progress, 1)).toBe(true);
+    expect(isVerificationDayCompleted(progress, 2)).toBe(false);
+    expect(countParticipatedDays(progress)).toBe(2);
+  });
+
 });

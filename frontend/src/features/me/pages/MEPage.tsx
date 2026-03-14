@@ -8,7 +8,13 @@ import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
 import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
-import { resolveChallengeBucket } from '@/features/challenge/utils/challengeLifecycle';
+import {
+  countParticipatedDays,
+  getProgressEntryByDay,
+  isVerificationDayCompleted,
+  resolveChallengeBucket,
+  resolveVerificationStatusForDay,
+} from '@/features/challenge/utils/challengeLifecycle';
 import toast from 'react-hot-toast';
 
 type METab = 'active' | 'pending' | 'completed';
@@ -103,22 +109,17 @@ function getChallengeDay(challenge: any): number {
 }
 
 function getParticipatedDaysCount(challenge: any): number {
-  const progress = Array.isArray(challenge?.progress) ? challenge.progress : [];
-  return progress.filter((item: any) => isCompletedStatus(item?.status)).length;
-}
-
-function isCompletedStatus(status?: string): boolean {
-  return status === 'success' || status === 'remedy' || status === 'failed';
+  return countParticipatedDays(challenge?.progress);
 }
 
 function hasBacklogBeforeToday(challenge: any): boolean {
   const progress = challenge.progress || [];
   const challengeDay = getChallengeDay(challenge);
-  const todayIndex = Math.max(0, Math.min(getDurationDays(challenge) - 1, challengeDay - 1));
+  const durationDays = getDurationDays(challenge);
+  const todayDay = Math.max(1, Math.min(durationDays, challengeDay));
 
-  for (let i = 0; i < todayIndex; i += 1) {
-    const status = progress[i]?.status;
-    if (!isCompletedStatus(status)) {
+  for (let day = 1; day < todayDay; day += 1) {
+    if (!isVerificationDayCompleted(progress, day)) {
       return true;
     }
   }
@@ -147,10 +148,8 @@ function formatVerificationTime(iso: string | undefined | null): string {
 }
 
 function isTodayVerified(challenge: any): boolean {
-  const progress = challenge.progress || [];
   const currentDay = getChallengeDay(challenge);
-  const status = progress[currentDay - 1]?.status;
-  return status === 'success' || status === 'remedy' || status === 'failed';
+  return isVerificationDayCompleted(challenge?.progress, currentDay);
 }
 
 const getProposalStatusMeta = (status?: string) => {
@@ -469,9 +468,8 @@ export const MEPage = () => {
 
                           // 가장 최근 인증된 날 (접힌 상태에서 표시할 행)
                           const lastVerifiedEntry = [...progress]
-                            .map((p: any, i: number) => ({ ...p, i }))
-                            .filter((p: any) => ['success', 'remedy', 'failed'].includes(p.status))
-                            .sort((a: any, b: any) => b.i - a.i)[0];
+                            .filter((p: any) => ['success', 'remedy', 'failed'].includes(String(p?.status || '').toLowerCase()))
+                            .sort((a: any, b: any) => Number(b?.day || 0) - Number(a?.day || 0))[0];
 
                           return (
                             <motion.div
@@ -509,7 +507,7 @@ export const MEPage = () => {
                                   <div className="flex items-center gap-2.5 pt-1">
                                     <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dotColor}`} />
                                     <p className="text-xs text-gray-500 truncate flex-1 min-w-0">
-                                      <span className="font-semibold text-gray-700">{p.i + 1}일차</span>
+                                      <span className="font-semibold text-gray-700">{Number(p?.day || 0)}일차</span>
                                       {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
                                       {note && <span className="text-gray-400"> · {note}</span>}
                                     </p>
@@ -522,8 +520,9 @@ export const MEPage = () => {
                                 <div className="pt-1">
                                   <p className="text-xs text-primary-500 text-right mb-2">탭하면 피드로 이동 →</p>
                                   {Array.from({ length: durationDays }, (_, i) => {
-                                    const p = progress[i];
-                                    const status = p?.status || (i < currentDay - 1 ? 'skipped' : 'pending');
+                                    const day = i + 1;
+                                    const p = getProgressEntryByDay(progress, day);
+                                    const status = resolveVerificationStatusForDay(progress, day, currentDay);
                                     const isPending = status === 'pending';
                                     const verif = p?.verificationId ? verificationMap.get(p.verificationId) : undefined;
                                     const timeStr = formatVerificationTime(p?.timestamp);
@@ -531,7 +530,7 @@ export const MEPage = () => {
                                     const dotColor = (DAY_STATUS_COLORS[status] || 'bg-gray-200').split(' ')[0];
                                     const isLastItem = i === durationDays - 1;
                                     return (
-                                      <div key={i} className="flex items-start gap-3">
+                                      <div key={day} className="flex items-start gap-3">
                                         {/* 왼쪽: 점 + 세로선 */}
                                         <div className="flex flex-col items-center flex-shrink-0" style={{ width: 16 }}>
                                           <div className={`w-2.5 h-2.5 rounded-full mt-1 ${dotColor}`} />
@@ -542,10 +541,10 @@ export const MEPage = () => {
                                         {/* 오른쪽: 텍스트 */}
                                         <div className="flex-1 min-w-0 pb-2.5">
                                           {isPending ? (
-                                            <p className="text-xs text-gray-300 mt-0.5">{i + 1}일차</p>
+                                            <p className="text-xs text-gray-300 mt-0.5">{day}일차</p>
                                           ) : (
                                             <p className="text-xs text-gray-500 truncate mt-0.5">
-                                              <span className="font-semibold text-gray-700">{i + 1}일차</span>
+                                              <span className="font-semibold text-gray-700">{day}일차</span>
                                               {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
                                               {note && <span className="text-gray-400"> · {note}</span>}
                                             </p>

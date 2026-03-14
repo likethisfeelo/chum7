@@ -10,8 +10,7 @@ export function resolveChallengeDay(item: any): number {
 }
 
 export function isVerificationDayCompleted(progress: any, day: number): boolean {
-  const list = Array.isArray(progress) ? progress : [];
-  const target = list.find((item: any) => Number(item?.day) === Number(day));
+  const target = getProgressEntryByDay(progress, day);
   const status = String(target?.status || '').toLowerCase();
   return status === 'success' || status === 'remedy' || status === 'failed';
 }
@@ -20,16 +19,38 @@ export function countParticipatedDays(progress: any): number {
   const list = Array.isArray(progress) ? progress : [];
   const completedDaySet = new Set<number>();
 
-  list.forEach((item: any) => {
-    const day = Number(item?.day);
-    if (!Number.isFinite(day)) return;
+  list.forEach((item: any, index: number) => {
+    const parsedDay = Number(item?.day);
+    const day = Number.isFinite(parsedDay) ? Math.floor(parsedDay) : index + 1;
     const status = String(item?.status || '').toLowerCase();
     if (status === 'success' || status === 'remedy' || status === 'failed') {
-      completedDaySet.add(Math.floor(day));
+      completedDaySet.add(day);
     }
   });
 
   return completedDaySet.size;
+}
+
+export function getProgressEntryByDay(progress: any, day: number): any | undefined {
+  const list = Array.isArray(progress) ? progress : [];
+  const targetDay = Number(day);
+  let target: any | undefined;
+
+  list.forEach((item: any, index: number) => {
+    const parsedDay = Number(item?.day);
+    const itemDay = Number.isFinite(parsedDay) ? Math.floor(parsedDay) : index + 1;
+    if (itemDay === targetDay) {
+      target = item;
+    }
+  });
+
+  return target;
+}
+
+export function resolveVerificationStatusForDay(progress: any, day: number, currentDay: number): string {
+  const entry = getProgressEntryByDay(progress, day);
+  if (entry?.status) return String(entry.status).toLowerCase();
+  return day < Number(currentDay) ? 'skipped' : 'pending';
 }
 
 export function resolveChallengeBucket(item: any): ChallengeBucket {
