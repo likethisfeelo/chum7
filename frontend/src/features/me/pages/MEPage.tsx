@@ -14,6 +14,8 @@ import {
   resolveChallengeBucket,
   resolveChallengeDay,
   resolveChallengeDurationDays,
+  resolveChallengeId,
+  resolveUserChallengeId,
 } from '@/features/challenge/utils/challengeLifecycle';
 import toast from 'react-hot-toast';
 
@@ -31,6 +33,15 @@ const DAY_STATUS_COLORS: Record<string, string> = {
 function getChallengeTypeLabel(challenge: any) {
   const type = String(challenge?.challenge?.challengeType || challenge?.challenge?.type || 'leader_personal');
   return getChallengeTypeLabelByType(type);
+}
+
+
+function getResolvedChallengeId(challenge: any): string {
+  return resolveChallengeId(challenge);
+}
+
+function getResolvedUserChallengeId(challenge: any): string {
+  return resolveUserChallengeId(challenge);
 }
 
 // personalTarget → 분 단위 변환 (0~1439)
@@ -177,16 +188,18 @@ export const MEPage = () => {
   );
 
   const { data: personalQuestProposalMap } = useQuery({
-    queryKey: ['my-personal-quest-proposals', personalQuestTargetChallenges.map((c: any) => c.challengeId).join(',')],
+    queryKey: ['my-personal-quest-proposals', personalQuestTargetChallenges.map((c: any) => getResolvedChallengeId(c)).filter(Boolean).join(',')],
     enabled: personalQuestTargetChallenges.length > 0,
     queryFn: async () => {
       const entries = await Promise.all(
         personalQuestTargetChallenges.map(async (challenge: any) => {
-          const response = await apiClient.get(`/challenges/${challenge.challengeId}/personal-quest`);
-          return [challenge.challengeId, response.data?.data?.latestProposal || null] as const;
+          const challengeId = getResolvedChallengeId(challenge);
+          if (!challengeId) return ['', null] as const;
+          const response = await apiClient.get(`/challenges/${challengeId}/personal-quest`);
+          return [challengeId, response.data?.data?.latestProposal || null] as const;
         }),
       );
-      return Object.fromEntries(entries) as Record<string, any>;
+      return Object.fromEntries(entries.filter(([key]) => Boolean(key))) as Record<string, any>;
     },
   });
 
@@ -223,8 +236,13 @@ export const MEPage = () => {
   });
 
   const handleVerifiedCardClick = (challenge: any) => {
-    const id = challenge.userChallengeId;
-    const challengeId = challenge.challengeId || challenge.challenge?.challengeId;
+    const id = getResolvedUserChallengeId(challenge);
+    const challengeId = getResolvedChallengeId(challenge);
+    if (!id || !challengeId) {
+      toast.error('챌린지 정보를 찾지 못했습니다');
+      return;
+    }
+
     if (expandedCards.has(id)) {
       navigate(`/challenge-feed/${challengeId}`);
     } else {
@@ -233,12 +251,30 @@ export const MEPage = () => {
   };
 
   const handleLeaderDm = (challenge: any) => {
-    const challengeId = challenge?.challengeId || challenge?.challenge?.challengeId;
+    const challengeId = getResolvedChallengeId(challenge);
     if (!challengeId) {
       toast.error('챌린지 정보를 찾지 못했습니다');
       return;
     }
     leaderDmMutation.mutate(challengeId);
+  };
+
+  const openChallengeFeed = (challenge: any) => {
+    const challengeId = getResolvedChallengeId(challenge);
+    if (!challengeId) {
+      toast.error('챌린지 정보를 찾지 못했습니다');
+      return;
+    }
+    navigate(`/challenge-feed/${challengeId}`);
+  };
+
+  const openChallengeIntro = (challenge: any) => {
+    const challengeId = getResolvedChallengeId(challenge);
+    if (!challengeId) {
+      toast.error('챌린지 정보를 찾지 못했습니다');
+      return;
+    }
+    navigate(`/challenges/${challengeId}`);
   };
 
   const pendingChallenges = useMemo(
@@ -260,7 +296,7 @@ export const MEPage = () => {
 
     const deduped = new Map<string, any>();
     merged.forEach((item: any) => {
-      const key = String(item?.userChallengeId || item?.challengeId || '');
+      const key = getResolvedUserChallengeId(item);
       if (!key) return;
       if (!deduped.has(key)) deduped.set(key, item);
     });
@@ -280,7 +316,7 @@ export const MEPage = () => {
         const dayDiff = resolveChallengeDay(b) - resolveChallengeDay(a);
         if (dayDiff !== 0) return dayDiff;
 
-        return String(a.userChallengeId || '').localeCompare(String(b.userChallengeId || ''));
+        return getResolvedUserChallengeId(a).localeCompare(getResolvedUserChallengeId(b));
       }),
     [activeChallenges],
   );
@@ -305,7 +341,7 @@ export const MEPage = () => {
     [unverifiedChallenges],
   );
   const primaryUnverified = primaryCandidateChallenges[0] ?? null;
-  const otherUnverified = unverifiedChallenges.filter((challenge: any) => challenge.userChallengeId !== primaryUnverified?.userChallengeId);
+  const otherUnverified = unverifiedChallenges.filter((challenge: any) => getResolvedUserChallengeId(challenge) !== getResolvedUserChallengeId(primaryUnverified));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -400,7 +436,7 @@ export const MEPage = () => {
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">오늘 인증 예정</p>
                         {otherUnverified.map((challenge: any, index: number) => (
                           <motion.div
-                            key={challenge.userChallengeId}
+                            key={getResolvedUserChallengeId(challenge)}
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.05 }}
@@ -419,7 +455,7 @@ export const MEPage = () => {
                             </div>
                             <button
                               type="button"
-                              onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                              onClick={() => openChallengeFeed(challenge)}
                               className="flex-shrink-0 px-3 py-2 bg-primary-500 text-white text-xs font-semibold rounded-xl hover:bg-primary-600 transition-colors"
                             >
                               인증하기
@@ -438,7 +474,7 @@ export const MEPage = () => {
                           const currentDay = resolveChallengeDay(challenge);
                           const durationDays = resolveChallengeDurationDays(challenge);
                           const participatedDays = countParticipatedDays(challenge);
-                          const uid = challenge.userChallengeId;
+                          const uid = getResolvedUserChallengeId(challenge);
                           const isExpanded = expandedCards.has(uid);
 
                           // 가장 최근 인증된 날 (접힌 상태에서 표시할 행)
@@ -553,11 +589,12 @@ export const MEPage = () => {
                 ) : pendingChallenges.map((challenge: any) => {
                   const lifecycle = String(challenge.challenge?.lifecycle || 'preparing');
                   const statusLabel = lifecycle === 'recruiting' ? '리크루팅' : '준비중';
-                  const proposal = personalQuestProposalMap?.[challenge.challengeId];
+                  const challengeId = getResolvedChallengeId(challenge);
+                  const proposal = personalQuestProposalMap?.[challengeId];
                   const statusMeta = getProposalStatusMeta(proposal?.status);
 
                   return (
-                    <div key={challenge.userChallengeId} className="bg-white rounded-2xl p-5 border border-amber-200 space-y-3">
+                    <div key={getResolvedUserChallengeId(challenge)} className="bg-white rounded-2xl p-5 border border-amber-200 space-y-3">
                       <div className="flex items-start gap-3">
                         <span className="text-2xl">{challenge.challenge?.badgeIcon || '🎯'}</span>
                         <div className="flex-1">
@@ -570,7 +607,7 @@ export const MEPage = () => {
 
                       <button
                         type="button"
-                        onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                        onClick={() => openChallengeFeed(challenge)}
                         className="w-full py-2.5 rounded-xl border border-primary-200 text-primary-700 bg-primary-50 text-sm font-medium hover:bg-primary-100 transition-colors"
                       >
                         챌린지 피드 →
@@ -589,7 +626,7 @@ export const MEPage = () => {
                           {proposal?.status === 'rejected' && (
                             <button
                               type="button"
-                              onClick={() => navigate(`/quests?challengeId=${challenge.challengeId}`)}
+                              onClick={() => { const challengeId = getResolvedChallengeId(challenge); if (!challengeId) { toast.error('챌린지 정보를 찾지 못했습니다'); return; } navigate(`/quests?challengeId=${challengeId}`); }}
                               className="mt-1 px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white"
                             >
                               퀘스트 보드에서 수정하기
@@ -601,14 +638,14 @@ export const MEPage = () => {
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => navigate(`/challenges/${challenge.challengeId}`)}
+                          onClick={() => openChallengeIntro(challenge)}
                           className="px-3 py-1.5 text-xs rounded-lg bg-white border border-amber-200 text-amber-800"
                         >
                           챌린지 소개
                         </button>
                         <button
                           type="button"
-                          onClick={() => navigate(`/quests?challengeId=${challenge.challengeId}`)}
+                          onClick={() => { const challengeId = getResolvedChallengeId(challenge); if (!challengeId) { toast.error('챌린지 정보를 찾지 못했습니다'); return; } navigate(`/quests?challengeId=${challengeId}`); }}
                           className="px-3 py-1.5 text-xs rounded-lg bg-amber-600 text-white"
                         >
                           퀘스트 보드
@@ -616,10 +653,10 @@ export const MEPage = () => {
                         <button
                           type="button"
                           onClick={() => handleLeaderDm(challenge)}
-                          disabled={leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId)}
+                          disabled={leaderDmTargetId === getResolvedChallengeId(challenge)}
                           className="px-3 py-1.5 text-xs rounded-lg border border-blue-200 bg-white text-blue-700 disabled:opacity-50"
                         >
-                          {leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId) ? 'DM 중...' : '리더 DM'}
+                          {leaderDmTargetId === getResolvedChallengeId(challenge) ? 'DM 중...' : '리더 DM'}
                         </button>
                       </div>
                     </div>
@@ -634,7 +671,7 @@ export const MEPage = () => {
                 {completedChallenges.length === 0 ? (
                   <EmptyState icon="🏆" title="완료한 챌린지가 없어요" description="7일 챌린지를 완주하면 여기에 표시돼요" />
                 ) : completedChallenges.map((challenge: any) => (
-                  <div key={challenge.userChallengeId || challenge.challengeId} className={`bg-white rounded-2xl p-5 border space-y-3 ${String(challenge.status || '').toLowerCase() === 'failed' ? 'border-rose-200' : 'border-emerald-200'}`}>
+                  <div key={getResolvedUserChallengeId(challenge)} className={`bg-white rounded-2xl p-5 border space-y-3 ${String(challenge.status || '').toLowerCase() === 'failed' ? 'border-rose-200' : 'border-emerald-200'}`}>
                     <div className="flex items-start gap-3">
                       <span className="text-2xl">{challenge.challenge?.badgeIcon || challenge.badgeIcon || '🏆'}</span>
                       <div>
@@ -644,7 +681,7 @@ export const MEPage = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                      onClick={() => openChallengeFeed(challenge)}
                       className="w-full py-2.5 rounded-xl border border-primary-200 text-primary-700 bg-primary-50 text-sm font-medium hover:bg-primary-100 transition-colors"
                     >
                       챌린지 피드 →
