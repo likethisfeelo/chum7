@@ -241,6 +241,13 @@
 **목표**
 - 유저가 보는 상태(준비중/진행중/완료)가 실제 데이터와 항상 일치.
 
+**진행 현황 (2026-03 업데이트)**
+- [x] 공통 lifecycle 유틸(`resolveChallengeBucket/day/duration`)을 ME/Profile/Today에서 공통 사용.
+- [x] 완료 판정 status 대소문자 정규화(`success/remedy/failed`) 처리.
+- [x] 참여일 집계를 진행 레코드 건수 기준이 아닌 day 중복 제거 기준으로 보정.
+- [x] Today 요약에서 `currentDay > durationDays` 챌린지의 완료 상태 표기 정합화.
+- [ ] 운영 QA Gate(오분류 0건/화면간 불일치 0건) 리허설 및 체크리스트 서명.
+
 **Frontend**
 - 버킷 분류 유틸 공통화(ME/Profile/Today 재사용).
 - `Day X / duration` 및 참여일 집계 표시 공통 컴포넌트화.

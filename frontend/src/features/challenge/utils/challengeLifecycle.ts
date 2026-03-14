@@ -1,7 +1,8 @@
 export type ChallengeBucket = 'pending' | 'active' | 'completed' | 'other';
 
 export function isVerificationDayCompleted(status?: string): boolean {
-  return status === 'success' || status === 'remedy' || status === 'failed';
+  const normalizedStatus = String(status || '').toLowerCase();
+  return normalizedStatus === 'success' || normalizedStatus === 'remedy' || normalizedStatus === 'failed';
 }
 
 export function getDateOnly(date: Date): Date {
@@ -34,7 +35,9 @@ export function resolveChallengeDurationDays(challenge: any): number {
 export function resolveChallengeDay(challenge: any): number {
   const durationDays = resolveChallengeDurationDays(challenge);
   const maxDay = durationDays + 1;
-  const storedCurrentDay = Math.max(1, Math.min(maxDay, Number(challenge?.currentDay || 1)));
+  const parsedCurrentDay = Number(challenge?.currentDay);
+  const normalizedCurrentDay = Number.isFinite(parsedCurrentDay) ? parsedCurrentDay : 1;
+  const storedCurrentDay = Math.max(1, Math.min(maxDay, Math.floor(normalizedCurrentDay)));
 
   const lifecycle = String(challenge?.challenge?.lifecycle || '').toLowerCase();
   const phase = String(challenge?.phase || '').toLowerCase();
@@ -59,7 +62,22 @@ export function resolveChallengeDay(challenge: any): number {
 
 export function countParticipatedDays(challenge: any): number {
   const progress = Array.isArray(challenge?.progress) ? challenge.progress : [];
-  return progress.filter((item: any) => isVerificationDayCompleted(item?.status)).length;
+  const completedItems = progress.filter((item: any) => isVerificationDayCompleted(item?.status));
+
+  const completedDays = new Set<number>();
+  let withoutDayCount = 0;
+
+  completedItems.forEach((item: any) => {
+    const parsedDay = Number(item?.day);
+    if (Number.isFinite(parsedDay) && parsedDay > 0) {
+      completedDays.add(Math.floor(parsedDay));
+      return;
+    }
+
+    withoutDayCount += 1;
+  });
+
+  return completedDays.size + withoutDayCount;
 }
 
 export function resolveChallengeBucket(challenge: any): ChallengeBucket {

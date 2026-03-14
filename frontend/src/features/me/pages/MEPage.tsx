@@ -96,11 +96,15 @@ function formatVerificationTime(iso: string | undefined | null): string {
   return `${mer} ${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+function normalizeStatus(status?: string): string {
+  return String(status || '').toLowerCase();
+}
+
 function isTodayVerified(challenge: any): boolean {
   const progress = challenge.progress || [];
   const currentDay = resolveChallengeDay(challenge);
   const status = progress[currentDay - 1]?.status;
-  return status === 'success' || status === 'remedy' || status === 'failed';
+  return isVerificationDayCompleted(status);
 }
 
 const getProposalStatusMeta = (status?: string) => {
@@ -474,7 +478,7 @@ export const MEPage = () => {
                                 const verif = p.verificationId ? verificationMap.get(p.verificationId) : undefined;
                                 const timeStr = formatVerificationTime(p.timestamp);
                                 const note = verif?.todayNote || '';
-                                const dotColor = (DAY_STATUS_COLORS[p.status] || 'bg-gray-200').split(' ')[0];
+                                const dotColor = (DAY_STATUS_COLORS[normalizeStatus(p.status)] || 'bg-gray-200').split(' ')[0];
                                 return (
                                   <div className="flex items-center gap-2.5 pt-1">
                                     <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dotColor}`} />
@@ -498,7 +502,7 @@ export const MEPage = () => {
                                     const verif = p?.verificationId ? verificationMap.get(p.verificationId) : undefined;
                                     const timeStr = formatVerificationTime(p?.timestamp);
                                     const note = verif?.todayNote || '';
-                                    const dotColor = (DAY_STATUS_COLORS[status] || 'bg-gray-200').split(' ')[0];
+                                    const dotColor = (DAY_STATUS_COLORS[normalizeStatus(status)] || 'bg-gray-200').split(' ')[0];
                                     const isLastItem = i === durationDays - 1;
                                     return (
                                       <div key={i} className="flex items-start gap-3">
