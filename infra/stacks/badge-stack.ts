@@ -53,20 +53,9 @@ export class BadgeStack extends Stack {
       authorizer,
     });
 
-    const grantBadgesFn = new NodejsFunction(this, 'GrantBadgesFn', {
-      ...commonProps,
-      functionName: `chme-${stage}-badge-grant`,
-      entry: path.join(__dirname, '../../backend/services/badge/grant/index.ts'),
-      handler: 'handler',
-      environment: commonEnv,
-    });
-    badgesTable.grantReadWriteData(grantBadgesFn);
-
-    apiGateway.addRoutes({
-      path: '/badges/grant',
-      methods: [HttpMethod.POST],
-      integration: new HttpLambdaIntegration('BadgeGrantIntegration', grantBadgesFn),
-      authorizer,
-    });
+    // NOTE:
+    // badge grant는 verification submit 서버 경로에서만 수행하며
+    // 클라이언트가 직접 호출 가능한 공개 라우트는 제공하지 않는다.
+    // (임의 파라미터로 self-grant 시도 가능성 방지)
   }
 }

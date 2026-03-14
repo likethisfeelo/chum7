@@ -22,7 +22,8 @@ describe('week2 p0 readiness guards', () => {
     const app = read('infra/bin/chme.ts');
 
     expect(badgeStack).toContain("path: '/users/me/badges'");
-    expect(badgeStack).toContain("path: '/badges/grant'");
+    expect(badgeStack).not.toContain("path: '/badges/grant'");
+    expect(badgeStack).toContain('클라이언트가 직접 호출 가능한 공개 라우트는 제공하지 않는다');
     expect(coreStack).toContain('this.badgesTable = new Table(this, \'BadgesTable\'');
     expect(coreStack).toContain("indexName: 'userId-index'");
     expect(app).toContain('new BadgeStack(app, `chme-${stage}-badge`');

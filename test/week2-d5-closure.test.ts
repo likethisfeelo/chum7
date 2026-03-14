@@ -39,6 +39,7 @@ describe('week2 d5 closure guards', () => {
     const profileBadgePage = read('frontend/src/features/profile/pages/BadgeCollectionPage.tsx');
 
     expect(badgeStack).toContain("path: '/users/me/badges'");
+    expect(badgeStack).not.toContain("path: '/badges/grant'");
     expect(profileBadgePage).toContain("apiClient.get('/users/me/badges')");
   });
 });
