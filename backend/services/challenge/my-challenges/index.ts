@@ -2,6 +2,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
+import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -72,20 +73,24 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const challengeMap = new Map(challenges.map(c => [c.challengeId, c]));
 
     // 3. 데이터 결합
+    const nowIso = new Date().toISOString();
     const enrichedChallenges = userChallenges.map(uc => {
       const challenge = challengeMap.get(uc.challengeId);
-      
+      const durationDays = resolveDurationDays(challenge?.durationDays, uc.progress);
+
       // 진행률 계산
       const progressList = Array.isArray(uc.progress) ? uc.progress : Object.values(uc.progress || {});
       const completedDays = progressList.filter((p: any) => p?.status === 'success').length;
-      const progressPercentage = Math.round((completedDays / 7) * 100);
+      const progressPercentage = Math.max(0, Math.min(100, Math.round((completedDays / durationDays) * 100)));
+
+      const effectiveCurrentDay = calculateEffectiveCurrentDay(uc, nowIso, durationDays);
 
       return {
         userChallengeId: uc.userChallengeId,
         challengeId: uc.challengeId,
         phase: uc.phase,
         status: uc.status,
-        currentDay: uc.currentDay,
+        currentDay: effectiveCurrentDay,
         startDate: uc.startDate,
         score: uc.score,
         cheerCount: uc.cheerCount,

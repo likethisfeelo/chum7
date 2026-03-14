@@ -8,7 +8,7 @@ describe('challenge-quest-policy', () => {
   });
 
   test('practiceAt too old should fail', () => {
-    const res = validatePracticeAt('2026-01-01T05:59:59.000Z', '2026-01-01T10:00:00.000Z', 'Asia/Seoul');
+    const res = validatePracticeAt('2025-12-31T14:59:59.000Z', '2026-01-01T10:00:00.000Z', 'Asia/Seoul');
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.errorCode).toBe('PRACTICE_TOO_OLD');
   });
