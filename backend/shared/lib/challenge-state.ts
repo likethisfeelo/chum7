@@ -20,6 +20,10 @@ export function resolveNormalizedChallengeState(input: {
       isChallengePeriodEnded(input.effectiveCurrentDay, input.durationDays, status));
 
   if (!shouldAutoFinalize) {
+    // If challenge is active but user phase is still 'preparing', promote phase to match
+    if (lifecycle === 'active' && phase === 'preparing' && status !== 'completed' && status !== 'failed') {
+      return { status, phase: 'active' };
+    }
     return { status, phase };
   }
 
