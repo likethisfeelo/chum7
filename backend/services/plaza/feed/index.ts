@@ -1,8 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const s3 = new S3Client({});
 
 type PlazaFilter = 'all' | 'recruiting' | 'in_progress' | 'completed';
 
@@ -91,7 +94,44 @@ function exposureScore(post: any, nowMs: number): number {
   return (freshness + reaction) * typeWeight;
 }
 
-function sanitizePost(post: any): any {
+function extractImageS3Key(url?: string | null): string | null {
+  if (!url) return null;
+  const raw = String(url).trim();
+  if (!raw.startsWith('http://') && !raw.startsWith('https://')) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.pathname.startsWith('/uploads/'))
+      return parsed.pathname.slice('/uploads/'.length);
+    // Old-format CDN URL: pathname is the S3 key without /uploads/ prefix
+    const pathKey = parsed.pathname.replace(/^\/+/, '');
+    if (pathKey) return pathKey;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function toSignedImageUrl(url?: string | null): Promise<string | null> {
+  if (!url) return null;
+  const raw = String(url).trim();
+  if (!raw) return null;
+  // Already a new-format CloudFront URL — publicly accessible
+  if ((raw.includes('chum7.com') || raw.includes('cloudfront.net')) && raw.includes('/uploads/')) return raw;
+  const key = extractImageS3Key(raw);
+  if (!key || !process.env.UPLOADS_BUCKET) return raw;
+  try {
+    return await getSignedUrl(
+      s3,
+      new GetObjectCommand({ Bucket: process.env.UPLOADS_BUCKET, Key: key }),
+      { expiresIn: 3600 },
+    );
+  } catch (err) {
+    console.error('Failed to sign plaza image url:', err);
+    return raw;
+  }
+}
+
+async function sanitizePost(post: any): Promise<any> {
   const {
     sourceUserId,
     sourceId,
@@ -102,8 +142,11 @@ function sanitizePost(post: any): any {
     ...safe
   } = post;
 
+  const imageUrl = await toSignedImageUrl(safe.imageUrl || null);
+
   return {
     ...safe,
+    imageUrl,
     challengeId: safe.challengeId || sourceChallengeId || null,
     leaderId: safe.leaderId || sourceLeaderId || null,
   };
@@ -132,7 +175,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         .filter((item: any) => item?.isActive !== false)
         .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
-      const posts = items.slice(0, limit).map(sanitizePost);
+      const posts = await Promise.all(items.slice(0, limit).map(sanitizePost));
       const nextPerType: CursorMap = {};
       if (queryRes.LastEvaluatedKey) nextPerType[postType] = queryRes.LastEvaluatedKey;
 
@@ -169,7 +212,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       .flatMap((result) => result.items)
       .sort((a: any, b: any) => (b._score || 0) - (a._score || 0));
 
-    const posts = sorted.slice(0, limit).map(sanitizePost);
+    const posts = await Promise.all(sorted.slice(0, limit).map(sanitizePost));
 
     const nextPerType: CursorMap = {};
     for (const result of typeResults) {

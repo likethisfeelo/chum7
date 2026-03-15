@@ -561,7 +561,7 @@ export const InlineVerificationForm = ({
                   <p className="text-sm font-semibold text-gray-900 leading-tight">
                     {userChallenge.challenge?.title}
                   </p>
-                  <p className="text-xs text-primary-600">Day {safeDay} / 7</p>
+                  <p className="text-xs text-primary-600">Day {safeDay} / {userChallenge.durationDays || userChallenge.challenge?.durationDays || 7}</p>
                 </div>
               </div>
               <button

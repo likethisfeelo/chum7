@@ -67,6 +67,7 @@ export class ChallengeBoardStack extends Stack {
     });
     challengeBoardsTable.grantReadData(getBoardFn);
     userChallengesTable.grantReadData(getBoardFn);
+    challengesTable.grantReadData(getBoardFn);
     apiGateway.addRoutes({
       path: '/challenge-board/{challengeId}',
       methods: [HttpMethod.GET],
