@@ -65,7 +65,12 @@ function getDateOnly(date: Date): Date {
 }
 
 function parseChallengeStartDate(challenge: any): Date | null {
-  const start = challenge?.startDate || challenge?.challenge?.startDate || challenge?.challenge?.challengeStartAt;
+  const start =
+    challenge?.challenge?.actualStartAt ||
+    challenge?.challenge?.startConfirmedAt ||
+    challenge?.startDate ||
+    challenge?.challenge?.startDate ||
+    challenge?.challenge?.challengeStartAt;
   if (!start || typeof start !== 'string') return null;
 
   const dateOnlyMatch = start.match(/^(\d{4})-(\d{2})-(\d{2})$/);

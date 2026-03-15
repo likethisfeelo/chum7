@@ -29,7 +29,12 @@ function getKstDateOnly(): Date {
 }
 
 function parseChallengeStartDate(userChallenge: any): Date | null {
-  const start = userChallenge?.startDate || userChallenge?.challenge?.startDate || userChallenge?.challenge?.startAt;
+  const start =
+    userChallenge?.challenge?.actualStartAt ||
+    userChallenge?.challenge?.startConfirmedAt ||
+    userChallenge?.startDate ||
+    userChallenge?.challenge?.startDate ||
+    userChallenge?.challenge?.startAt;
   if (!start || typeof start !== "string") return null;
 
   // YYYY-MM-DD 형식 → KST 자정 기준으로 해석

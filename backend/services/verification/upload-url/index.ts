@@ -14,7 +14,9 @@ const uploadUrlSchema = z.object({
   fileName: z.string().min(1),
   fileType: z
     .string()
-    .regex(/^(image\/(jpeg|jpg|png|webp|gif)|video\/(mp4|webm|quicktime))$/),
+    .regex(
+      /^(image\/(jpeg|jpg|png|webp|gif|heic|heif|heic-sequence|heif-sequence)|video\/(mp4|webm|quicktime))$/,
+    ),
   fileSize: z
     .number()
     .int()
@@ -137,7 +139,13 @@ export const handler = async (
     const fileExtension =
       input.fileType === "video/quicktime"
         ? "mov"
-        : input.fileType.split("/")[1];
+        : input.fileType === "image/jpeg" || input.fileType === "image/jpg"
+          ? "jpg"
+          : input.fileType === "image/heic-sequence"
+            ? "heic"
+            : input.fileType === "image/heif-sequence"
+              ? "heif"
+              : input.fileType.split("/")[1];
 
     // S3 키 생성: uploads/userId/challengeId/timestamp-random.ext
     // "uploads/" prefix는 CloudFront /uploads/* 동작이 S3 키를 직접 매핑하기 위해 필요합니다.

@@ -147,6 +147,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           remedyPolicy: challenge.defaultRemedyPolicy || null,
           lifecycle: challenge.lifecycle,
           challengeStartAt: challenge.challengeStartAt,
+          actualStartAt: challenge.actualStartAt || null,
+          startConfirmedAt: challenge.startConfirmedAt || null,
           recruitingEndAt: challenge.recruitingEndAt,
           allowedVerificationTypes: Array.isArray(challenge.allowedVerificationTypes) && challenge.allowedVerificationTypes.length > 0
             ? challenge.allowedVerificationTypes
