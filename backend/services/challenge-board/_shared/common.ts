@@ -46,7 +46,6 @@ export async function isParticipant(
       ':cid': challengeId,
       ':active': 'active',
     },
-    Limit: 1,
   }));
 
   return !!result.Items?.length;
@@ -71,7 +70,6 @@ export async function wasParticipant(
       ':completed': 'completed',
       ':failed': 'failed',
     },
-    Limit: 1,
   }));
 
   return !!result.Items?.length;

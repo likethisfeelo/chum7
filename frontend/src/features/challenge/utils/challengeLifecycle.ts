@@ -136,7 +136,7 @@ export function resolveChallengeBucket(item: any): ChallengeBucket {
   }
 
   if (userStatus === 'active' || userStatus === 'in_progress') {
-    if (userPhase === 'preparing' || lifecycle === 'recruiting' || lifecycle === 'preparing') {
+    if (lifecycle !== 'active' && (userPhase === 'preparing' || lifecycle === 'recruiting' || lifecycle === 'preparing')) {
       return 'preparing';
     }
     return 'active';
