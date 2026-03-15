@@ -172,10 +172,19 @@ export const InlineVerificationForm = ({
     return filtered.length ? filtered : ALL_TYPES;
   }, [allowedVerificationTypes]);
 
+  // challengeType 기반 questType 가용 여부
+  const challengeType = String(userChallenge?.challenge?.challengeType || 'leader_personal');
+  const isMixedType = challengeType === 'leader_personal' || challengeType === 'mixed';
+  const isLeaderOnlyType = challengeType === 'leader_only';
+  const isPersonalOnlyType = challengeType === 'personal_only';
+  const showQuestTypeSelector = isMixedType; // 혼합형만 선택UI 표시
+  const defaultQuestType: 'leader' | 'personal' = isPersonalOnlyType ? 'personal' : 'leader';
+
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedType, setSelectedType] = useState<VerificationType>(
     availableTypes[0],
   );
+  const [selectedQuestType, setSelectedQuestType] = useState<'leader' | 'personal'>(defaultQuestType);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [videoDurationSec, setVideoDurationSec] = useState<number | null>(null);
@@ -378,6 +387,7 @@ export const InlineVerificationForm = ({
         userChallengeId: userChallenge.userChallengeId,
         day: getChallengeDay(userChallenge),
         verificationType: selectedType,
+        questType: selectedQuestType,
         ...(selectedType === "image" && uploadedUrl
           ? { imageUrl: uploadedUrl }
           : {}),
@@ -467,9 +477,6 @@ export const InlineVerificationForm = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const nowLocalDateTime = toLocalDateTimeInputValue(new Date());
-    setFormData((prev) => ({ ...prev, completedAt: nowLocalDateTime }));
-
     if (selectedType === "image" && !mediaFile) {
       toast.error("사진을 첨부해주세요.");
       return;
@@ -496,14 +503,13 @@ export const InlineVerificationForm = ({
       return;
     }
 
-    verificationMutation.mutate({ performedAtLocal: nowLocalDateTime });
+    // 사용자가 설정한 실천 시각 사용 (덮어쓰기 없음)
+    verificationMutation.mutate({ performedAtLocal: formData.completedAt });
   };
 
   const handleRetryUpload = () => {
     if (verificationMutation.isPending) return;
-    const nowLocalDateTime = toLocalDateTimeInputValue(new Date());
-    setFormData((prev) => ({ ...prev, completedAt: nowLocalDateTime }));
-    verificationMutation.mutate({ performedAtLocal: nowLocalDateTime });
+    verificationMutation.mutate({ performedAtLocal: formData.completedAt });
   };
 
   const makeExtraPublic = async () => {
@@ -750,6 +756,38 @@ export const InlineVerificationForm = ({
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
               />
             </div>
+
+            {showQuestTypeSelector && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  퀘스트 구분
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedQuestType('leader')}
+                    className={`flex-1 py-2 text-xs rounded-xl border font-medium transition-colors ${
+                      selectedQuestType === 'leader'
+                        ? 'bg-primary-600 text-white border-primary-600'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'
+                    }`}
+                  >
+                    리더 퀘스트
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedQuestType('personal')}
+                    className={`flex-1 py-2 text-xs rounded-xl border font-medium transition-colors ${
+                      selectedQuestType === 'personal'
+                        ? 'bg-primary-600 text-white border-primary-600'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'
+                    }`}
+                  >
+                    개인 퀘스트
+                  </button>
+                </div>
+              </div>
+            )}
 
             {extraVisibilityPrompt && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">

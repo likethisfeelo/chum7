@@ -28,11 +28,20 @@ export const MyRecordsPage = () => {
 
   const [extraItems, setExtraItems] = useState<any[]>([]);
   const [extraNextToken, setExtraNextToken] = useState<string | null>(null);
+  const initialLoadDone = extraItems.length > 0;
 
   useEffect(() => {
-    setExtraItems(myExtraFeedPage?.verifications || []);
-    setExtraNextToken(myExtraFeedPage?.nextToken || null);
-  }, [myExtraFeedPage]);
+    if (!myExtraFeedPage) return;
+    if (!initialLoadDone) {
+      // 첫 로드: 전체 교체
+      setExtraItems(myExtraFeedPage.verifications);
+      setExtraNextToken(myExtraFeedPage.nextToken);
+    } else {
+      // 재조회(visibility 변경 후): 기존 아이템의 isPersonalOnly 상태만 업데이트 (페이지네이션 유지)
+      const updatedMap = new Map(myExtraFeedPage.verifications.map((v: any) => [v.verificationId, v]));
+      setExtraItems((prev) => prev.map((item) => updatedMap.get(item.verificationId) ?? item));
+    }
+  }, [myExtraFeedPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const privateIds = extraItems.filter((item: any) => item.isPersonalOnly).map((item: any) => item.verificationId);

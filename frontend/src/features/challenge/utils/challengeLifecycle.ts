@@ -127,19 +127,22 @@ export function resolveChallengeBucket(item: any): ChallengeBucket {
     return 'completed';
   }
 
-  if (userPhase === 'in_progress' || userPhase === 'active') {
-    return 'active';
-  }
-
   if (userStatus === 'completed' || userPhase === 'completed' || lifecycle === 'completed') {
     return 'completed';
   }
 
-  if (userStatus === 'active' || userStatus === 'in_progress') {
-    if (lifecycle !== 'active' && (userPhase === 'preparing' || lifecycle === 'recruiting' || lifecycle === 'preparing')) {
-      return 'preparing';
-    }
+  // in_progress ↔ active 동의어 통일
+  const isUserInActivePhase =
+    userPhase === 'in_progress' || userPhase === 'active' ||
+    userStatus === 'active' || userStatus === 'in_progress';
+
+  if (isUserInActivePhase) {
+    if (lifecycle === 'preparing' || lifecycle === 'recruiting') return 'preparing';
     return 'active';
+  }
+
+  if (userPhase === 'preparing' || lifecycle === 'preparing' || lifecycle === 'recruiting') {
+    return 'preparing';
   }
 
   return 'other';

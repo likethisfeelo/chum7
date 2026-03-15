@@ -105,14 +105,16 @@ async function toSignedImageUrl(url?: string | null): Promise<string | null> {
   if (!url) return null;
   const raw = String(url).trim();
   if (!raw) return null;
-  // Already public CDN URL (uploads path) or already signed URL: reuse as-is
-  if (((raw.includes('chum7.com') || raw.includes('cloudfront.net')) && raw.includes('/uploads/')) || isLikelySignedAssetUrl(raw)) return raw;
+  // isLikelySignedAssetUrl: CloudFront /uploads/ URL 또는 이미 서명된 URL → 그대로 반환
+  if (isLikelySignedAssetUrl(raw)) return raw;
   const key = extractImageS3Key(raw);
   if (!key || !process.env.UPLOADS_BUCKET) return raw;
+  // S3 키에 uploads/ prefix 붙여서 서명 (S3 버킷 내 실제 키)
+  const s3Key = key.startsWith('uploads/') ? key : `uploads/${key}`;
   try {
     return await getSignedUrl(
       s3,
-      new GetObjectCommand({ Bucket: process.env.UPLOADS_BUCKET, Key: key }),
+      new GetObjectCommand({ Bucket: process.env.UPLOADS_BUCKET, Key: s3Key }),
       { expiresIn: 3600 },
     );
   } catch (err) {

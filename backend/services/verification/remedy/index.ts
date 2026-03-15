@@ -4,7 +4,8 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { certDateFromIso, remedyScore, safeTimezone } from '../../../shared/lib/challenge-quest-policy';
+import { certDateFromIso, remedyScore, safeTimezone, calculateChallengeDay } from '../../../shared/lib/challenge-quest-policy';
+import { resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 import { normalizeProgress } from '../../../shared/lib/progress';
 
 const dynamoClient = new DynamoDBClient({});
@@ -102,7 +103,26 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    if (userChallenge.currentDay !== 6) {
+    // effectiveCurrentDay 계산: stored currentDay와 캘린더 계산값 중 큰 것
+    const nowIso = new Date().toISOString();
+    const timezone = safeTimezone(
+      ((event.headers?.['x-user-timezone'] || event.headers?.['X-User-Timezone']) as string | undefined) ||
+        userChallenge.timezone,
+    );
+    let effectiveCurrentDay = Number(userChallenge.currentDay || 1);
+    if (userChallenge.startDate) {
+      try {
+        const certDate = certDateFromIso(nowIso, timezone);
+        const calendarDay = calculateChallengeDay(userChallenge.startDate, certDate, timezone);
+        if (Number.isFinite(calendarDay)) {
+          effectiveCurrentDay = Math.max(effectiveCurrentDay, calendarDay);
+        }
+      } catch {
+        // fallback to stored value
+      }
+    }
+
+    if (effectiveCurrentDay !== 6) {
       return response(400, {
         error: 'REMEDY_WRONG_DAY',
         message: 'Day 6에만 보완 인증이 가능합니다'

@@ -258,6 +258,11 @@ export const ChallengeFeedPage = () => {
     return <Loading fullScreen />;
   }
 
+  const challengeType = challengeData?.challengeType || 'leader_personal';
+  const isMixedChallengeType = challengeType === 'leader_personal' || challengeType === 'mixed';
+  const questBoardLabel = challengeType === 'leader_only' ? '리더 퀘스트 📋'
+    : challengeType === 'personal_only' ? '개인 퀘스트 📋' : '퀘스트 보드 📋';
+
   return (
     <div className="min-h-screen bg-gray-100">
       <div className="mx-auto min-h-screen w-full max-w-3xl bg-gray-50 pb-20 md:border-x md:border-gray-200">
@@ -305,8 +310,14 @@ export const ChallengeFeedPage = () => {
                 onClick={() => navigate(`/quests?challengeId=${challengeId}`)}
                 className="text-xs font-semibold text-amber-700"
               >
-                퀘스트 보드 📋
+                {questBoardLabel}
               </button>
+              {challengeType === 'personal_only' && (
+                <p className="text-xs text-gray-500 mt-1">개인퀘스트로 진행되는 챌린지입니다</p>
+              )}
+              {isMixedChallengeType && (
+                <p className="text-xs text-gray-500 mt-1">리더퀘스트 + 개인퀘스트 모두 인증해야 하루 완료</p>
+              )}
             </div>
           </section>
 

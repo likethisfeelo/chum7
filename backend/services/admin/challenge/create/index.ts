@@ -69,13 +69,19 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
 }
 
 function resolveLayerPolicy(challengeType: string, layerPolicy: { requirePersonalGoalOnJoin: boolean; requirePersonalTargetOnJoin: boolean; allowExtraVisibilityToggle: boolean; }) {
-  const forceRequireGoal = challengeType === 'personal_only' || challengeType === 'leader_personal';
+  const isMixed = challengeType === 'personal_only' || challengeType === 'leader_personal' || challengeType === 'mixed';
 
   return {
-    requirePersonalGoalOnJoin: forceRequireGoal ? true : layerPolicy.requirePersonalGoalOnJoin,
+    requirePersonalGoalOnJoin: isMixed ? true : layerPolicy.requirePersonalGoalOnJoin,
     requirePersonalTargetOnJoin: layerPolicy.requirePersonalTargetOnJoin,
     allowExtraVisibilityToggle: layerPolicy.allowExtraVisibilityToggle,
   };
+}
+
+function resolvePersonalQuestEnabled(challengeType: string): boolean {
+  if (challengeType === 'leader_only') return false;
+  if (challengeType === 'personal_only' || challengeType === 'leader_personal' || challengeType === 'mixed') return true;
+  return false;
 }
 
 function parseGroups(rawGroups: unknown): string[] {
@@ -177,7 +183,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       challengeType: input.challengeType,
       layerPolicy: normalizedLayerPolicy,
       defaultRemedyPolicy: input.defaultRemedyPolicy,
-      personalQuestEnabled: input.personalQuestEnabled,
+      personalQuestEnabled: resolvePersonalQuestEnabled(input.challengeType),
       personalQuestAutoApprove: input.personalQuestAutoApprove,
       requireStartConfirmation: input.requireStartConfirmation,
       joinApprovalRequired: input.joinApprovalRequired,

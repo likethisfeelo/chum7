@@ -492,7 +492,8 @@ export const MEPage = () => {
                       <div className="space-y-2">
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">오늘 인증 예정</p>
                         {otherUnverified.map((challenge: any, index: number) => {
-                          const { currentDay: challengeDay, durationDays, participatedDays, completionRate } = getChallengeDisplayMeta(challenge);
+                          const { durationDays, participatedDays, completionRate } = getChallengeDisplayMeta(challenge);
+                          const challengeDay = getCalendarChallengeDay(challenge);
                           return (
                           <motion.div
                             key={challenge.userChallengeId}
@@ -531,7 +532,8 @@ export const MEPage = () => {
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">인증 완료</p>
                         {verifiedTodayChallenges.map((challenge: any, index: number) => {
                           const progress = challenge.progress || [];
-                          const { currentDay: challengeDay, durationDays, participatedDays, completionRate } = getChallengeDisplayMeta(challenge);
+                          const { durationDays, participatedDays, completionRate } = getChallengeDisplayMeta(challenge);
+                          const challengeDay = getCalendarChallengeDay(challenge);
                           const uid = challenge.userChallengeId;
                           const isExpanded = expandedCards.has(uid);
 
