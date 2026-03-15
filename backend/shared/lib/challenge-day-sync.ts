@@ -120,3 +120,30 @@ export function isChallengePeriodEnded(
 ): boolean {
   return effectiveCurrentDay > durationDays || status === 'completed' || status === 'failed';
 }
+
+export function calculateChallengeEndAt(startAtIso: string, durationDays: number): string {
+  const startDate = new Date(startAtIso);
+  if (Number.isNaN(startDate.getTime())) {
+    return startAtIso;
+  }
+  const normalizedDurationDays = normalizeDurationDays(durationDays);
+  startDate.setDate(startDate.getDate() + normalizedDurationDays);
+  return startDate.toISOString();
+}
+
+export function resolveChallengeActualStartAt(challenge: {
+  actualStartAt?: unknown;
+  startConfirmedAt?: unknown;
+  challengeStartAt?: unknown;
+}): string | null {
+  const actualStartAt = typeof challenge.actualStartAt === 'string' ? challenge.actualStartAt : '';
+  if (actualStartAt) return actualStartAt;
+
+  const startConfirmedAt = typeof challenge.startConfirmedAt === 'string' ? challenge.startConfirmedAt : '';
+  if (startConfirmedAt) return startConfirmedAt;
+
+  const challengeStartAt = typeof challenge.challengeStartAt === 'string' ? challenge.challengeStartAt : '';
+  if (challengeStartAt) return challengeStartAt;
+
+  return null;
+}
