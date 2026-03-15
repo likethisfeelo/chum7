@@ -8,6 +8,7 @@ import {
   ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { resolveVerificationType } from "../../../shared/lib/verification-normalization";
+import { extractImageS3Key, isLikelySignedAssetUrl } from "../../../shared/lib/media-key";
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -23,32 +24,6 @@ type ParsedNextToken = {
 
 const s3Client = new S3Client({});
 
-function extractUploadsKey(url?: string | null): string | null {
-  if (!url) return null;
-  const raw = String(url).trim();
-  if (!raw) return null;
-
-  if (raw.startsWith("/uploads/")) return raw.slice("/uploads/".length);
-  if (raw.startsWith("uploads/")) return raw.slice("uploads/".length);
-
-  if (raw.startsWith("http://") || raw.startsWith("https://")) {
-    try {
-      const parsed = new URL(raw);
-      if (parsed.pathname.startsWith("/uploads/"))
-        return parsed.pathname.slice("/uploads/".length);
-      // Old-format CDN URL: pathname is the S3 key without /uploads/ prefix
-      const pathKey = parsed.pathname.replace(/^\/+/, "");
-      if (pathKey) return pathKey;
-    } catch {
-      return null;
-    }
-  }
-
-  if (raw.includes("/") && !raw.startsWith("http"))
-    return raw.replace(/^\/+/, "");
-  return null;
-}
-
 async function toRenderableMediaUrl(
   url?: string | null,
 ): Promise<string | null> {
@@ -56,17 +31,18 @@ async function toRenderableMediaUrl(
   const raw = String(url).trim();
   if (!raw) return null;
 
-  // CloudFront/CDN URL은 이미 공개 접근 가능하므로 재서명 없이 반환
-  // (단, /uploads/ 경로가 없는 구버전 URL은 S3 직접 서명 필요)
-  if ((raw.includes("chum7.com") || raw.includes("cloudfront.net")) && raw.includes("/uploads/")) return raw;
+  // isLikelySignedAssetUrl: CloudFront /uploads/ URL 또는 이미 서명된 URL → 그대로 반환
+  if (isLikelySignedAssetUrl(raw)) return raw;
 
-  const key = extractUploadsKey(raw);
+  const key = extractImageS3Key(raw);
   if (!key || !process.env.UPLOADS_BUCKET) return raw;
 
+  // S3 키에 uploads/ prefix 붙여서 서명 (S3 버킷 내 실제 키)
+  const s3Key = key.startsWith("uploads/") ? key : `uploads/${key}`;
   try {
     return await getSignedUrl(
       s3Client,
-      new GetObjectCommand({ Bucket: process.env.UPLOADS_BUCKET, Key: key }),
+      new GetObjectCommand({ Bucket: process.env.UPLOADS_BUCKET, Key: s3Key }),
       { expiresIn: 3600 },
     );
   } catch (error) {

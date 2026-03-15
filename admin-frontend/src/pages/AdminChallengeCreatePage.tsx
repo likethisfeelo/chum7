@@ -4,7 +4,7 @@ import { apiClient } from '@/lib/api-client';
 import { lifecycleLabel } from '@/utils/lifecycle';
 
 type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
-type ChallengeType = 'leader_only' | 'personal_only' | 'leader_personal' | 'mixed';
+type ChallengeType = 'leader_only' | 'personal_only' | 'leader_personal';
 type VerificationType = 'image' | 'text' | 'link' | 'video';
 
 const VERIFICATION_TYPE_OPTIONS: { value: VerificationType; label: string }[] = [
@@ -28,10 +28,9 @@ const CATEGORIES = [
 type Category = typeof CATEGORIES[number]['value'];
 
 const CHALLENGE_TYPES: Array<{ value: ChallengeType; label: string; hint: string }> = [
-  { value: 'leader_only', label: '리더 퀘스트형', hint: '참여자는 리더가 설계한 퀘스트 중심으로 수행' },
-  { value: 'personal_only', label: '개인 퀘스트형', hint: '참여자 개인 입력/개인 목표 중심으로 수행' },
-  { value: 'leader_personal', label: '리더+개인 혼합형', hint: '공통 퀘스트와 개인 목표를 함께 수행' },
-  { value: 'mixed', label: '혼합형(확장)', hint: '레이어 정책을 함께 사용하는 확장형' },
+  { value: 'leader_only', label: '리더 퀘스트형', hint: '리더가 설계한 퀘스트 1개 인증으로 하루 완료. 개인퀘스트 없음.' },
+  { value: 'personal_only', label: '개인 퀘스트형', hint: '참여자 개인 퀘스트 1개 인증으로 하루 완료. 리더퀘스트 없음.' },
+  { value: 'leader_personal', label: '리더+개인 혼합형', hint: '리더퀘스트 + 개인퀘스트 모두 인증해야 하루 완료.' },
 ];
 
 const INITIAL = {
@@ -54,7 +53,6 @@ const INITIAL = {
   remedyType: 'open' as 'strict'|'limited'|'open',
   maxRemedyDays: 1,
   allowBulk: false,
-  personalQuestEnabled: false,
   personalQuestAutoApprove: true,
   joinApprovalRequired: true,
   allowedVerificationTypes: ['image', 'text', 'link', 'video'] as VerificationType[],
@@ -62,7 +60,7 @@ const INITIAL = {
 
 
 const isForcedPersonalGoalRequiredType = (challengeType: ChallengeType) =>
-  challengeType === 'personal_only' || challengeType === 'leader_personal';
+  challengeType === 'personal_only' || challengeType === 'leader_personal' || (challengeType as string) === 'mixed';
 
 const isForcedPersonalGoalDisabledType = (challengeType: ChallengeType) =>
   challengeType === 'leader_only';
@@ -140,7 +138,6 @@ export const AdminChallengeCreatePage = () => {
           maxRemedyDays: form.remedyType === 'limited' ? Number(form.maxRemedyDays) : null,
           allowBulk: form.remedyType === 'open' ? Boolean(form.allowBulk) : null,
         },
-        personalQuestEnabled: form.personalQuestEnabled,
         personalQuestAutoApprove: form.personalQuestAutoApprove,
         joinApprovalRequired: form.joinApprovalRequired,
         allowedVerificationTypes: form.allowedVerificationTypes,
@@ -370,9 +367,6 @@ export const AdminChallengeCreatePage = () => {
             </label>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <label className="text-sm flex items-center gap-2">
-              <input type="checkbox" checked={form.personalQuestEnabled} onChange={(e) => set('personalQuestEnabled', e.target.checked as any)} /> 개인 퀘스트 제안 사용
-            </label>
             <label className="text-sm flex items-center gap-2">
               <input type="checkbox" checked={form.personalQuestAutoApprove} onChange={(e) => set('personalQuestAutoApprove', e.target.checked as any)} /> 개인 퀘스트 자동 승인
             </label>

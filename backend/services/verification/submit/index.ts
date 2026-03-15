@@ -26,8 +26,9 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const submitSchema = z.object({
   userChallengeId: z.string().uuid(),
-  day: z.number().min(1).max(14),
+  day: z.number().min(1).max(30),
   verificationType: z.enum(["text", "image", "video", "link"]).optional(),
+  questType: z.enum(["leader", "personal"]).optional(),
   imageUrl: z.string().url().optional(),
   videoUrl: z.string().url().optional(),
   videoDurationSec: z.number().min(0).max(60).optional(),
@@ -302,6 +303,8 @@ export const handler = async (
     let challengeTargetTime24: string | null = null;
     let challengeTitle: string | null = null;
     let challengeCategory: string | null = null;
+    let challengeType: string = "leader_personal";
+    let challengeDurationDays: number = 7;
     if (process.env.CHALLENGES_TABLE) {
       try {
         const challengeResult = await docClient.send(
@@ -334,6 +337,13 @@ export const handler = async (
           typeof challengeResult.Item?.category === "string"
             ? challengeResult.Item.category
             : null;
+        if (typeof challengeResult.Item?.challengeType === "string") {
+          challengeType = challengeResult.Item.challengeType;
+        }
+        const rawDuration = Number(challengeResult.Item?.durationDays);
+        if (Number.isFinite(rawDuration) && rawDuration > 0) {
+          challengeDurationDays = Math.floor(rawDuration);
+        }
       } catch (challengeErr: any) {
         console.warn("Failed to fetch challenge data (non-fatal):", {
           challengeId,
@@ -390,7 +400,40 @@ export const handler = async (
 
     const progress = normalizeProgress(userChallenge.progress);
     const dayProgress = progress.find((p: any) => Number(p?.day) === input.day);
-    const isExtra = !!(dayProgress && dayProgress.status === "success");
+
+    // 퀘스트 타입 결정: 요청값 우선, 없으면 challengeType에서 기본값 추론
+    const isMixedType = challengeType === "leader_personal" || challengeType === "mixed";
+    const isLeaderOnlyType = challengeType === "leader_only";
+    const isPersonalOnlyType = challengeType === "personal_only";
+    let resolvedQuestType: "leader" | "personal" | null = input.questType ?? null;
+    if (!resolvedQuestType) {
+      if (isLeaderOnlyType) resolvedQuestType = "leader";
+      else if (isPersonalOnlyType) resolvedQuestType = "personal";
+      // mixed: null → 아래 isExtra 판단에서 처리
+    }
+
+    // 하루 인증 완료 여부 판단 (challengeType 기반)
+    function isDayComplete(dp: any): boolean {
+      if (!dp) return false;
+      if (isMixedType) {
+        return dp.leaderQuestDone === true && dp.personalQuestDone === true;
+      }
+      if (isLeaderOnlyType) return dp.leaderQuestDone === true;
+      if (isPersonalOnlyType) return dp.personalQuestDone === true;
+      // fallback: 기존 status 방식
+      return dp.status === "success";
+    }
+
+    // 이미 해당 퀘스트 타입을 오늘 인증했는지 확인 (혼합형에서 같은 퀘스트 중복 방지)
+    function isQuestAlreadyDone(dp: any, qt: "leader" | "personal" | null): boolean {
+      if (!dp) return false;
+      if (qt === "leader") return dp.leaderQuestDone === true;
+      if (qt === "personal") return dp.personalQuestDone === true;
+      // questType 미지정 + 기존 완료 상태
+      return dp.status === "success";
+    }
+
+    const isExtra = isDayComplete(dayProgress) || (isMixedType && resolvedQuestType !== null && isQuestAlreadyDone(dayProgress, resolvedQuestType));
 
     const verificationDate =
       input.verificationDate || practiceValidation.certDate;
@@ -472,6 +515,7 @@ export const handler = async (
       isAnonymous: input.isAnonymous,
       originalDay: null,
       reflectionNote: null,
+      questType: resolvedQuestType,
       isExtra,
       primaryVerificationId: isExtra
         ? dayProgress?.verificationId || null
@@ -497,7 +541,26 @@ export const handler = async (
           scoreEarned: 0,
           delta: null,
           cheerOpportunity: null,
-          notice: "점수와 응원 혜택은 오늘의 첫 번째 인증에만 적용됩니다.",
+          notice: "점수와 응원 혜택은 오늘의 첫 번째 완료 인증에만 적용됩니다.",
+        },
+      });
+    }
+
+    // 혼합형에서 첫 번째 퀘스트 인증은 완료(partial) → 나머지 퀘스트 안내
+    if (isMixedType && !dayNowComplete) {
+      return response(200, {
+        success: true,
+        message: resolvedQuestType === "leader"
+          ? "리더 퀘스트 인증 완료! 개인 퀘스트도 인증해야 오늘 인증이 완료됩니다 🎯"
+          : "개인 퀘스트 인증 완료! 리더 퀘스트도 인증해야 오늘 인증이 완료됩니다 🎯",
+        data: {
+          verificationId,
+          isExtra: false,
+          isDayComplete: false,
+          questType: resolvedQuestType,
+          scoreEarned: 0,
+          delta: null,
+          cheerOpportunity: null,
         },
       });
     }
@@ -507,13 +570,31 @@ export const handler = async (
       (p: any) => Number(p?.day) === input.day,
     );
 
+    // 기존 progress 항목 기반으로 questType 플래그 업데이트
+    const existingDayEntry = existingIndex >= 0 ? updatedProgress[existingIndex] : null;
+    const leaderQuestDone = resolvedQuestType === "leader"
+      ? true
+      : (existingDayEntry?.leaderQuestDone ?? (isLeaderOnlyType ? false : undefined));
+    const personalQuestDone = resolvedQuestType === "personal"
+      ? true
+      : (existingDayEntry?.personalQuestDone ?? (isPersonalOnlyType ? false : undefined));
+
+    // 이 인증으로 하루 완료가 되는지 판단
+    const dayNowComplete = isMixedType
+      ? leaderQuestDone === true && personalQuestDone === true
+      : true; // single-quest type: 이 인증이 첫 번째 유효 인증이므로 완료
+
     const newProgress = {
       day: input.day,
-      status: "success",
+      status: dayNowComplete ? "success" : "partial",
       verificationId,
       timestamp: performedAt,
-      delta: delta || 0,
-      score: 10,
+      delta: dayNowComplete ? (delta || 0) : 0,
+      score: dayNowComplete ? 10 : 0,
+      leaderQuestDone: leaderQuestDone ?? false,
+      personalQuestDone: personalQuestDone ?? false,
+      ...(isMixedType && resolvedQuestType === "leader" ? { leaderVerificationId: verificationId } : {}),
+      ...(isMixedType && resolvedQuestType === "personal" ? { personalVerificationId: verificationId } : {}),
     };
 
     if (existingIndex >= 0) {
@@ -536,7 +617,9 @@ export const handler = async (
       .filter((p: any) => p.status === "success")
       .reduce((sum: number, p: any) => sum + (p.score || 0), 0);
 
-    const nextDay = Math.min(8, input.day + 1);
+    // nextDay: durationDays 기반으로 cap (하드코딩 8 제거)
+    const maxDay = challengeDurationDays + 1;
+    const nextDay = Math.min(maxDay, input.day + 1);
 
     await docClient.send(
       new UpdateCommand({
@@ -603,7 +686,7 @@ export const handler = async (
       }
     }
 
-    if (input.day === 7 && consecutiveDays === 7) {
+    if (input.day === challengeDurationDays && consecutiveDays === challengeDurationDays) {
       try {
         for (let i = 0; i < 3; i++) {
           await createCheerTicket(
@@ -644,6 +727,8 @@ export const handler = async (
       data: {
         verificationId,
         isExtra: false,
+        isDayComplete: true,
+        questType: resolvedQuestType,
         verificationDate,
         performedAt,
         uploadedAt: nowIso,
