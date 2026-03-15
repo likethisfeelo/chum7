@@ -97,6 +97,21 @@ export const VerificationSheet = ({
       return;
     }
 
+    if (
+      file.type === 'image/heic' ||
+      file.type === 'image/heif' ||
+      file.type === 'image/heic-sequence' ||
+      file.type === 'image/heif-sequence' ||
+      file.name.toLowerCase().endsWith('.heic') ||
+      file.name.toLowerCase().endsWith('.heif')
+    ) {
+      toast.error(
+        'HEIC/HEIF 이미지는 피드에서 표시되지 않을 수 있어요. 카메라 설정에서 JPEG 형식으로 변경하거나 다른 파일을 선택해주세요.',
+        { duration: 5000 },
+      );
+      return;
+    }
+
     if (file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE_BYTES) {
       toast.error('이미지는 10MB 이내만 업로드할 수 있어요.');
       return;

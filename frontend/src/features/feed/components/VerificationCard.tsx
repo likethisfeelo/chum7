@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -12,6 +12,25 @@ import type { Recommendation } from '@/features/feed/hooks/usePlazaReactions';
 function isVideoUrl(url: string): boolean {
   const lower = url.toLowerCase();
   return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.mov') || lower.includes('.m4v');
+}
+
+function FeedImage({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className="w-full h-48 rounded-xl mt-3 bg-gray-100 flex items-center justify-center text-xs text-gray-400">
+        이미지를 불러올 수 없습니다
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt="인증 이미지"
+      className="w-full h-48 object-cover rounded-xl mt-3"
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 function FeedVideo({ src }: { src: string }) {
@@ -103,7 +122,7 @@ export function VerificationCard({
       {post.imageUrl && (
         isVideoUrl(post.imageUrl)
           ? <FeedVideo src={resolveMediaUrl(post.imageUrl)} />
-          : <img src={resolveMediaUrl(post.imageUrl)} alt="인증 이미지" className="w-full h-48 object-cover rounded-xl mt-3" />
+          : <FeedImage src={resolveMediaUrl(post.imageUrl)} />
       )}
 
       {post.content && (
