@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { extractImageS3Key } from '../../../shared/lib/media-key';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -92,23 +93,6 @@ function exposureScore(post: any, nowMs: number): number {
   const reaction = (post.likeCount || 0) * 1 + (post.commentCount || 0) * 2 + (post.bookmarkCount || 0) * 1.5;
   const typeWeight = post.postType === 'recruitment' && (post.remainingSlots || 0) > 0 ? 1.3 : 1;
   return (freshness + reaction) * typeWeight;
-}
-
-function extractImageS3Key(url?: string | null): string | null {
-  if (!url) return null;
-  const raw = String(url).trim();
-  if (!raw.startsWith('http://') && !raw.startsWith('https://')) return null;
-  try {
-    const parsed = new URL(raw);
-    if (parsed.pathname.startsWith('/uploads/'))
-      return parsed.pathname.slice('/uploads/'.length);
-    // Old-format CDN URL: pathname is the S3 key without /uploads/ prefix
-    const pathKey = parsed.pathname.replace(/^\/+/, '');
-    if (pathKey) return pathKey;
-  } catch {
-    return null;
-  }
-  return null;
 }
 
 async function toSignedImageUrl(url?: string | null): Promise<string | null> {

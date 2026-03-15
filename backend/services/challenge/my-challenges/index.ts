@@ -82,7 +82,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
       // 진행률 계산
       const progressList = normalizeProgress(uc.progress);
-      const completedDays = progressList.filter((p: any) => p?.status === 'success').length;
+      const completedDays = progressList.filter((p: any) => {
+        const status = String(p?.status || '').toLowerCase();
+        return status === 'completed' || status === 'success' || status === 'remedy';
+      }).length;
       const progressPercentage = Math.max(0, Math.min(100, Math.round((completedDays / durationDays) * 100)));
 
       const effectiveCurrentDay = calculateEffectiveCurrentDay(uc, nowIso, durationDays);
