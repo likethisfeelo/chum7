@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { extractImageS3Key, isLikelySignedAssetUrl } from '../../../shared/lib/media-key';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -18,6 +19,11 @@ type FeedCursor = {
   perType?: CursorMap;
   legacyCursorDetected?: boolean;
 };
+
+function isDebugEnabled(raw?: string): boolean {
+  const key = String(raw || '').toLowerCase();
+  return key === '1' || key === 'true' || key === 'yes';
+}
 
 function decodeCursor(raw?: string): FeedCursor {
   if (!raw) return {};
@@ -94,29 +100,13 @@ function exposureScore(post: any, nowMs: number): number {
   return (freshness + reaction) * typeWeight;
 }
 
-function extractImageS3Key(url?: string | null): string | null {
-  if (!url) return null;
-  const raw = String(url).trim();
-  if (!raw.startsWith('http://') && !raw.startsWith('https://')) return null;
-  try {
-    const parsed = new URL(raw);
-    if (parsed.pathname.startsWith('/uploads/'))
-      return parsed.pathname.slice('/uploads/'.length);
-    // Old-format CDN URL: pathname is the S3 key without /uploads/ prefix
-    const pathKey = parsed.pathname.replace(/^\/+/, '');
-    if (pathKey) return pathKey;
-  } catch {
-    return null;
-  }
-  return null;
-}
 
 async function toSignedImageUrl(url?: string | null): Promise<string | null> {
   if (!url) return null;
   const raw = String(url).trim();
   if (!raw) return null;
-  // Already a new-format CloudFront URL — publicly accessible
-  if ((raw.includes('chum7.com') || raw.includes('cloudfront.net')) && raw.includes('/uploads/')) return raw;
+  // Already public CDN URL (uploads path) or already signed URL: reuse as-is
+  if (((raw.includes('chum7.com') || raw.includes('cloudfront.net')) && raw.includes('/uploads/')) || isLikelySignedAssetUrl(raw)) return raw;
   const key = extractImageS3Key(raw);
   if (!key || !process.env.UPLOADS_BUCKET) return raw;
   try {
@@ -131,7 +121,7 @@ async function toSignedImageUrl(url?: string | null): Promise<string | null> {
   }
 }
 
-async function sanitizePost(post: any): Promise<any> {
+async function sanitizePost(post: any, debugCollector?: Array<Record<string, unknown>>): Promise<any> {
   const {
     sourceUserId,
     sourceId,
@@ -143,6 +133,16 @@ async function sanitizePost(post: any): Promise<any> {
   } = post;
 
   const imageUrl = await toSignedImageUrl(safe.imageUrl || null);
+
+  if (debugCollector) {
+    debugCollector.push({
+      plazaPostId: safe.plazaPostId || null,
+      postType: safe.postType || null,
+      rawImageUrl: safe.imageUrl || null,
+      extractedKey: extractImageS3Key(safe.imageUrl || null),
+      normalizedImageUrl: imageUrl || null,
+    });
+  }
 
   return {
     ...safe,
@@ -158,6 +158,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const filter = normalizeFilter(params.filter);
     const limit = Math.max(1, Math.min(50, Number(params.limit || '20')));
     const cursor = decodeCursor(params.cursor);
+    const debugEnabled = isDebugEnabled(params.debug);
+    const debugImageSamples: Array<Record<string, unknown>> = [];
 
     const allowTypes = toPostType(filter);
     const nowMs = Date.now();
@@ -175,7 +177,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         .filter((item: any) => item?.isActive !== false)
         .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
-      const posts = await Promise.all(items.slice(0, limit).map(sanitizePost));
+      const posts = await Promise.all(items.slice(0, limit).map((item: any) => sanitizePost(item, debugEnabled ? debugImageSamples : undefined)));
       const nextPerType: CursorMap = {};
       if (queryRes.LastEvaluatedKey) nextPerType[postType] = queryRes.LastEvaluatedKey;
 
@@ -185,6 +187,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           posts,
           hasMore: Boolean(queryRes.LastEvaluatedKey),
           nextCursor: encodeCursor({ perType: nextPerType }),
+          ...(debugEnabled ? {
+            _debug: {
+              filter,
+              limit,
+              returnedPosts: posts.length,
+              legacyCursorDetected: Boolean(cursor.legacyCursorDetected),
+              imageNormalizationSamples: debugImageSamples.slice(0, 20),
+            }
+          } : {}),
         },
       });
     }
@@ -212,7 +223,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       .flatMap((result) => result.items)
       .sort((a: any, b: any) => (b._score || 0) - (a._score || 0));
 
-    const posts = await Promise.all(sorted.slice(0, limit).map(sanitizePost));
+    const posts = await Promise.all(sorted.slice(0, limit).map((item: any) => sanitizePost(item, debugEnabled ? debugImageSamples : undefined)));
 
     const nextPerType: CursorMap = {};
     for (const result of typeResults) {
@@ -227,6 +238,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         posts,
         hasMore: Object.keys(nextPerType).length > 0,
         nextCursor: encodeCursor({ perType: nextPerType }),
+        ...(debugEnabled ? {
+          _debug: {
+            filter,
+            limit,
+            returnedPosts: posts.length,
+            legacyCursorDetected: Boolean(cursor.legacyCursorDetected),
+            imageNormalizationSamples: debugImageSamples.slice(0, 20),
+          }
+        } : {}),
       },
     });
   } catch (error: any) {

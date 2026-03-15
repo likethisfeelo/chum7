@@ -30,3 +30,15 @@ export function resolveNormalizedChallengeState(input: {
   const finalizedStatus = input.completedDays >= input.durationDays ? 'completed' : 'failed';
   return { status: finalizedStatus, phase: finalizedStatus };
 }
+
+
+export function matchesRequestedChallengeStatus(requestedStatus: string, normalizedStatus: string): boolean {
+  const requested = String(requestedStatus || 'active').toLowerCase();
+  const normalized = String(normalizedStatus || '').toLowerCase();
+
+  if (requested === 'all') return true;
+  if (requested === 'active') return normalized === 'active';
+  if (requested === 'completed') return normalized === 'completed';
+  if (requested === 'failed') return normalized === 'failed';
+  return normalized === requested;
+}

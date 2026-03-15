@@ -10,6 +10,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { sendNotification } from '../../../../shared/lib/notification';
+import { calculateChallengeEndAt, resolveDurationDays } from '../../../../shared/lib/challenge-day-sync';
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -263,19 +264,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const now = new Date().toISOString();
+    const durationDays = resolveDurationDays(challenge.durationDays, undefined);
+    const recalculatedEndAt = calculateChallengeEndAt(now, durationDays);
 
-    // startConfirmedAt, startConfirmedBy 기록 + lifecycle → active
+    // startConfirmedAt/startConfirmedBy + 실제 시작(actualStartAt) 반영 후 lifecycle → active
     await docClient.send(
       new UpdateCommand({
         TableName: CHALLENGES_TABLE,
         Key: { challengeId },
         UpdateExpression:
-          'SET lifecycle = :active, startConfirmedAt = :now, startConfirmedBy = :by, updatedAt = :now',
+          'SET lifecycle = :active, startConfirmedAt = :now, startConfirmedBy = :by, actualStartAt = if_not_exists(actualStartAt, :now), challengeEndAt = :endAt, updatedAt = :now',
         ConditionExpression: 'lifecycle = :preparing',
         ExpressionAttributeValues: {
           ':active': 'active',
           ':preparing': 'preparing',
           ':now': now,
+          ':endAt': recalculatedEndAt,
           ':by': requesterId,
         },
       })

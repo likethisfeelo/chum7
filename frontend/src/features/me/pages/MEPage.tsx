@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -84,12 +84,7 @@ function getChallengeDay(challenge: any): number {
   const maxDay = durationDays + 1;
   const storedCurrentDay = Math.max(1, Math.min(maxDay, Number(challenge.currentDay || 1)));
 
-  const lifecycle = String(challenge?.challenge?.lifecycle || '').toLowerCase();
-  const phase = String(challenge?.phase || '').toLowerCase();
-  const status = String(challenge?.status || '').toLowerCase();
-  const canSyncElapsedDay =
-    (lifecycle === 'active' || phase === 'active') &&
-    (status === '' || status === 'active');
+  const canSyncElapsedDay = isChallengeActivelyRunning(challenge);
 
   if (!canSyncElapsedDay) return storedCurrentDay;
 
@@ -102,6 +97,18 @@ function getChallengeDay(challenge: any): number {
   const syncedCurrentDay = Math.max(1, Math.min(maxDay, elapsed));
 
   return Math.max(storedCurrentDay, syncedCurrentDay);
+}
+
+function isChallengeActivelyRunning(challenge: any): boolean {
+  const lifecycle = String(challenge?.challenge?.lifecycle || '').toLowerCase();
+  const phase = String(challenge?.phase || '').toLowerCase();
+  const status = String(challenge?.status || '').toLowerCase();
+
+  const isActiveLifecycle = lifecycle === 'active';
+  const isActivePhase = phase === 'active' || phase === 'in_progress';
+  const isActiveStatus = status === '' || status === 'active' || status === 'in_progress';
+
+  return (isActiveLifecycle || isActivePhase) && isActiveStatus;
 }
 
 function hasBacklogBeforeToday(challenge: any): boolean {
@@ -144,12 +151,7 @@ function formatVerificationTime(iso: string | undefined | null): string {
 // causing getChallengeDay() to return day+1 (via Math.max). We need the actual
 // calendar day to correctly detect today's completed verification.
 function getCalendarChallengeDay(challenge: any): number {
-  const lifecycle = String(challenge?.challenge?.lifecycle || '').toLowerCase();
-  const phase = String(challenge?.phase || '').toLowerCase();
-  const status = String(challenge?.status || '').toLowerCase();
-  const isActive =
-    (lifecycle === 'active' || phase === 'active') &&
-    (status === '' || status === 'active');
+  const isActive = isChallengeActivelyRunning(challenge);
 
   const startDate = parseChallengeStartDate(challenge);
   if (!isActive || !startDate) return getChallengeDay(challenge);
@@ -165,6 +167,16 @@ function isTodayVerified(challenge: any): boolean {
   // Use calendar day, not storedCurrentDay which is incremented to day+1 after verification.
   const calendarDay = getCalendarChallengeDay(challenge);
   return isVerificationDayCompleted(challenge?.progress, calendarDay);
+}
+
+
+function isMeDebugEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  const query = new URLSearchParams(window.location.search);
+  const debugParam = String(query.get('debug') || query.get('meDebug') || '').toLowerCase();
+  if (debugParam === '1' || debugParam === 'true' || debugParam === 'yes') return true;
+  const storedFlag = String(window.localStorage.getItem('me-debug') || '').toLowerCase();
+  return storedFlag === '1' || storedFlag === 'true' || storedFlag === 'yes';
 }
 
 const getProposalStatusMeta = (status?: string) => {
@@ -347,6 +359,42 @@ export const MEPage = () => {
   const primaryUnverified = primaryCandidateChallenges[0] ?? null;
   const otherUnverified = unverifiedChallenges.filter((challenge: any) => challenge.userChallengeId !== primaryUnverified?.userChallengeId);
 
+  useEffect(() => {
+    if (!isMeDebugEnabled()) return;
+
+    const summarize = (challenge: any) => {
+      const challengeDay = getChallengeDay(challenge);
+      const calendarDay = getCalendarChallengeDay(challenge);
+      return {
+        userChallengeId: challenge.userChallengeId,
+        challengeId: challenge.challengeId,
+        title: challenge.challenge?.title || challenge.title,
+        bucket: resolveChallengeBucket(challenge),
+        status: challenge.status,
+        phase: challenge.phase,
+        lifecycle: challenge.challenge?.lifecycle,
+        challengeDay,
+        calendarDay,
+        durationDays: resolveChallengeDurationDays(challenge),
+        todayVerified: isTodayVerified(challenge),
+        periodCompleted: isChallengePeriodCompleted(challenge),
+      };
+    };
+
+    // eslint-disable-next-line no-console
+    console.groupCollapsed('[ME DEBUG] challenge section classification');
+    // eslint-disable-next-line no-console
+    console.table(challenges.map(summarize));
+    // eslint-disable-next-line no-console
+    console.log('section-1 primaryUnverified', primaryUnverified ? summarize(primaryUnverified) : null);
+    // eslint-disable-next-line no-console
+    console.log('section-2 otherUnverified', otherUnverified.map(summarize));
+    // eslint-disable-next-line no-console
+    console.log('section-3 verifiedTodayChallenges', verifiedTodayChallenges.map(summarize));
+    // eslint-disable-next-line no-console
+    console.groupEnd();
+  }, [challenges, otherUnverified, primaryUnverified, verifiedTodayChallenges]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
@@ -372,7 +420,7 @@ export const MEPage = () => {
           <EmptyState
             icon="🎯"
             title="진행 중인 챌린지가 없어요"
-            description="새로운 챌린지에 참여하고 7일 여정을 시작해보세요!"
+            description="새로운 챌린지에 참여하고 여정을 시작해보세요!"
             action={{
               label: '챌린지 참여하기',
               onClick: () => navigate('/challenges'),
@@ -529,7 +577,7 @@ export const MEPage = () => {
                                 );
                               })()}
 
-                              {/* 펼친 상태: Day 1~7 세로 타임라인 */}
+                              {/* 펼친 상태: Day 1~N 세로 타임라인 */}
                               {isExpanded && (
                                 <div className="pt-1">
                                   <p className="text-xs text-primary-500 text-right mb-2">탭하면 피드로 이동 →</p>
@@ -720,7 +768,7 @@ export const MEPage = () => {
             {activeTab === 'completed' && (
               <div className="space-y-3">
                 {completedChallenges.length === 0 ? (
-                  <EmptyState icon="🏆" title="완료한 챌린지가 없어요" description="7일 챌린지를 완주하면 여기에 표시돼요" />
+                  <EmptyState icon="🏆" title="완료한 챌린지가 없어요" description="챌린지를 완주하면 여기에 표시돼요" />
                 ) : completedChallenges.map((challenge: any) => (
                   <div
                     key={challenge.userChallengeId || challenge.challengeId}
