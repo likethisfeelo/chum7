@@ -84,12 +84,7 @@ function getChallengeDay(challenge: any): number {
   const maxDay = durationDays + 1;
   const storedCurrentDay = Math.max(1, Math.min(maxDay, Number(challenge.currentDay || 1)));
 
-  const lifecycle = String(challenge?.challenge?.lifecycle || '').toLowerCase();
-  const phase = String(challenge?.phase || '').toLowerCase();
-  const status = String(challenge?.status || '').toLowerCase();
-  const canSyncElapsedDay =
-    (lifecycle === 'active' || phase === 'active') &&
-    (status === '' || status === 'active');
+  const canSyncElapsedDay = isChallengeActivelyRunning(challenge);
 
   if (!canSyncElapsedDay) return storedCurrentDay;
 
@@ -102,6 +97,18 @@ function getChallengeDay(challenge: any): number {
   const syncedCurrentDay = Math.max(1, Math.min(maxDay, elapsed));
 
   return Math.max(storedCurrentDay, syncedCurrentDay);
+}
+
+function isChallengeActivelyRunning(challenge: any): boolean {
+  const lifecycle = String(challenge?.challenge?.lifecycle || '').toLowerCase();
+  const phase = String(challenge?.phase || '').toLowerCase();
+  const status = String(challenge?.status || '').toLowerCase();
+
+  const isActiveLifecycle = lifecycle === 'active';
+  const isActivePhase = phase === 'active' || phase === 'in_progress';
+  const isActiveStatus = status === '' || status === 'active' || status === 'in_progress';
+
+  return (isActiveLifecycle || isActivePhase) && isActiveStatus;
 }
 
 function hasBacklogBeforeToday(challenge: any): boolean {
@@ -144,12 +151,7 @@ function formatVerificationTime(iso: string | undefined | null): string {
 // causing getChallengeDay() to return day+1 (via Math.max). We need the actual
 // calendar day to correctly detect today's completed verification.
 function getCalendarChallengeDay(challenge: any): number {
-  const lifecycle = String(challenge?.challenge?.lifecycle || '').toLowerCase();
-  const phase = String(challenge?.phase || '').toLowerCase();
-  const status = String(challenge?.status || '').toLowerCase();
-  const isActive =
-    (lifecycle === 'active' || phase === 'active') &&
-    (status === '' || status === 'active');
+  const isActive = isChallengeActivelyRunning(challenge);
 
   const startDate = parseChallengeStartDate(challenge);
   if (!isActive || !startDate) return getChallengeDay(challenge);
