@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 import { lifecycleLabel } from '@/utils/lifecycle';
@@ -6,219 +6,326 @@ import { lifecycleLabel } from '@/utils/lifecycle';
 type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
 type ChallengeType = 'leader_only' | 'personal_only' | 'leader_personal';
 type VerificationType = 'image' | 'text' | 'link' | 'video';
+type RemedyType = 'strict' | 'limited' | 'open';
+type Category = 'health' | 'habit' | 'development' | 'creativity' | 'relationship' | 'mindfulness' | 'expand' | 'impact';
 
-const VERIFICATION_TYPE_OPTIONS: { value: VerificationType; label: string }[] = [
-  { value: 'image', label: '📸 사진' },
-  { value: 'text',  label: '✍️ 텍스트' },
-  { value: 'link',  label: '🔗 URL' },
-  { value: 'video', label: '🎥 영상' },
+const CATEGORIES: Array<{ value: Category; label: string }> = [
+  { value: 'health',       label: '💗 Selflove' },
+  { value: 'mindfulness',  label: '🔥 Attitude' },
+  { value: 'habit',        label: '⚡ Discipline' },
+  { value: 'creativity',   label: '🧭 Explore' },
+  { value: 'development',  label: '🎨 Create' },
+  { value: 'relationship', label: '🏗️ Build' },
+  { value: 'expand',       label: '🌱 Expand' },
+  { value: 'impact',       label: '🚀 Impact' },
 ];
 
-const CATEGORIES = [
-  { value: 'health',        label: '💗 Selflove' },
-  { value: 'mindfulness',   label: '🔥 Attitude' },
-  { value: 'habit',         label: '⚡ Discipline' },
-  { value: 'creativity',    label: '🧭 Explore' },
-  { value: 'development',   label: '🎨 Create' },
-  { value: 'relationship',  label: '🏗️ Build' },
-  { value: 'expand',        label: '🌱 Expand' },
-  { value: 'impact',        label: '🚀 Impact' },
-] as const;
-
-type Category = typeof CATEGORIES[number]['value'];
-
-const CHALLENGE_TYPES: Array<{ value: ChallengeType; label: string; hint: string }> = [
-  { value: 'leader_only', label: '리더 퀘스트형', hint: '리더가 설계한 퀘스트 1개 인증으로 하루 완료. 개인퀘스트 없음.' },
-  { value: 'personal_only', label: '개인 퀘스트형', hint: '참여자 개인 퀘스트 1개 인증으로 하루 완료. 리더퀘스트 없음.' },
-  { value: 'leader_personal', label: '리더+개인 혼합형', hint: '리더퀘스트 + 개인퀘스트 모두 인증해야 하루 완료.' },
+const CHALLENGE_TYPES: Array<{ value: ChallengeType; icon: string; label: string; desc: string }> = [
+  {
+    value: 'leader_only',
+    icon: '🎯',
+    label: '리더 퀘스트형',
+    desc: '리더 퀘스트 1개 인증으로 하루 완료\n개인퀘스트 없음',
+  },
+  {
+    value: 'personal_only',
+    icon: '🌱',
+    label: '개인 퀘스트형',
+    desc: '개인 퀘스트 1개 인증으로 하루 완료\n리더퀘스트 없음',
+  },
+  {
+    value: 'leader_personal',
+    icon: '🤝',
+    label: '리더+개인 혼합형',
+    desc: '리더퀘스트 + 개인퀘스트\n둘 다 인증해야 하루 완료',
+  },
 ];
 
-const INITIAL = {
-  title:             '',
-  description:       '',
-  category:          'habit' as Category,
-  targetTime:        '07:00',
-  identityKeyword:   '',
-  badgeIcon:         '🏆',
-  badgeName:         '',
+const VERIFICATION_TYPES: Array<{ value: VerificationType; icon: string; label: string }> = [
+  { value: 'image', icon: '📸', label: '사진' },
+  { value: 'text',  icon: '✍️', label: '텍스트' },
+  { value: 'link',  icon: '🔗', label: 'URL' },
+  { value: 'video', icon: '🎥', label: '영상' },
+];
+
+const DURATION_PRESETS = [7, 14, 21, 30];
+
+const LIFECYCLE_TRANSITIONS: Array<{ target: Lifecycle; label: string; color: string }> = [
+  { target: 'recruiting', label: '모집 시작',   color: 'bg-indigo-600 hover:bg-indigo-700' },
+  { target: 'preparing',  label: '모집 마감',   color: 'bg-amber-600 hover:bg-amber-700' },
+  { target: 'active',     label: '챌린지 시작', color: 'bg-blue-600 hover:bg-blue-700' },
+  { target: 'completed',  label: '완료 처리',   color: 'bg-gray-500 hover:bg-gray-600' },
+];
+
+interface FormState {
+  title: string;
+  description: string;
+  category: Category;
+  targetTime: string;
+  identityKeyword: string;
+  badgeIcon: string;
+  badgeName: string;
+  recruitingStartAt: string;
+  recruitingEndAt: string;
+  challengeStartAt: string;
+  durationDays: number;
+  maxParticipants: string;
+  challengeType: ChallengeType;
+  requirePersonalTargetOnJoin: boolean;
+  allowExtraVisibilityToggle: boolean;
+  remedyType: RemedyType;
+  maxRemedyDays: 1 | 2;
+  allowBulk: boolean;
+  personalQuestAutoApprove: boolean;
+  joinApprovalRequired: boolean;
+  allowedVerificationTypes: VerificationType[];
+}
+
+const INITIAL: FormState = {
+  title: '',
+  description: '',
+  category: 'habit',
+  targetTime: '07:00',
+  identityKeyword: '',
+  badgeIcon: '🏆',
+  badgeName: '',
   recruitingStartAt: '',
-  recruitingEndAt:   '',
-  challengeStartAt:  '',
-  durationDays:      7,
-  maxParticipants:   '' as string,   // '' = 무제한
-  challengeType:     'leader_personal' as ChallengeType,
-  requirePersonalGoalOnJoin: true,
+  recruitingEndAt: '',
+  challengeStartAt: '',
+  durationDays: 7,
+  maxParticipants: '',
+  challengeType: 'leader_personal',
   requirePersonalTargetOnJoin: true,
   allowExtraVisibilityToggle: true,
-  remedyType: 'open' as 'strict'|'limited'|'open',
+  remedyType: 'open',
   maxRemedyDays: 1,
   allowBulk: false,
   personalQuestAutoApprove: true,
-  joinApprovalRequired: true,
-  allowedVerificationTypes: ['image', 'text', 'link', 'video'] as VerificationType[],
+  joinApprovalRequired: false,
+  allowedVerificationTypes: ['image', 'text', 'link', 'video'],
 };
 
-
-const isForcedPersonalGoalRequiredType = (challengeType: ChallengeType) =>
-  challengeType === 'personal_only' || challengeType === 'leader_personal' || (challengeType as string) === 'mixed';
-
-const isForcedPersonalGoalDisabledType = (challengeType: ChallengeType) =>
-  challengeType === 'leader_only';
-
-const isPersonalGoalPolicyLockedType = (challengeType: ChallengeType) =>
-  isForcedPersonalGoalRequiredType(challengeType) || isForcedPersonalGoalDisabledType(challengeType);
-
-const normalizeJoinPolicyByType = (challengeType: ChallengeType, prev: typeof INITIAL) => ({
-  ...prev,
-  challengeType,
-  requirePersonalGoalOnJoin: isForcedPersonalGoalRequiredType(challengeType)
-    ? true
-    : isForcedPersonalGoalDisabledType(challengeType)
-      ? false
-      : prev.requirePersonalGoalOnJoin,
-});
+const S = 'bg-white rounded-2xl border border-gray-200 p-5 space-y-4';
+const I = 'w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent';
+const IE = 'w-full px-3 py-2.5 border border-red-400 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent';
 
 export const AdminChallengeCreatePage = () => {
   const navigate = useNavigate();
-  const [form, setForm] = useState(INITIAL);
-  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState<FormState>(INITIAL);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [createdChallengeId, setCreatedChallengeId] = useState('');
+  const [createdId, setCreatedId] = useState('');
+  const [currentLifecycle, setCurrentLifecycle] = useState<Lifecycle>('draft');
   const [lifecycleLoading, setLifecycleLoading] = useState<Lifecycle | null>(null);
-  const [currentLifecycle, setCurrentLifecycle] = useState<Lifecycle | null>(null);
+  const [lifecycleError, setLifecycleError] = useState('');
 
-  const set = <K extends keyof typeof INITIAL>(key: K, val: (typeof INITIAL)[K]) =>
+  function set<K extends keyof FormState>(key: K, val: FormState[K]) {
     setForm(prev => ({ ...prev, [key]: val }));
+  }
 
-
-  const handleTransition = async (target: Lifecycle, reason: string) => {
-    if (!createdChallengeId) return;
-    setLifecycleLoading(target);
-    setError('');
-    try {
-      await apiClient.put(`/admin/challenges/${createdChallengeId}/lifecycle`, { lifecycle: target, reason });
-      setCurrentLifecycle(target);
-      alert(`챌린지가 ${target} 상태로 전환되었습니다`);
-    } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } };
-      setError(e.response?.data?.message || '챌린지 상태 전환에 실패했습니다. 현재 상태와 전환 경로를 확인해주세요.');
-    } finally {
-      setLifecycleLoading(null);
+  // 실시간 타임라인 검증
+  const timelineErrors = useMemo(() => {
+    const e: Record<string, string> = {};
+    if (form.recruitingStartAt && form.recruitingEndAt) {
+      if (new Date(form.recruitingEndAt) <= new Date(form.recruitingStartAt)) {
+        e.recruitingEndAt = '모집 마감일은 모집 시작일 이후여야 합니다';
+      }
     }
-  };
+    if (form.recruitingEndAt && form.challengeStartAt) {
+      if (new Date(form.challengeStartAt).getTime() < new Date(form.recruitingEndAt).getTime() + 60_000) {
+        e.challengeStartAt = '챌린지 시작일은 모집 마감 후 최소 1분 이후여야 합니다';
+      }
+    }
+    return e;
+  }, [form.recruitingStartAt, form.recruitingEndAt, form.challengeStartAt]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim()) { setError('제목을 입력해주세요'); return; }
-    if (form.description.trim().length < 10) { setError('설명은 10자 이상 입력해주세요'); return; }
-    if (!form.identityKeyword.trim()) { setError('정체성 키워드를 입력해주세요'); return; }
-    if (!form.badgeName.trim()) { setError('배지 이름을 입력해주세요'); return; }
-    if (!form.recruitingStartAt) { setError('모집 시작일을 입력해주세요'); return; }
-    if (!form.recruitingEndAt) { setError('모집 마감일을 입력해주세요'); return; }
-    if (!form.challengeStartAt) { setError('챌린지 시작일을 입력해주세요'); return; }
-
-    setLoading(true);
     setError('');
+
+    if (!form.title.trim())                       return setError('제목을 입력해주세요');
+    if (form.description.trim().length < 10)      return setError('설명은 10자 이상 입력해주세요');
+    if (!form.identityKeyword.trim())              return setError('정체성 키워드를 입력해주세요');
+    if (!form.badgeName.trim())                    return setError('배지 이름을 입력해주세요');
+    if (!form.recruitingStartAt || !form.recruitingEndAt || !form.challengeStartAt)
+                                                   return setError('일정을 모두 입력해주세요');
+    if (Object.keys(timelineErrors).length > 0)   return setError('일정 오류를 먼저 수정해주세요');
+    if (form.allowedVerificationTypes.length === 0) return setError('인증 유형을 최소 1개 선택해주세요');
+
+    setSubmitting(true);
     try {
+      // requirePersonalGoalOnJoin은 challengeType에서 자동 결정
+      const requirePersonalGoalOnJoin = form.challengeType !== 'leader_only';
+
       const payload: Record<string, unknown> = {
-        title:            form.title.trim(),
-        description:      form.description.trim(),
-        category:         form.category,
-        targetTime:       form.targetTime,
-        identityKeyword:  form.identityKeyword.trim(),
-        badgeIcon:        form.badgeIcon.trim() || '🏆',
-        badgeName:        form.badgeName.trim(),
+        title:           form.title.trim(),
+        description:     form.description.trim(),
+        category:        form.category,
+        targetTime:      form.targetTime,
+        identityKeyword: form.identityKeyword.trim(),
+        badgeIcon:       form.badgeIcon.trim() || '🏆',
+        badgeName:       form.badgeName.trim(),
         recruitingStartAt: new Date(form.recruitingStartAt).toISOString(),
         recruitingEndAt:   new Date(form.recruitingEndAt).toISOString(),
         challengeStartAt:  new Date(form.challengeStartAt).toISOString(),
-        durationDays:      Number(form.durationDays),
-        challengeType:     form.challengeType,
+        durationDays:    form.durationDays,
+        challengeType:   form.challengeType,
         defaultRemedyPolicy: {
-          type: form.remedyType,
-          maxRemedyDays: form.remedyType === 'limited' ? Number(form.maxRemedyDays) : null,
-          allowBulk: form.remedyType === 'open' ? Boolean(form.allowBulk) : null,
+          type:          form.remedyType,
+          maxRemedyDays: form.remedyType === 'limited' ? form.maxRemedyDays : null,
+          allowBulk:     form.remedyType === 'open'    ? form.allowBulk     : null,
+        },
+        layerPolicy: {
+          requirePersonalGoalOnJoin,
+          requirePersonalTargetOnJoin: form.requirePersonalTargetOnJoin,
+          allowExtraVisibilityToggle:  form.allowExtraVisibilityToggle,
         },
         personalQuestAutoApprove: form.personalQuestAutoApprove,
-        joinApprovalRequired: form.joinApprovalRequired,
+        joinApprovalRequired:     form.joinApprovalRequired,
         allowedVerificationTypes: form.allowedVerificationTypes,
-        layerPolicy: {
-          requirePersonalGoalOnJoin: form.requirePersonalGoalOnJoin,
-          requirePersonalTargetOnJoin: form.requirePersonalTargetOnJoin,
-          allowExtraVisibilityToggle: form.allowExtraVisibilityToggle,
-        },
       };
       if (form.maxParticipants !== '') {
         payload.maxParticipants = Number(form.maxParticipants);
       }
 
       const res = await apiClient.post('/admin/challenges', payload);
-      const challengeId = res.data?.data?.challengeId || '';
-      const lifecycle = (res.data?.data?.lifecycle || null) as Lifecycle | null;
-      setCreatedChallengeId(challengeId);
-      setCurrentLifecycle(lifecycle);
+      const data = res.data?.data;
+      setCreatedId(data.challengeId || '');
+      setCurrentLifecycle((data.lifecycle as Lifecycle) || 'draft');
       setForm(INITIAL);
-      alert('챌린지가 생성되었습니다. 아래 운영 버튼으로 모집 시작/마감/챌린지 시작을 수동 전환할 수 있습니다.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setError(e.response?.data?.message || '생성에 실패했습니다');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
+    }
+  };
+
+  const handleTransition = async (target: Lifecycle) => {
+    if (!createdId) return;
+    setLifecycleLoading(target);
+    setLifecycleError('');
+    try {
+      await apiClient.put(`/admin/challenges/${createdId}/lifecycle`, {
+        lifecycle: target,
+        reason: `admin_manual_${target}`,
+      });
+      setCurrentLifecycle(target);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setLifecycleError(e.response?.data?.message || '상태 전환에 실패했습니다');
+    } finally {
+      setLifecycleLoading(null);
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
+    <div className="max-w-2xl mx-auto p-6 pb-24">
       {/* 헤더 */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-900 transition-colors">
-          ← 뒤로
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
+        >
+          ←
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">챌린지 생성</h1>
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">챌린지 생성</h1>
+          <p className="text-xs text-gray-500 mt-0.5">새 챌린지를 만들고 일정을 설정합니다</p>
+        </div>
       </div>
+
+      {/* 생성 완료 패널 */}
+      {createdId && (
+        <div className="mb-6 bg-green-50 border border-green-200 rounded-2xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">✅</span>
+            <h3 className="font-bold text-green-900">챌린지 생성 완료!</h3>
+          </div>
+          <div className="text-sm text-green-800 space-y-1">
+            <p>ID: <code className="bg-green-100 px-1.5 py-0.5 rounded text-xs font-mono">{createdId}</code></p>
+            <p>현재 상태: <span className="font-semibold">{lifecycleLabel(currentLifecycle)}</span></p>
+          </div>
+          {lifecycleError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{lifecycleError}</p>
+          )}
+          <div className="border-t border-green-200 pt-3">
+            <p className="text-xs text-green-700 mb-2 font-medium">수동 상태 전환</p>
+            <div className="flex flex-wrap gap-2">
+              {LIFECYCLE_TRANSITIONS.map(({ target, label, color }) => (
+                <button
+                  key={target}
+                  type="button"
+                  onClick={() => handleTransition(target)}
+                  disabled={lifecycleLoading !== null || currentLifecycle === target}
+                  className={`px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors disabled:opacity-50 ${color}`}
+                >
+                  {lifecycleLoading === target ? '전환 중...' : label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCreatedId('')}
+            className="text-xs text-green-700 underline"
+          >
+            닫고 새 챌린지 만들기
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>
         )}
 
-        {/* 기본 정보 */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
-          <h2 className="font-bold text-gray-800">기본 정보</h2>
+        {/* ① 기본 정보 */}
+        <div className={S}>
+          <h2 className="font-bold text-gray-800">① 기본 정보</h2>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">제목 *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              제목 <span className="text-red-500">*</span>
+            </label>
             <input
               value={form.title}
               onChange={e => set('title', e.target.value)}
               placeholder="챌린지 제목 (최대 100자)"
               maxLength={100}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
+              className={I}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">설명 * (10자 이상)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              설명 <span className="text-red-500">*</span>{' '}
+              <span className="text-xs font-normal text-gray-400">(10자 이상)</span>
+            </label>
             <textarea
               value={form.description}
               onChange={e => set('description', e.target.value)}
               rows={4}
               placeholder="챌린지 설명 (10~1000자)"
               maxLength={1000}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className={`${I} resize-none`}
             />
             <p className="text-xs text-gray-400 mt-1 text-right">{form.description.length}/1000</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">카테고리 *</label>
-            <div className="grid grid-cols-3 gap-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              카테고리 <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-4 gap-1.5">
               {CATEGORIES.map(cat => (
                 <button
                   key={cat.value}
                   type="button"
                   onClick={() => set('category', cat.value)}
-                  className={`py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  className={`py-2 px-1 rounded-xl text-xs font-medium transition-colors ${
                     form.category === cat.value
                       ? 'bg-primary-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -232,283 +339,388 @@ export const AdminChallengeCreatePage = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">목표 시각 (HH:MM) *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                목표 시각 <span className="text-red-500">*</span>
+              </label>
               <input
                 type="time"
                 value={form.targetTime}
                 onChange={e => set('targetTime', e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
+                className={I}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">정체성 키워드 *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                정체성 키워드 <span className="text-red-500">*</span>
+              </label>
               <input
                 value={form.identityKeyword}
                 onChange={e => set('identityKeyword', e.target.value)}
                 placeholder="예: 아침형 인간"
                 maxLength={50}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
+                className={I}
               />
             </div>
           </div>
         </div>
 
-        {/* 배지 */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
-          <h2 className="font-bold text-gray-800">배지</h2>
-          <div className="flex gap-3">
+        {/* ② 챌린지 유형 */}
+        <div className={S}>
+          <div>
+            <h2 className="font-bold text-gray-800">② 챌린지 유형 <span className="text-red-500">*</span></h2>
+            <p className="text-xs text-gray-500 mt-0.5">인증 완료 조건과 하루 완료 기준을 결정합니다</p>
+          </div>
+          <div className="space-y-2">
+            {CHALLENGE_TYPES.map(type => (
+              <button
+                key={type.value}
+                type="button"
+                onClick={() => set('challengeType', type.value)}
+                className={`w-full text-left px-4 py-3.5 rounded-xl border-2 transition-all ${
+                  form.challengeType === type.value
+                    ? 'border-primary-500 bg-primary-50'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl leading-none">{type.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`font-semibold text-sm ${
+                        form.challengeType === type.value ? 'text-primary-700' : 'text-gray-900'
+                      }`}>
+                        {type.label}
+                      </span>
+                      {form.challengeType === type.value && (
+                        <span className="text-xs px-1.5 py-0.5 bg-primary-100 text-primary-700 rounded-full font-medium">
+                          선택됨
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">{type.desc}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+          {form.challengeType === 'leader_personal' && (
+            <div className="flex gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
+              <span className="text-amber-500 text-sm flex-shrink-0">ℹ️</span>
+              <p className="text-xs text-amber-700">
+                혼합형은 리더퀘스트·개인퀘스트 인증을 각각 1개씩 제출해야 하루 완료로 처리됩니다.
+                첫 번째 인증 제출 후 "부분 완료" 상태가 됩니다.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ③ 완주 배지 */}
+        <div className={S}>
+          <h2 className="font-bold text-gray-800">③ 완주 배지</h2>
+          <div className="flex gap-3 items-start">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">배지 아이콘</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">아이콘</label>
               <input
                 value={form.badgeIcon}
                 onChange={e => set('badgeIcon', e.target.value)}
-                className="w-16 h-12 text-2xl text-center border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-16 h-10 text-2xl text-center border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
                 maxLength={10}
               />
             </div>
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">배지 이름 *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                배지 이름 <span className="text-red-500">*</span>
+              </label>
               <input
                 value={form.badgeName}
                 onChange={e => set('badgeName', e.target.value)}
                 placeholder="예: 7일 챌린지 완료자"
                 maxLength={50}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
+                className={I}
               />
             </div>
           </div>
         </div>
 
-
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
-          <h2 className="font-bold text-gray-800">레이어/참여 정책</h2>
+        {/* ④ 일정 */}
+        <div className={S}>
+          <div>
+            <h2 className="font-bold text-gray-800">④ 일정</h2>
+            <p className="text-xs text-gray-500 mt-0.5">모집 시작 → 모집 마감 → 챌린지 시작 순서여야 합니다</p>
+          </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">챌린지 유형 *</label>
-            <select
-              value={form.challengeType}
-              onChange={(e) => setForm((prev) => normalizeJoinPolicyByType(e.target.value as ChallengeType, prev))}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              {CHALLENGE_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>{type.label}</option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-gray-500">
-              {CHALLENGE_TYPES.find((type) => type.value === form.challengeType)?.hint}
-            </p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              모집 시작 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={form.recruitingStartAt}
+              onChange={e => set('recruitingStartAt', e.target.value)}
+              className={I}
+            />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
+          <div className="flex justify-center -my-1">
+            <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-200">
+              ↓ 모집 기간
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              모집 마감 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={form.recruitingEndAt}
+              onChange={e => set('recruitingEndAt', e.target.value)}
+              className={timelineErrors.recruitingEndAt ? IE : I}
+            />
+            {timelineErrors.recruitingEndAt && (
+              <p className="text-xs text-red-500 mt-1">{timelineErrors.recruitingEndAt}</p>
+            )}
+          </div>
+
+          <div className="flex justify-center -my-1">
+            <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-200">
+              ↓ 준비 기간 (최소 1분)
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              챌린지 시작 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={form.challengeStartAt}
+              onChange={e => set('challengeStartAt', e.target.value)}
+              className={timelineErrors.challengeStartAt ? IE : I}
+            />
+            {timelineErrors.challengeStartAt && (
+              <p className="text-xs text-red-500 mt-1">{timelineErrors.challengeStartAt}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">진행 기간</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {DURATION_PRESETS.map(d => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => set('durationDays', d)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    form.durationDays === d
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {d}일
+                </button>
+              ))}
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={form.durationDays}
+                  onChange={e => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v)) set('durationDays', Math.max(1, Math.min(30, v)));
+                  }}
+                  className="w-20 px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-500">일</span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-1.5">
+              종료일 = 챌린지 시작 + {form.durationDays}일 (자동 계산)
+            </p>
+          </div>
+        </div>
+
+        {/* ⑤ 허용 인증 방식 */}
+        <div className={S}>
+          <div>
+            <h2 className="font-bold text-gray-800">⑤ 허용 인증 방식</h2>
+            <p className="text-xs text-gray-500 mt-0.5">최소 1개 이상 선택</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {VERIFICATION_TYPES.map(vt => {
+              const checked = form.allowedVerificationTypes.includes(vt.value);
+              return (
+                <button
+                  key={vt.value}
+                  type="button"
+                  onClick={() => {
+                    const next = checked
+                      ? form.allowedVerificationTypes.filter(t => t !== vt.value)
+                      : [...form.allowedVerificationTypes, vt.value];
+                    if (next.length > 0) set('allowedVerificationTypes', next);
+                  }}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 transition-all text-sm font-medium ${
+                    checked
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  <span>{vt.icon}</span>
+                  <span>{vt.label}</span>
+                  {checked && <span className="ml-auto text-primary-500 text-xs">✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ⑥ 보완 인증 정책 */}
+        <div className={S}>
+          <div>
+            <h2 className="font-bold text-gray-800">⑥ 보완 인증 정책</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Day 6에 이전 실패일을 보완 인증할 수 있는 정책</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { value: 'open'    as RemedyType, icon: '🔓', label: '자유',  desc: '횟수 제한 없음' },
+              { value: 'limited' as RemedyType, icon: '🔢', label: '제한',  desc: '최대 N회' },
+              { value: 'strict'  as RemedyType, icon: '🔒', label: '엄격',  desc: '보완 불가' },
+            ]).map(t => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => set('remedyType', t.value)}
+                className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-all ${
+                  form.remedyType === t.value
+                    ? 'border-primary-500 bg-primary-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <span className="text-xl">{t.icon}</span>
+                <span className={`text-xs font-semibold ${
+                  form.remedyType === t.value ? 'text-primary-700' : 'text-gray-700'
+                }`}>{t.label}</span>
+                <span className="text-xs text-gray-400">{t.desc}</span>
+              </button>
+            ))}
+          </div>
+
+          {form.remedyType === 'limited' && (
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-gray-700 font-medium">최대 보완 횟수</label>
+              <select
+                value={form.maxRemedyDays}
+                onChange={e => set('maxRemedyDays', Number(e.target.value) as 1 | 2)}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value={1}>1회</option>
+                <option value={2}>2회</option>
+              </select>
+            </div>
+          )}
+
+          {form.remedyType === 'open' && (
+            <label className="flex items-start gap-2.5 cursor-pointer">
               <input
                 type="checkbox"
-                checked={form.requirePersonalGoalOnJoin}
-                disabled={isPersonalGoalPolicyLockedType(form.challengeType)}
-                onChange={(e) => set('requirePersonalGoalOnJoin', e.target.checked)}
+                checked={form.allowBulk}
+                onChange={e => set('allowBulk', e.target.checked)}
+                className="mt-0.5 w-4 h-4 text-primary-600 rounded"
               />
-              참여 시 개인 목표 입력 필수
-              {isForcedPersonalGoalRequiredType(form.challengeType) && (
-                <span className="text-xs text-gray-500" title="personal_only / leader_personal 유형은 참여 시 개인 목표가 반드시 필요합니다.">(유형 정책으로 자동 필수)</span>
-              )}
-              {isForcedPersonalGoalDisabledType(form.challengeType) && (
-                <span className="text-xs text-gray-500" title="leader_only 유형은 리더 퀘스트 중심이므로 참여 개인 목표 입력을 요구하지 않습니다.">(유형 정책으로 비활성)</span>
-              )}
+              <div>
+                <span className="text-sm font-medium text-gray-700">몰아서 제출 허용</span>
+                <p className="text-xs text-gray-400 mt-0.5">여러 날 실패분을 한 번에 보완 제출할 수 있습니다</p>
+              </div>
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={form.requirePersonalTargetOnJoin} onChange={e => set('requirePersonalTargetOnJoin', e.target.checked)} />
-              참여 시 개인 목표시간 필수
-            </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={form.allowExtraVisibilityToggle} onChange={e => set('allowExtraVisibilityToggle', e.target.checked)} />
-              추가 기록 공개 전환 허용
-            </label>
-          </div>
-
-          {isForcedPersonalGoalRequiredType(form.challengeType) && (
-            <p className="text-xs text-primary-700">
-              선택한 챌린지 유형은 참여 시 개인 목표 입력이 필수로 자동 적용됩니다.
-            </p>
-          )}
-          {isForcedPersonalGoalDisabledType(form.challengeType) && (
-            <p className="text-xs text-gray-600">
-              리더 퀘스트형은 참여자가 리더 퀘스트를 수행하는 구조라 개인 목표 입력 필수를 설정할 수 없습니다.
-            </p>
           )}
         </div>
 
+        {/* ⑦ 참여 및 운영 설정 */}
+        <div className={S}>
+          <h2 className="font-bold text-gray-800">⑦ 참여 및 운영 설정</h2>
 
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
-          <h2 className="font-bold text-gray-800">보완(Remedy) 정책</h2>
-          <div className="flex gap-4">
-            {([
-              { value: 'strict',  label: '엄격 (strict)' },
-              { value: 'limited', label: '제한부 (limited)' },
-              { value: 'open',    label: '자유 (open)' },
-            ] as const).map((t) => (
-              <label key={t.value} className="text-sm flex items-center gap-1">
-                <input type="radio" checked={form.remedyType === t.value} onChange={() => set('remedyType', t.value as any)} />
-                {t.label}
-              </label>
-            ))}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">최대 참가자 수</label>
+            <input
+              type="number"
+              min={1}
+              value={form.maxParticipants}
+              onChange={e => set('maxParticipants', e.target.value)}
+              placeholder="비워두면 무제한"
+              className={I}
+            />
+            <p className="text-xs text-gray-400 mt-1">비워두면 참가자 수 제한 없음</p>
           </div>
-          {form.remedyType === 'limited' && (
-            <select value={form.maxRemedyDays} onChange={(e) => set('maxRemedyDays', Number(e.target.value) as any)} className="px-3 py-2 border rounded-lg">
-              <option value={1}>1일</option>
-              <option value={2}>2일</option>
-            </select>
-          )}
-          {form.remedyType === 'open' && (
-            <label className="text-sm flex items-center gap-2">
-              <input type="checkbox" checked={form.allowBulk} onChange={(e) => set('allowBulk', e.target.checked as any)} /> 몰아서 제출 허용
+
+          <div className="space-y-3 pt-1">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.requirePersonalTargetOnJoin}
+                onChange={e => set('requirePersonalTargetOnJoin', e.target.checked)}
+                className="mt-0.5 w-4 h-4 text-primary-600 rounded"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700">참여 시 목표 시각 입력 필수</span>
+                <p className="text-xs text-gray-400 mt-0.5">참여 신청 시 하루 목표 시각을 직접 입력하도록 합니다</p>
+              </div>
             </label>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <label className="text-sm flex items-center gap-2">
-              <input type="checkbox" checked={form.personalQuestAutoApprove} onChange={(e) => set('personalQuestAutoApprove', e.target.checked as any)} /> 개인 퀘스트 자동 승인
+
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.allowExtraVisibilityToggle}
+                onChange={e => set('allowExtraVisibilityToggle', e.target.checked)}
+                className="mt-0.5 w-4 h-4 text-primary-600 rounded"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700">추가 기록 공개 전환 허용</span>
+                <p className="text-xs text-gray-400 mt-0.5">나만 보기로 저장된 추가 기록을 공개 피드로 전환할 수 있도록 합니다</p>
+              </div>
             </label>
-            <label className="text-sm flex items-center gap-2 md:col-span-2">
-              <input type="checkbox" checked={form.joinApprovalRequired} onChange={(e) => set('joinApprovalRequired', e.target.checked as any)} />
-              유료 챌린지 참여 신청 승인 필요 (해제 시 자동 참여 확정)
-            </label>
-          </div>
-          <p className="text-xs text-gray-500">무료 챌린지는 자동 참여 확정이며, 이 설정은 유료 챌린지에만 적용됩니다.</p>
-        </div>
 
-        {/* 일정 */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
-          <h2 className="font-bold text-gray-800">일정</h2>
-          <p className="text-xs text-gray-500">모집 시작 → 모집 마감 → 챌린지 시작 순서여야 합니다</p>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">모집 시작일 *</label>
-              <input
-                type="datetime-local"
-                value={form.recruitingStartAt}
-                onChange={e => set('recruitingStartAt', e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">모집 마감일 *</label>
-              <input
-                type="datetime-local"
-                value={form.recruitingEndAt}
-                onChange={e => set('recruitingEndAt', e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">챌린지 시작일 *</label>
-              <input
-                type="datetime-local"
-                value={form.challengeStartAt}
-                onChange={e => set('challengeStartAt', e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">진행 기간 (일)</label>
-              <input
-                type="number"
-                min={1}
-                max={30}
-                value={form.durationDays}
-                onChange={e => set('durationDays', Number(e.target.value) as unknown as typeof form.durationDays)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 참가자 제한 */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <h2 className="font-bold text-gray-800 mb-3">최대 참가자 수</h2>
-          <input
-            type="number"
-            min={1}
-            value={form.maxParticipants}
-            onChange={e => set('maxParticipants', e.target.value)}
-            placeholder="비워두면 무제한"
-            className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-          <p className="text-xs text-gray-400 mt-1">비워두면 참가자 수 제한 없음</p>
-        </div>
-
-
-        {/* 허용 인증 유형 */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
-          <h2 className="font-bold text-gray-800">허용 인증 유형</h2>
-          <p className="text-xs text-gray-500">이 챌린지에서 사용 가능한 인증 방식을 선택하세요. 최소 1개 이상 필요.</p>
-          <div className="grid grid-cols-2 gap-2">
-            {VERIFICATION_TYPE_OPTIONS.map(vt => (
-              <label key={vt.value} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            {form.challengeType !== 'leader_only' && (
+              <label className="flex items-start gap-2.5 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={form.allowedVerificationTypes.includes(vt.value)}
-                  onChange={(e) => {
-                    const next = e.target.checked
-                      ? [...form.allowedVerificationTypes, vt.value]
-                      : form.allowedVerificationTypes.filter(t => t !== vt.value);
-                    if (next.length > 0) set('allowedVerificationTypes', next as any);
-                  }}
-                  className="w-4 h-4 text-primary-600 rounded"
+                  checked={form.personalQuestAutoApprove}
+                  onChange={e => set('personalQuestAutoApprove', e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-primary-600 rounded"
                 />
-                {vt.label}
+                <div>
+                  <span className="text-sm font-medium text-gray-700">개인 퀘스트 자동 승인</span>
+                  <p className="text-xs text-gray-400 mt-0.5">참여자가 제안한 개인 퀘스트를 리더 확인 없이 자동으로 확정합니다</p>
+                </div>
               </label>
-            ))}
+            )}
+
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.joinApprovalRequired}
+                onChange={e => set('joinApprovalRequired', e.target.checked)}
+                className="mt-0.5 w-4 h-4 text-primary-600 rounded"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700">
+                  참여 승인 필요{' '}
+                  <span className="text-xs text-gray-400 font-normal">(유료 챌린지용)</span>
+                </span>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  체크 해제 시 신청 즉시 자동 확정됩니다. 무료 챌린지는 해제 권장.
+                </p>
+              </div>
+            </label>
           </div>
         </div>
-
-        {createdChallengeId && (
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-            <p className="text-sm text-blue-800 mb-2">최근 생성 챌린지 ID: <span className="font-semibold">{createdChallengeId}</span></p>
-            <p className="text-xs text-blue-700 mb-3">현재 상태: <span className="font-semibold">{currentLifecycle ? lifecycleLabel(currentLifecycle) : 'unknown'}</span></p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => handleTransition('recruiting', 'admin_manual_recruiting_start')}
-                disabled={lifecycleLoading !== null || currentLifecycle === 'recruiting'}
-                className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold disabled:opacity-50"
-              >
-                {lifecycleLoading === 'recruiting' ? '전환 중...' : '모집 시작'}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTransition('preparing', 'admin_manual_recruiting_close')}
-                disabled={lifecycleLoading !== null || currentLifecycle === 'preparing'}
-                className="px-4 py-2 rounded-xl bg-amber-600 text-white font-semibold disabled:opacity-50"
-              >
-                {lifecycleLoading === 'preparing' ? '전환 중...' : '모집 마감'}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTransition('active', 'admin_manual_challenge_start')}
-                disabled={lifecycleLoading !== null || currentLifecycle === 'active'}
-                className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold disabled:opacity-50"
-              >
-                {lifecycleLoading === 'active' ? '전환 중...' : '챌린지 시작'}
-              </button>
-            </div>
-          </div>
-        )}
 
         <button
           type="submit"
-          disabled={loading}
-          className="w-full py-3.5 bg-primary-600 text-white font-bold rounded-2xl hover:bg-primary-700 transition-colors disabled:opacity-50"
+          disabled={submitting}
+          className="w-full py-3.5 bg-primary-600 text-white font-bold rounded-2xl hover:bg-primary-700 transition-colors disabled:opacity-50 text-sm"
         >
-          {loading ? '생성 중...' : '챌린지 생성하기'}
+          {submitting ? '생성 중...' : '챌린지 생성하기'}
         </button>
       </form>
     </div>
