@@ -175,7 +175,6 @@ export const InlineVerificationForm = ({
   // challengeType 기반 questType 가용 여부
   const challengeType = String(userChallenge?.challenge?.challengeType || 'leader_personal');
   const isMixedType = challengeType === 'leader_personal' || challengeType === 'mixed';
-  const isLeaderOnlyType = challengeType === 'leader_only';
   const isPersonalOnlyType = challengeType === 'personal_only';
   const showQuestTypeSelector = isMixedType; // 혼합형만 선택UI 표시
   const defaultQuestType: 'leader' | 'personal' = isPersonalOnlyType ? 'personal' : 'leader';
