@@ -3,23 +3,29 @@ export function extractImageS3Key(url?: string | null): string | null {
   const raw = String(url).trim();
   if (!raw) return null;
 
+  const sanitizePath = (input: string): string | null => {
+    const noQuery = input.split('?')[0].split('#')[0];
+    const withoutLeading = noQuery.replace(/^\/+/, '');
+    const withoutUploads = withoutLeading.startsWith('uploads/')
+      ? withoutLeading.slice('uploads/'.length)
+      : withoutLeading;
+    if (!withoutUploads) return null;
+
+    try {
+      return decodeURIComponent(withoutUploads);
+    } catch {
+      return withoutUploads;
+    }
+  };
+
   if (!raw.startsWith('http://') && !raw.startsWith('https://')) {
-    if (raw.startsWith('/uploads/')) return raw.slice('/uploads/'.length);
-    if (raw.startsWith('uploads/')) return raw.slice('uploads/'.length);
-    return raw.replace(/^\/+/, '') || null;
+    return sanitizePath(raw);
   }
 
   try {
     const parsed = new URL(raw);
-    if (parsed.pathname.startsWith('/uploads/')) {
-      return parsed.pathname.slice('/uploads/'.length);
-    }
-
-    const pathKey = parsed.pathname.replace(/^\/+/, '');
-    if (pathKey) return pathKey;
+    return sanitizePath(parsed.pathname);
   } catch {
     return null;
   }
-
-  return null;
 }
