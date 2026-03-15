@@ -147,3 +147,8 @@ export function resolveChallengeActualStartAt(challenge: {
 
   return null;
 }
+
+export function isCompletedProgressStatus(status: unknown): boolean {
+  const key = String(status || '').toLowerCase();
+  return key === 'completed' || key === 'success' || key === 'remedy';
+}

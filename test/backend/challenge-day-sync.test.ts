@@ -1,4 +1,4 @@
-import { calculateChallengeEndAt, calculateEffectiveCurrentDay, resolveChallengeActualStartAt } from '../../backend/shared/lib/challenge-day-sync';
+import { calculateChallengeEndAt, calculateEffectiveCurrentDay, isCompletedProgressStatus, resolveChallengeActualStartAt } from '../../backend/shared/lib/challenge-day-sync';
 
 describe('calculateEffectiveCurrentDay', () => {
   test('syncs in_progress challenge states using stored startDate', () => {
@@ -58,5 +58,19 @@ describe('challenge schedule helpers', () => {
   test('calculateChallengeEndAt adds duration days from actual start', () => {
     expect(calculateChallengeEndAt('2025-01-01T12:00:00.000Z', 7)).toBe('2025-01-08T12:00:00.000Z');
     expect(calculateChallengeEndAt('2025-01-01T00:00:00.000Z', 10)).toBe('2025-01-11T00:00:00.000Z');
+  });
+});
+
+
+describe('isCompletedProgressStatus', () => {
+  test('treats completed/success/remedy as completed progress', () => {
+    expect(isCompletedProgressStatus('completed')).toBe(true);
+    expect(isCompletedProgressStatus('success')).toBe(true);
+    expect(isCompletedProgressStatus('remedy')).toBe(true);
+  });
+
+  test('does not treat failed/pending as completed progress', () => {
+    expect(isCompletedProgressStatus('failed')).toBe(false);
+    expect(isCompletedProgressStatus('pending')).toBe(false);
   });
 });

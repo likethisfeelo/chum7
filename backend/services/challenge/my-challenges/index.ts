@@ -2,7 +2,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
-import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
+import { calculateEffectiveCurrentDay, isCompletedProgressStatus, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 import { normalizeProgress } from '../../../shared/lib/progress';
 import { matchesRequestedChallengeStatus, resolveNormalizedChallengeState } from '../../../shared/lib/challenge-state';
 
@@ -85,10 +85,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
       // 진행률 계산
       const progressList = normalizeProgress(uc.progress);
-      const completedDays = progressList.filter((p: any) => {
-        const status = String(p?.status || '').toLowerCase();
-        return status === 'completed' || status === 'success' || status === 'remedy';
-      }).length;
+      const completedDays = progressList.filter((p: any) => isCompletedProgressStatus(p?.status)).length;
       const progressPercentage = Math.max(0, Math.min(100, Math.round((completedDays / durationDays) * 100)));
 
       const effectiveCurrentDay = calculateEffectiveCurrentDay({

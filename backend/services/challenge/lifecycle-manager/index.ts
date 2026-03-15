@@ -20,7 +20,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { sendNotification } from '../../../shared/lib/notification';
-import { calculateChallengeEndAt, calculateSyncedCurrentDay, resolveChallengeActualStartAt, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
+import { calculateChallengeEndAt, calculateSyncedCurrentDay, isCompletedProgressStatus, resolveChallengeActualStartAt, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 import { normalizeProgress } from '../../../shared/lib/progress';
 
 const dynamoClient = new DynamoDBClient({});
@@ -273,7 +273,7 @@ async function finalizeUserChallenges(challengeId: string, durationDays: number)
 
     const now = new Date().toISOString();
     const updates = (result.Items ?? []).map((uc: any) => {
-      const completedDays = normalizeProgress(uc.progress).filter((p: any) => p.status === 'success').length;
+      const completedDays = normalizeProgress(uc.progress).filter((p: any) => isCompletedProgressStatus(p?.status)).length;
       const finalStatus = completedDays >= durationDays ? 'completed' : 'failed';
 
       return docClient.send(
