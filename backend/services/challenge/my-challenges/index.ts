@@ -4,7 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
 import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 import { normalizeProgress } from '../../../shared/lib/progress';
-import { resolveNormalizedChallengeState } from '../../../shared/lib/challenge-state';
+import { matchesRequestedChallengeStatus, resolveNormalizedChallengeState } from '../../../shared/lib/challenge-state';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -46,11 +46,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       TableName: process.env.USER_CHALLENGES_TABLE!,
       IndexName: 'userId-index',
       KeyConditionExpression: 'userId = :userId',
-      FilterExpression: status !== 'all' ? '#status = :status' : undefined,
-      ExpressionAttributeNames: status !== 'all' ? { '#status': 'status' } : undefined,
       ExpressionAttributeValues: {
         ':userId': userId,
-        ...(status !== 'all' && { ':status': status })
       },
       ScanIndexForward: false // 최신순
     }));
@@ -163,15 +160,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       };
     });
 
+    const filteredChallenges = enrichedChallenges.filter((c: any) => matchesRequestedChallengeStatus(status, c.status));
+
     return response(200, {
       success: true,
       data: {
-        challenges: enrichedChallenges,
-        total: enrichedChallenges.length,
+        challenges: filteredChallenges,
+        total: filteredChallenges.length,
         summary: {
-          active: enrichedChallenges.filter((c: any) => c.status === 'active').length,
-          completed: enrichedChallenges.filter((c: any) => c.status === 'completed').length,
-          failed: enrichedChallenges.filter((c: any) => c.status === 'failed').length
+          active: filteredChallenges.filter((c: any) => c.status === 'active').length,
+          completed: filteredChallenges.filter((c: any) => c.status === 'completed').length,
+          failed: filteredChallenges.filter((c: any) => c.status === 'failed').length
         },
         ...(debugEnabled ? {
           _debug: {
@@ -179,6 +178,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             requestedStatus: status,
             totalRawUserChallenges: userChallenges.length,
             totalResolvedChallenges: enrichedChallenges.length,
+            totalReturnedChallenges: filteredChallenges.length,
           }
         } : {})
       }
