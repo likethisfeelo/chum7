@@ -20,30 +20,38 @@ const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024;
 const ALL_TYPES: VerificationType[] = ["text", "image", "video", "link"];
 
 
-function getDateOnly(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+// KST(UTC+9) 기준 오늘 날짜를 UTC midnight Date로 반환
+function getKstDateOnly(): Date {
+  const now = new Date();
+  const kstMs = now.getTime() + 9 * 60 * 60 * 1000;
+  const kst = new Date(kstMs);
+  return new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()));
 }
 
 function parseChallengeStartDate(userChallenge: any): Date | null {
   const start = userChallenge?.startDate || userChallenge?.challenge?.startDate || userChallenge?.challenge?.startAt;
   if (!start || typeof start !== "string") return null;
 
+  // YYYY-MM-DD 형식 → KST 자정 기준으로 해석
   const dateOnlyMatch = start.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (dateOnlyMatch) {
     const [, y, m, d] = dateOnlyMatch;
-    return new Date(Number(y), Number(m) - 1, Number(d));
+    return new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
   }
 
+  // ISO 형식 → KST로 변환
   const parsed = new Date(start);
   if (Number.isNaN(parsed.getTime())) return null;
-  return getDateOnly(parsed);
+  const kstMs = parsed.getTime() + 9 * 60 * 60 * 1000;
+  const kst = new Date(kstMs);
+  return new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()));
 }
 
 function getChallengeDay(userChallenge: any): number {
   const startDate = parseChallengeStartDate(userChallenge);
   if (!startDate) return Math.max(1, Number(userChallenge.currentDay || 1));
 
-  const today = getDateOnly(new Date());
+  const today = getKstDateOnly();
   const diffMs = today.getTime() - startDate.getTime();
   const elapsed = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   return Math.max(1, elapsed + 1);

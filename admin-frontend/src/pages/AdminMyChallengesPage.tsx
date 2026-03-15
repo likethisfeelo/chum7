@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 import { lifecycleLabel, transitionLabel } from '@/utils/lifecycle';
 
@@ -26,6 +27,7 @@ const ALLOWED_TRANSITIONS: Record<Lifecycle, Lifecycle[]> = {
 };
 
 export const AdminMyChallengesPage = () => {
+  const navigate = useNavigate();
   const [selectedChallengeId, setSelectedChallengeId] = useState<string>('');
   const [transitionReason, setTransitionReason] = useState('운영 정책에 따른 상태 전환');
   const [transitionLoading, setTransitionLoading] = useState<Lifecycle | null>(null);
@@ -326,7 +328,16 @@ export const AdminMyChallengesPage = () => {
 
       {selectedChallengeId && (
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <h3 className="text-lg font-bold text-gray-900 mb-3">챌린지별 퀘스트</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-bold text-gray-900">챌린지별 퀘스트</h3>
+            <button
+              type="button"
+              onClick={() => navigate(`/admin/quests/create?challengeId=${selectedChallengeId}`)}
+              className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors"
+            >
+              + 퀘스트 추가
+            </button>
+          </div>
           {questsLoading ? (
             <p className="text-sm text-gray-500">퀘스트 목록을 불러오는 중...</p>
           ) : (questsData?.length ?? 0) === 0 ? (
@@ -335,9 +346,19 @@ export const AdminMyChallengesPage = () => {
             <div className="space-y-3">
               {(questsData as Quest[]).map((q) => (
                 <div key={q.questId} className="border border-gray-200 rounded-xl p-3 space-y-2">
-                  <p className="font-semibold text-gray-900">{q.title}</p>
+                  <div className="flex items-start justify-between">
+                    <p className="font-semibold text-gray-900">{q.title}</p>
+                    {q.status && q.status !== 'active' && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{q.status}</span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-600">{q.description}</p>
-                  <p className="text-xs text-gray-500">유형: {q.verificationType} · 포인트: {q.rewardPoints} · 순서: {q.displayOrder}</p>
+                  <p className="text-xs text-gray-500">
+                    유형: {q.verificationType} · 포인트: {q.rewardPoints} · 순서: {q.displayOrder}
+                    {(q as any).questLayer ? ` · 레이어: ${(q as any).questLayer}` : ''}
+                    {(q as any).questScope ? ` · 스코프: ${(q as any).questScope}` : ''}
+                    {(q as any).startDay || (q as any).endDay ? ` · Day ${(q as any).startDay ?? '?'}~${(q as any).endDay ?? '?'}` : ''}
+                  </p>
 
                   {editingQuestId === q.questId ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-gray-50 rounded-lg p-2">

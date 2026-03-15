@@ -50,8 +50,14 @@ async function toRenderableMediaUrl(
   url?: string | null,
 ): Promise<string | null> {
   if (!url) return null;
-  const key = extractUploadsKey(url);
-  if (!key || !process.env.UPLOADS_BUCKET) return url;
+  const raw = String(url).trim();
+  if (!raw) return null;
+
+  // CloudFront/CDN URL은 이미 공개 접근 가능하므로 재서명 없이 반환
+  if (raw.includes("chum7.com") || raw.includes("cloudfront.net")) return raw;
+
+  const key = extractUploadsKey(raw);
+  if (!key || !process.env.UPLOADS_BUCKET) return raw;
 
   try {
     return await getSignedUrl(
@@ -61,7 +67,7 @@ async function toRenderableMediaUrl(
     );
   } catch (error) {
     console.error("Failed to sign verification media url:", error);
-    return url;
+    return raw;
   }
 }
 
@@ -178,6 +184,7 @@ export const handler = async (
     const isPublic = query.isPublic === "true";
     const mine = query.mine === "true";
     const isExtra = query.isExtra;
+    const challengeIdFilter = query.challengeId || null;
 
     let parsedNextToken: ParsedNextToken | null = null;
     try {
@@ -217,14 +224,16 @@ export const handler = async (
             ":userId": userId,
           },
           ScanIndexForward: false,
-          Limit: Math.max(limit * 2, 40),
+          Limit: Math.max(limit * 4, 80),
           ExclusiveStartKey: parsedNextToken?.startKey,
         }),
       );
 
-      items = (result.Items || []).filter((v) =>
-        matchesExtraFilter(v, isExtra),
-      );
+      items = (result.Items || []).filter((v) => {
+        if (!matchesExtraFilter(v, isExtra)) return false;
+        if (challengeIdFilter && v.challengeId !== challengeIdFilter) return false;
+        return true;
+      });
       items = items.slice(0, limit);
       nextToken = toNextToken(mode, result.LastEvaluatedKey);
     } else if (mode === "public") {
@@ -241,14 +250,17 @@ export const handler = async (
               ":isPublic": "true",
             },
             ScanIndexForward: false,
-            Limit: Math.max(limit * 2, 40),
+            Limit: Math.max(limit * 4, 80),
             ExclusiveStartKey: cursor,
           }),
         );
 
-        const filtered = (result.Items || []).filter(
-          (v) => isPublicVerification(v) && matchesExtraFilter(v, isExtra),
-        );
+        const filtered = (result.Items || []).filter((v) => {
+          if (!isPublicVerification(v)) return false;
+          if (!matchesExtraFilter(v, isExtra)) return false;
+          if (challengeIdFilter && v.challengeId !== challengeIdFilter) return false;
+          return true;
+        });
         merged.push(...filtered);
 
         cursor = result.LastEvaluatedKey;
@@ -269,6 +281,7 @@ export const handler = async (
       items = (result.Items || []).filter((v: VerificationItem) => {
         if (isExtra === "true" && !v.isExtra) return false;
         if (isExtra === "false" && v.isExtra) return false;
+        if (challengeIdFilter && v.challengeId !== challengeIdFilter) return false;
         return true;
       });
 

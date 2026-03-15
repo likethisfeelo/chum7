@@ -26,7 +26,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const submitSchema = z.object({
   userChallengeId: z.string().uuid(),
-  day: z.number().min(1).max(7),
+  day: z.number().min(1).max(14),
   verificationType: z.enum(["text", "image", "video", "link"]).optional(),
   imageUrl: z.string().url().optional(),
   videoUrl: z.string().url().optional(),
@@ -350,7 +350,8 @@ export const handler = async (
         practiceValidation.certDate,
         timezone,
       );
-      if (isInvalidDayDelta(input.day, calculatedDay)) {
+      // 타임존 경계에서 ±1 오차 허용
+      if (Math.abs(input.day - calculatedDay) > 1) {
         return response(400, {
           error: "INVALID_DAY",
           message: "요청 day가 서버 계산 day와 불일치합니다",
