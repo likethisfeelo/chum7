@@ -20,6 +20,11 @@ type FeedCursor = {
   legacyCursorDetected?: boolean;
 };
 
+function isDebugEnabled(raw?: string): boolean {
+  const key = String(raw || '').toLowerCase();
+  return key === '1' || key === 'true' || key === 'yes';
+}
+
 function decodeCursor(raw?: string): FeedCursor {
   if (!raw) return {};
   try {
@@ -115,7 +120,7 @@ async function toSignedImageUrl(url?: string | null): Promise<string | null> {
   }
 }
 
-async function sanitizePost(post: any): Promise<any> {
+async function sanitizePost(post: any, debugCollector?: Array<Record<string, unknown>>): Promise<any> {
   const {
     sourceUserId,
     sourceId,
@@ -127,6 +132,16 @@ async function sanitizePost(post: any): Promise<any> {
   } = post;
 
   const imageUrl = await toSignedImageUrl(safe.imageUrl || null);
+
+  if (debugCollector) {
+    debugCollector.push({
+      plazaPostId: safe.plazaPostId || null,
+      postType: safe.postType || null,
+      rawImageUrl: safe.imageUrl || null,
+      extractedKey: extractImageS3Key(safe.imageUrl || null),
+      normalizedImageUrl: imageUrl || null,
+    });
+  }
 
   return {
     ...safe,
@@ -142,6 +157,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const filter = normalizeFilter(params.filter);
     const limit = Math.max(1, Math.min(50, Number(params.limit || '20')));
     const cursor = decodeCursor(params.cursor);
+    const debugEnabled = isDebugEnabled(params.debug);
+    const debugImageSamples: Array<Record<string, unknown>> = [];
 
     const allowTypes = toPostType(filter);
     const nowMs = Date.now();
@@ -159,7 +176,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         .filter((item: any) => item?.isActive !== false)
         .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
-      const posts = await Promise.all(items.slice(0, limit).map(sanitizePost));
+      const posts = await Promise.all(items.slice(0, limit).map((item: any) => sanitizePost(item, debugEnabled ? debugImageSamples : undefined)));
       const nextPerType: CursorMap = {};
       if (queryRes.LastEvaluatedKey) nextPerType[postType] = queryRes.LastEvaluatedKey;
 
@@ -169,6 +186,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           posts,
           hasMore: Boolean(queryRes.LastEvaluatedKey),
           nextCursor: encodeCursor({ perType: nextPerType }),
+          ...(debugEnabled ? {
+            _debug: {
+              filter,
+              limit,
+              returnedPosts: posts.length,
+              legacyCursorDetected: Boolean(cursor.legacyCursorDetected),
+              imageNormalizationSamples: debugImageSamples.slice(0, 20),
+            }
+          } : {}),
         },
       });
     }
@@ -196,7 +222,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       .flatMap((result) => result.items)
       .sort((a: any, b: any) => (b._score || 0) - (a._score || 0));
 
-    const posts = await Promise.all(sorted.slice(0, limit).map(sanitizePost));
+    const posts = await Promise.all(sorted.slice(0, limit).map((item: any) => sanitizePost(item, debugEnabled ? debugImageSamples : undefined)));
 
     const nextPerType: CursorMap = {};
     for (const result of typeResults) {
@@ -211,6 +237,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         posts,
         hasMore: Object.keys(nextPerType).length > 0,
         nextCursor: encodeCursor({ perType: nextPerType }),
+        ...(debugEnabled ? {
+          _debug: {
+            filter,
+            limit,
+            returnedPosts: posts.length,
+            legacyCursorDetected: Boolean(cursor.legacyCursorDetected),
+            imageNormalizationSamples: debugImageSamples.slice(0, 20),
+          }
+        } : {}),
       },
     });
   } catch (error: any) {

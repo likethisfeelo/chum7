@@ -9,6 +9,11 @@ import { resolveNormalizedChallengeState } from '../../../shared/lib/challenge-s
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
+function isDebugEnabled(params: Record<string, string | undefined>): boolean {
+  const raw = String(params.debug || '').toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
     statusCode,
@@ -34,6 +39,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const params = event.queryStringParameters || {};
     const status = params.status || 'active'; // 'active', 'completed', 'failed'
+    const debugEnabled = isDebugEnabled(params);
 
     // 1. 사용자의 챌린지 조회
     const userChallengesResult = await docClient.send(new QueryCommand({
@@ -98,6 +104,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         completedDays,
       });
 
+      const debugLifecycle = {
+        storedCurrentDay: Number(uc.currentDay || 1),
+        effectiveCurrentDay,
+        durationDays,
+        completedDays,
+        progressLength: progressList.length,
+        normalizedStatus,
+        normalizedPhase,
+        rawStatus: uc.status,
+        rawPhase: uc.phase,
+        challengeLifecycle: challenge?.lifecycle || null,
+        startDate: uc.startDate || null,
+      };
+
       return {
         userChallengeId: uc.userChallengeId,
         challengeId: uc.challengeId,
@@ -135,7 +155,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             ? challenge.allowedVerificationTypes
             : ['image', 'text', 'link', 'video'],
           durationDays,
-        } : null
+        } : null,
+        ...(debugEnabled ? { _debug: debugLifecycle } : {}),
       };
     });
 
@@ -148,7 +169,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           active: enrichedChallenges.filter((c: any) => c.status === 'active').length,
           completed: enrichedChallenges.filter((c: any) => c.status === 'completed').length,
           failed: enrichedChallenges.filter((c: any) => c.status === 'failed').length
-        }
+        },
+        ...(debugEnabled ? {
+          _debug: {
+            nowIso,
+            requestedStatus: status,
+            totalRawUserChallenges: userChallenges.length,
+            totalResolvedChallenges: enrichedChallenges.length,
+          }
+        } : {})
       }
     });
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -165,6 +165,16 @@ function isTodayVerified(challenge: any): boolean {
   // Use calendar day, not storedCurrentDay which is incremented to day+1 after verification.
   const calendarDay = getCalendarChallengeDay(challenge);
   return isVerificationDayCompleted(challenge?.progress, calendarDay);
+}
+
+
+function isMeDebugEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  const query = new URLSearchParams(window.location.search);
+  const debugParam = String(query.get('debug') || query.get('meDebug') || '').toLowerCase();
+  if (debugParam === '1' || debugParam === 'true' || debugParam === 'yes') return true;
+  const storedFlag = String(window.localStorage.getItem('me-debug') || '').toLowerCase();
+  return storedFlag === '1' || storedFlag === 'true' || storedFlag === 'yes';
 }
 
 const getProposalStatusMeta = (status?: string) => {
@@ -346,6 +356,42 @@ export const MEPage = () => {
   );
   const primaryUnverified = primaryCandidateChallenges[0] ?? null;
   const otherUnverified = unverifiedChallenges.filter((challenge: any) => challenge.userChallengeId !== primaryUnverified?.userChallengeId);
+
+  useEffect(() => {
+    if (!isMeDebugEnabled()) return;
+
+    const summarize = (challenge: any) => {
+      const challengeDay = getChallengeDay(challenge);
+      const calendarDay = getCalendarChallengeDay(challenge);
+      return {
+        userChallengeId: challenge.userChallengeId,
+        challengeId: challenge.challengeId,
+        title: challenge.challenge?.title || challenge.title,
+        bucket: resolveChallengeBucket(challenge),
+        status: challenge.status,
+        phase: challenge.phase,
+        lifecycle: challenge.challenge?.lifecycle,
+        challengeDay,
+        calendarDay,
+        durationDays: resolveChallengeDurationDays(challenge),
+        todayVerified: isTodayVerified(challenge),
+        periodCompleted: isChallengePeriodCompleted(challenge),
+      };
+    };
+
+    // eslint-disable-next-line no-console
+    console.groupCollapsed('[ME DEBUG] challenge section classification');
+    // eslint-disable-next-line no-console
+    console.table(challenges.map(summarize));
+    // eslint-disable-next-line no-console
+    console.log('section-1 primaryUnverified', primaryUnverified ? summarize(primaryUnverified) : null);
+    // eslint-disable-next-line no-console
+    console.log('section-2 otherUnverified', otherUnverified.map(summarize));
+    // eslint-disable-next-line no-console
+    console.log('section-3 verifiedTodayChallenges', verifiedTodayChallenges.map(summarize));
+    // eslint-disable-next-line no-console
+    console.groupEnd();
+  }, [challenges, otherUnverified, primaryUnverified, verifiedTodayChallenges]);
 
   return (
     <div className="min-h-screen bg-gray-50">
