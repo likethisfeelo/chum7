@@ -58,7 +58,7 @@ const getInitialTimeState = (targetTime?: string): Pick<WizardFormState, 'hour12
   return { hour12, minute, meridiem };
 };
 
-const getVerificationTypeLabel = (verificationType: WizardFormState['questVerificationType']) => {
+const getVerificationTypeLabel = (verificationType: QuestVerificationType) => {
   if (verificationType === 'image') return '사진';
   if (verificationType === 'text') return '텍스트';
   if (verificationType === 'link') return '링크';
@@ -121,13 +121,12 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
   const [slideDir, setSlideDir] = useState(1);
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Seoul';
   const allowedTypes = (challenge.allowedVerificationTypes?.length ? challenge.allowedVerificationTypes : ['image', 'text', 'link', 'video']) as QuestVerificationType[];
-  const defaultVerificationType = allowedTypes.includes('image') ? 'image' : allowedTypes[0];
 
   const [formState, setFormState] = useState<WizardFormState>({
     ...getInitialTimeState(challenge.targetTime),
     questTitle: '',
     questDescription: '',
-    questVerificationType: defaultVerificationType,
+    questAllowedVerificationTypes: [...allowedTypes],
   });
 
   useEffect(() => {
@@ -140,9 +139,9 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
       ...getInitialTimeState(challenge.targetTime),
       questTitle: '',
       questDescription: '',
-      questVerificationType: defaultVerificationType,
+      questAllowedVerificationTypes: [...allowedTypes],
     }));
-  }, [isOpen, challenge.targetTime]);
+  }, [isOpen, challenge.targetTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentConfig = stepConfigs[wizardStepIdx];
   const isLastStep = wizardStepIdx === stepConfigs.length - 1;
@@ -273,28 +272,37 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
               </div>
 
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">인증 방식</p>
-                <div className="grid grid-cols-4 gap-2">
-                  {(['image', 'text', 'link', 'video'] as const).map((verificationType) => {
-                    const isAllowed = allowedTypes.includes(verificationType);
+                <p className="text-sm font-medium text-gray-700 mb-1">허용 인증 방식</p>
+                <p className="text-xs text-gray-400 mb-2">이 퀘스트에서 인증 가능한 방식을 선택하세요 (기본: 전체 허용)</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['image', 'text', 'link', 'video'] as const).map((vt) => {
+                    const isAllowed = allowedTypes.includes(vt);
+                    const isChecked = formState.questAllowedVerificationTypes.includes(vt);
+                    const label = vt === 'image' ? '📸 사진' : vt === 'text' ? '✍️ 텍스트' : vt === 'link' ? '🔗 링크' : '🎥 영상';
                     return (
                       <button
-                        key={verificationType}
+                        key={vt}
                         type="button"
                         disabled={!isAllowed}
-                        onClick={() => isAllowed && setFormState((prev) => ({ ...prev, questVerificationType: verificationType }))}
-                        className={`px-2 py-2 rounded-xl text-sm ${
-                          formState.questVerificationType === verificationType
+                        onClick={() => {
+                          if (!isAllowed) return;
+                          setFormState((prev) => {
+                            const next = isChecked
+                              ? prev.questAllowedVerificationTypes.filter(t => t !== vt)
+                              : [...prev.questAllowedVerificationTypes, vt] as QuestVerificationType[];
+                            return { ...prev, questAllowedVerificationTypes: next.length > 0 ? next : prev.questAllowedVerificationTypes };
+                          });
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm ${
+                          isChecked
                             ? 'bg-primary-600 text-white'
                             : isAllowed
                               ? 'bg-gray-100 text-gray-700'
                               : 'bg-gray-50 text-gray-300 cursor-not-allowed'
                         }`}
                       >
-                        {verificationType === 'image' && '사진'}
-                        {verificationType === 'text' && '텍스트'}
-                        {verificationType === 'link' && '링크'}
-                        {verificationType === 'video' && '영상'}
+                        <span>{isChecked ? '✓' : '○'}</span>
+                        {label}
                       </button>
                     );
                   })}
@@ -342,7 +350,7 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
               {showQuestDetailFields && confirmQuestPolicy.showDescription && !!formState.questDescription.trim() && (
                 <p className="text-xs text-gray-600 line-clamp-2">{formState.questDescription.trim()}</p>
               )}
-              {showQuestDetailFields && <p className="text-xs text-gray-500">인증: {getVerificationTypeLabel(formState.questVerificationType)}</p>}
+              {showQuestDetailFields && <p className="text-xs text-gray-500">인증: {formState.questAllowedVerificationTypes.map(getVerificationTypeLabel).join(', ')}</p>}
               {showQuestDetailFields && (
                 <p className="text-xs text-gray-500">
                   {challenge.personalQuestAutoApprove ? '자동 승인' : '리더 검토 후 승인'}

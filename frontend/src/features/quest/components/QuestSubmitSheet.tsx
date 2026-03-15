@@ -34,10 +34,30 @@ async function readVideoDuration(file: File): Promise<number> {
   });
 }
 
+type VerificationType = 'image' | 'video' | 'link' | 'text';
+
+const getQuestAllowedTypes = (quest: any): VerificationType[] => {
+  if (Array.isArray(quest?.allowedVerificationTypes) && quest.allowedVerificationTypes.length > 0) {
+    return quest.allowedVerificationTypes as VerificationType[];
+  }
+  if (quest?.verificationType) return [quest.verificationType as VerificationType];
+  return ['image', 'video', 'link', 'text'];
+};
+
+const TYPE_META: Record<VerificationType, { icon: React.ReactNode; label: string }> = {
+  image: { icon: <FiCamera className="w-4 h-4" />, label: '사진' },
+  video: { icon: <FiVideo className="w-4 h-4" />, label: '영상' },
+  link:  { icon: <FiLink className="w-4 h-4" />, label: 'URL' },
+  text:  { icon: <FiFileText className="w-4 h-4" />, label: '텍스트' },
+};
+
 export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSubmitSheetProps) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoPreviewUrlRef = useRef<string | null>(null);
+
+  const questAllowedTypes = getQuestAllowedTypes(quest);
+  const [selectedType, setSelectedType] = useState<VerificationType>(questAllowedTypes[0] ?? 'image');
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -62,6 +82,8 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
     setLinkUrl('');
     setTextContent('');
     setNote('');
+    const types = getQuestAllowedTypes(quest);
+    setSelectedType(types[0] ?? 'image');
   };
 
   useEffect(() => {
@@ -131,7 +153,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
     mutationFn: async () => {
       let content: Record<string, string | number> = {};
 
-      if (quest.verificationType === 'image') {
+      if (selectedType === 'image') {
         if (!imageFile) throw new Error('이미지를 선택해주세요');
 
         const challengeId = quest.challengeId ?? quest.challenge?.challengeId;
@@ -151,7 +173,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
         if (!uploadResp.ok) throw new Error(`UPLOAD_PUT_FAILED_${uploadResp.status}`);
         content = { imageUrl: uploadData.data.fileUrl };
 
-      } else if (quest.verificationType === 'video') {
+      } else if (selectedType === 'video') {
         if (!videoFile) throw new Error('영상을 선택해주세요');
         if (videoDurationSec === null || Number.isNaN(videoDurationSec)) throw new Error('영상 길이 확인 후 다시 시도해주세요');
 
@@ -175,19 +197,19 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
           videoDurationSec: Number((videoDurationSec ?? 0).toFixed(2)),
         };
 
-      } else if (quest.verificationType === 'link') {
+      } else if (selectedType === 'link') {
         if (!linkUrl.trim()) throw new Error('URL을 입력해주세요');
         if (!linkUrl.trim().startsWith('https://')) throw new Error('URL은 https 형식만 허용됩니다');
         content = { linkUrl: linkUrl.trim() };
 
-      } else if (quest.verificationType === 'text') {
+      } else if (selectedType === 'text') {
         if (!textContent.trim()) throw new Error('내용을 입력해주세요');
         content = { textContent: textContent.trim() };
       }
 
       if (note.trim()) content.note = note.trim();
 
-      const res = await apiClient.post(`/quests/${quest.questId}/submit`, { content });
+      const res = await apiClient.post(`/quests/${quest.questId}/submit`, { verificationType: selectedType, content });
       return res.data;
     },
     onSuccess: () => {
@@ -249,7 +271,34 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
           </div>
         )}
 
-        {quest.verificationType === 'image' && (
+        {questAllowedTypes.length > 1 && (
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">인증 방식 선택</p>
+            <div className="flex gap-2">
+              {questAllowedTypes.map(vt => (
+                <button
+                  key={vt}
+                  type="button"
+                  onClick={() => {
+                    setSelectedType(vt);
+                    setImageFile(null); setImagePreview(null);
+                    setVideoFile(null); setVideoPreview(null); setVideoDurationSec(null);
+                    setLinkUrl(''); setTextContent('');
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                    selectedType === vt ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {TYPE_META[vt].icon}
+                  {TYPE_META[vt].label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {selectedType === 'image' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               인증 사진 📸 <span className="text-red-500">*</span>
@@ -279,7 +328,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
           </div>
         )}
 
-        {quest.verificationType === 'video' && (
+        {selectedType === 'video' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <FiVideo className="inline w-4 h-4 mr-1" />인증 영상 <span className="text-red-500">*</span>
@@ -321,7 +370,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
           </div>
         )}
 
-        {quest.verificationType === 'link' && (
+        {selectedType === 'link' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <FiLink className="inline w-4 h-4 mr-1" />URL 입력 <span className="text-red-500">*</span>
@@ -340,7 +389,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
           </div>
         )}
 
-        {quest.verificationType === 'text' && (
+        {selectedType === 'text' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <FiFileText className="inline w-4 h-4 mr-1" />내용 입력 <span className="text-red-500">*</span>

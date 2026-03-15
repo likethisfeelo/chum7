@@ -8,7 +8,7 @@ export interface WizardFormState {
   meridiem: 'AM' | 'PM';
   questTitle: string;
   questDescription: string;
-  questVerificationType: QuestVerificationType;
+  questAllowedVerificationTypes: QuestVerificationType[];
 }
 
 export interface WizardStepConfig {

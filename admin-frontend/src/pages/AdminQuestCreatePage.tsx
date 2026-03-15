@@ -32,8 +32,8 @@ const INITIAL = {
   description:     '',
   icon:            '📋',
   rewardPoints:    100,
-  verificationType: 'image' as VerificationType,
-  approvalRequired: true,
+  allowedVerificationTypes: ['image', 'link', 'text', 'video'] as VerificationType[],
+  approvalRequired: false,
   displayOrder:    0,
   startAt:         '',
   endAt:           '',
@@ -60,7 +60,7 @@ export const AdminQuestCreatePage = () => {
   const [form, setForm] = useState(INITIAL);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
-  const [challengeOptions, setChallengeOptions] = useState<Array<{ challengeId: string; title: string; lifecycle?: string; allowedVerificationTypes?: string[] }>>([]);
+  const [challengeOptions, setChallengeOptions] = useState<Array<{ challengeId: string; title: string; lifecycle?: string; allowedVerificationTypes?: string[]; personalQuestAutoApprove?: boolean }>>([]);
   const [challengeLoading, setChallengeLoading] = useState(false);
 
   useEffect(() => {
@@ -78,6 +78,7 @@ export const AdminQuestCreatePage = () => {
             .filter((challenge: any) => challenge?.challengeId)
             .map((challenge: any) => ({
               challengeId: challenge.challengeId,
+              personalQuestAutoApprove: challenge.personalQuestAutoApprove,
               title: challenge.title ?? '제목 없음',
               lifecycle: challenge.lifecycle,
               allowedVerificationTypes: challenge.allowedVerificationTypes,
@@ -101,20 +102,27 @@ export const AdminQuestCreatePage = () => {
     setForm(prev => ({ ...prev, [key]: val }));
 
   const selectedChallenge = challengeOptions.find(c => c.challengeId === challengeId);
-  const allowedTypes = sanitizeAllowedVerificationTypes(selectedChallenge?.allowedVerificationTypes);
+  const challengeAllowedTypes = sanitizeAllowedVerificationTypes(selectedChallenge?.allowedVerificationTypes);
 
   useEffect(() => {
-    if (challengeId && allowedTypes.length > 0 && !allowedTypes.includes(form.verificationType)) {
-      set('verificationType', allowedTypes[0]);
+    if (!challengeId) return;
+    // 챌린지 허용 방식 범위 내로 퀘스트 허용 방식 재조정
+    const filtered = form.allowedVerificationTypes.filter(t => challengeAllowedTypes.includes(t));
+    if (filtered.length !== form.allowedVerificationTypes.length) {
+      set('allowedVerificationTypes', filtered.length > 0 ? filtered as VerificationType[] : challengeAllowedTypes);
     }
-  }, [allowedTypes, challengeId, form.verificationType]); // eslint-disable-line react-hooks/exhaustive-deps
+    // 챌린지의 personalQuestAutoApprove → approvalRequired 자동 연동
+    if (selectedChallenge?.personalQuestAutoApprove !== undefined) {
+      set('approvalRequired', !selectedChallenge.personalQuestAutoApprove);
+    }
+  }, [challengeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) { setError('제목을 입력해주세요'); return; }
     if (!challengeId.trim()) { setError('연결할 챌린지를 선택해주세요'); return; }
-    if (!allowedTypes.includes(form.verificationType)) {
-      setError('선택한 챌린지에서 허용되지 않는 인증 유형입니다. 인증 유형을 다시 선택해주세요.');
+    if (form.allowedVerificationTypes.length === 0) {
+      setError('인증 방식을 최소 1개 이상 선택해주세요');
       return;
     }
 
@@ -127,7 +135,7 @@ export const AdminQuestCreatePage = () => {
         verificationGuide: form.description.trim() || `${form.title.trim()} 인증을 제출해주세요.`,
         icon:             form.icon.trim() || '📋',
         rewardPoints:     Number(form.rewardPoints),
-        verificationType: form.verificationType,
+        allowedVerificationTypes: form.allowedVerificationTypes,
         approvalRequired: form.approvalRequired,
         displayOrder:     Number(form.displayOrder),
         questLayer:       form.questLayer,
@@ -147,13 +155,13 @@ export const AdminQuestCreatePage = () => {
         ? new Date(form.startAt).toISOString()
         : new Date().toISOString();
       if (form.endAt)    payload.endAt            = new Date(form.endAt).toISOString();
-      if (form.verificationType === 'link') {
+      if (form.allowedVerificationTypes.includes('link')) {
         payload.verificationConfig = {};
         if (form.linkExample.trim()) payload.verificationConfig.linkExample = form.linkExample.trim();
         if (form.linkPattern.trim()) payload.verificationConfig.linkPattern = form.linkPattern.trim();
       }
-      if (form.verificationType === 'text') {
-        payload.verificationConfig = { maxChars: Number(form.maxChars) };
+      if (form.allowedVerificationTypes.includes('text')) {
+        payload.verificationConfig = { ...(payload.verificationConfig ?? {}), maxChars: Number(form.maxChars) };
       }
 
       await apiClient.post('/admin/quests', payload);
@@ -269,33 +277,42 @@ export const AdminQuestCreatePage = () => {
         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
           <h2 className="font-bold text-gray-800">인증 방식</h2>
 
-          <div className="grid grid-cols-4 gap-2">
+          <p className="text-xs text-gray-500">허용할 인증 방식을 선택하세요. 체크 해제 시 해당 방식으로 제출 불가합니다.</p>
+          <div className="grid grid-cols-2 gap-2">
             {VERIFICATION_TYPES.map(vt => {
-              const isAllowed = allowedTypes.includes(vt.value);
+              const isAllowed = challengeAllowedTypes.includes(vt.value);
+              const isChecked = form.allowedVerificationTypes.includes(vt.value);
               return (
                 <button
                   key={vt.value}
                   type="button"
                   disabled={!isAllowed}
-                  onClick={() => isAllowed && set('verificationType', vt.value as any)}
-                  className={`py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                    form.verificationType === vt.value
+                  onClick={() => {
+                    if (!isAllowed) return;
+                    const next = isChecked
+                      ? form.allowedVerificationTypes.filter(t => t !== vt.value)
+                      : [...form.allowedVerificationTypes, vt.value] as VerificationType[];
+                    if (next.length > 0) set('allowedVerificationTypes', next);
+                  }}
+                  className={`flex items-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium transition-colors ${
+                    isChecked
                       ? 'bg-primary-600 text-white'
                       : isAllowed
                         ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         : 'bg-gray-50 text-gray-300 cursor-not-allowed'
                   }`}
                 >
+                  <span>{isChecked ? '✓' : '○'}</span>
                   {vt.label}
                 </button>
               );
             })}
           </div>
-          {challengeId && allowedTypes.length < 4 && (
-            <p className="text-xs text-amber-600">이 챌린지는 일부 인증 방식만 허용합니다: {allowedTypes.join(', ')}</p>
+          {challengeId && challengeAllowedTypes.length < 4 && (
+            <p className="text-xs text-amber-600">이 챌린지는 일부 인증 방식만 허용합니다: {challengeAllowedTypes.join(', ')}</p>
           )}
 
-          {form.verificationType === 'link' && (
+          {form.allowedVerificationTypes.includes('link') && (
             <div className="space-y-3 pt-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">URL 예시 (선택)</label>
@@ -318,7 +335,7 @@ export const AdminQuestCreatePage = () => {
             </div>
           )}
 
-          {form.verificationType === 'text' && (
+          {form.allowedVerificationTypes.includes('text') && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">최대 글자수</label>
               <input
