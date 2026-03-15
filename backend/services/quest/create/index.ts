@@ -3,11 +3,9 @@
  * Admin이 퀘스트를 생성한다.
  *
  * Quest는 반드시 특정 챌린지에 연결되어 생성된다.
- * verificationType에 따라 사용자 제출 방식이 달라진다:
- *   - image : 이미지 업로드 (S3)
- *   - video : 영상 업로드 (S3, 최대 1분 HD)
- *   - link  : URL 제출 (패턴 검증 or 인앱 브라우저 열기)
- *   - text  : 텍스트 작성
+ * allowedVerificationTypes: 퀘스트에서 허용할 인증 방식 목록 (복수 가능)
+ *   기본값: 챌린지의 allowedVerificationTypes 전체 상속
+ *   제출 시 사용자가 허용 목록 안에서 방식을 선택함
  *
  * approvalRequired = true  → 제출 후 pending, 관리자 검토 필요
  * approvalRequired = false → 제출 즉시 auto_approved, 포인트 자동 지급
@@ -39,14 +37,14 @@ const createQuestSchema = z.object({
   title: z.string().min(1).max(100),
   description: z.string().min(1).max(1000),
   challengeId: z.string().uuid(),                                 // 챌린지별 퀘스트 필수
-  verificationType: z.enum(['image', 'video', 'link', 'text']),
+  allowedVerificationTypes: z.array(z.enum(['image', 'video', 'link', 'text'])).min(1).optional(),
   verificationGuide: z.string().min(1).max(500).optional(),       // 제출 방법 안내
   verificationConfig: verificationConfigSchema,
   rewardPoints: z.number().int().min(0).max(1000).default(10),
   rewardBadgeId: z.string().max(50).optional().nullable(),
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional().nullable(),             // null = 기간 무제한
-  approvalRequired: z.boolean().default(true),
+  approvalRequired: z.boolean().default(false),
   displayOrder: z.number().int().min(0).default(0),              // 보드 내 표시 순서
   questLayer: z.enum(['A', 'B', 'D']).optional().default('A'),
   questScope: z.enum(['leader', 'personal', 'mixed']).optional().default('leader'),
@@ -124,17 +122,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(403, { error: 'FORBIDDEN', message: '퀘스트 생성 권한이 없습니다' });
     }
 
-    const defaultAllowedTypes = ['image', 'video', 'link', 'text'];
-    const rawAllowedTypes = challenge.allowedVerificationTypes as string[] | undefined;
-    const allowedTypes = (rawAllowedTypes?.length
-      ? rawAllowedTypes.filter((type) => defaultAllowedTypes.includes(type))
+    const defaultAllowedTypes: Array<'image' | 'video' | 'link' | 'text'> = ['image', 'video', 'link', 'text'];
+    const rawChallengeAllowed = challenge.allowedVerificationTypes as string[] | undefined;
+    const challengeAllowedTypes = (rawChallengeAllowed?.length
+      ? rawChallengeAllowed.filter((t) => defaultAllowedTypes.includes(t as any))
       : defaultAllowedTypes
     ) as Array<'image' | 'video' | 'link' | 'text'>;
 
-    if (!allowedTypes.includes(input.verificationType)) {
+    // 퀘스트 허용 방식: 입력값이 있으면 챌린지 허용 범위 내에서 필터, 없으면 챌린지 전체 상속
+    const questAllowedTypes: Array<'image' | 'video' | 'link' | 'text'> = input.allowedVerificationTypes?.length
+      ? input.allowedVerificationTypes.filter((t) => challengeAllowedTypes.includes(t))
+      : challengeAllowedTypes;
+
+    if (questAllowedTypes.length === 0) {
       return response(400, {
         error: 'VERIFICATION_TYPE_NOT_ALLOWED',
-        message: `이 챌린지에서 허용되지 않는 인증 방식입니다. 허용: ${allowedTypes.join(', ')}`,
+        message: `이 챌린지에서 허용되지 않는 인증 방식입니다. 허용: ${challengeAllowedTypes.join(', ')}`,
       });
     }
 
@@ -147,7 +150,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       title: input.title,
       description: input.description,
       challengeId: input.challengeId,
-      verificationType: input.verificationType,
+      allowedVerificationTypes: questAllowedTypes,
+      verificationType: questAllowedTypes[0], // 하위호환 (기존 코드 대비)
       verificationGuide,
       verificationConfig: input.verificationConfig,
       rewardPoints: input.rewardPoints,

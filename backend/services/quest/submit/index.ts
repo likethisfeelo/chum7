@@ -29,6 +29,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const submitSchema = z.object({
   userChallengeId: z.string().uuid().optional(),
+  verificationType: z.enum(['image', 'video', 'link', 'text']),
   content: z.object({
     imageUrl: z.string().url().optional(),
     videoUrl: z.string().url().optional(),
@@ -90,9 +91,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (quest.startAt > now) return response(409, { error: 'QUEST_NOT_STARTED', message: '아직 시작되지 않은 퀘스트입니다' });
     if (quest.endAt && quest.endAt < now) return response(409, { error: 'QUEST_EXPIRED', message: '기간이 만료된 퀘스트입니다' });
 
+    // 퀘스트의 허용 인증 방식 (신규: allowedVerificationTypes, 구버전 호환: verificationType)
+    const questAllowedTypes: string[] = Array.isArray(quest.allowedVerificationTypes) && quest.allowedVerificationTypes.length > 0
+      ? quest.allowedVerificationTypes
+      : quest.verificationType ? [quest.verificationType] : ['image', 'video', 'link', 'text'];
+
+    if (!questAllowedTypes.includes(input.verificationType)) {
+      return response(400, {
+        error: 'VERIFICATION_TYPE_NOT_ALLOWED',
+        message: `이 퀘스트에서 허용되지 않는 인증 방식입니다. 허용: ${questAllowedTypes.join(', ')}`,
+      });
+    }
+
     const normalizedContent = normalizeQuestSubmissionContent(input.content);
 
-    const contentError = validateQuestSubmissionContent(quest, normalizedContent);
+    const contentError = validateQuestSubmissionContent(quest, normalizedContent, input.verificationType);
     if (contentError) {
       return response(400, { error: 'INVALID_CONTENT', message: contentError });
     }
@@ -133,7 +146,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       userId,
       challengeId: quest.challengeId ?? null,
       userChallengeId: input.userChallengeId ?? null,
-      verificationType: quest.verificationType,
+      verificationType: input.verificationType,
       content: normalizedContent,
       status,
       rewardGranted: autoApprove,

@@ -178,13 +178,16 @@ export const QuestBoardPage = () => {
                     <p className="text-sm text-gray-500 line-clamp-2 mt-0.5">{quest.description}</p>
 
                     {/* 인증 방식 */}
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs text-gray-400">
-                        {quest.verificationType === 'image' && '📸 사진 인증'}
-                        {quest.verificationType === 'link'  && '🔗 URL 인증'}
-                        {quest.verificationType === 'text'  && '✍️ 텍스트 인증'}
-                        {quest.verificationType === 'video' && '🎥 영상 인증'}
-                      </span>
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {(() => {
+                        const types: string[] = Array.isArray(quest.allowedVerificationTypes) && quest.allowedVerificationTypes.length > 0
+                          ? quest.allowedVerificationTypes
+                          : quest.verificationType ? [quest.verificationType] : [];
+                        const labels: Record<string, string> = { image: '📸 사진', link: '🔗 URL', text: '✍️ 텍스트', video: '🎥 영상' };
+                        return types.map(t => (
+                          <span key={t} className="text-xs text-gray-400">{labels[t] ?? t}</span>
+                        ));
+                      })()}
                       {quest.approvalRequired && (
                         <span className="text-xs text-gray-400">• 관리자 검토</span>
                       )}

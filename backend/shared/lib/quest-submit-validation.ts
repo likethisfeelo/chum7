@@ -1,5 +1,6 @@
-export function validateQuestSubmissionContent(quest: any, content: any): string | null {
-  switch (quest.verificationType) {
+export function validateQuestSubmissionContent(quest: any, content: any, verificationType?: string): string | null {
+  const vType = verificationType || quest.verificationType;
+  switch (vType) {
     case 'image':
       if (!content.imageUrl?.trim()) return '이미지 URL이 필요합니다';
       break;

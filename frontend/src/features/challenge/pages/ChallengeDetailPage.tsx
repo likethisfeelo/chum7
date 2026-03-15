@@ -17,7 +17,7 @@ const parseTargetTimeToFormState = (targetTime?: string): WizardFormState => {
     meridiem: 'AM',
     questTitle: '',
     questDescription: '',
-    questVerificationType: 'image',
+    questAllowedVerificationTypes: ['image', 'text', 'link', 'video'],
   };
 
   if (!targetTime) return fallback;
@@ -108,7 +108,7 @@ export const ChallengeDetailPage = () => {
               userChallengeId,
               title: formState.questTitle.trim(),
               description: formState.questDescription.trim(),
-              verificationType: formState.questVerificationType,
+              allowedVerificationTypes: formState.questAllowedVerificationTypes,
             });
           } catch (e: any) {
             toast.error(e?.response?.data?.message || '개인 퀘스트 제안 제출에 실패했습니다');

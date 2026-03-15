@@ -11,7 +11,8 @@ const schema = z.object({
   userChallengeId: z.string().uuid(),
   title: z.string().min(1).max(100),
   description: z.string().max(1000).optional(),
-  verificationType: z.enum(['image', 'text', 'link', 'video']),
+  allowedVerificationTypes: z.array(z.enum(['image', 'text', 'link', 'video'])).min(1).optional(),
+  verificationType: z.enum(['image', 'text', 'link', 'video']).optional(), // 구버전 호환
 });
 
 function response(statusCode: number, body: any): APIGatewayProxyResult { return { statusCode, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(body) }; }
@@ -54,6 +55,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const proposalId = uuidv4();
     const now = new Date().toISOString();
     const auto = challenge.personalQuestAutoApprove ?? false;
+
+    // 허용 인증 방식: 신규 allowedVerificationTypes 우선, 구버전 verificationType 폴백
+    const defaultAllowed = ['image', 'text', 'link', 'video'];
+    const rawChallengeAllowed = challenge.allowedVerificationTypes as string[] | undefined;
+    const challengeAllowed = rawChallengeAllowed?.length ? rawChallengeAllowed.filter(t => defaultAllowed.includes(t)) : defaultAllowed;
+    const proposedAllowed = input.allowedVerificationTypes?.length
+      ? input.allowedVerificationTypes.filter(t => challengeAllowed.includes(t))
+      : input.verificationType ? [input.verificationType] : challengeAllowed;
+    const effectiveAllowedTypes = proposedAllowed.length > 0 ? proposedAllowed : challengeAllowed;
+
     const item = {
       proposalId,
       challengeId,
@@ -61,7 +72,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       userChallengeId: input.userChallengeId,
       title: input.title,
       description: input.description || '',
-      verificationType: input.verificationType,
+      allowedVerificationTypes: effectiveAllowedTypes,
+      verificationType: effectiveAllowedTypes[0], // 하위호환
       status: auto ? 'approved' : 'pending',
       revisionCount: 0,
       leaderFeedback: null,
