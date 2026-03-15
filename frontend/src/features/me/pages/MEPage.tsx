@@ -420,7 +420,7 @@ export const MEPage = () => {
           <EmptyState
             icon="🎯"
             title="진행 중인 챌린지가 없어요"
-            description="새로운 챌린지에 참여하고 7일 여정을 시작해보세요!"
+            description="새로운 챌린지에 참여하고 여정을 시작해보세요!"
             action={{
               label: '챌린지 참여하기',
               onClick: () => navigate('/challenges'),
@@ -577,7 +577,7 @@ export const MEPage = () => {
                                 );
                               })()}
 
-                              {/* 펼친 상태: Day 1~7 세로 타임라인 */}
+                              {/* 펼친 상태: Day 1~N 세로 타임라인 */}
                               {isExpanded && (
                                 <div className="pt-1">
                                   <p className="text-xs text-primary-500 text-right mb-2">탭하면 피드로 이동 →</p>
@@ -768,7 +768,7 @@ export const MEPage = () => {
             {activeTab === 'completed' && (
               <div className="space-y-3">
                 {completedChallenges.length === 0 ? (
-                  <EmptyState icon="🏆" title="완료한 챌린지가 없어요" description="7일 챌린지를 완주하면 여기에 표시돼요" />
+                  <EmptyState icon="🏆" title="완료한 챌린지가 없어요" description="챌린지를 완주하면 여기에 표시돼요" />
                 ) : completedChallenges.map((challenge: any) => (
                   <div
                     key={challenge.userChallengeId || challenge.challengeId}

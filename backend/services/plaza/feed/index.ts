@@ -100,12 +100,18 @@ function exposureScore(post: any, nowMs: number): number {
   return (freshness + reaction) * typeWeight;
 }
 
+
+function isAlreadySignedAssetUrl(raw: string): boolean {
+  const key = raw.toLowerCase();
+  return key.includes('x-amz-algorithm=') || key.includes('x-amz-signature=') || key.includes('signature=');
+}
+
 async function toSignedImageUrl(url?: string | null): Promise<string | null> {
   if (!url) return null;
   const raw = String(url).trim();
   if (!raw) return null;
-  // Already a new-format CloudFront URL — publicly accessible
-  if ((raw.includes('chum7.com') || raw.includes('cloudfront.net')) && raw.includes('/uploads/')) return raw;
+  // Already public CDN URL (uploads path) or already signed URL: reuse as-is
+  if (((raw.includes('chum7.com') || raw.includes('cloudfront.net')) && raw.includes('/uploads/')) || isAlreadySignedAssetUrl(raw)) return raw;
   const key = extractImageS3Key(raw);
   if (!key || !process.env.UPLOADS_BUCKET) return raw;
   try {
