@@ -173,7 +173,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
-    const nowIso = new Date().toISOString();
     // practiceAt은 개인 기록용 - 미래 시간만 차단, 날짜 범위 제한 없음
     const performedAt = input.practiceAt || input.completedAt || nowIso;
     if (new Date(performedAt).getTime() > new Date(nowIso).getTime()) {
@@ -182,7 +181,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         message: 'practiceAt이 uploadAt보다 미래입니다'
       });
     }
-    const timezone = safeTimezone((event.headers?.['x-user-timezone'] || event.headers?.['X-User-Timezone']) as string | undefined || userChallenge.timezone);
     const certDate = certDateFromIso(nowIso, timezone); // REMEDY 업로드 날짜 기준
 
     const verificationId = uuidv4();
