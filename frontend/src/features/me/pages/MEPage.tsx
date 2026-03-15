@@ -180,7 +180,7 @@ export const MEPage = () => {
   const { data: extraCountData } = useQuery({
     queryKey: ['verifications', 'mine-extra-count'],
     queryFn: async () => {
-      const response = await apiClient.get('/verifications?mine=true&isExtra=true&limit=1');
+      const response = await apiClient.get('/verifications?mine=true&isExtra=true&limit=5');
       return response.data.data;
     },
   });
@@ -552,6 +552,55 @@ export const MEPage = () => {
                       </div>
                     )}
 
+                    {/* 섹션 4: 추가 인증 */}
+                    {(extraCountData?.verifications?.length > 0 || extraCountData?.nextToken) && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between px-1">
+                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">추가 인증</p>
+                          {(extraCountData?.nextToken || extraCountData?.verifications?.length >= 5) && (
+                            <button
+                              type="button"
+                              onClick={() => navigate('/me/records')}
+                              className="text-xs text-primary-500 font-medium"
+                            >
+                              더보기 →
+                            </button>
+                          )}
+                        </div>
+                        {(extraCountData?.verifications || []).map((item: any, index: number) => (
+                          <motion.div
+                            key={item.verificationId}
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                            className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100 flex items-center gap-3"
+                          >
+                            <span className="text-2xl flex-shrink-0">📝</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-gray-900 text-sm">Day {item.day} · 추가 기록</p>
+                              {item.todayNote && (
+                                <p className="text-xs text-gray-400 truncate mt-0.5">{item.todayNote}</p>
+                              )}
+                            </div>
+                            {item.isPersonalOnly ? (
+                              <span className="flex-shrink-0 px-2 py-1 text-xs rounded-lg bg-gray-100 text-gray-500 border border-gray-200">나만보기</span>
+                            ) : (
+                              <span className="flex-shrink-0 px-2 py-1 text-xs rounded-lg bg-green-50 text-green-700 border border-green-200">공개</span>
+                            )}
+                          </motion.div>
+                        ))}
+                        {extraCountData?.nextToken && (
+                          <button
+                            type="button"
+                            onClick={() => navigate('/me/records')}
+                            className="w-full py-2.5 border border-gray-200 rounded-2xl text-xs text-gray-500 bg-white hover:border-primary-300 hover:text-primary-600 transition-colors"
+                          >
+                            추가 인증 기록 모두 보기 →
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     {/* 모두 인증 완료 상태 */}
                     {unverifiedChallenges.length === 0 && verifiedTodayChallenges.length === 0 && (
                       <EmptyState icon="🏃" title="진행 중인 챌린지가 없어요" description="챌린지에 참여하고 오늘부터 시작해보세요" />
@@ -679,8 +728,8 @@ export const MEPage = () => {
           </>
         )}
 
-        {/* 추가기록 링크 */}
-        {(extraCountData?.verifications?.length > 0 || extraCountData?.nextToken) && (
+        {/* 추가기록 링크 (active 탭 외에서도 접근 가능하도록) */}
+        {activeTab !== 'active' && (extraCountData?.verifications?.length > 0 || extraCountData?.nextToken) && (
           <button
             type="button"
             onClick={() => navigate('/me/records')}
