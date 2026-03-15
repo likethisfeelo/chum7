@@ -186,6 +186,12 @@ export const InlineVerificationForm = ({
   const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(
     null,
   );
+  const [cachedUploadUrl, setCachedUploadUrl] = useState<string | undefined>(
+    undefined,
+  );
+  const [cachedUploadObjectKey, setCachedUploadObjectKey] = useState<
+    string | undefined
+  >(undefined);
   const [trimStartSec, setTrimStartSec] = useState<number>(0);
   const [trimEndSec, setTrimEndSec] = useState<number>(0);
 
@@ -231,6 +237,8 @@ export const InlineVerificationForm = ({
     setTrimStartSec(0);
     setTrimEndSec(0);
     setUploadErrorMessage(null);
+    setCachedUploadUrl(undefined);
+    setCachedUploadObjectKey(undefined);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -307,10 +315,10 @@ export const InlineVerificationForm = ({
 
   const verificationMutation = useMutation({
     mutationFn: async (payload?: { performedAtLocal?: string }) => {
-      let uploadedUrl: string | undefined;
-      let uploadedObjectKey: string | undefined;
+      let uploadedUrl: string | undefined = cachedUploadUrl;
+      let uploadedObjectKey: string | undefined = cachedUploadObjectKey;
 
-      if (acceptsFile && mediaFile) {
+      if (acceptsFile && mediaFile && !uploadedUrl) {
         setUploadErrorMessage(null);
         const challengeId =
           userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
@@ -341,6 +349,8 @@ export const InlineVerificationForm = ({
         );
         uploadedUrl = uploadData.data.fileUrl;
         uploadedObjectKey = uploadData.data.key;
+        setCachedUploadUrl(uploadedUrl);
+        setCachedUploadObjectKey(uploadedObjectKey);
       }
 
       const response = await apiClient.post("/verifications", {
@@ -406,6 +416,8 @@ export const InlineVerificationForm = ({
       }
 
       setUploadProgress(0);
+      setCachedUploadUrl(undefined);
+      setCachedUploadObjectKey(undefined);
 
       if (payload.isExtra && payload.verificationId) {
         setExtraVisibilityPrompt({ verificationId: payload.verificationId });
@@ -422,6 +434,9 @@ export const InlineVerificationForm = ({
         typeof error?.message === "string" &&
         error.message.startsWith("UPLOAD_PUT_FAILED_")
       ) {
+        // S3 upload itself failed — clear the cache so retry re-uploads
+        setCachedUploadUrl(undefined);
+        setCachedUploadObjectKey(undefined);
         setUploadErrorMessage(message);
       }
       toast.error(message);

@@ -255,6 +255,17 @@ export const handler = async (
       });
     }
 
+    if (!process.env.USER_CHALLENGES_TABLE || !process.env.VERIFICATIONS_TABLE) {
+      console.error("Missing required env vars", {
+        USER_CHALLENGES_TABLE: process.env.USER_CHALLENGES_TABLE,
+        VERIFICATIONS_TABLE: process.env.VERIFICATIONS_TABLE,
+      });
+      return response(500, {
+        error: "CONFIGURATION_ERROR",
+        message: "서버 설정 오류가 발생했습니다",
+      });
+    }
+
     const userChallengeResult = await docClient.send(
       new GetCommand({
         TableName: process.env.USER_CHALLENGES_TABLE!,
@@ -589,14 +600,19 @@ export const handler = async (
       }
     }
 
-    const newBadges = await grantBadges({
-      userId,
-      challengeId,
-      verificationId,
-      day: input.day,
-      consecutiveDays,
-      isRemedy: false,
-    });
+    let newBadges: string[] = [];
+    try {
+      newBadges = await grantBadges({
+        userId,
+        challengeId,
+        verificationId,
+        day: input.day,
+        consecutiveDays,
+        isRemedy: false,
+      });
+    } catch (badgeError) {
+      console.error("Badge grant error (non-fatal):", badgeError);
+    }
 
     const message = isEarlyCompletion
       ? `Day ${input.day} 완료! 목표보다 ${delta}분 일찍!`
@@ -622,7 +638,13 @@ export const handler = async (
       },
     });
   } catch (error: any) {
-    console.error("Verification submit error:", error);
+    console.error("Verification submit error:", {
+      name: error?.name,
+      message: error?.message,
+      code: error?.code,
+      statusCode: error?.$metadata?.httpStatusCode,
+      stack: error?.stack,
+    });
 
     if (error instanceof z.ZodError) {
       return response(400, {
