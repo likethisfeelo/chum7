@@ -14,6 +14,7 @@ import {
   CfnOutput,
   RemovalPolicy,
   Duration,
+  CustomResource,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { Bucket, BlockPublicAccess } from 'aws-cdk-lib/aws-s3';
@@ -28,6 +29,10 @@ import {
 } from 'aws-cdk-lib/aws-cloudfront';
 import { S3Origin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { BucketDeployment, Source, CacheControl } from 'aws-cdk-lib/aws-s3-deployment';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import { Runtime } from 'aws-cdk-lib/aws-lambda';
+import { PolicyStatement, Effect, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import { Provider } from 'aws-cdk-lib/custom-resources';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -76,6 +81,61 @@ export class FrontendStack extends Stack {
         domainName:     config.domain.app,
       },
     );
+
+    // ================================================================
+    // CloudFront /uploads/* 동작 — uploads S3 버킷으로 라우팅
+    // imported distribution은 L2 addBehavior() 미지원 → Lambda custom resource 사용
+    // ================================================================
+    const cfBehaviorFn = new NodejsFunction(this, 'CFUploadsBehaviorFn', {
+      runtime:  Runtime.NODEJS_20_X,
+      timeout:  Duration.minutes(2),
+      entry:    path.join(__dirname, '../custom-resources/cf-uploads-behavior/index.ts'),
+      handler:  'handler',
+      bundling: { externalModules: ['@aws-sdk/*'] },
+    });
+
+    cfBehaviorFn.addToRolePolicy(new PolicyStatement({
+      effect:  Effect.ALLOW,
+      actions: [
+        'cloudfront:GetDistributionConfig',
+        'cloudfront:UpdateDistribution',
+        'cloudfront:CreateCloudFrontOriginAccessControl',
+        'cloudfront:ListCloudFrontOriginAccessControls',
+      ],
+      resources: ['*'],
+    }));
+
+    // uploads 버킷에 CloudFront OAC read 권한 부여
+    const uploadsBucketRef = Bucket.fromBucketName(
+      this,
+      'UploadsBucketRef',
+      config.s3.uploadsBucket,
+    );
+    uploadsBucketRef.addToResourcePolicy(new PolicyStatement({
+      effect:     Effect.ALLOW,
+      principals: [new ServicePrincipal('cloudfront.amazonaws.com')],
+      actions:    ['s3:GetObject'],
+      resources:  [`arn:aws:s3:::${config.s3.uploadsBucket}/uploads/*`],
+      conditions: {
+        StringEquals: {
+          'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${config.cloudfront.distributionId}`,
+        },
+      },
+    }));
+
+    const cfBehaviorProvider = new Provider(this, 'CFUploadsBehaviorProvider', {
+      onEventHandler: cfBehaviorFn,
+    });
+
+    new CustomResource(this, 'CFUploadsBehavior', {
+      serviceToken: cfBehaviorProvider.serviceToken,
+      properties: {
+        DistributionId:       config.cloudfront.distributionId,
+        UploadsBucketName:    config.s3.uploadsBucket,
+        UploadsBucketRegion:  config.region,
+        Stage:                stage,
+      },
+    });
 
     const userDistPath = path.join(__dirname, '../../frontend/dist');
     if (fs.existsSync(userDistPath)) {

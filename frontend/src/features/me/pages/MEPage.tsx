@@ -139,9 +139,32 @@ function formatVerificationTime(iso: string | undefined | null): string {
   return `${mer} ${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+// Returns the CALENDAR-based day (elapsed since startDate), ignoring storedCurrentDay.
+// After a verification, the backend increments storedCurrentDay to day+1,
+// causing getChallengeDay() to return day+1 (via Math.max). We need the actual
+// calendar day to correctly detect today's completed verification.
+function getCalendarChallengeDay(challenge: any): number {
+  const lifecycle = String(challenge?.challenge?.lifecycle || '').toLowerCase();
+  const phase = String(challenge?.phase || '').toLowerCase();
+  const status = String(challenge?.status || '').toLowerCase();
+  const isActive =
+    (lifecycle === 'active' || phase === 'active') &&
+    (status === '' || status === 'active');
+
+  const startDate = parseChallengeStartDate(challenge);
+  if (!isActive || !startDate) return getChallengeDay(challenge);
+
+  const durationDays = resolveChallengeDurationDays(challenge);
+  const today = getDateOnly(new Date());
+  const diffMs = today.getTime() - startDate.getTime();
+  const elapsed = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+  return Math.max(1, Math.min(durationDays, elapsed));
+}
+
 function isTodayVerified(challenge: any): boolean {
-  const currentDay = getChallengeDay(challenge);
-  return isVerificationDayCompleted(challenge?.progress, currentDay);
+  // Use calendar day, not storedCurrentDay which is incremented to day+1 after verification.
+  const calendarDay = getCalendarChallengeDay(challenge);
+  return isVerificationDayCompleted(challenge?.progress, calendarDay);
 }
 
 const getProposalStatusMeta = (status?: string) => {
