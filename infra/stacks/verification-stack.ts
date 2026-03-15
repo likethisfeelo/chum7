@@ -393,6 +393,7 @@ export class VerificationStack extends Stack {
       environment: commonEnv,
     });
     plazaPostsTable.grantReadData(plazaFeedFn);
+    uploadsBucket.grantRead(plazaFeedFn);
     apiGateway.addRoutes({
       path: "/plaza/feed",
       methods: [HttpMethod.GET],

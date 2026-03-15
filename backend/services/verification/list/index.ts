@@ -36,6 +36,9 @@ function extractUploadsKey(url?: string | null): string | null {
       const parsed = new URL(raw);
       if (parsed.pathname.startsWith("/uploads/"))
         return parsed.pathname.slice("/uploads/".length);
+      // Old-format CDN URL: pathname is the S3 key without /uploads/ prefix
+      const pathKey = parsed.pathname.replace(/^\/+/, "");
+      if (pathKey) return pathKey;
     } catch {
       return null;
     }
@@ -54,7 +57,8 @@ async function toRenderableMediaUrl(
   if (!raw) return null;
 
   // CloudFront/CDN URL은 이미 공개 접근 가능하므로 재서명 없이 반환
-  if (raw.includes("chum7.com") || raw.includes("cloudfront.net")) return raw;
+  // (단, /uploads/ 경로가 없는 구버전 URL은 S3 직접 서명 필요)
+  if ((raw.includes("chum7.com") || raw.includes("cloudfront.net")) && raw.includes("/uploads/")) return raw;
 
   const key = extractUploadsKey(raw);
   if (!key || !process.env.UPLOADS_BUCKET) return raw;
