@@ -94,7 +94,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }).length;
       const progressPercentage = Math.max(0, Math.min(100, Math.round((completedDays / durationDays) * 100)));
 
-      const effectiveCurrentDay = calculateEffectiveCurrentDay(uc, nowIso, durationDays);
+      const effectiveCurrentDay = calculateEffectiveCurrentDay({
+        ...uc,
+        challengeStartAt: challenge?.challengeStartAt,
+      }, nowIso, durationDays);
       const { status: normalizedStatus, phase: normalizedPhase } = resolveNormalizedChallengeState({
         status: uc.status,
         phase: uc.phase,

@@ -74,6 +74,7 @@ export function calculateEffectiveCurrentDay(
     phase?: unknown;
     status?: unknown;
     startDate?: unknown;
+    challengeStartAt?: unknown;
     timezone?: string;
   },
   nowIso: string,
@@ -81,15 +82,23 @@ export function calculateEffectiveCurrentDay(
 ): number {
   const normalizedDurationDays = normalizeDurationDays(durationDays);
   const storedCurrentDay = normalizeStoredCurrentDay(userChallenge.currentDay, normalizedDurationDays);
+  const phase = String(userChallenge.phase || '').toLowerCase();
+  const status = String(userChallenge.status || '').toLowerCase();
+  const candidateStartDate =
+    typeof userChallenge.startDate === 'string' && userChallenge.startDate.length > 0
+      ? userChallenge.startDate
+      : typeof userChallenge.challengeStartAt === 'string' && userChallenge.challengeStartAt.length > 0
+        ? userChallenge.challengeStartAt
+        : null;
+
   const canSync =
-    userChallenge.phase === 'active' &&
-    userChallenge.status === 'active' &&
-    typeof userChallenge.startDate === 'string' &&
-    userChallenge.startDate.length > 0;
+    (phase === 'active' || phase === 'in_progress') &&
+    (status === 'active' || status === 'in_progress') &&
+    candidateStartDate !== null;
 
   if (!canSync) return storedCurrentDay;
 
-  const startDate = userChallenge.startDate as string;
+  const startDate = candidateStartDate as string;
 
   const syncedCurrentDay = calculateSyncedCurrentDay(
     startDate,
