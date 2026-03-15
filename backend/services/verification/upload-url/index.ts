@@ -139,10 +139,11 @@ export const handler = async (
         ? "mov"
         : input.fileType.split("/")[1];
 
-    // S3 키 생성: userId/challengeId/timestamp-random.ext
+    // S3 키 생성: uploads/userId/challengeId/timestamp-random.ext
+    // "uploads/" prefix는 CloudFront /uploads/* 동작이 S3 키를 직접 매핑하기 위해 필요합니다.
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(7);
-    const key = `${userId}/${challengeSegment}/${timestamp}-${random}.${fileExtension}`;
+    const key = `uploads/${userId}/${challengeSegment}/${timestamp}-${random}.${fileExtension}`;
 
     // Presigned URL 생성
     const command = new PutObjectCommand({
@@ -178,7 +179,8 @@ export const handler = async (
     const cloudfrontDomain =
       stage === "prod" ? "https://www.chum7.com" : "https://test.chum7.com";
 
-    const fileUrl = `${cloudfrontDomain}/uploads/${key}`;
+    // key already starts with "uploads/", so no extra prefix needed
+    const fileUrl = `${cloudfrontDomain}/${key}`;
 
     return response(200, {
       success: true,
