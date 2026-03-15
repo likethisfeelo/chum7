@@ -18,13 +18,28 @@ export function extractImageS3Key(url?: string | null): string | null {
     }
   };
 
-  if (!raw.startsWith('http://') && !raw.startsWith('https://')) {
+  if (!raw.startsWith('http://') && !raw.startsWith('https://') && !raw.startsWith('//')) {
     return sanitizePath(raw);
   }
 
   try {
-    const parsed = new URL(raw);
-    return sanitizePath(parsed.pathname);
+    const normalizedUrl = raw.startsWith('//') ? `https:${raw}` : raw;
+    const parsed = new URL(normalizedUrl);
+    const host = String(parsed.hostname || '').toLowerCase();
+    const pathname = parsed.pathname || '';
+
+    if (pathname.startsWith('/uploads/')) {
+      return sanitizePath(pathname);
+    }
+
+    const isKnownStorageHost =
+      host.includes('amazonaws.com') ||
+      host.includes('cloudfront.net') ||
+      host.includes('chum7.com');
+
+    if (!isKnownStorageHost) return null;
+
+    return sanitizePath(pathname);
   } catch {
     return null;
   }

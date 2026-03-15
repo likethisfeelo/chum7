@@ -9,6 +9,15 @@ describe('extractImageS3Key', () => {
     expect(extractImageS3Key('https://cdn.chum7.com/uploads/a%20b.png?X-Amz=1#top')).toBe('a b.png');
   });
 
+
+  test('supports protocol-relative uploads URLs', () => {
+    expect(extractImageS3Key('//cdn.chum7.com/uploads/a/b.png')).toBe('a/b.png');
+  });
+
+  test('returns null for non-storage external absolute URLs', () => {
+    expect(extractImageS3Key('https://example.com/assets/a.png')).toBeNull();
+  });
+
   test('extracts key from relative uploads path', () => {
     expect(extractImageS3Key('/uploads/a/b.png')).toBe('a/b.png');
     expect(extractImageS3Key('uploads/a/b.png')).toBe('a/b.png');
