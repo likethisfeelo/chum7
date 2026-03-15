@@ -300,28 +300,46 @@ export const handler = async (
       "image" | "text" | "link" | "video"
     >;
     let challengeTargetTime24: string | null = null;
+    let challengeTitle: string | null = null;
+    let challengeCategory: string | null = null;
     if (process.env.CHALLENGES_TABLE) {
-      const challengeResult = await docClient.send(
-        new GetCommand({
-          TableName: process.env.CHALLENGES_TABLE,
-          Key: { challengeId },
-        }),
-      );
-      const rawAllowedTypes = challengeResult.Item?.allowedVerificationTypes;
-      if (Array.isArray(rawAllowedTypes) && rawAllowedTypes.length > 0) {
-        const sanitized = rawAllowedTypes.filter((type) =>
-          ["image", "text", "link", "video"].includes(type),
-        ) as Array<"image" | "text" | "link" | "video">;
-        if (sanitized.length > 0) {
-          allowedTypes.splice(0, allowedTypes.length, ...sanitized);
+      try {
+        const challengeResult = await docClient.send(
+          new GetCommand({
+            TableName: process.env.CHALLENGES_TABLE,
+            Key: { challengeId },
+          }),
+        );
+        const rawAllowedTypes = challengeResult.Item?.allowedVerificationTypes;
+        if (Array.isArray(rawAllowedTypes) && rawAllowedTypes.length > 0) {
+          const sanitized = rawAllowedTypes.filter((type) =>
+            ["image", "text", "link", "video"].includes(type),
+          ) as Array<"image" | "text" | "link" | "video">;
+          if (sanitized.length > 0) {
+            allowedTypes.splice(0, allowedTypes.length, ...sanitized);
+          }
         }
-      }
-      const rawTargetTime = challengeResult.Item?.targetTime;
-      if (
-        typeof rawTargetTime === "string" &&
-        /^\d{2}:\d{2}$/.test(rawTargetTime.trim())
-      ) {
-        challengeTargetTime24 = rawTargetTime.trim();
+        const rawTargetTime = challengeResult.Item?.targetTime;
+        if (
+          typeof rawTargetTime === "string" &&
+          /^\d{2}:\d{2}$/.test(rawTargetTime.trim())
+        ) {
+          challengeTargetTime24 = rawTargetTime.trim();
+        }
+        challengeTitle =
+          typeof challengeResult.Item?.title === "string"
+            ? challengeResult.Item.title
+            : null;
+        challengeCategory =
+          typeof challengeResult.Item?.category === "string"
+            ? challengeResult.Item.category
+            : null;
+      } catch (challengeErr: any) {
+        console.warn("Failed to fetch challenge data (non-fatal):", {
+          challengeId,
+          name: challengeErr?.name,
+          message: challengeErr?.message,
+        });
       }
     }
 
@@ -418,6 +436,8 @@ export const handler = async (
       userId,
       userChallengeId: input.userChallengeId,
       challengeId,
+      challengeTitle,
+      challengeCategory,
       day: input.day,
       type: "normal",
       verificationType,
