@@ -89,6 +89,7 @@ describe('challengeLifecycle resolveChallengeBucket', () => {
   });
 
   test('completed status helper is case-insensitive and strict', () => {
+    expect(isCompletedVerificationStatus('completed')).toBe(true);
     expect(isCompletedVerificationStatus('SUCCESS')).toBe(true);
     expect(isCompletedVerificationStatus('remedy')).toBe(true);
     expect(isCompletedVerificationStatus('failed')).toBe(true);

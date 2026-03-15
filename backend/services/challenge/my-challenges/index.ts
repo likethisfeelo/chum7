@@ -2,12 +2,17 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
-import { calculateEffectiveCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
+import { calculateEffectiveCurrentDay, isCompletedProgressStatus, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 import { normalizeProgress } from '../../../shared/lib/progress';
-import { resolveNormalizedChallengeState } from '../../../shared/lib/challenge-state';
+import { matchesRequestedChallengeStatus, resolveNormalizedChallengeState } from '../../../shared/lib/challenge-state';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
+
+function isDebugEnabled(params: Record<string, string | undefined>): boolean {
+  const raw = String(params.debug || '').toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
@@ -34,17 +39,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const params = event.queryStringParameters || {};
     const status = params.status || 'active'; // 'active', 'completed', 'failed'
+    const debugEnabled = isDebugEnabled(params);
 
     // 1. 사용자의 챌린지 조회
     const userChallengesResult = await docClient.send(new QueryCommand({
       TableName: process.env.USER_CHALLENGES_TABLE!,
       IndexName: 'userId-index',
       KeyConditionExpression: 'userId = :userId',
-      FilterExpression: status !== 'all' ? '#status = :status' : undefined,
-      ExpressionAttributeNames: status !== 'all' ? { '#status': 'status' } : undefined,
       ExpressionAttributeValues: {
         ':userId': userId,
-        ...(status !== 'all' && { ':status': status })
       },
       ScanIndexForward: false // 최신순
     }));
@@ -82,10 +85,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
       // 진행률 계산
       const progressList = normalizeProgress(uc.progress);
-      const completedDays = progressList.filter((p: any) => p?.status === 'success').length;
+      const completedDays = progressList.filter((p: any) => isCompletedProgressStatus(p?.status)).length;
       const progressPercentage = Math.max(0, Math.min(100, Math.round((completedDays / durationDays) * 100)));
 
-      const effectiveCurrentDay = calculateEffectiveCurrentDay(uc, nowIso, durationDays);
+      const effectiveCurrentDay = calculateEffectiveCurrentDay({
+        ...uc,
+        challengeStartAt: challenge?.challengeStartAt,
+      }, nowIso, durationDays);
       const { status: normalizedStatus, phase: normalizedPhase } = resolveNormalizedChallengeState({
         status: uc.status,
         phase: uc.phase,
@@ -94,6 +100,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         durationDays,
         completedDays,
       });
+
+      const debugLifecycle = {
+        storedCurrentDay: Number(uc.currentDay || 1),
+        effectiveCurrentDay,
+        durationDays,
+        completedDays,
+        progressLength: progressList.length,
+        normalizedStatus,
+        normalizedPhase,
+        rawStatus: uc.status,
+        rawPhase: uc.phase,
+        challengeLifecycle: challenge?.lifecycle || null,
+        startDate: uc.startDate || null,
+      };
 
       return {
         userChallengeId: uc.userChallengeId,
@@ -127,25 +147,39 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           remedyPolicy: challenge.defaultRemedyPolicy || null,
           lifecycle: challenge.lifecycle,
           challengeStartAt: challenge.challengeStartAt,
+          actualStartAt: challenge.actualStartAt || null,
+          startConfirmedAt: challenge.startConfirmedAt || null,
           recruitingEndAt: challenge.recruitingEndAt,
           allowedVerificationTypes: Array.isArray(challenge.allowedVerificationTypes) && challenge.allowedVerificationTypes.length > 0
             ? challenge.allowedVerificationTypes
             : ['image', 'text', 'link', 'video'],
           durationDays,
-        } : null
+        } : null,
+        ...(debugEnabled ? { _debug: debugLifecycle } : {}),
       };
     });
+
+    const filteredChallenges = enrichedChallenges.filter((c: any) => matchesRequestedChallengeStatus(status, c.status));
 
     return response(200, {
       success: true,
       data: {
-        challenges: enrichedChallenges,
-        total: enrichedChallenges.length,
+        challenges: filteredChallenges,
+        total: filteredChallenges.length,
         summary: {
-          active: enrichedChallenges.filter((c: any) => c.status === 'active').length,
-          completed: enrichedChallenges.filter((c: any) => c.status === 'completed').length,
-          failed: enrichedChallenges.filter((c: any) => c.status === 'failed').length
-        }
+          active: filteredChallenges.filter((c: any) => c.status === 'active').length,
+          completed: filteredChallenges.filter((c: any) => c.status === 'completed').length,
+          failed: filteredChallenges.filter((c: any) => c.status === 'failed').length
+        },
+        ...(debugEnabled ? {
+          _debug: {
+            nowIso,
+            requestedStatus: status,
+            totalRawUserChallenges: userChallenges.length,
+            totalResolvedChallenges: enrichedChallenges.length,
+            totalReturnedChallenges: filteredChallenges.length,
+          }
+        } : {})
       }
     });
 

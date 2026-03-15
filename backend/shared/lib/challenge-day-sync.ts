@@ -74,6 +74,7 @@ export function calculateEffectiveCurrentDay(
     phase?: unknown;
     status?: unknown;
     startDate?: unknown;
+    challengeStartAt?: unknown;
     timezone?: string;
   },
   nowIso: string,
@@ -81,15 +82,23 @@ export function calculateEffectiveCurrentDay(
 ): number {
   const normalizedDurationDays = normalizeDurationDays(durationDays);
   const storedCurrentDay = normalizeStoredCurrentDay(userChallenge.currentDay, normalizedDurationDays);
+  const phase = String(userChallenge.phase || '').toLowerCase();
+  const status = String(userChallenge.status || '').toLowerCase();
+  const candidateStartDate =
+    typeof userChallenge.startDate === 'string' && userChallenge.startDate.length > 0
+      ? userChallenge.startDate
+      : typeof userChallenge.challengeStartAt === 'string' && userChallenge.challengeStartAt.length > 0
+        ? userChallenge.challengeStartAt
+        : null;
+
   const canSync =
-    userChallenge.phase === 'active' &&
-    userChallenge.status === 'active' &&
-    typeof userChallenge.startDate === 'string' &&
-    userChallenge.startDate.length > 0;
+    (phase === 'active' || phase === 'in_progress') &&
+    (status === 'active' || status === 'in_progress') &&
+    candidateStartDate !== null;
 
   if (!canSync) return storedCurrentDay;
 
-  const startDate = userChallenge.startDate as string;
+  const startDate = candidateStartDate as string;
 
   const syncedCurrentDay = calculateSyncedCurrentDay(
     startDate,
@@ -110,4 +119,36 @@ export function isChallengePeriodEnded(
   status: unknown,
 ): boolean {
   return effectiveCurrentDay > durationDays || status === 'completed' || status === 'failed';
+}
+
+export function calculateChallengeEndAt(startAtIso: string, durationDays: number): string {
+  const startDate = new Date(startAtIso);
+  if (Number.isNaN(startDate.getTime())) {
+    return startAtIso;
+  }
+  const normalizedDurationDays = normalizeDurationDays(durationDays);
+  startDate.setDate(startDate.getDate() + normalizedDurationDays);
+  return startDate.toISOString();
+}
+
+export function resolveChallengeActualStartAt(challenge: {
+  actualStartAt?: unknown;
+  startConfirmedAt?: unknown;
+  challengeStartAt?: unknown;
+}): string | null {
+  const actualStartAt = typeof challenge.actualStartAt === 'string' ? challenge.actualStartAt : '';
+  if (actualStartAt) return actualStartAt;
+
+  const startConfirmedAt = typeof challenge.startConfirmedAt === 'string' ? challenge.startConfirmedAt : '';
+  if (startConfirmedAt) return startConfirmedAt;
+
+  const challengeStartAt = typeof challenge.challengeStartAt === 'string' ? challenge.challengeStartAt : '';
+  if (challengeStartAt) return challengeStartAt;
+
+  return null;
+}
+
+export function isCompletedProgressStatus(status: unknown): boolean {
+  const key = String(status || '').toLowerCase();
+  return key === 'completed' || key === 'success' || key === 'remedy';
 }

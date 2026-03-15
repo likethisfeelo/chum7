@@ -31,7 +31,7 @@ export function resolveProgressDay(item: any, fallbackIndex?: number): number | 
 
 export function isCompletedVerificationStatus(status: any): boolean {
   const key = String(status || '').toLowerCase();
-  return key === 'success' || key === 'remedy' || key === 'failed';
+  return key === 'completed' || key === 'success' || key === 'remedy' || key === 'failed';
 }
 
 export function isVerificationDayCompleted(progress: any, day: number): boolean {

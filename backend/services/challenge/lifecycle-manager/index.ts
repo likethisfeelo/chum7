@@ -20,7 +20,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { sendNotification } from '../../../shared/lib/notification';
-import { calculateSyncedCurrentDay, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
+import { calculateChallengeEndAt, calculateSyncedCurrentDay, isCompletedProgressStatus, resolveChallengeActualStartAt, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 import { normalizeProgress } from '../../../shared/lib/progress';
 
 const dynamoClient = new DynamoDBClient({});
@@ -61,7 +61,13 @@ const TRANSITION_RULES: TransitionRule[] = [
   {
     from: 'active',
     to: 'completed',
-    condition: (item, now) => item.challengeEndAt <= now,
+    condition: (item, now) => {
+      const actualStartAt = resolveChallengeActualStartAt(item);
+      const endAt = actualStartAt
+        ? calculateChallengeEndAt(actualStartAt, resolveDurationDays(item.durationDays, undefined))
+        : item.challengeEndAt;
+      return typeof endAt === 'string' && endAt <= now;
+    },
   },
 ];
 
@@ -89,6 +95,29 @@ async function transitionChallenge(challengeId: string, from: Lifecycle, to: Lif
         ':from': from,
         ':to': to,
         ':now': new Date().toISOString(),
+      },
+    })
+  );
+}
+
+
+async function syncChallengeScheduleOnActivation(challenge: any, nowIso: string): Promise<void> {
+  const challengeId = challenge?.challengeId;
+  if (!challengeId) return;
+
+  const actualStartAt = resolveChallengeActualStartAt(challenge) || nowIso;
+  const durationDays = resolveDurationDays(challenge?.durationDays, undefined);
+  const challengeEndAt = calculateChallengeEndAt(actualStartAt, durationDays);
+
+  await docClient.send(
+    new UpdateCommand({
+      TableName: CHALLENGES_TABLE,
+      Key: { challengeId },
+      UpdateExpression: 'SET actualStartAt = if_not_exists(actualStartAt, :actualStartAt), challengeEndAt = :challengeEndAt, updatedAt = :now',
+      ExpressionAttributeValues: {
+        ':actualStartAt': actualStartAt,
+        ':challengeEndAt': challengeEndAt,
+        ':now': nowIso,
       },
     })
   );
@@ -244,7 +273,7 @@ async function finalizeUserChallenges(challengeId: string, durationDays: number)
 
     const now = new Date().toISOString();
     const updates = (result.Items ?? []).map((uc: any) => {
-      const completedDays = normalizeProgress(uc.progress).filter((p: any) => p.status === 'success').length;
+      const completedDays = normalizeProgress(uc.progress).filter((p: any) => isCompletedProgressStatus(p?.status)).length;
       const finalStatus = completedDays >= durationDays ? 'completed' : 'failed';
 
       return docClient.send(
@@ -519,6 +548,7 @@ export const handler = async (): Promise<void> => {
         }
 
         if (rule.from === 'preparing' && rule.to === 'active') {
+          await syncChallengeScheduleOnActivation(challenge, now);
           await handleUnapprovedJoinRequests(challenge.challengeId, challenge);
           await expirePendingProposals(challenge);
           await activateUserChallenges(challenge.challengeId);
