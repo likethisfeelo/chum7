@@ -3,7 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { extractImageS3Key } from '../../../shared/lib/media-key';
+import { extractImageS3Key, isLikelySignedAssetUrl } from '../../../shared/lib/media-key';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -101,17 +101,12 @@ function exposureScore(post: any, nowMs: number): number {
 }
 
 
-function isAlreadySignedAssetUrl(raw: string): boolean {
-  const key = raw.toLowerCase();
-  return key.includes('x-amz-algorithm=') || key.includes('x-amz-signature=') || key.includes('signature=');
-}
-
 async function toSignedImageUrl(url?: string | null): Promise<string | null> {
   if (!url) return null;
   const raw = String(url).trim();
   if (!raw) return null;
   // Already public CDN URL (uploads path) or already signed URL: reuse as-is
-  if (((raw.includes('chum7.com') || raw.includes('cloudfront.net')) && raw.includes('/uploads/')) || isAlreadySignedAssetUrl(raw)) return raw;
+  if (((raw.includes('chum7.com') || raw.includes('cloudfront.net')) && raw.includes('/uploads/')) || isLikelySignedAssetUrl(raw)) return raw;
   const key = extractImageS3Key(raw);
   if (!key || !process.env.UPLOADS_BUCKET) return raw;
   try {

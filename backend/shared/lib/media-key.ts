@@ -44,3 +44,24 @@ export function extractImageS3Key(url?: string | null): string | null {
     return null;
   }
 }
+
+
+export function isLikelySignedAssetUrl(url?: string | null): boolean {
+  if (!url) return false;
+  const raw = String(url).trim();
+  if (!raw) return false;
+
+  try {
+    const normalizedUrl = raw.startsWith('//') ? `https:${raw}` : raw;
+    const parsed = new URL(normalizedUrl);
+    const keys = new Set(Array.from(parsed.searchParams.keys()).map((k) => k.toLowerCase()));
+
+    const hasAmzSignature = keys.has('x-amz-signature');
+    const hasAmzAlgorithm = keys.has('x-amz-algorithm');
+    const hasLegacySignature = keys.has('signature') && keys.has('expires');
+
+    return hasAmzSignature || hasAmzAlgorithm || hasLegacySignature;
+  } catch {
+    return false;
+  }
+}
