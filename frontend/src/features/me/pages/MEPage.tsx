@@ -321,8 +321,8 @@ export const MEPage = () => {
   };
 
   const pendingChallenges = useMemo(
-    () => challenges.filter((challenge: any) => resolveChallengeBucket(challenge) === 'preparing'),
-    [challenges],
+    () => (completedChallengesData?.challenges || []).filter((challenge: any) => resolveChallengeBucket(challenge) === 'preparing'),
+    [completedChallengesData],
   );
 
   const activeChallenges = useMemo(
