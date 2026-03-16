@@ -7,6 +7,7 @@ import { apiClient } from "@/lib/api-client";
 import { Loading } from "@/shared/components/Loading";
 import { InlineVerificationForm } from "@/features/verification/components/InlineVerificationForm";
 import { QuestSubmitSheet } from "@/features/quest/components/QuestSubmitSheet";
+import { BottomSheet } from "@/shared/components/BottomSheet";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import {
   getRemedyType,
@@ -150,7 +151,41 @@ export const ChallengeFeedPage = () => {
     },
   });
 
+  const { data: myProposalData, refetch: refetchMyProposal } = useQuery({
+    queryKey: ["challenge-my-proposal", challengeId],
+    enabled: Boolean(challengeId),
+    queryFn: async () => {
+      const res = await apiClient.get(`/challenges/${challengeId}/personal-quest`);
+      return res.data?.data ?? { latestProposal: null, proposals: [] };
+    },
+  });
+
   const [selectedPersonalQuest, setSelectedPersonalQuest] = useState<any>(null);
+  const [isProposalFormOpen, setIsProposalFormOpen] = useState(false);
+  const [proposalForm, setProposalForm] = useState({ title: '', description: '', allowedVerificationTypes: ['image', 'text', 'link', 'video'] as string[] });
+
+  const submitProposalMutation = useMutation({
+    mutationFn: async () => {
+      const uc = userChallenge;
+      const userChallengeId = uc?.userChallengeId ?? uc?.id;
+      if (!userChallengeId) throw new Error('참여 정보를 찾을 수 없습니다');
+      await apiClient.post(`/challenges/${challengeId}/personal-quest`, {
+        userChallengeId,
+        title: proposalForm.title.trim(),
+        description: proposalForm.description.trim(),
+        allowedVerificationTypes: proposalForm.allowedVerificationTypes,
+      });
+    },
+    onSuccess: () => {
+      toast.success('개인 퀘스트 제안이 제출됐어요 🎯');
+      setIsProposalFormOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["challenge-my-proposal", challengeId] });
+      queryClient.invalidateQueries({ queryKey: ["challenge-personal-quests", challengeId] });
+    },
+    onError: (e: any) => {
+      toast.error(e?.response?.data?.message || '제안 제출에 실패했습니다');
+    },
+  });
 
   const leaderDmMutation = useMutation({
     mutationFn: async () => {
@@ -331,65 +366,152 @@ export const ChallengeFeedPage = () => {
             </div>
           </section>
 
-          {/* 개인퀘스트 전용 챌린지: 개인 퀘스트 현황 섹션 */}
-          {challengeType === 'personal_only' && (
-            <section className="bg-amber-50 rounded-2xl p-5 border border-amber-100 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-amber-900">📋 개인 퀘스트</h3>
-                <button
-                  type="button"
-                  onClick={() => navigate(`/quests?challengeId=${challengeId}`)}
-                  className="text-xs font-semibold text-amber-700 underline"
-                >
-                  퀘스트 보드 →
-                </button>
-              </div>
-              {personalQuestData ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-amber-800">{personalQuestData.title}</p>
-                  {personalQuestData.description && (
-                    <p className="text-xs text-amber-700">{personalQuestData.description}</p>
+          {/* 개인 퀘스트 제안 섹션 - personalQuestEnabled인 모든 챌린지에 표시 */}
+          {challengeData?.personalQuestEnabled && (() => {
+            const proposal = myProposalData?.latestProposal ?? null;
+            const lifecycle = challengeData?.lifecycle as string;
+            const canSubmit = ['recruiting', 'preparing'].includes(lifecycle);
+            const statusLabel: Record<string, string> = {
+              pending: '⏳ 심사 중',
+              revision_pending: '⏳ 재심사 중',
+              approved: '✅ 승인됨',
+              rejected: '↩️ 반려됨',
+              expired: '⛔ 만료됨',
+            };
+            return (
+              <section className="bg-amber-50 rounded-2xl p-5 border border-amber-100 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-amber-900">📋 나의 개인 퀘스트 제안</h3>
+                  {challengeType !== 'personal_only' && (
+                    <button type="button" onClick={() => navigate(`/quests?challengeId=${challengeId}`)} className="text-xs font-semibold text-amber-700 underline">
+                      퀘스트 보드 →
+                    </button>
                   )}
-                  <div className="flex items-center gap-2 mt-2">
-                    {personalQuestData.mySubmission ? (
+                </div>
+
+                {proposal ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                        ['approved', 'auto_approved'].includes(personalQuestData.mySubmission.status)
-                          ? 'bg-green-100 text-green-700'
-                          : personalQuestData.mySubmission.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-700'
-                          : 'bg-red-100 text-red-700'
+                        proposal.status === 'approved' ? 'bg-green-100 text-green-700'
+                        : proposal.status === 'rejected' || proposal.status === 'expired' ? 'bg-red-100 text-red-700'
+                        : 'bg-yellow-100 text-yellow-700'
                       }`}>
-                        {['approved', 'auto_approved'].includes(personalQuestData.mySubmission.status)
-                          ? '✅ 제출 완료'
-                          : personalQuestData.mySubmission.status === 'pending'
-                          ? '⏳ 심사중'
-                          : '↩️ 재제출 필요'}
+                        {statusLabel[proposal.status] ?? proposal.status}
                       </span>
-                    ) : (
+                    </div>
+                    <p className="text-sm font-semibold text-amber-900">{proposal.title}</p>
+                    {proposal.description && <p className="text-xs text-amber-700 line-clamp-2">{proposal.description}</p>}
+                    {proposal.leaderFeedback && (
+                      <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">💬 리더 피드백: {proposal.leaderFeedback}</p>
+                    )}
+                    {canSubmit && (
                       <button
                         type="button"
-                        onClick={() => setSelectedPersonalQuest(personalQuestData)}
-                        className="px-4 py-1.5 bg-amber-600 text-white rounded-xl text-xs font-semibold"
+                        onClick={() => {
+                          setProposalForm({ title: proposal.title, description: proposal.description || '', allowedVerificationTypes: proposal.allowedVerificationTypes ?? ['image', 'text', 'link', 'video'] });
+                          setIsProposalFormOpen(true);
+                        }}
+                        className="mt-1 text-xs font-semibold text-amber-700 underline"
                       >
-                        개인 퀘스트 제출하기 →
+                        수정 제출하기 →
                       </button>
                     )}
                   </div>
-                </div>
-              ) : (
-                <p className="text-sm text-amber-700">
-                  아직 승인된 개인 퀘스트가 없어요.{' '}
+                ) : (
+                  <div>
+                    {canSubmit ? (
+                      <>
+                        <p className="text-sm text-amber-700 mb-3">아직 개인 퀘스트 제안서가 없어요. 챌린지 시작 전에 제출해주세요.</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProposalForm({ title: '', description: '', allowedVerificationTypes: challengeData?.allowedVerificationTypes ?? ['image', 'text', 'link', 'video'] });
+                            setIsProposalFormOpen(true);
+                          }}
+                          className="px-4 py-2 bg-amber-600 text-white rounded-xl text-sm font-semibold"
+                        >
+                          개인 퀘스트 제안하기 🎯
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-sm text-amber-700">
+                        {lifecycle === 'active' ? '챌린지가 시작됐어요. 개인 퀘스트 제안 마감이 지났습니다.' : '개인 퀘스트 제안 기간이 아닙니다.'}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* active 상태에서 승인된 퀘스트가 있으면 기존 제출 버튼 유지 */}
+                {lifecycle === 'active' && personalQuestData && !personalQuestData.mySubmission && (
                   <button
                     type="button"
-                    onClick={() => navigate(`/quests?challengeId=${challengeId}`)}
-                    className="underline font-medium"
+                    onClick={() => setSelectedPersonalQuest(personalQuestData)}
+                    className="mt-3 px-4 py-1.5 bg-amber-600 text-white rounded-xl text-xs font-semibold"
                   >
-                    퀘스트 보드에서 확인하기
+                    개인 퀘스트 인증 제출하기 →
                   </button>
-                </p>
-              )}
-            </section>
-          )}
+                )}
+              </section>
+            );
+          })()}
+
+          {/* 개인 퀘스트 제안 제출/수정 폼 */}
+          <BottomSheet isOpen={isProposalFormOpen} onClose={() => setIsProposalFormOpen(false)} title="개인 퀘스트 제안">
+            <div className="px-6 pb-8 space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">퀘스트 제목 <span className="text-red-500">*</span></label>
+                <input
+                  value={proposalForm.title}
+                  maxLength={100}
+                  onChange={e => setProposalForm(p => ({ ...p, title: e.target.value }))}
+                  placeholder="나만의 퀘스트 제목을 입력하세요"
+                  className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-xl text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">퀘스트 설명 <span className="text-red-500">*</span></label>
+                <textarea
+                  value={proposalForm.description}
+                  maxLength={1000}
+                  rows={4}
+                  onChange={e => setProposalForm(p => ({ ...p, description: e.target.value }))}
+                  placeholder="어떻게 실천할지 구체적으로 적어주세요"
+                  className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-xl text-sm resize-none"
+                />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">허용 인증 방식</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['image', 'text', 'link', 'video'] as const).map(vt => {
+                    const label = vt === 'image' ? '📸 사진' : vt === 'text' ? '✍️ 텍스트' : vt === 'link' ? '🔗 링크' : '🎥 영상';
+                    const isChecked = proposalForm.allowedVerificationTypes.includes(vt);
+                    return (
+                      <button
+                        key={vt}
+                        type="button"
+                        onClick={() => setProposalForm(p => {
+                          const next = isChecked ? p.allowedVerificationTypes.filter(t => t !== vt) : [...p.allowedVerificationTypes, vt];
+                          return { ...p, allowedVerificationTypes: next.length > 0 ? next : p.allowedVerificationTypes };
+                        })}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm ${isChecked ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                      >
+                        {isChecked ? '✓' : '○'} {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={!proposalForm.title.trim() || !proposalForm.description.trim() || submitProposalMutation.isPending}
+                onClick={() => submitProposalMutation.mutate()}
+                className="w-full py-3 bg-amber-600 text-white rounded-xl font-semibold disabled:opacity-40"
+              >
+                {submitProposalMutation.isPending ? '제출 중...' : '제안 제출하기 🚀'}
+              </button>
+            </div>
+          </BottomSheet>
 
           {(!iDidTodayVerification || hasInvalidMyVideo) && userChallenge && (
             <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
