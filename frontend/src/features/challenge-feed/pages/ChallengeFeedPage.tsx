@@ -6,7 +6,6 @@ import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api-client";
 import { Loading } from "@/shared/components/Loading";
 import { InlineVerificationForm } from "@/features/verification/components/InlineVerificationForm";
-import { QuestSubmitSheet } from "@/features/quest/components/QuestSubmitSheet";
 import { BottomSheet } from "@/shared/components/BottomSheet";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import {
@@ -159,7 +158,8 @@ export const ChallengeFeedPage = () => {
     },
   });
 
-  const [selectedQuest, setSelectedQuest] = useState<any>(null);
+  const [activeQuestTab, setActiveQuestTab] = useState<'leader' | 'personal'>('leader');
+  const [expandedLeaderQuestId, setExpandedLeaderQuestId] = useState<string | null>(null);
 
   const leaderQuests: any[] = useMemo(
     () => (questsData || []).filter((q: any) => q.questScope !== 'personal'),
@@ -502,125 +502,144 @@ export const ChallengeFeedPage = () => {
             </div>
           </BottomSheet>
 
-          {/* 오늘의 퀘스트 - active 상태에서만 인라인 카드로 표시 */}
-          {isActive && questsData && questsData.length > 0 && (
+          {/* 오늘의 퀘스트 인증 — active + 퀘스트 있을 때 인라인 폼 */}
+          {isActive && questsData && questsData.length > 0 && userChallenge && (
             <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-gray-900">
-                  {challengeType === 'leader_only' ? '리더 퀘스트 📋'
-                    : challengeType === 'personal_only' ? '개인 퀘스트 📋'
-                    : '오늘의 퀘스트 📋'}
-                </h3>
-                {isMixedChallengeType && (
-                  <span className="text-xs text-gray-400">둘 다 인증해야 하루 완료</span>
-                )}
-              </div>
+              {/* 탭 헤더 — leader_personal만 */}
+              {isMixedChallengeType && (
+                <div className="flex gap-1 mb-4 p-1 bg-gray-100 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => { setActiveQuestTab('leader'); setExpandedLeaderQuestId(null); }}
+                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      activeQuestTab === 'leader' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    }`}
+                  >
+                    🎯 리더 퀘스트
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveQuestTab('personal'); setExpandedLeaderQuestId(null); }}
+                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      activeQuestTab === 'personal' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    }`}
+                  >
+                    🌱 개인 퀘스트
+                  </button>
+                </div>
+              )}
 
-              <div className="space-y-2">
-                {/* 리더 퀘스트 목록 */}
-                {challengeType !== 'personal_only' && leaderQuests.map((quest: any) => {
-                  const sub = quest.mySubmission;
-                  const isDone = sub?.status === 'approved' || sub?.status === 'auto_approved';
-                  const isPending = sub?.status === 'pending';
-                  const isRejected = sub?.status === 'rejected';
-                  return (
-                    <div key={quest.questId} className="flex items-center gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100">
-                      <span className="text-2xl leading-none shrink-0">{quest.icon || '🎯'}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{quest.title}</p>
-                        <p className="text-xs text-blue-600 mt-0.5">
-                          +{quest.rewardPoints}pt{quest.approvalRequired ? ' · 관리자 검토' : ''}
-                        </p>
+              {/* 리더 퀘스트 영역 */}
+              {challengeType !== 'personal_only' && (!isMixedChallengeType || activeQuestTab === 'leader') && (
+                <div className="space-y-3">
+                  {leaderQuests.map((q: any) => {
+                    const sub = q.mySubmission;
+                    const isDone = sub?.status === 'approved' || sub?.status === 'auto_approved';
+                    const isPending = sub?.status === 'pending';
+                    const isExpanded = expandedLeaderQuestId === q.questId;
+                    return (
+                      <div key={q.questId} className="rounded-xl bg-blue-50 border border-blue-100 overflow-hidden">
+                        <div className="flex items-center gap-3 p-3">
+                          <span className="text-2xl shrink-0">{q.icon || '🎯'}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{q.title}</p>
+                            <p className="text-xs text-blue-600 mt-0.5">+{q.rewardPoints}pt{q.approvalRequired ? ' · 관리자 검토' : ''}</p>
+                          </div>
+                          {isDone ? (
+                            <span className="text-xs px-2.5 py-1 bg-green-100 text-green-700 rounded-full shrink-0">완료 ✅</span>
+                          ) : isPending ? (
+                            <span className="text-xs px-2.5 py-1 bg-yellow-100 text-yellow-700 rounded-full shrink-0">심사중 🔄</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedLeaderQuestId(isExpanded ? null : q.questId)}
+                              className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-xl shrink-0"
+                            >
+                              {sub?.status === 'rejected' ? '재제출 ↩️' : isExpanded ? '접기 ▲' : '인증하기 ▼'}
+                            </button>
+                          )}
+                        </div>
+                        {isExpanded && !isDone && !isPending && (
+                          <div className="px-3 pb-3 border-t border-blue-100 pt-3">
+                            <InlineVerificationForm
+                              userChallenge={userChallenge}
+                              quest={q}
+                              onSuccess={() => {
+                                setExpandedLeaderQuestId(null);
+                                queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
+                                queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
+                              }}
+                              onQuestSuccess={() => queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] })}
+                            />
+                          </div>
+                        )}
                       </div>
-                      {isDone ? (
-                        <span className="text-xs px-2.5 py-1 bg-green-100 text-green-700 rounded-full font-medium shrink-0">완료 ✅</span>
-                      ) : isPending ? (
-                        <span className="text-xs px-2.5 py-1 bg-yellow-100 text-yellow-700 rounded-full font-medium shrink-0">심사중 🔄</span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedQuest(quest)}
-                          className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-xl font-semibold shrink-0"
-                        >
-                          {isRejected ? '재제출 ↩️' : '제출하기'}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+              )}
 
-                {/* 개인 퀘스트 카드 */}
-                {challengeType !== 'leader_only' && personalQuest && (() => {
-                  const sub = personalQuest.mySubmission;
-                  const isDone = sub?.status === 'approved' || sub?.status === 'auto_approved';
-                  const isPending = sub?.status === 'pending';
-                  const isRejected = sub?.status === 'rejected';
-                  return (
-                    <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
-                      <span className="text-2xl leading-none shrink-0">{personalQuest.icon || '🌱'}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{personalQuest.title}</p>
-                        <p className="text-xs text-amber-600 mt-0.5">
-                          +{personalQuest.rewardPoints}pt{personalQuest.approvalRequired ? ' · 관리자 검토' : ''}
-                        </p>
+              {/* 개인 퀘스트 영역 */}
+              {challengeType !== 'leader_only' && (!isMixedChallengeType || activeQuestTab === 'personal') && (
+                <div>
+                  {personalQuest ? (() => {
+                    const sub = personalQuest.mySubmission;
+                    const isDone = sub?.status === 'approved' || sub?.status === 'auto_approved';
+                    const isPending = sub?.status === 'pending';
+                    return isDone ? (
+                      <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
+                        <span className="text-2xl shrink-0">{personalQuest.icon || '🌱'}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{personalQuest.title}</p>
+                        </div>
+                        <span className="text-xs px-2.5 py-1 bg-green-100 text-green-700 rounded-full shrink-0">완료 ✅</span>
                       </div>
-                      {isDone ? (
-                        <span className="text-xs px-2.5 py-1 bg-green-100 text-green-700 rounded-full font-medium shrink-0">완료 ✅</span>
-                      ) : isPending ? (
-                        <span className="text-xs px-2.5 py-1 bg-yellow-100 text-yellow-700 rounded-full font-medium shrink-0">심사중 🔄</span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedQuest(personalQuest)}
-                          className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded-xl font-semibold shrink-0"
-                        >
-                          {isRejected ? '재제출 ↩️' : '제출하기'}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* 개인 퀘스트가 아직 없을 때 안내 */}
-                {challengeType !== 'leader_only' && !personalQuest && (
-                  <p className="text-xs text-amber-600 bg-amber-50 rounded-xl px-3 py-2.5">
-                    {myProposalData?.latestProposal?.status === 'pending' || myProposalData?.latestProposal?.status === 'revision_pending'
-                      ? '⏳ 개인 퀘스트 승인 대기 중입니다.'
-                      : '개인 퀘스트가 없습니다. 제안 섹션에서 제출해주세요.'}
-                  </p>
-                )}
-              </div>
+                    ) : isPending ? (
+                      <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
+                        <span className="text-2xl shrink-0">{personalQuest.icon || '🌱'}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{personalQuest.title}</p>
+                        </div>
+                        <span className="text-xs px-2.5 py-1 bg-yellow-100 text-yellow-700 rounded-full shrink-0">심사중 🔄</span>
+                      </div>
+                    ) : (
+                      <InlineVerificationForm
+                        userChallenge={userChallenge}
+                        quest={personalQuest}
+                        onSuccess={() => {
+                          queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
+                          queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
+                        }}
+                        onQuestSuccess={() => queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] })}
+                      />
+                    );
+                  })() : (
+                    <p className="text-xs text-amber-600 bg-amber-50 rounded-xl px-3 py-2.5">
+                      {myProposalData?.latestProposal?.status === 'pending' || myProposalData?.latestProposal?.status === 'revision_pending'
+                        ? '⏳ 개인 퀘스트 승인 대기 중입니다.'
+                        : '개인 퀘스트가 없습니다. 제안 섹션에서 제출해주세요.'}
+                    </p>
+                  )}
+                </div>
+              )}
             </section>
           )}
 
-          {(!iDidTodayVerification || hasInvalidMyVideo) && userChallenge && (
+          {/* 오늘의 인증 — 퀘스트가 없는 챌린지에서만 */}
+          {(!questsData || questsData.length === 0) && (!iDidTodayVerification || hasInvalidMyVideo) && userChallenge && (
             <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
               <h3 className="font-bold text-gray-900 mb-3">오늘의 인증</h3>
               <InlineVerificationForm
                 userChallenge={userChallenge}
-                allowedVerificationTypes={
-                  challengeData?.allowedVerificationTypes
-                }
+                allowedVerificationTypes={challengeData?.allowedVerificationTypes}
                 onSuccess={() => {
-                  queryClient.invalidateQueries({
-                    queryKey: ["challenge-feed-verifications", challengeId],
-                  });
-                  queryClient.invalidateQueries({
-                    queryKey: ["challenge-feed-my-verifications", challengeId],
-                  });
+                  queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
+                  queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
                 }}
                 openVideoPickerSignal={openVideoPickerSignal}
               />
             </section>
           )}
-
-          {/* 퀘스트 제출 시트 */}
-          <QuestSubmitSheet
-            isOpen={!!selectedQuest}
-            onClose={() => setSelectedQuest(null)}
-            quest={selectedQuest}
-            onSuccess={() => queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] })}
-          />
 
           {iDidTodayVerification && !hasInvalidMyVideo && (
             <section className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
