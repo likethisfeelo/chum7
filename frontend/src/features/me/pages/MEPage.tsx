@@ -372,7 +372,8 @@ export const MEPage = () => {
     [unverifiedChallenges],
   );
   const primaryUnverified = primaryCandidateChallenges[0] ?? null;
-  const otherUnverified = unverifiedChallenges.filter((challenge: any) => challenge.userChallengeId !== primaryUnverified?.userChallengeId);
+  // 섹션2: 모든 미인증 챌린지 (섹션1과 동일한 챌린지도 포함 — 피드 이동 가능하도록)
+  const otherUnverified = unverifiedChallenges;
 
   useEffect(() => {
     if (!isMeDebugEnabled()) return;
