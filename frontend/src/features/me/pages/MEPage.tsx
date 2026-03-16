@@ -60,10 +60,6 @@ function getMinutesUntilTarget(challenge: any): number {
   return (targetMinutes - nowMinutes + 24 * 60) % (24 * 60);
 }
 
-function getDateOnly(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
 // Asia/Seoul 기준 오늘 날짜를 로컬 Date(자정)로 반환
 function getTodayInSeoul(): Date {
   const seoulStr = new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }); // "YYYY-MM-DD"
@@ -214,6 +210,7 @@ export const MEPage = () => {
       const response = await apiClient.get('/challenges/my?status=active');
       return response.data.data;
     },
+    refetchInterval: 60 * 1000,
   });
 
   const challenges = data?.challenges || [];
@@ -224,6 +221,7 @@ export const MEPage = () => {
       const response = await apiClient.get('/challenges/my?status=all');
       return response.data.data;
     },
+    refetchInterval: 60 * 1000,
   });
 
   const { data: extraCountData } = useQuery({
@@ -232,6 +230,7 @@ export const MEPage = () => {
       const response = await apiClient.get('/verifications?mine=true&isExtra=true&limit=5');
       return response.data.data;
     },
+    refetchInterval: 60 * 1000,
   });
 
   const { data: myVerificationsData } = useQuery({
@@ -240,6 +239,7 @@ export const MEPage = () => {
       const response = await apiClient.get('/verifications?mine=true&isExtra=false&limit=20');
       return response.data.data;
     },
+    refetchInterval: 60 * 1000,
   });
 
   const verificationMap = useMemo(() => {
@@ -266,6 +266,7 @@ export const MEPage = () => {
       );
       return Object.fromEntries(entries) as Record<string, any>;
     },
+    refetchInterval: 60 * 1000,
   });
 
   const [leaderDmTargetId, setLeaderDmTargetId] = useState<string | null>(null);
