@@ -14,6 +14,46 @@ export type GrantBadgeInput = {
   isRemedy?: boolean;
 };
 
+export type GrantSpecificBadgeInput = {
+  badgeId: string;
+  userId: string;
+  challengeId: string;
+  metadata?: Record<string, any>;
+};
+
+export async function grantSpecificBadge(input: GrantSpecificBadgeInput): Promise<boolean> {
+  const badgesTable = process.env.BADGES_TABLE;
+  if (!badgesTable) return false;
+
+  const grantedAt = new Date().toISOString();
+  try {
+    await docClient.send(
+      new PutCommand({
+        TableName: badgesTable,
+        Item: {
+          badgeId: input.badgeId,
+          userId: input.userId,
+          challengeId: input.challengeId,
+          grantedAt,
+          createdAt: grantedAt,
+          ...input.metadata,
+        },
+        ConditionExpression: 'attribute_not_exists(badgeId) AND attribute_not_exists(userId)',
+      }),
+    );
+    return true;
+  } catch (error: any) {
+    if (error?.name !== 'ConditionalCheckFailedException') {
+      console.error('[badge-grant] failed to grant specific badge', {
+        badgeId: input.badgeId,
+        userId: input.userId,
+        error,
+      });
+    }
+    return false;
+  }
+}
+
 export async function grantBadges(input: GrantBadgeInput): Promise<string[]> {
   const badgesTable = process.env.BADGES_TABLE;
   if (!badgesTable) return [];

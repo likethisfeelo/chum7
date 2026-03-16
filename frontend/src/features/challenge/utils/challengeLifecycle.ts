@@ -1,4 +1,4 @@
-export type ChallengeBucket = 'active' | 'preparing' | 'completed' | 'other';
+export type ChallengeBucket = 'active' | 'preparing' | 'completed' | 'gave_up' | 'other';
 
 export function resolveChallengeDurationDays(item: any): number {
   const durationDays = Number(item?.durationDays || item?.challenge?.durationDays || 0);
@@ -123,6 +123,10 @@ export function resolveChallengeBucket(item: any): ChallengeBucket {
   const userPhase = String(item?.phase || '').toLowerCase();
   const lifecycle = String(item?.challenge?.lifecycle || '').toLowerCase();
 
+  if (userStatus === 'gave_up' || userPhase === 'gave_up') {
+    return 'gave_up';
+  }
+
   if (isFailedChallengeState(item) || lifecycle === 'archived') {
     return 'completed';
   }
@@ -152,5 +156,6 @@ export function getChallengeStatusLabel(item: any): string {
   const bucket = resolveChallengeBucket(item);
   if (bucket === 'preparing') return '준비중';
   if (bucket === 'completed') return '완주';
+  if (bucket === 'gave_up') return '중도포기';
   return '진행중';
 }

@@ -200,6 +200,8 @@ export const MEPage = () => {
       return response.data.data;
     },
     refetchInterval: 60 * 1000,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 
   const challenges = data?.challenges || [];
