@@ -42,10 +42,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (!uc || uc.userId !== userId || uc.challengeId !== challengeId) return response(403, { error: 'FORBIDDEN', message: '본인 참여 정보만 제출할 수 있습니다' });
     if (!challenge) return response(404, { error: 'CHALLENGE_NOT_FOUND', message: '챌린지를 찾을 수 없습니다' });
     if (!challenge.personalQuestEnabled) return response(400, { error: 'PERSONAL_QUEST_DISABLED', message: '개인 퀘스트 제안이 비활성화된 챌린지입니다' });
+    // lifecycle 검사만으로 제출 가능 여부 판단 (챌린지 시작 후 active 전환 시 lifecycle manager가 차단)
     if (!['recruiting','preparing'].includes(String(challenge.lifecycle || ''))) return response(409, { error: 'INVALID_LIFECYCLE', message: '제안 제출 가능 기간이 아닙니다' });
-
-    const registrationDeadline = deadline(challenge.challengeStartAt);
-    if (new Date().toISOString() > registrationDeadline) return response(409, { error: 'PROPOSAL_DEADLINE_PASSED', message: '제안 제출 마감이 지났습니다' });
 
     const existing = await docClient.send(new QueryCommand({
       TableName: process.env.PERSONAL_QUEST_PROPOSALS_TABLE!,
