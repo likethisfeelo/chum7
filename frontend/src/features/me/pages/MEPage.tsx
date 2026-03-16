@@ -176,7 +176,10 @@ function getCalendarChallengeDay(challenge: any): number {
 function isTodayVerified(challenge: any): boolean {
   // Use calendar day, not storedCurrentDay which is incremented to day+1 after verification.
   const calendarDay = getCalendarChallengeDay(challenge);
-  return isVerificationDayCompleted(challenge?.progress, calendarDay);
+  const target = getProgressEntryByDay(challenge?.progress, calendarDay);
+  const status = String(target?.status || '').toLowerCase();
+  // 'partial': leader_personal 챌린지에서 한 쪽만 인증한 경우 → 섹션 3에 표시
+  return status === 'success' || status === 'partial' || status === 'completed' || status === 'remedy' || status === 'failed';
 }
 
 
