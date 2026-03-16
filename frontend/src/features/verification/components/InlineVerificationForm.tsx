@@ -12,6 +12,7 @@ interface InlineVerificationFormProps {
   openVideoPickerSignal?: number;
   quest?: any;
   onQuestSuccess?: () => void;
+  defaultExpanded?: boolean;
 }
 
 type VerificationType = "text" | "image" | "video" | "link";
@@ -162,6 +163,7 @@ export const InlineVerificationForm = ({
   openVideoPickerSignal,
   quest,
   onQuestSuccess,
+  defaultExpanded = false,
 }: InlineVerificationFormProps) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -188,7 +190,7 @@ export const InlineVerificationForm = ({
   const showQuestTypeSelector = !forcedQuestType && isMixedType; // 혼합형만 선택UI 표시, quest 연동 시 숨김
   const defaultQuestType: 'leader' | 'personal' = forcedQuestType ?? (isPersonalOnlyType ? 'personal' : 'leader');
 
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [selectedType, setSelectedType] = useState<VerificationType>(
     availableTypes[0],
   );
