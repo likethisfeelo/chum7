@@ -53,13 +53,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       KeyConditionExpression: 'userId = :uid AND challengeId = :cid',
       ExpressionAttributeValues: { ':uid': userId, ':cid': challengeId },
     }));
-    const items = existing.Items || [];
-    if (items.some((p: any) => p.status === 'approved')) return response(409, { error: 'ALREADY_APPROVED', message: '이미 승인된 개인 퀘스트가 있습니다' });
+    const items = (existing.Items || []).sort((a: any, b: any) =>
+      String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))
+    );
+    // 만료되지 않은 가장 최근 proposal (upsert 대상)
+    const activeProposal = items.find((p: any) => p.status !== 'expired') ?? null;
 
-    const rejectedCount = items.filter((p: any) => p.status === 'rejected').length;
-    if (rejectedCount > 2) return response(409, { error: 'PROPOSAL_EXPIRED', message: '수정 가능 횟수를 초과했습니다' });
-
-    const proposalId = uuidv4();
     const now = new Date().toISOString();
     const auto = challenge.personalQuestAutoApprove ?? false;
 
@@ -72,16 +71,81 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       : input.verificationType ? [input.verificationType] : challengeAllowed;
     const effectiveAllowedTypes = proposedAllowed.length > 0 ? proposedAllowed : challengeAllowed;
 
+    const newStatus = auto ? 'approved' : 'pending';
+
+    if (activeProposal) {
+      // 기존 proposal 업데이트 (최신 내용으로 교체)
+      await docClient.send(new UpdateCommand({
+        TableName: process.env.PERSONAL_QUEST_PROPOSALS_TABLE!,
+        Key: { proposalId: activeProposal.proposalId },
+        UpdateExpression: 'SET title = :t, description = :d, allowedVerificationTypes = :av, verificationType = :vt, #status = :s, leaderFeedback = :fb, updatedAt = :now',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':t': input.title,
+          ':d': input.description || '',
+          ':av': effectiveAllowedTypes,
+          ':vt': effectiveAllowedTypes[0],
+          ':s': newStatus,
+          ':fb': null,
+          ':now': now,
+        },
+      }));
+
+      // 연결된 퀘스트도 동기화 (auto-approve이고 questId가 있는 경우)
+      if (activeProposal.questId && process.env.QUESTS_TABLE) {
+        await docClient.send(new UpdateCommand({
+          TableName: process.env.QUESTS_TABLE,
+          Key: { questId: activeProposal.questId },
+          UpdateExpression: 'SET title = :t, description = :d, allowedVerificationTypes = :av, verificationType = :vt, updatedAt = :now',
+          ExpressionAttributeValues: {
+            ':t': input.title,
+            ':d': input.description || '',
+            ':av': effectiveAllowedTypes,
+            ':vt': effectiveAllowedTypes[0],
+            ':now': now,
+          },
+        }));
+      } else if (auto && !activeProposal.questId && process.env.QUESTS_TABLE) {
+        // 기존 proposal이 있지만 quest가 없는 경우 (이전 버그로 미생성된 경우) 생성
+        const questId = uuidv4();
+        await docClient.send(new PutCommand({
+          TableName: process.env.QUESTS_TABLE,
+          Item: {
+            questId, challengeId, title: input.title, description: input.description || '',
+            questScope: 'personal', assignedUserId: userId,
+            allowedVerificationTypes: effectiveAllowedTypes, verificationType: effectiveAllowedTypes[0],
+            rewardPoints: challenge.personalQuestRewardPoints ?? 100, approvalRequired: false,
+            status: 'active', questLayer: 'A', displayOrder: 0, startAt: now,
+            createdAt: now, updatedAt: now, sourceProposalId: activeProposal.proposalId,
+          },
+        }));
+        await docClient.send(new UpdateCommand({
+          TableName: process.env.PERSONAL_QUEST_PROPOSALS_TABLE!,
+          Key: { proposalId: activeProposal.proposalId },
+          UpdateExpression: 'SET questId = :qid',
+          ExpressionAttributeValues: { ':qid': questId },
+        }));
+      }
+
+      const updated = { ...activeProposal, title: input.title, description: input.description || '', allowedVerificationTypes: effectiveAllowedTypes, verificationType: effectiveAllowedTypes[0], status: newStatus, leaderFeedback: null, updatedAt: now };
+      if (!auto && challenge.createdBy) {
+        await sendNotification({ recipientId: challenge.createdBy, type: 'quest_proposal_submitted', title: '개인 퀘스트 제안이 수정됐어요', body: `${input.title} 제안서 심사가 필요해요.`, relatedId: activeProposal.proposalId, relatedType: 'personal_quest_proposal' });
+      } else if (auto) {
+        await sendNotification({ recipientId: userId, type: 'quest_proposal_approved', title: '퀘스트가 업데이트됐어요 ✅', body: input.title, relatedId: activeProposal.proposalId, relatedType: 'personal_quest_proposal' });
+      }
+      return response(200, { success: true, data: updated });
+    }
+
+    // 신규 proposal 생성
+    const proposalId = uuidv4();
     const item = {
-      proposalId,
-      challengeId,
-      userId,
+      proposalId, challengeId, userId,
       userChallengeId: input.userChallengeId,
       title: input.title,
       description: input.description || '',
       allowedVerificationTypes: effectiveAllowedTypes,
-      verificationType: effectiveAllowedTypes[0], // 하위호환
-      status: auto ? 'approved' : 'pending',
+      verificationType: effectiveAllowedTypes[0],
+      status: newStatus,
       revisionCount: 0,
       leaderFeedback: null,
       registrationDeadline,
