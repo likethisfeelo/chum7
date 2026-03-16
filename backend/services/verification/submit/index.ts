@@ -565,8 +565,41 @@ export const handler = async (
       ? leaderQuestDone === true && personalQuestDone === true
       : true; // single-quest type: 이 인증이 첫 번째 유효 인증이므로 완료
 
-    // 혼합형에서 첫 번째 퀘스트 인증은 완료(partial) → 나머지 퀘스트 안내
+    // 혼합형에서 첫 번째 퀘스트 인증은 partial → progress 기록 후 안내 반환
     if (isMixedType && !dayNowComplete) {
+      const partialEntry = {
+        ...(existingDayEntry ?? {}),
+        day: input.day,
+        status: "partial",
+        verificationId: existingDayEntry?.verificationId ?? verificationId,
+        timestamp: existingDayEntry?.timestamp ?? performedAt,
+        delta: 0,
+        score: 0,
+        leaderQuestDone: leaderQuestDone === true,
+        personalQuestDone: personalQuestDone === true,
+        ...(resolvedQuestType === "leader" ? { leaderVerificationId: verificationId } : {}),
+        ...(resolvedQuestType === "personal" ? { personalVerificationId: verificationId } : {}),
+      };
+      if (existingIndex >= 0) {
+        updatedProgress[existingIndex] = partialEntry;
+      } else {
+        updatedProgress.push(partialEntry);
+      }
+      try {
+        await docClient.send(
+          new UpdateCommand({
+            TableName: process.env.USER_CHALLENGES_TABLE!,
+            Key: { userChallengeId: input.userChallengeId },
+            UpdateExpression: "SET progress = :progress, updatedAt = :updatedAt",
+            ExpressionAttributeValues: {
+              ":progress": updatedProgress,
+              ":updatedAt": nowIso,
+            },
+          }),
+        );
+      } catch (partialWriteErr: any) {
+        console.error("Partial progress write error (non-fatal):", partialWriteErr?.message);
+      }
       return response(200, {
         success: true,
         message: resolvedQuestType === "leader"

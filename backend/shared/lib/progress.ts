@@ -1,11 +1,15 @@
 export type ProgressRecord = {
   day: number;
-  status: 'success' | 'failed' | null;
+  status: 'success' | 'partial' | 'failed' | 'completed' | 'remedy' | null;
   verificationId?: string;
   timestamp?: string;
   delta?: number | null;
   score: number;
   remedied: boolean;
+  leaderQuestDone?: boolean;
+  personalQuestDone?: boolean;
+  leaderVerificationId?: string;
+  personalVerificationId?: string;
 };
 
 function toSafeNumber(value: unknown, fallback = 0): number {
@@ -25,8 +29,9 @@ export function normalizeProgress(progress: unknown): ProgressRecord[] {
     .map((item): ProgressRecord => ({
       day: toSafeNumber(item.day),
       status:
-        item.status === 'success' || item.status === 'failed'
-          ? (item.status as 'success' | 'failed')
+        item.status === 'success' || item.status === 'partial' || item.status === 'failed' ||
+        item.status === 'completed' || item.status === 'remedy'
+          ? (item.status as ProgressRecord['status'])
           : null,
       verificationId:
         typeof item.verificationId === 'string' ? item.verificationId : undefined,
@@ -37,6 +42,12 @@ export function normalizeProgress(progress: unknown): ProgressRecord[] {
           : toSafeNumber(item.delta, 0),
       score: toSafeNumber(item.score, 0),
       remedied: item.remedied === true,
+      leaderQuestDone: item.leaderQuestDone === true ? true : undefined,
+      personalQuestDone: item.personalQuestDone === true ? true : undefined,
+      leaderVerificationId:
+        typeof item.leaderVerificationId === 'string' ? item.leaderVerificationId : undefined,
+      personalVerificationId:
+        typeof item.personalVerificationId === 'string' ? item.personalVerificationId : undefined,
     }))
     .filter((item) => item.day > 0)
     .sort((a, b) => a.day - b.day);

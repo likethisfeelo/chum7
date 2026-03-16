@@ -58,7 +58,19 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
+        // localStorage 직접 키 + Zustand persist(auth-storage) 둘 다 확인
+        let refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) {
+          try {
+            const authStorage = localStorage.getItem('auth-storage');
+            if (authStorage) {
+              const parsed = JSON.parse(authStorage);
+              refreshToken = parsed?.state?.refreshToken ?? null;
+            }
+          } catch {
+            // ignore parse errors
+          }
+        }
         if (!refreshToken) {
           throw new Error('No refresh token');
         }
@@ -67,10 +79,25 @@ apiClient.interceptors.response.use(
           refreshToken,
         });
 
-        localStorage.setItem('accessToken', data.data.accessToken);
+        const newAccessToken = data.data.accessToken;
+        localStorage.setItem('accessToken', newAccessToken);
+
+        // Zustand persist 상태도 갱신
+        try {
+          const authStorage = localStorage.getItem('auth-storage');
+          if (authStorage) {
+            const parsed = JSON.parse(authStorage);
+            if (parsed?.state) {
+              parsed.state.accessToken = newAccessToken;
+              localStorage.setItem('auth-storage', JSON.stringify(parsed));
+            }
+          }
+        } catch {
+          // ignore
+        }
 
         originalRequest.headers = originalRequest.headers || {};
-        originalRequest.headers.Authorization = `Bearer ${data.data.accessToken}`;
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
         localStorage.clear();
