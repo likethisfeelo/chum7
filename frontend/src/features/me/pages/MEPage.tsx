@@ -64,6 +64,13 @@ function getDateOnly(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+// Asia/Seoul 기준 오늘 날짜를 로컬 Date(자정)로 반환
+function getTodayInSeoul(): Date {
+  const seoulStr = new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }); // "YYYY-MM-DD"
+  const [y, m, d] = seoulStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function parseChallengeStartDate(challenge: any): Date | null {
   const start =
     challenge?.challenge?.actualStartAt ||
@@ -73,15 +80,17 @@ function parseChallengeStartDate(challenge: any): Date | null {
     challenge?.challenge?.challengeStartAt;
   if (!start || typeof start !== 'string') return null;
 
-  const dateOnlyMatch = start.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (dateOnlyMatch) {
-    const [, y, m, d] = dateOnlyMatch;
-    return new Date(Number(y), Number(m) - 1, Number(d));
+  // ISO 타임스탬프는 Asia/Seoul 기준 날짜로 변환, date-only 문자열은 그대로 파싱
+  let dateStr: string;
+  if (start.includes('T') || start.includes('Z')) {
+    dateStr = new Date(start).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' });
+  } else {
+    dateStr = start.slice(0, 10);
   }
 
-  const parsed = new Date(start);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return getDateOnly(parsed);
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
 }
 
 function getChallengeDay(challenge: any): number {
@@ -96,7 +105,7 @@ function getChallengeDay(challenge: any): number {
   const startDate = parseChallengeStartDate(challenge);
   if (!startDate) return storedCurrentDay;
 
-  const today = getDateOnly(new Date());
+  const today = getTodayInSeoul();
   const diffMs = today.getTime() - startDate.getTime();
   const elapsed = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
   const syncedCurrentDay = Math.max(1, Math.min(maxDay, elapsed));
@@ -162,7 +171,7 @@ function getCalendarChallengeDay(challenge: any): number {
   if (!isActive || !startDate) return getChallengeDay(challenge);
 
   const durationDays = resolveChallengeDurationDays(challenge);
-  const today = getDateOnly(new Date());
+  const today = getTodayInSeoul();
   const diffMs = today.getTime() - startDate.getTime();
   const elapsed = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
   return Math.max(1, Math.min(durationDays, elapsed));

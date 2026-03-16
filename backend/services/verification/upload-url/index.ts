@@ -154,11 +154,12 @@ export const handler = async (
     const key = `uploads/${userId}/${challengeSegment}/${timestamp}-${random}.${fileExtension}`;
 
     // Presigned URL 생성
+    // ContentLength는 서명 헤더에 포함하지 않음: 브라우저 fetch API는 Content-Length를
+    // forbidden header로 처리하므로 서명에 포함되면 S3 서명 검증 실패(403)가 발생할 수 있음
     const command = new PutObjectCommand({
       Bucket: process.env.UPLOADS_BUCKET,
       Key: key,
       ContentType: input.fileType,
-      ContentLength: input.fileSize,
       Metadata: {
         uploadedBy: userId,
         challengeId:
