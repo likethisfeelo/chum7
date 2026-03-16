@@ -92,10 +92,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         ...uc,
         challengeStartAt: challenge?.challengeStartAt,
       }, nowIso, durationDays);
+
+      // lifecycle-manager 크론 실행 지연 보정:
+      // 자동 시작 챌린지(requireStartConfirmation=false)의 challengeStartAt이 이미 지났다면
+      // lifecycle이 아직 'preparing'이더라도 'active'로 간주한다.
+      const storedLifecycle = challenge?.lifecycle;
+      const effectiveLifecycle = (
+        storedLifecycle === 'preparing' &&
+        !challenge?.requireStartConfirmation &&
+        challenge?.challengeStartAt &&
+        challenge.challengeStartAt <= nowIso
+      ) ? 'active' : storedLifecycle;
+
       const { status: normalizedStatus, phase: normalizedPhase } = resolveNormalizedChallengeState({
         status: uc.status,
         phase: uc.phase,
-        challengeLifecycle: challenge?.lifecycle,
+        challengeLifecycle: effectiveLifecycle,
         effectiveCurrentDay,
         durationDays,
         completedDays,
@@ -111,7 +123,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         normalizedPhase,
         rawStatus: uc.status,
         rawPhase: uc.phase,
-        challengeLifecycle: challenge?.lifecycle || null,
+        challengeLifecycle: effectiveLifecycle || null,
+        storedLifecycle: storedLifecycle || null,
         startDate: uc.startDate || null,
       };
 
@@ -145,7 +158,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           personalQuestEnabled: challenge.personalQuestEnabled,
           personalQuestAutoApprove: challenge.personalQuestAutoApprove,
           remedyPolicy: challenge.defaultRemedyPolicy || null,
-          lifecycle: challenge.lifecycle,
+          lifecycle: effectiveLifecycle,
+          requireStartConfirmation: challenge.requireStartConfirmation ?? false,
           challengeStartAt: challenge.challengeStartAt,
           actualStartAt: challenge.actualStartAt || null,
           startConfirmedAt: challenge.startConfirmedAt || null,
