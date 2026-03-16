@@ -19,6 +19,14 @@ export function CommentSection({ postId, hook }: Props) {
     );
   }
 
+  if (state.error) {
+    return (
+      <div className="mt-3 rounded-xl border border-gray-200 p-3 bg-gray-50">
+        <p className="text-xs text-gray-500">{state.error}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-3 rounded-xl border border-gray-200 p-3 bg-gray-50">
       <div className="space-y-2">
