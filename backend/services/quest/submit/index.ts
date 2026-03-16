@@ -55,14 +55,6 @@ function isTransactionConditionFailed(error: any): boolean {
   return Array.isArray(reasons) && reasons.some((r: any) => r?.Code === 'ConditionalCheckFailed');
 }
 
-function isRetriableHistoryLookupError(error: any): boolean {
-  const code = String(error?.name || error?.Code || '');
-  const message = String(error?.message || '');
-
-  if (code === 'ValidationException' && message.includes('IndexName')) return true;
-  if (code === 'ResourceNotFoundException') return true;
-  return false;
-}
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -122,10 +114,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }));
       previousAttempts = historyResult.Items ?? [];
     } catch (historyLookupError: any) {
-      if (!isRetriableHistoryLookupError(historyLookupError)) {
-        throw historyLookupError;
-      }
-      console.warn('Quest submission history lookup skipped due to missing index/resource:', {
+      // 히스토리 조회 실패는 비치명적 — previousAttempts=[] 로 폴백
+      console.warn('Quest submission history lookup skipped (non-fatal):', {
         errorName: historyLookupError?.name,
         message: historyLookupError?.message,
       });

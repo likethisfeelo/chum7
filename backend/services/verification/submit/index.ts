@@ -546,25 +546,6 @@ export const handler = async (
       });
     }
 
-    // 혼합형에서 첫 번째 퀘스트 인증은 완료(partial) → 나머지 퀘스트 안내
-    if (isMixedType && !dayNowComplete) {
-      return response(200, {
-        success: true,
-        message: resolvedQuestType === "leader"
-          ? "리더 퀘스트 인증 완료! 개인 퀘스트도 인증해야 오늘 인증이 완료됩니다 🎯"
-          : "개인 퀘스트 인증 완료! 리더 퀘스트도 인증해야 오늘 인증이 완료됩니다 🎯",
-        data: {
-          verificationId,
-          isExtra: false,
-          isDayComplete: false,
-          questType: resolvedQuestType,
-          scoreEarned: 0,
-          delta: null,
-          cheerOpportunity: null,
-        },
-      });
-    }
-
     const updatedProgress = [...progress];
     const existingIndex = updatedProgress.findIndex(
       (p: any) => Number(p?.day) === input.day,
@@ -583,6 +564,25 @@ export const handler = async (
     const dayNowComplete = isMixedType
       ? leaderQuestDone === true && personalQuestDone === true
       : true; // single-quest type: 이 인증이 첫 번째 유효 인증이므로 완료
+
+    // 혼합형에서 첫 번째 퀘스트 인증은 완료(partial) → 나머지 퀘스트 안내
+    if (isMixedType && !dayNowComplete) {
+      return response(200, {
+        success: true,
+        message: resolvedQuestType === "leader"
+          ? "리더 퀘스트 인증 완료! 개인 퀘스트도 인증해야 오늘 인증이 완료됩니다 🎯"
+          : "개인 퀘스트 인증 완료! 리더 퀘스트도 인증해야 오늘 인증이 완료됩니다 🎯",
+        data: {
+          verificationId,
+          isExtra: false,
+          isDayComplete: false,
+          questType: resolvedQuestType,
+          scoreEarned: 0,
+          delta: null,
+          cheerOpportunity: null,
+        },
+      });
+    }
 
     const newProgress = {
       day: input.day,
