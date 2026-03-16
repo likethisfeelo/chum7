@@ -62,6 +62,7 @@ new ChallengeStack(app, `chme-${stage}-challenge`, {
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
   personalQuestProposalsTable: coreStack.personalQuestProposalsTable,
+  questsTable: coreStack.questsTable,
   notificationsTable: coreStack.notificationsTable,
   payoutAuditLogsTable: coreStack.payoutAuditLogsTable,
   categoryBannersTable: coreStack.categoryBannersTable,

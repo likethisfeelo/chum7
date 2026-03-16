@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { sendNotification } from '../../../../shared/lib/notification';
@@ -90,7 +90,40 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
     await docClient.send(new PutCommand({ TableName: process.env.PERSONAL_QUEST_PROPOSALS_TABLE!, Item: item }));
 
-    if (!auto && challenge.createdBy) {
+    if (auto && process.env.QUESTS_TABLE) {
+      // 자동 승인 챌린지: proposal 저장 직후 QUESTS_TABLE에 퀘스트 레코드 생성
+      const questId = uuidv4();
+      await docClient.send(new PutCommand({
+        TableName: process.env.QUESTS_TABLE,
+        Item: {
+          questId,
+          challengeId,
+          title: input.title,
+          description: input.description || '',
+          questScope: 'personal',
+          assignedUserId: userId,
+          allowedVerificationTypes: effectiveAllowedTypes,
+          verificationType: effectiveAllowedTypes[0],
+          rewardPoints: challenge.personalQuestRewardPoints ?? 100,
+          approvalRequired: false,
+          status: 'active',
+          questLayer: 'A',
+          displayOrder: 0,
+          startAt: now,
+          createdAt: now,
+          updatedAt: now,
+          sourceProposalId: proposalId,
+        },
+      }));
+      // proposal에 questId 연결 저장
+      await docClient.send(new UpdateCommand({
+        TableName: process.env.PERSONAL_QUEST_PROPOSALS_TABLE!,
+        Key: { proposalId },
+        UpdateExpression: 'SET questId = :qid',
+        ExpressionAttributeValues: { ':qid': questId },
+      }));
+      await sendNotification({ recipientId: userId, type: 'quest_proposal_approved', title: '퀘스트가 승인됐어요 ✅', body: input.title, relatedId: proposalId, relatedType: 'personal_quest_proposal' });
+    } else if (!auto && challenge.createdBy) {
       await sendNotification({ recipientId: challenge.createdBy, type: 'quest_proposal_submitted', title: '개인 퀘스트 제안이 도착했어요', body: `${input.title} 제안서 심사가 필요해요.`, relatedId: proposalId, relatedType: 'personal_quest_proposal' });
     }
 

@@ -50,15 +50,13 @@ export const resolveWizardSteps = (challenge: JoinWizardChallenge): WizardStepCo
   const { requirePersonalGoalOnJoin } = resolveJoinRequirements(challenge);
   const steps: WizardStepConfig[] = [TIME_STEP];
 
-  if (challenge.personalQuestEnabled || requirePersonalGoalOnJoin) {
-    const isRequiredQuest = challenge.challengeType === 'personal_only';
-    if (isRequiredQuest && challenge.personalQuestEnabled) {
-      steps.push(QUEST_STEP_REQUIRED);
-    } else if (requirePersonalGoalOnJoin) {
-      steps.push(GOAL_STEP_REQUIRED);
-    } else {
-      steps.push(QUEST_STEP_OPTIONAL);
-    }
+  if (challenge.personalQuestEnabled) {
+    // personalQuestEnabled=true인 챌린지: personal_only / leader_personal은 필수, 그 외는 선택
+    const isRequiredQuest = challenge.challengeType === 'personal_only' || challenge.challengeType === 'leader_personal';
+    steps.push(isRequiredQuest ? QUEST_STEP_REQUIRED : QUEST_STEP_OPTIONAL);
+  } else if (requirePersonalGoalOnJoin) {
+    // 개인 퀘스트 없이 텍스트 목표만 필요한 챌린지
+    steps.push(GOAL_STEP_REQUIRED);
   }
 
   steps.push(CONFIRM_STEP);
