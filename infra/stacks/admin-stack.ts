@@ -17,6 +17,7 @@ interface AdminStackProps extends StackProps {
   cheerDeadLettersTable: Table;
   challengesTable: Table;
   userChallengesTable: Table;
+  questsTable: Table;
   questSubmissionsTable: Table;
   verificationsTable: Table;
   personalQuestProposalsTable: Table;
@@ -37,6 +38,7 @@ export class AdminStack extends Stack {
       cheerDeadLettersTable,
       challengesTable,
       userChallengesTable,
+      questsTable,
       questSubmissionsTable,
       verificationsTable,
       personalQuestProposalsTable,
@@ -51,6 +53,7 @@ export class AdminStack extends Stack {
       CHEER_DEAD_LETTERS_TABLE: cheerDeadLettersTable.tableName,
       CHALLENGES_TABLE: challengesTable.tableName,
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
+      QUESTS_TABLE: questsTable.tableName,
       QUEST_SUBMISSIONS_TABLE: questSubmissionsTable.tableName,
       VERIFICATIONS_TABLE: verificationsTable.tableName,
       PERSONAL_QUEST_PROPOSALS_TABLE: personalQuestProposalsTable.tableName,
@@ -269,6 +272,8 @@ export class AdminStack extends Stack {
     });
     personalQuestProposalsTable.grantReadWriteData(personalQuestReviewFn);
     notificationsTable.grantReadWriteData(personalQuestReviewFn);
+    questsTable.grantReadWriteData(personalQuestReviewFn);
+    challengesTable.grantReadData(personalQuestReviewFn);
     apiGateway.addRoutes({
       path: '/admin/personal-quest-proposals/{proposalId}/review',
       methods: [HttpMethod.PUT],

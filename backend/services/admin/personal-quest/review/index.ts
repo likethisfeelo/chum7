@@ -1,7 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
+import { v4 as uuidv4 } from 'uuid';
 import { sendNotification } from '../../../../shared/lib/notification';
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -18,6 +19,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   const proposal = got.Item;
   if (!proposal) return res(404, { error: 'PROPOSAL_NOT_FOUND', message: '제안서를 찾을 수 없습니다' });
 
+  // 이미 처리된 제안서 중복 심사 방지
+  if (proposal.status !== 'pending' && proposal.status !== 'revision_pending') {
+    return res(409, { error: 'ALREADY_REVIEWED', message: `이미 처리된 제안서입니다 (status: ${proposal.status})` });
+  }
+
   const now = new Date().toISOString();
   let status = input.action === 'approve' ? 'approved' : 'rejected';
   if (input.action === 'reject' && (proposal.revisionCount || 0) >= 2) status = 'expired';
@@ -29,6 +35,46 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     ExpressionAttributeNames: { '#status': 'status' },
     ExpressionAttributeValues: { ':status': status, ':fb': input.leaderFeedback || null, ':now': now },
   }));
+
+  // 승인 시 QUESTS_TABLE에 개인 퀘스트 레코드 생성 → 퀘스트 보드에 표시되기 위함
+  if (status === 'approved' && process.env.QUESTS_TABLE) {
+    const challengeResult = process.env.CHALLENGES_TABLE
+      ? await docClient.send(new GetCommand({ TableName: process.env.CHALLENGES_TABLE, Key: { challengeId: proposal.challengeId } })).catch(() => ({ Item: null }))
+      : { Item: null };
+    const challenge = challengeResult.Item;
+
+    const questId = uuidv4();
+    await docClient.send(new PutCommand({
+      TableName: process.env.QUESTS_TABLE,
+      Item: {
+        questId,
+        challengeId: proposal.challengeId,
+        title: proposal.title,
+        description: proposal.description || '',
+        questScope: 'personal',
+        assignedUserId: proposal.userId,
+        allowedVerificationTypes: proposal.allowedVerificationTypes,
+        verificationType: proposal.verificationType,
+        rewardPoints: challenge?.personalQuestRewardPoints ?? 100,
+        approvalRequired: !(challenge?.personalQuestAutoApprove ?? false),
+        status: 'active',
+        questLayer: 'A',
+        displayOrder: 0,
+        startAt: now,
+        createdAt: now,
+        updatedAt: now,
+        sourceProposalId: proposal.proposalId,
+      },
+    }));
+
+    // 생성된 questId를 proposal에도 저장 (연결 추적용)
+    await docClient.send(new UpdateCommand({
+      TableName: process.env.PERSONAL_QUEST_PROPOSALS_TABLE!,
+      Key: { proposalId },
+      UpdateExpression: 'SET questId = :qid',
+      ExpressionAttributeValues: { ':qid': questId },
+    }));
+  }
 
   if (status === 'approved') {
     await sendNotification({ recipientId: proposal.userId, type: 'quest_proposal_approved', title: '퀘스트가 승인됐어요 ✅', body: proposal.title, relatedId: proposalId, relatedType: 'personal_quest_proposal' });

@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api-client";
 import { Loading } from "@/shared/components/Loading";
 import { InlineVerificationForm } from "@/features/verification/components/InlineVerificationForm";
+import { QuestSubmitSheet } from "@/features/quest/components/QuestSubmitSheet";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import {
   getRemedyType,
@@ -138,6 +139,18 @@ export const ChallengeFeedPage = () => {
         return response.data?.data?.verifications || [];
       },
     });
+
+  const { data: personalQuestData } = useQuery({
+    queryKey: ["challenge-personal-quests", challengeId],
+    enabled: Boolean(challengeId),
+    queryFn: async () => {
+      const res = await apiClient.get(`/quests?challengeId=${challengeId}&status=active`);
+      const quests: any[] = res.data?.data?.quests ?? [];
+      return quests.find((q: any) => q.questScope === 'personal') ?? null;
+    },
+  });
+
+  const [selectedPersonalQuest, setSelectedPersonalQuest] = useState<any>(null);
 
   const leaderDmMutation = useMutation({
     mutationFn: async () => {
@@ -312,18 +325,77 @@ export const ChallengeFeedPage = () => {
               >
                 {questBoardLabel}
               </button>
-              {challengeType === 'personal_only' && (
-                <p className="text-xs text-gray-500 mt-1">개인퀘스트로 진행되는 챌린지입니다</p>
-              )}
               {isMixedChallengeType && (
                 <p className="text-xs text-gray-500 mt-1">리더퀘스트 + 개인퀘스트 모두 인증해야 하루 완료</p>
               )}
             </div>
           </section>
 
+          {/* 개인퀘스트 전용 챌린지: 개인 퀘스트 현황 섹션 */}
+          {challengeType === 'personal_only' && (
+            <section className="bg-amber-50 rounded-2xl p-5 border border-amber-100 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-amber-900">📋 개인 퀘스트</h3>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/quests?challengeId=${challengeId}`)}
+                  className="text-xs font-semibold text-amber-700 underline"
+                >
+                  퀘스트 보드 →
+                </button>
+              </div>
+              {personalQuestData ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-amber-800">{personalQuestData.title}</p>
+                  {personalQuestData.description && (
+                    <p className="text-xs text-amber-700">{personalQuestData.description}</p>
+                  )}
+                  <div className="flex items-center gap-2 mt-2">
+                    {personalQuestData.mySubmission ? (
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                        ['approved', 'auto_approved'].includes(personalQuestData.mySubmission.status)
+                          ? 'bg-green-100 text-green-700'
+                          : personalQuestData.mySubmission.status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {['approved', 'auto_approved'].includes(personalQuestData.mySubmission.status)
+                          ? '✅ 제출 완료'
+                          : personalQuestData.mySubmission.status === 'pending'
+                          ? '⏳ 심사중'
+                          : '↩️ 재제출 필요'}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPersonalQuest(personalQuestData)}
+                        className="px-4 py-1.5 bg-amber-600 text-white rounded-xl text-xs font-semibold"
+                      >
+                        개인 퀘스트 제출하기 →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-amber-700">
+                  아직 승인된 개인 퀘스트가 없어요.{' '}
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/quests?challengeId=${challengeId}`)}
+                    className="underline font-medium"
+                  >
+                    퀘스트 보드에서 확인하기
+                  </button>
+                </p>
+              )}
+            </section>
+          )}
+
           {(!iDidTodayVerification || hasInvalidMyVideo) && userChallenge && (
             <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-              <h3 className="font-bold text-gray-900 mb-3">오늘의 인증</h3>
+              <h3 className="font-bold text-gray-900 mb-3">
+                {challengeType === 'personal_only' ? '개인 퀘스트 인증 📸' : '오늘의 인증'}
+              </h3>
               <InlineVerificationForm
                 userChallenge={userChallenge}
                 allowedVerificationTypes={
@@ -341,6 +413,13 @@ export const ChallengeFeedPage = () => {
               />
             </section>
           )}
+
+          {/* 개인 퀘스트 제출 시트 */}
+          <QuestSubmitSheet
+            isOpen={!!selectedPersonalQuest}
+            onClose={() => setSelectedPersonalQuest(null)}
+            quest={selectedPersonalQuest}
+          />
 
           {iDidTodayVerification && !hasInvalidMyVideo && (
             <section className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
