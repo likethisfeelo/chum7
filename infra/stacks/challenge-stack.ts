@@ -17,6 +17,7 @@ interface ChallengeStackProps extends StackProps {
   challengesTable: Table;
   userChallengesTable: Table;
   personalQuestProposalsTable: Table;
+  questsTable: Table;
   notificationsTable: Table;
   payoutAuditLogsTable: Table;
   categoryBannersTable: Table;
@@ -26,13 +27,14 @@ export class ChallengeStack extends Stack {
   constructor(scope: Construct, id: string, props: ChallengeStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable, personalQuestProposalsTable, notificationsTable, payoutAuditLogsTable, categoryBannersTable } = props;
+    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable, personalQuestProposalsTable, questsTable, notificationsTable, payoutAuditLogsTable, categoryBannersTable } = props;
 
     const commonEnv = {
       STAGE: stage,
       CHALLENGES_TABLE: challengesTable.tableName,
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
       PERSONAL_QUEST_PROPOSALS_TABLE: personalQuestProposalsTable.tableName,
+      QUESTS_TABLE: questsTable.tableName,
       NOTIFICATIONS_TABLE: notificationsTable.tableName,
       PAYOUT_AUDIT_LOGS_TABLE: payoutAuditLogsTable.tableName,
       CATEGORY_BANNERS_TABLE: categoryBannersTable.tableName,
@@ -140,6 +142,7 @@ export class ChallengeStack extends Stack {
     challengesTable.grantReadData(personalQuestSubmitFn);
     userChallengesTable.grantReadData(personalQuestSubmitFn);
     personalQuestProposalsTable.grantReadWriteData(personalQuestSubmitFn);
+    questsTable.grantReadWriteData(personalQuestSubmitFn);
     notificationsTable.grantReadWriteData(personalQuestSubmitFn);
     apiGateway.addRoutes({ path: '/challenges/{challengeId}/personal-quest', methods: [HttpMethod.POST], integration: new HttpLambdaIntegration('PersonalQuestSubmitIntegration', personalQuestSubmitFn), authorizer });
 
