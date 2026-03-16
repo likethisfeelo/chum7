@@ -360,6 +360,9 @@ export const ChallengeFeedPage = () => {
               >
                 {questBoardLabel}
               </button>
+              {challengeType === 'personal_only' && (
+                <p className="text-xs text-gray-500 mt-1">개인퀘스트로 진행되는 챌린지입니다</p>
+              )}
               {isMixedChallengeType && (
                 <p className="text-xs text-gray-500 mt-1">리더퀘스트 + 개인퀘스트 모두 인증해야 하루 완료</p>
               )}
