@@ -1,7 +1,7 @@
 // backend/services/challenge/list/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -26,28 +26,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const limit = parseInt(params.limit || '20');
     const lifecycleFilter = params.lifecycle || null; // 'recruiting', 'active', 'preparing', etc.
 
-    let items;
-
+    // Scan 전체 테이블 후 JS에서 필터링 (GSI sort key endDate 누락 이슈 방지)
+    const scanParams: any = {
+      TableName: process.env.CHALLENGES_TABLE!,
+    };
     if (category) {
-      // 카테고리별 조회
-      const result = await docClient.send(new QueryCommand({
-        TableName: process.env.CHALLENGES_TABLE!,
-        IndexName: 'category-index-v2',
-        KeyConditionExpression: 'category = :category',
-        ExpressionAttributeValues: {
-          ':category': category
-        },
-        Limit: limit
-      }));
-      items = result.Items || [];
-    } else {
-      // 전체 조회
-      const result = await docClient.send(new ScanCommand({
-        TableName: process.env.CHALLENGES_TABLE!,
-        Limit: limit
-      }));
-      items = result.Items || [];
+      scanParams.FilterExpression = 'category = :category';
+      scanParams.ExpressionAttributeValues = { ':category': category };
     }
+    const result = await docClient.send(new ScanCommand(scanParams));
+    let items = result.Items || [];
 
     // 조회 불가/비활성 챌린지 숨김 (admin 콘솔 포함 공통 정책)
     items = items.filter((item: any) => item?.isVisible !== false && item?.isActive !== false);
@@ -65,6 +53,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     } else if (sortBy === 'completion') {
       items.sort((a, b) => (b.stats?.completionRate || 0) - (a.stats?.completionRate || 0));
     }
+
+    // 정렬 후 limit 적용
+    items = items.slice(0, limit);
 
     return response(200, {
       success: true,

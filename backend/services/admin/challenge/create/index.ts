@@ -178,6 +178,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       recruitingEndAt: input.recruitingEndAt,
       challengeStartAt: input.challengeStartAt,
       challengeEndAt: challengeEnd.toISOString(),
+      endDate: challengeEnd.toISOString(), // category-index-v2 / lifecycle-index GSI sort key
       durationDays: input.durationDays,
       maxParticipants: input.maxParticipants ?? null,
       challengeType: input.challengeType,
