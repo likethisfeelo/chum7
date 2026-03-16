@@ -10,6 +10,8 @@ interface InlineVerificationFormProps {
   allowedVerificationTypes?: string[];
   onSuccess?: (data: any) => void;
   openVideoPickerSignal?: number;
+  quest?: any;
+  onQuestSuccess?: () => void;
 }
 
 type VerificationType = "text" | "image" | "video" | "link";
@@ -158,26 +160,33 @@ export const InlineVerificationForm = ({
   allowedVerificationTypes,
   onSuccess,
   openVideoPickerSignal,
+  quest,
+  onQuestSuccess,
 }: InlineVerificationFormProps) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaPreviewUrlRef = useRef<string | null>(null);
+  const lastUploadedUrlRef = useRef<string | undefined>(undefined);
+  const lastUploadedObjectKeyRef = useRef<string | undefined>(undefined);
 
   const availableTypes = useMemo(() => {
-    if (!allowedVerificationTypes || allowedVerificationTypes.length === 0)
-      return ALL_TYPES;
-    const filtered = ALL_TYPES.filter((t) =>
-      allowedVerificationTypes.includes(t),
-    );
+    const base = quest
+      ? (quest.allowedVerificationTypes?.length ? quest.allowedVerificationTypes : null)
+      : allowedVerificationTypes;
+    if (!base || base.length === 0) return ALL_TYPES;
+    const filtered = ALL_TYPES.filter((t) => base.includes(t));
     return filtered.length ? filtered : ALL_TYPES;
-  }, [allowedVerificationTypes]);
+  }, [allowedVerificationTypes, quest]);
 
   // challengeType 기반 questType 가용 여부
   const challengeType = String(userChallenge?.challenge?.challengeType || 'leader_personal');
   const isMixedType = challengeType === 'leader_personal' || challengeType === 'mixed';
   const isPersonalOnlyType = challengeType === 'personal_only';
-  const showQuestTypeSelector = isMixedType; // 혼합형만 선택UI 표시
-  const defaultQuestType: 'leader' | 'personal' = isPersonalOnlyType ? 'personal' : 'leader';
+  const forcedQuestType: 'leader' | 'personal' | null = quest
+    ? (quest.questScope === 'personal' ? 'personal' : 'leader')
+    : null;
+  const showQuestTypeSelector = !forcedQuestType && isMixedType; // 혼합형만 선택UI 표시, quest 연동 시 숨김
+  const defaultQuestType: 'leader' | 'personal' = forcedQuestType ?? (isPersonalOnlyType ? 'personal' : 'leader');
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedType, setSelectedType] = useState<VerificationType>(
@@ -382,6 +391,9 @@ export const InlineVerificationForm = ({
         setCachedUploadObjectKey(uploadedObjectKey);
       }
 
+      lastUploadedUrlRef.current = uploadedUrl;
+      lastUploadedObjectKeyRef.current = uploadedObjectKey;
+
       const response = await apiClient.post("/verifications", {
         userChallengeId: userChallenge.userChallengeId,
         day: getChallengeDay(userChallenge),
@@ -416,6 +428,28 @@ export const InlineVerificationForm = ({
     },
     onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
+
+      // quest 연동 시 퀘스트 제출도 fire-and-forget
+      if (quest?.questId) {
+        const uploadedUrl = lastUploadedUrlRef.current;
+        const content: Record<string, any> = {};
+        if (selectedType === 'image' && uploadedUrl) content.imageUrl = uploadedUrl;
+        if (selectedType === 'video' && uploadedUrl) {
+          content.videoUrl = uploadedUrl;
+          if (videoDurationSec != null) content.videoDurationSec = videoDurationSec;
+        }
+        if (selectedType === 'link' && linkUrl.trim()) content.linkUrl = linkUrl.trim();
+        if (formData.todayNote.trim()) content.note = formData.todayNote.trim();
+        apiClient.post(`/quests/${quest.questId}/submit`, {
+          userChallengeId: userChallenge.userChallengeId,
+          verificationType: selectedType,
+          content,
+        }).then(() => {
+          if (onQuestSuccess) onQuestSuccess();
+        }).catch(() => {
+          // 퀘스트 제출 실패는 인증 성공에 영향 없음
+        });
+      }
 
       const payload = data?.data || {};
       const feedback = [
@@ -542,12 +576,12 @@ export const InlineVerificationForm = ({
     <div className="relative">
       {!isExpanded && (
         <div className="flex items-center gap-3">
-          <span className="text-2xl flex-shrink-0">{badgeIcon}</span>
+          <span className="text-2xl flex-shrink-0">{quest ? (quest.icon || (quest.questScope === 'personal' ? '🌱' : '🎯')) : badgeIcon}</span>
           <div
             className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-400 cursor-text select-none hover:border-primary-300 hover:bg-primary-50 transition-colors"
             onClick={handleFocus}
           >
-            오늘의 인증을 남겨보세요... (Day {safeDay})
+            {quest ? `${quest.title} 인증하기... (Day ${safeDay})` : `오늘의 인증을 남겨보세요... (Day ${safeDay})`}
           </div>
           {availableTypes.some((t) => t === "image" || t === "video") && (
             <button
