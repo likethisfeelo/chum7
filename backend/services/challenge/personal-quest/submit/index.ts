@@ -17,7 +17,14 @@ const schema = z.object({
 
 function response(statusCode: number, body: any): APIGatewayProxyResult { return { statusCode, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(body) }; }
 
-const deadline = (startAt: string) => { const d = new Date(startAt); d.setDate(d.getDate()-1); d.setHours(23,59,0,0); return d.toISOString(); };
+const KST_MS = 9 * 60 * 60 * 1000;
+const deadline = (startAt: string) => {
+  // challengeStartAt을 KST로 변환하여 D-1 23:59 KST를 계산한 뒤 UTC로 반환
+  const kst = new Date(new Date(startAt).getTime() + KST_MS);
+  kst.setUTCDate(kst.getUTCDate() - 1);
+  kst.setUTCHours(23, 59, 0, 0);
+  return new Date(kst.getTime() - KST_MS).toISOString();
+};
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
