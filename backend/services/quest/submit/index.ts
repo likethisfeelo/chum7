@@ -152,13 +152,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       await docClient.send(new TransactWriteCommand({
         TransactItems: [
           {
-            ConditionCheck: {
-              TableName: process.env.ACTIVE_QUEST_SUBMISSIONS_TABLE!,
-              Key: { activeSubmissionId },
-              ConditionExpression: 'attribute_not_exists(activeSubmissionId)',
-            },
-          },
-          {
             Put: {
               TableName: process.env.QUEST_SUBMISSIONS_TABLE!,
               Item: submission,
@@ -176,6 +169,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
                 createdAt: now,
                 updatedAt: now,
               },
+              ConditionExpression: 'attribute_not_exists(activeSubmissionId)',
             },
           },
           {

@@ -17,14 +17,6 @@ const schema = z.object({
 
 function response(statusCode: number, body: any): APIGatewayProxyResult { return { statusCode, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(body) }; }
 
-const KST_MS = 9 * 60 * 60 * 1000;
-const deadline = (startAt: string) => {
-  // challengeStartAt을 KST로 변환하여 D-1 23:59 KST를 계산한 뒤 UTC로 반환
-  const kst = new Date(new Date(startAt).getTime() + KST_MS);
-  kst.setUTCDate(kst.getUTCDate() - 1);
-  kst.setUTCHours(23, 59, 0, 0);
-  return new Date(kst.getTime() - KST_MS).toISOString();
-};
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -42,10 +34,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (!uc || uc.userId !== userId || uc.challengeId !== challengeId) return response(403, { error: 'FORBIDDEN', message: '본인 참여 정보만 제출할 수 있습니다' });
     if (!challenge) return response(404, { error: 'CHALLENGE_NOT_FOUND', message: '챌린지를 찾을 수 없습니다' });
     if (!challenge.personalQuestEnabled) return response(400, { error: 'PERSONAL_QUEST_DISABLED', message: '개인 퀘스트 제안이 비활성화된 챌린지입니다' });
+    // lifecycle 검사만으로 제출 가능 여부 판단 (챌린지 시작 후 active 전환 시 lifecycle manager가 차단)
     if (!['recruiting','preparing'].includes(String(challenge.lifecycle || ''))) return response(409, { error: 'INVALID_LIFECYCLE', message: '제안 제출 가능 기간이 아닙니다' });
-
-    const registrationDeadline = deadline(challenge.challengeStartAt);
-    if (new Date().toISOString() > registrationDeadline) return response(409, { error: 'PROPOSAL_DEADLINE_PASSED', message: '제안 제출 마감이 지났습니다' });
 
     const existing = await docClient.send(new QueryCommand({
       TableName: process.env.PERSONAL_QUEST_PROPOSALS_TABLE!,
@@ -148,7 +138,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       status: newStatus,
       revisionCount: 0,
       leaderFeedback: null,
-      registrationDeadline,
       createdAt: now,
       updatedAt: now,
     };

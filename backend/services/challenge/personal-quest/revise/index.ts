@@ -24,7 +24,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     await docClient.send(new UpdateCommand({ TableName: process.env.PERSONAL_QUEST_PROPOSALS_TABLE!, Key: { proposalId }, UpdateExpression: 'SET #status = :expired, updatedAt = :now', ExpressionAttributeNames: { '#status': 'status' }, ExpressionAttributeValues: { ':expired': 'expired', ':now': new Date().toISOString() } }));
     return res(409, { error: 'PROPOSAL_EXPIRED', message: '수정 가능 횟수를 초과했습니다' });
   }
-  if (new Date().toISOString() > proposal.registrationDeadline) return res(409, { error: 'PROPOSAL_DEADLINE_PASSED', message: '제안 제출 마감이 지났습니다' });
+  // lifecycle 기반 차단은 챌린지 조회 후 처리 - 별도 deadline 검사 제거
 
   const now = new Date().toISOString();
   const revisionCount = (proposal.revisionCount || 0) + 1;
