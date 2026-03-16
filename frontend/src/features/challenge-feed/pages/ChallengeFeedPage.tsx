@@ -151,7 +151,7 @@ export const ChallengeFeedPage = () => {
     },
   });
 
-  const { data: myProposalData, refetch: refetchMyProposal } = useQuery({
+  const { data: myProposalData } = useQuery({
     queryKey: ["challenge-my-proposal", challengeId],
     enabled: Boolean(challengeId),
     queryFn: async () => {
