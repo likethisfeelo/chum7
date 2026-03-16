@@ -15,6 +15,7 @@ interface CommentState {
   nextCursor: string | null;
   isFetchingMore: boolean;
   count: number;
+  error: string | null;
 }
 
 const DEFAULT_STATE: CommentState = {
@@ -27,6 +28,7 @@ const DEFAULT_STATE: CommentState = {
   nextCursor: null,
   isFetchingMore: false,
   count: 0,
+  error: null,
 };
 
 export function usePlazaComments(initialCounts: Record<string, number> = {}) {
@@ -53,7 +55,7 @@ export function usePlazaComments(initialCounts: Record<string, number> = {}) {
     update(postId, { isOpen: true });
     if (state.comments.length > 0) return;
 
-    update(postId, { isLoading: true });
+    update(postId, { isLoading: true, error: null });
     try {
       const page = await fetchPlazaCommentsPage({ plazaPostId: postId, limit: 30 });
       const comments = page.comments || [];
@@ -64,8 +66,12 @@ export function usePlazaComments(initialCounts: Record<string, number> = {}) {
         nextCursor: page.nextCursor || null,
         isLoading: false,
       });
-    } catch {
-      update(postId, { isLoading: false });
+    } catch (e: any) {
+      const status = e?.response?.status;
+      update(postId, {
+        isLoading: false,
+        error: status === 401 ? '로그인 후 댓글을 볼 수 있어요.' : '댓글을 불러오지 못했어요.',
+      });
     }
   }
 

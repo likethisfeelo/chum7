@@ -557,8 +557,8 @@ export const ChallengeFeedPage = () => {
                 <div className="space-y-3">
                   {leaderQuests.map((q: any) => {
                     const sub = q.mySubmission;
-                    const isDone = sub?.status === 'approved' || sub?.status === 'auto_approved';
-                    const isPending = sub?.status === 'pending';
+                    const isDone = sub?.status === 'approved' || sub?.status === 'auto_approved' || iDidTodayVerification;
+                    const isPending = !isDone && sub?.status === 'pending';
                     const isExpanded = expandedLeaderQuestId === q.questId;
                     return (
                       <div key={q.questId} className="rounded-xl bg-blue-50 border border-blue-100 overflow-hidden">
@@ -591,6 +591,7 @@ export const ChallengeFeedPage = () => {
                                 setExpandedLeaderQuestId(null);
                                 queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
                                 queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
+                                queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] });
                               }}
                               onQuestSuccess={() => queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] })}
                             />
@@ -607,8 +608,8 @@ export const ChallengeFeedPage = () => {
                 <div>
                   {personalQuest ? (() => {
                     const sub = personalQuest.mySubmission;
-                    const isDone = sub?.status === 'approved' || sub?.status === 'auto_approved';
-                    const isPending = sub?.status === 'pending';
+                    const isDone = sub?.status === 'approved' || sub?.status === 'auto_approved' || iDidTodayVerification;
+                    const isPending = !isDone && sub?.status === 'pending';
                     return (
                       <div className="rounded-xl bg-amber-50 border border-amber-100 overflow-hidden">
                         <div className="flex items-center gap-3 p-3">

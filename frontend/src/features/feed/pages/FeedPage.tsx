@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { EmptyState } from '@/shared/components/EmptyState';
 import { SkeletonList } from '@/shared/components/Skeleton';
@@ -22,7 +22,11 @@ export const FeedPage = () => {
 
   const { posts, isLoading, isError, hasNextPage, fetchNextPage, isFetchingNextPage } = usePlazaFeed(plazaFilter);
 
-  const commentHook = usePlazaComments();
+  const initialCommentCounts = useMemo(
+    () => Object.fromEntries(posts.map((p) => [p.plazaPostId, Number(p.commentCount ?? 0)])),
+    [posts],
+  );
+  const commentHook = usePlazaComments(initialCommentCounts);
 
   const reactions = usePlazaReactions();
 
