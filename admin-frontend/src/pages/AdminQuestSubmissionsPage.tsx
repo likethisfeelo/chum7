@@ -58,10 +58,19 @@ function resolveMediaUrl(url: string): string {
   const normalizedPath = raw.replace(/^\/+/, '');
 
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
-    if (!cloudfrontBase) return raw;
-
     try {
       const parsed = new URL(raw);
+      const host = parsed.hostname.toLowerCase();
+
+      // Already on CDN domain → preserve original domain (do not rewrite)
+      if (
+        (host.includes('chum7.com') || host.includes('cloudfront.net')) &&
+        parsed.pathname.startsWith('/uploads/')
+      ) {
+        return `https://${parsed.host}${parsed.pathname}`;
+      }
+
+      if (!cloudfrontBase) return raw;
       if (parsed.pathname.startsWith('/uploads/')) {
         return `${cloudfrontBase}${parsed.pathname}`;
       }

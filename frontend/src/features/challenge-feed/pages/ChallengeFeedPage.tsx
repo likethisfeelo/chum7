@@ -5,6 +5,7 @@ import { FiArrowLeft } from "react-icons/fi";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api-client";
 import { Loading } from "@/shared/components/Loading";
+import { resolveMediaUrl } from "@/shared/utils/mediaUrl";
 import { InlineVerificationForm } from "@/features/verification/components/InlineVerificationForm";
 import { BottomSheet } from "@/shared/components/BottomSheet";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
@@ -799,13 +800,13 @@ export const ChallengeFeedPage = () => {
                     )}
                   {item.verificationType === "image" && item.imageUrl && (
                     <img
-                      src={item.imageUrl}
+                      src={resolveMediaUrl(item.imageUrl)}
                       alt="verification"
                       className="mt-2 w-full rounded-lg border border-gray-100"
                     />
                   )}
                   {item.verificationType === "video" && item.videoUrl && (
-                    <FeedVideo src={item.videoUrl} />
+                    <FeedVideo src={resolveMediaUrl(item.videoUrl)} />
                   )}
                   {item.verificationType === "link" && item.linkUrl && (
                     <LinkPreviewCard url={item.linkUrl} />
