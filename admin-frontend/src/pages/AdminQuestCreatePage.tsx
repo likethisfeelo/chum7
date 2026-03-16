@@ -60,7 +60,7 @@ export const AdminQuestCreatePage = () => {
   const [form, setForm] = useState(INITIAL);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
-  const [challengeOptions, setChallengeOptions] = useState<Array<{ challengeId: string; title: string; lifecycle?: string; allowedVerificationTypes?: string[]; personalQuestAutoApprove?: boolean }>>([]);
+  const [challengeOptions, setChallengeOptions] = useState<Array<{ challengeId: string; title: string; lifecycle?: string; allowedVerificationTypes?: string[]; personalQuestAutoApprove?: boolean; challengeStartAt?: string; challengeEndAt?: string }>>([]);
   const [challengeLoading, setChallengeLoading] = useState(false);
 
   useEffect(() => {
@@ -82,6 +82,8 @@ export const AdminQuestCreatePage = () => {
               title: challenge.title ?? '제목 없음',
               lifecycle: challenge.lifecycle,
               allowedVerificationTypes: challenge.allowedVerificationTypes,
+              challengeStartAt: challenge.challengeStartAt,
+              challengeEndAt: challenge.challengeEndAt,
             }))
         );
       } catch {
@@ -104,6 +106,12 @@ export const AdminQuestCreatePage = () => {
   const selectedChallenge = challengeOptions.find(c => c.challengeId === challengeId);
   const challengeAllowedTypes = sanitizeAllowedVerificationTypes(selectedChallenge?.allowedVerificationTypes);
 
+  // datetime-local 입력 형식으로 변환 (ISO → "YYYY-MM-DDTHH:MM")
+  const toDatetimeLocal = (iso?: string) => {
+    if (!iso) return '';
+    return iso.slice(0, 16);
+  };
+
   useEffect(() => {
     if (!challengeId) return;
     // 챌린지 허용 방식 범위 내로 퀘스트 허용 방식 재조정
@@ -115,7 +123,20 @@ export const AdminQuestCreatePage = () => {
     if (selectedChallenge?.personalQuestAutoApprove !== undefined) {
       set('approvalRequired', !selectedChallenge.personalQuestAutoApprove);
     }
+    // 리더 스코프 퀘스트는 챌린지 기간으로 기간 자동 설정
+    if (form.questScope === 'leader' && selectedChallenge) {
+      if (selectedChallenge.challengeStartAt) set('startAt', toDatetimeLocal(selectedChallenge.challengeStartAt));
+      if (selectedChallenge.challengeEndAt) set('endAt', toDatetimeLocal(selectedChallenge.challengeEndAt));
+    }
   }, [challengeId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // questScope가 'leader'로 변경될 때도 기간 자동 적용
+  useEffect(() => {
+    if (form.questScope === 'leader' && selectedChallenge) {
+      if (selectedChallenge.challengeStartAt) set('startAt', toDatetimeLocal(selectedChallenge.challengeStartAt));
+      if (selectedChallenge.challengeEndAt) set('endAt', toDatetimeLocal(selectedChallenge.challengeEndAt));
+    }
+  }, [form.questScope]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -416,10 +437,10 @@ export const AdminQuestCreatePage = () => {
                 onChange={e => set('questScope', e.target.value as QuestScope)}
                 className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                <option value="leader">리더 중심</option>
-                <option value="personal">개인 중심</option>
-                <option value="mixed">혼합</option>
+                <option value="leader">리더 중심 — 챌린지 전 기간 공통 적용</option>
+                <option value="mixed" disabled>혼합 (특정 기간 공개) — 향후 개발 예정</option>
               </select>
+              <p className="mt-1 text-xs text-gray-500">개인 퀘스트 등록은 참여자가 직접 수행합니다.</p>
             </div>
           </div>
 
@@ -439,7 +460,12 @@ export const AdminQuestCreatePage = () => {
 
         {/* 기간 */}
         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
-          <h2 className="font-bold text-gray-800">기간 (선택)</h2>
+          <h2 className="font-bold text-gray-800">기간</h2>
+          {form.questScope === 'leader' && (
+            <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+              챌린지 선택 시 기간이 자동 입력됩니다. 챌린지 시작일이 오늘과 달라도 실제 설정된 시작일로 반영됩니다.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">시작 일시</label>
