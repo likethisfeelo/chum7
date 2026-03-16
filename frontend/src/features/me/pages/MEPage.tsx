@@ -60,10 +60,6 @@ function getMinutesUntilTarget(challenge: any): number {
   return (targetMinutes - nowMinutes + 24 * 60) % (24 * 60);
 }
 
-function getDateOnly(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
 // Asia/Seoul 기준 오늘 날짜를 로컬 Date(자정)로 반환
 function getTodayInSeoul(): Date {
   const seoulStr = new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }); // "YYYY-MM-DD"
