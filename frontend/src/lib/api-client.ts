@@ -45,7 +45,7 @@ apiClient.interceptors.request.use(
 );
 
 // Response interceptor - 에러 처리
-const AUTH_EXCLUDED_PATHS = ['/auth/login', '/auth/register', '/auth/refresh-token'];
+const AUTH_EXCLUDED_PATHS = ['/auth/login', '/auth/register', '/auth/refresh-token', '/auth/refresh'];
 
 apiClient.interceptors.response.use(
   (response) => response,
@@ -75,7 +75,7 @@ apiClient.interceptors.response.use(
           throw new Error('No refresh token');
         }
 
-        const { data } = await axios.post(`${API_URL}/auth/refresh-token`, {
+        const { data } = await axios.post(`${API_URL}/auth/refresh`, {
           refreshToken,
         });
 
