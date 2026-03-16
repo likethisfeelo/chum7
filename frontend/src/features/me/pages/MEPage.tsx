@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
@@ -14,7 +14,6 @@ import {
   getProgressEntryByDay,
   isChallengePeriodCompleted,
   isFailedChallengeState,
-  isVerificationDayCompleted,
   resolveChallengeBucket,
   resolveChallengeDurationDays,
   resolveVerificationStatusForDay,
@@ -121,20 +120,6 @@ function isChallengeActivelyRunning(challenge: any): boolean {
   return (isActiveLifecycle || isActivePhase) && isActiveStatus;
 }
 
-function hasBacklogBeforeToday(challenge: any): boolean {
-  const progress = challenge.progress || [];
-  const challengeDay = getChallengeDay(challenge);
-  const durationDays = resolveChallengeDurationDays(challenge);
-  const todayDay = Math.max(1, Math.min(durationDays, challengeDay));
-
-  for (let day = 1; day < todayDay; day += 1) {
-    if (!isVerificationDayCompleted(progress, day)) {
-      return true;
-    }
-  }
-
-  return false;
-}
 
 function formatPersonalTarget(challenge: any): string {
   const target = challenge.personalTarget;
@@ -205,6 +190,7 @@ const getProposalStatusMeta = (status?: string) => {
 export const MEPage = () => {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<METab>('active');
 
   const { data, isLoading } = useQuery({
@@ -369,14 +355,12 @@ export const MEPage = () => {
 
   const isEmpty = activeChallenges.length === 0 && pendingChallenges.length === 0 && completedChallenges.length === 0;
 
-  // 대표 인증 챌린지 (최상단 인라인 폼): 오늘 이전 밀린 인증이 없는 챌린지만 우선 노출
-  const primaryCandidateChallenges = useMemo(
-    () => unverifiedChallenges.filter((challenge: any) => !hasBacklogBeforeToday(challenge)),
-    [unverifiedChallenges],
-  );
-  const primaryUnverified = primaryCandidateChallenges[0] ?? null;
-  // 섹션2: 모든 미인증 챌린지 (섹션1과 동일한 챌린지도 포함 — 피드 이동 가능하도록)
-  const otherUnverified = unverifiedChallenges;
+  // 섹션1: 오늘 기준 목표 시간이 가장 가까운 미인증 챌린지 → InlineVerificationForm
+  const primaryUnverified = unverifiedChallenges[0] ?? null;
+  // 섹션2: 나머지 미인증 챌린지 (섹션1 제외)
+  const otherUnverified = primaryUnverified
+    ? unverifiedChallenges.filter((c: any) => c.userChallengeId !== primaryUnverified.userChallengeId)
+    : unverifiedChallenges;
 
   useEffect(() => {
     if (!isMeDebugEnabled()) return;
@@ -497,7 +481,13 @@ export const MEPage = () => {
                             </span>
                           )}
                         </div>
-                        <InlineVerificationForm userChallenge={primaryUnverified} allowedVerificationTypes={primaryUnverified.challenge?.allowedVerificationTypes} />
+                        <InlineVerificationForm
+                          userChallenge={primaryUnverified}
+                          allowedVerificationTypes={primaryUnverified.challenge?.allowedVerificationTypes}
+                          onSuccess={() => {
+                            void queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
+                          }}
+                        />
                       </motion.div>
                     )}
 

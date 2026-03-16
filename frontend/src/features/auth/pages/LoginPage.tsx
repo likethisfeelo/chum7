@@ -18,7 +18,8 @@ export const LoginPage = () => {
     },
     onSuccess: (data) => {
       const user = data?.data?.user;
-      const accessToken = data?.data?.tokens?.accessToken;
+      // idToken은 aud=clientId를 포함하여 API Gateway JWT 인증 통과, accessToken은 aud 없음
+      const accessToken = data?.data?.tokens?.idToken || data?.data?.tokens?.accessToken;
       const refreshToken = data?.data?.tokens?.refreshToken;
 
       if (!user || !accessToken || !refreshToken) {

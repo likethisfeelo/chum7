@@ -79,7 +79,8 @@ apiClient.interceptors.response.use(
           refreshToken,
         });
 
-        const newAccessToken = data.data.accessToken;
+        // idToken has aud=clientId → passes API Gateway JWT authorizer
+        const newAccessToken = data.data.idToken || data.data.accessToken;
         localStorage.setItem('accessToken', newAccessToken);
 
         // Zustand persist 상태도 갱신
