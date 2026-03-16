@@ -57,15 +57,6 @@ export function isLikelySignedAssetUrl(url?: string | null): boolean {
     const host = String(parsed.hostname || '').toLowerCase();
     const pathname = parsed.pathname || '';
 
-    // CloudFront / chum7.com 도메인에서 /uploads/ 경로를 포함한 URL은
-    // 이미 공개 CDN URL이므로 재서명이 불필요 → signed으로 취급하여 스킵
-    if (
-      (host.includes('chum7.com') || host.includes('cloudfront.net')) &&
-      pathname.startsWith('/uploads/')
-    ) {
-      return true;
-    }
-
     const keys = new Set(Array.from(parsed.searchParams.keys()).map((k) => k.toLowerCase()));
 
     const hasAmzSignature = keys.has('x-amz-signature');
