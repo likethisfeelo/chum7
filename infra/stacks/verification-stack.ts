@@ -752,7 +752,28 @@ export class VerificationStack extends Stack {
       authorizer,
     });
 
-    // 11. Recommendation Dismiss (protected)
+    // 11. Give Up Challenge (protected)
+    const giveUpFn = new NodejsFunction(this, "GiveUpFn", {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-give-up`,
+      entry: path.join(
+        __dirname,
+        "../../backend/services/challenge/give-up/index.ts",
+      ),
+      handler: "handler",
+      environment: commonEnv,
+    });
+    userChallengesTable.grantReadWriteData(giveUpFn);
+    challengesTable.grantReadData(giveUpFn);
+    badgesTable.grantReadWriteData(giveUpFn);
+    apiGateway.addRoutes({
+      path: "/user-challenges/{userChallengeId}/give-up",
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration("GiveUpIntegration", giveUpFn),
+      authorizer,
+    });
+
+    // 12. Recommendation Dismiss (protected)
     const dismissRecommendFn = new NodejsFunction(this, "DismissRecommendFn", {
       ...commonProps,
       functionName: `chme-${stage}-plaza-recommend-dismiss`,

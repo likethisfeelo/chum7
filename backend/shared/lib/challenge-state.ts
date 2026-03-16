@@ -12,6 +12,11 @@ export function resolveNormalizedChallengeState(input: {
   const phase = typeof input.phase === 'string' ? input.phase : status;
   const lifecycle = typeof input.challengeLifecycle === 'string' ? input.challengeLifecycle : undefined;
 
+  // 중도 포기한 경우 그대로 유지
+  if (status === 'gave_up' || phase === 'gave_up') {
+    return { status: 'gave_up', phase: 'gave_up' };
+  }
+
   const shouldAutoFinalize =
     status !== 'completed' &&
     status !== 'failed' &&
@@ -37,7 +42,8 @@ export function matchesRequestedChallengeStatus(requestedStatus: string, normali
   const normalized = String(normalizedStatus || '').toLowerCase();
 
   if (requested === 'all') return true;
-  if (requested === 'active') return normalized === 'active';
+  if (requested === 'active') return normalized === 'active'; // gave_up 제외
+  if (requested === 'gave_up') return normalized === 'gave_up';
   if (requested === 'completed') return normalized === 'completed';
   if (requested === 'failed') return normalized === 'failed';
   return normalized === requested;

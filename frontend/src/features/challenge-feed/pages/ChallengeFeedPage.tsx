@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FiArrowLeft } from "react-icons/fi";
+import { useAuthStore } from "@/stores/authStore";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api-client";
 import { Loading } from "@/shared/components/Loading";
@@ -80,6 +81,7 @@ export const ChallengeFeedPage = () => {
   const { challengeId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   const { data: challengeData, isLoading: isChallengeLoading } = useQuery({
     queryKey: ["challenge-feed", challengeId],
     enabled: Boolean(challengeId),
@@ -93,7 +95,7 @@ export const ChallengeFeedPage = () => {
     queryKey: ["challenge-feed-my-challenges", challengeId],
     enabled: Boolean(challengeId),
     queryFn: async () => {
-      const response = await apiClient.get("/challenges/my?status=active");
+      const response = await apiClient.get("/challenges/my?status=all");
       return response.data?.data?.challenges || [];
     },
   });
@@ -239,6 +241,27 @@ export const ChallengeFeedPage = () => {
     },
   });
 
+  const [showGiveUpConfirm, setShowGiveUpConfirm] = useState(false);
+
+  const giveUpMutation = useMutation({
+    mutationFn: async () => {
+      const uc = userChallenge;
+      const userChallengeId = uc?.userChallengeId ?? uc?.id;
+      if (!userChallengeId) throw new Error('참여 정보를 찾을 수 없습니다');
+      await apiClient.post(`/user-challenges/${userChallengeId}/give-up`);
+    },
+    onSuccess: () => {
+      toast.success('중도 포기했습니다. 포기는쉽다 뱃지가 지급되었어요.');
+      setShowGiveUpConfirm(false);
+      queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-challenges", challengeId] });
+      queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
+    },
+    onError: (e: any) => {
+      toast.error(e?.response?.data?.message || '중도 포기에 실패했습니다');
+      setShowGiveUpConfirm(false);
+    },
+  });
+
   const boardSummary = useMemo(() => {
     const blocks = boardData?.blocks || [];
     const textBlock = blocks.find((b: any) => b.type === "text" && b.content);
@@ -332,6 +355,9 @@ export const ChallengeFeedPage = () => {
   const challengeType = challengeData?.challengeType || 'leader_personal';
   const isMixedChallengeType = challengeType === 'leader_personal' || challengeType === 'mixed';
   const isActive = challengeData?.lifecycle === 'active';
+  const isLeader = challengeData?.leaderId === user?.userId;
+  const isGaveUp = userChallenge?.phase === 'gave_up' || userChallenge?.status === 'gave_up';
+  const canGiveUp = Boolean(userChallenge) && !isLeader && !isGaveUp && isActive;
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -343,8 +369,45 @@ export const ChallengeFeedPage = () => {
           >
             <FiArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-lg font-bold text-gray-900">챌린지 피드</h1>
+          <h1 className="text-lg font-bold text-gray-900 flex-1">챌린지 피드</h1>
+          {canGiveUp && (
+            <button
+              type="button"
+              onClick={() => setShowGiveUpConfirm(true)}
+              className="text-xs text-gray-400 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors"
+            >
+              중도 포기
+            </button>
+          )}
         </div>
+
+        {/* 중도 포기 확인 모달 */}
+        {showGiveUpConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+              <h2 className="text-lg font-bold text-gray-900 mb-2">중도 포기하시겠어요?</h2>
+              <p className="text-sm text-gray-600 mb-1">포기는 취소할 수 없습니다.</p>
+              <p className="text-sm text-gray-600 mb-4">포기 후에는 인증 게시물을 올릴 수 없지만, 챌린지 피드는 계속 볼 수 있어요. 포기는쉽다 뱃지가 지급됩니다.</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowGiveUpConfirm(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-medium text-sm"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={() => giveUpMutation.mutate()}
+                  disabled={giveUpMutation.isPending}
+                  className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium text-sm disabled:opacity-50"
+                >
+                  {giveUpMutation.isPending ? '처리 중...' : '포기하기'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="p-6 space-y-4">
           <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
@@ -356,6 +419,13 @@ export const ChallengeFeedPage = () => {
                 "챌린지 소개를 불러오지 못했습니다."}
             </p>
           </section>
+
+          {isGaveUp && (
+            <section className="bg-red-50 rounded-2xl p-5 border border-red-100 shadow-sm">
+              <h3 className="font-bold text-red-800 mb-1">🏳️ 중도 포기한 챌린지</h3>
+              <p className="text-sm text-red-700">인증 게시물 업로드가 제한되지만, 다른 참여자의 인증 피드는 계속 볼 수 있어요.</p>
+            </section>
+          )}
 
           <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
             <div className="flex items-center justify-between mb-2">
@@ -518,7 +588,7 @@ export const ChallengeFeedPage = () => {
           </BottomSheet>
 
           {/* 오늘의 퀘스트 인증 — active + 퀘스트 있을 때 인라인 폼 */}
-          {isActive && questsData && questsData.length > 0 && userChallenge && (
+          {isActive && questsData && questsData.length > 0 && userChallenge && !isGaveUp && (
             <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
               {/* 탭 헤더 — leader_personal만 */}
               {isMixedChallengeType && (
@@ -650,7 +720,7 @@ export const ChallengeFeedPage = () => {
           )}
 
           {/* 오늘의 인증 — 퀘스트가 없는 챌린지에서만 */}
-          {(!questsData || questsData.length === 0) && (!iDidTodayVerification || hasInvalidMyVideo) && userChallenge && (
+          {(!questsData || questsData.length === 0) && (!iDidTodayVerification || hasInvalidMyVideo) && userChallenge && !isGaveUp && (
             <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
               <h3 className="font-bold text-gray-900 mb-3">오늘의 인증</h3>
               <InlineVerificationForm
@@ -676,6 +746,7 @@ export const ChallengeFeedPage = () => {
 
           {(() => {
             if (!userChallenge) return null;
+            if (isGaveUp) return null;
             const remedyType = getRemedyType(userChallenge.remedyPolicy);
             if (remedyType === "strict") return null;
             const remaining = getRemainingRemedyCount(

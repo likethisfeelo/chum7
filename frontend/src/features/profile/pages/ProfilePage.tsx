@@ -12,7 +12,7 @@ import {
 } from '@/features/challenge/utils/challengeLifecycle';
 
 
-type ChallengeFilter = 'active' | 'preparing' | 'completed';
+type ChallengeFilter = 'active' | 'preparing' | 'completed' | 'gave_up';
 
 export const ProfilePage = () => {
   const navigate = useNavigate();
@@ -48,8 +48,9 @@ export const ProfilePage = () => {
     const preparing = challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'preparing').length;
     const active = challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'active').length;
     const completed = challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'completed').length;
+    const gaveUp = challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'gave_up').length;
     const receivedCheer = challengeItems.reduce((acc: number, item: any) => acc + Number(item.cheerCount ?? 0), 0);
-    return { preparing, active, completed, receivedCheer };
+    return { preparing, active, completed, gaveUp, receivedCheer };
   }, [challengeItems]);
 
   const filteredChallenges = useMemo(() => {
@@ -58,6 +59,9 @@ export const ProfilePage = () => {
     }
     if (challengeFilter === 'active') {
       return challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'active');
+    }
+    if (challengeFilter === 'gave_up') {
+      return challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'gave_up');
     }
     return challengeItems.filter((item: any) => resolveChallengeBucket(item) === 'completed');
   }, [challengeFilter, challengeItems]);
@@ -92,7 +96,7 @@ export const ProfilePage = () => {
         </div>
 
         <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-2">
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center">
               <p className="text-white/70 text-xs mb-1">진행중</p>
               <p className="text-white font-bold text-2xl">{summary.active}</p>
@@ -109,6 +113,14 @@ export const ProfilePage = () => {
               <p className="text-white/70 text-xs mb-1">완주</p>
               <p className="text-white font-bold text-2xl">{summary.completed}</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setChallengeFilter('gave_up')}
+              className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center"
+            >
+              <p className="text-white/70 text-xs mb-1">포기</p>
+              <p className="text-white font-bold text-2xl">{summary.gaveUp}</p>
+            </button>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -126,7 +138,7 @@ export const ProfilePage = () => {
 
       <div className="px-6 py-6 space-y-4">
         <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="grid grid-cols-4 gap-2 mb-3">
             <button
               type="button"
               onClick={() => setChallengeFilter('active')}
@@ -148,6 +160,13 @@ export const ProfilePage = () => {
             >
               완주
             </button>
+            <button
+              type="button"
+              onClick={() => setChallengeFilter('gave_up')}
+              className={`py-2 rounded-lg text-sm font-semibold ${challengeFilter === 'gave_up' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}
+            >
+              포기
+            </button>
           </div>
 
           {filteredChallenges.length === 0 ? (
@@ -162,7 +181,7 @@ export const ProfilePage = () => {
                     type="button"
                     onClick={() => {
                       const bucket = resolveChallengeBucket(item);
-                      if (bucket === 'active') {
+                      if (bucket === 'active' || bucket === 'gave_up') {
                         navigate(`/challenge-feed/${item.challengeId}`);
                         return;
                       }
