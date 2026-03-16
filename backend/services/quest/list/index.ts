@@ -60,9 +60,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       quests = result.Items ?? [];
     }
 
-    // 기간 만료 필터 + displayOrder 정렬
+    // 기간 만료 필터 + 개인 퀘스트 소유자 필터 + displayOrder 정렬
     quests = quests
       .filter(q => !q.endAt || q.endAt >= now)
+      // questScope='personal' 퀘스트는 assignedUserId 본인에게만 노출
+      .filter(q => q.questScope !== 'personal' || q.assignedUserId === userId)
       .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
 
     if (quests.length === 0) {

@@ -118,6 +118,7 @@ new AdminStack(app, `chme-${stage}-admin`, {
   cheerDeadLettersTable: coreStack.cheerDeadLettersTable,
   challengesTable: coreStack.challengesTable,
   userChallengesTable: coreStack.userChallengesTable,
+  questsTable: coreStack.questsTable,
   questSubmissionsTable: coreStack.questSubmissionsTable,
   verificationsTable: coreStack.verificationsTable,
   personalQuestProposalsTable: coreStack.personalQuestProposalsTable,
