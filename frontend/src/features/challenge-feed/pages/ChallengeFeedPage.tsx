@@ -377,7 +377,16 @@ export const ChallengeFeedPage = () => {
 
   const challengeType = challengeData?.challengeType || 'leader_personal';
   const isMixedChallengeType = challengeType === 'leader_personal' || challengeType === 'mixed';
-  const isActive = challengeData?.lifecycle === 'active';
+  // lifecycle-manager 크론 지연 보정: my-challenges API와 동일한 로직
+  // requireStartConfirmation=false 챌린지가 challengeStartAt 이후면 active로 간주
+  const isActive = (() => {
+    const lc = challengeData?.lifecycle;
+    if (lc === 'active') return true;
+    if (lc === 'preparing' && !challengeData?.requireStartConfirmation && challengeData?.challengeStartAt) {
+      return challengeData.challengeStartAt <= new Date().toISOString();
+    }
+    return false;
+  })();
   const isLeader = challengeData?.leaderId === user?.userId;
   const isGaveUp = userChallenge?.phase === 'gave_up' || userChallenge?.status === 'gave_up';
   const canGiveUp = Boolean(userChallenge) && !isLeader && !isGaveUp && isActive;
@@ -746,8 +755,8 @@ export const ChallengeFeedPage = () => {
             </section>
           )}
 
-          {/* 오늘의 인증 — 퀘스트가 없는 챌린지에서만 */}
-          {(!questsData || questsData.length === 0) && (!iDidTodayVerification || hasInvalidMyVideo) && userChallenge && !isGaveUp && (
+          {/* 오늘의 인증 — 퀘스트가 없거나, leader_only 챌린지에서 leaderQuests가 비어있는 경우 */}
+          {(!questsData || questsData.length === 0 || (challengeType === 'leader_only' && leaderQuests.length === 0)) && (!iDidTodayVerification || hasInvalidMyVideo) && userChallenge && !isGaveUp && (
             <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
               <h3 className="font-bold text-gray-900 mb-3">오늘의 인증</h3>
               <InlineVerificationForm
