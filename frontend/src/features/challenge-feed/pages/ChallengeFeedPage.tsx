@@ -299,6 +299,26 @@ export const ChallengeFeedPage = () => {
     [myChallengeVerifications],
   );
 
+  // 혼합 퀘스트형에서 퀘스트별 완료 여부: questType='leader'/'personal' 인증이 오늘 있는지 각각 확인
+  const iDidTodayLeaderQuestVerification = useMemo(
+    () =>
+      myChallengeVerifications.some(
+        (item: any) =>
+          isSameKstDate(item.performedAt || item.createdAt) &&
+          item.questType === 'leader',
+      ),
+    [myChallengeVerifications],
+  );
+  const iDidTodayPersonalQuestVerification = useMemo(
+    () =>
+      myChallengeVerifications.some(
+        (item: any) =>
+          isSameKstDate(item.performedAt || item.createdAt) &&
+          item.questType === 'personal',
+      ),
+    [myChallengeVerifications],
+  );
+
   const myTotalCount = myChallengeVerifications.length;
   const canCheerNow = iDidTodayVerification;
   const [openVideoPickerSignal, setOpenVideoPickerSignal] = useState(0);
@@ -627,7 +647,8 @@ export const ChallengeFeedPage = () => {
                 <div className="space-y-3">
                   {leaderQuests.map((q: any) => {
                     const sub = q.mySubmission;
-                    const isDone = sub?.status === 'approved' || sub?.status === 'auto_approved' || iDidTodayVerification;
+                    const isDone = sub?.status === 'approved' || sub?.status === 'auto_approved'
+                      || (isMixedChallengeType ? iDidTodayLeaderQuestVerification : iDidTodayVerification);
                     const isPending = !isDone && sub?.status === 'pending';
                     const isExpanded = expandedLeaderQuestId === q.questId;
                     return (
@@ -679,7 +700,8 @@ export const ChallengeFeedPage = () => {
                 <div>
                   {personalQuest ? (() => {
                     const sub = personalQuest.mySubmission;
-                    const isDone = sub?.status === 'approved' || sub?.status === 'auto_approved' || iDidTodayVerification;
+                    const isDone = sub?.status === 'approved' || sub?.status === 'auto_approved'
+                      || (isMixedChallengeType ? iDidTodayPersonalQuestVerification : iDidTodayVerification);
                     const isPending = !isDone && sub?.status === 'pending';
                     return (
                       <div className="rounded-xl bg-amber-50 border border-amber-100 overflow-hidden">
@@ -738,7 +760,9 @@ export const ChallengeFeedPage = () => {
             </section>
           )}
 
-          {iDidTodayVerification && !hasInvalidMyVideo && (
+          {(isMixedChallengeType
+            ? iDidTodayLeaderQuestVerification && iDidTodayPersonalQuestVerification
+            : iDidTodayVerification) && !hasInvalidMyVideo && (
             <section className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
               <h3 className="font-bold text-emerald-800">✅ 오늘 인증 완료!</h3>
               <p className="text-sm text-emerald-700 mt-1">
