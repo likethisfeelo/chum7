@@ -250,13 +250,6 @@ export const MEPage = () => {
     staleTime: 0,
   });
 
-  const verificationMap = useMemo(() => {
-    const items: any[] = myVerificationsData?.verifications || [];
-    const map = new Map<string, any>();
-    items.forEach((v: any) => map.set(v.verificationId, v));
-    return map;
-  }, [myVerificationsData]);
-
   // (challengeId|userChallengeId) + day → verification (non-extra)
   // progress GSI 지연 보완: progress 엔트리가 없을 때 verifications 테이블로 fallback
   // userChallengeId를 우선 키로 사용 (challengeId 누락 케이스 대응)
