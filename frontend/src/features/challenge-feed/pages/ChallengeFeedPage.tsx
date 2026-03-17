@@ -291,19 +291,21 @@ export const ChallengeFeedPage = () => {
     [challengeVerifications],
   );
 
+  // 오늘 1차 인증 여부 (isExtra 제외 — extra 인증만 있어도 완료로 오인하는 것 방지)
   const iDidTodayVerification = useMemo(
     () =>
       myChallengeVerifications.some((item: any) =>
-        isSameKstDate(item.performedAt || item.createdAt),
+        !item.isExtra && isSameKstDate(item.performedAt || item.createdAt),
       ),
     [myChallengeVerifications],
   );
 
-  // 혼합 퀘스트형에서 퀘스트별 완료 여부: questType='leader'/'personal' 인증이 오늘 있는지 각각 확인
+  // 혼합 퀘스트형에서 퀘스트별 완료 여부 (isExtra 제외)
   const iDidTodayLeaderQuestVerification = useMemo(
     () =>
       myChallengeVerifications.some(
         (item: any) =>
+          !item.isExtra &&
           isSameKstDate(item.performedAt || item.createdAt) &&
           item.questType === 'leader',
       ),
@@ -313,6 +315,7 @@ export const ChallengeFeedPage = () => {
     () =>
       myChallengeVerifications.some(
         (item: any) =>
+          !item.isExtra &&
           isSameKstDate(item.performedAt || item.createdAt) &&
           item.questType === 'personal',
       ),
