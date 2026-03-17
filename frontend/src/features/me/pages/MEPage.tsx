@@ -266,6 +266,22 @@ export const MEPage = () => {
     return map;
   }, [myVerificationsData]);
 
+  // challengeId + day → verification (non-extra)
+  // progress GSI 지연 보완: progress 엔트리가 없을 때 verifications 테이블로 fallback
+  const verifiedDaysByChallengeMap = useMemo(() => {
+    const map = new Map<string, Map<number, any>>();
+    const items: any[] = myVerificationsData?.verifications || [];
+    for (const v of items) {
+      if (!v.challengeId || v.isExtra) continue;
+      const day = Number(v.day);
+      if (!Number.isFinite(day) || day < 1) continue;
+      if (!map.has(v.challengeId)) map.set(v.challengeId, new Map());
+      const dayMap = map.get(v.challengeId)!;
+      if (!dayMap.has(day)) dayMap.set(day, v);
+    }
+    return map;
+  }, [myVerificationsData]);
+
   // verifications 테이블 기반으로 오늘 1차 인증(non-extra)한 challengeId 세트
   // progress 배열 스탈 데이터(GSI 지연, 혼합형 partial 쓰기 실패) 보완용
   const todayVerifiedChallengeIds = useMemo(() => {
@@ -619,6 +635,17 @@ export const MEPage = () => {
 
                           // 가장 최근 인증된 날 (접힌 상태에서 표시할 행)
                           const lastVerified = getLatestCompletedProgressEntry(progress);
+                          // progress GSI 지연 보완: progress 없을 때 verifications 테이블로 fallback
+                          const fallbackLastVerifiedEntry = (() => {
+                            if (lastVerified) return null;
+                            const dayMap = verifiedDaysByChallengeMap.get(challenge.challengeId);
+                            if (!dayMap || dayMap.size === 0) return null;
+                            let latestDay = 0;
+                            let latestVerif: any = null;
+                            dayMap.forEach((v, d) => { if (d > latestDay) { latestDay = d; latestVerif = v; } });
+                            if (!latestVerif) return null;
+                            return { day: latestDay, entry: { day: latestDay, status: 'success', timestamp: latestVerif.performedAt || latestVerif.createdAt, verificationId: latestVerif.verificationId } };
+                          })();
 
                           return (
                             <motion.div
@@ -646,8 +673,9 @@ export const MEPage = () => {
                               </div>
 
                               {/* 접힌 상태: 최근 인증 날 행 1줄 */}
-                              {!isExpanded && lastVerified && (() => {
-                                const p = lastVerified.entry;
+                              {!isExpanded && (lastVerified || fallbackLastVerifiedEntry) && (() => {
+                                const src = lastVerified || fallbackLastVerifiedEntry!;
+                                const p = src.entry;
                                 const verif = p.verificationId ? verificationMap.get(p.verificationId) : undefined;
                                 const timeStr = formatVerificationTime(p.timestamp);
                                 const note = verif?.todayNote || '';
@@ -656,7 +684,7 @@ export const MEPage = () => {
                                   <div className="flex items-center gap-2.5 pt-1">
                                     <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dotColor}`} />
                                     <p className="text-xs text-gray-500 truncate flex-1 min-w-0">
-                                      <span className="font-semibold text-gray-700">{lastVerified.day}일차</span>
+                                      <span className="font-semibold text-gray-700">{src.day}일차</span>
                                       {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
                                       {isMixedChallenge && (p.leaderQuestDone != null || p.personalQuestDone != null) && (
                                         <span className="text-gray-400"> · 리더 {p.leaderQuestDone ? '✅' : '⬜'} 개인 {p.personalQuestDone ? '✅' : '⬜'}</span>
@@ -673,8 +701,16 @@ export const MEPage = () => {
                                   <p className="text-xs text-primary-500 text-right mb-2">탭하면 피드로 이동 →</p>
                                   {Array.from({ length: durationDays }, (_, i) => {
                                     const day = i + 1;
-                                    const p = getProgressEntryByDay(progress, day);
-                                    const status = resolveVerificationStatusForDay(progress, day, challengeDay);
+                                    let p = getProgressEntryByDay(progress, day);
+                                    let status = resolveVerificationStatusForDay(progress, day, challengeDay);
+                                    // progress GSI 지연 보완: 엔트리 없을 때 verifications 테이블 fallback
+                                    if (!p && (status === 'pending' || status === 'skipped')) {
+                                      const fbVerif = verifiedDaysByChallengeMap.get(challenge.challengeId)?.get(day);
+                                      if (fbVerif) {
+                                        status = 'success';
+                                        p = { day, status: 'success', timestamp: fbVerif.performedAt || fbVerif.createdAt, verificationId: fbVerif.verificationId };
+                                      }
+                                    }
                                     const isPending = status === 'pending';
                                     const verif = p?.verificationId ? verificationMap.get(p.verificationId) : undefined;
                                     const timeStr = formatVerificationTime(p?.timestamp);
