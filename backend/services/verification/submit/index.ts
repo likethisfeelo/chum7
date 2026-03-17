@@ -8,6 +8,7 @@ import {
   UpdateCommand,
   QueryCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -23,6 +24,7 @@ import { grantBadges } from "../../../shared/lib/badge-grant";
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const snsClient = new SNSClient({});
 
 const submitSchema = z.object({
   userChallengeId: z.string().uuid(),
@@ -184,6 +186,143 @@ async function checkIncompleteUsers(
     hasIncompletePeople: incompleteUsers.length > 0,
     incompleteCount: incompleteUsers.length,
   };
+}
+
+const ANIMAL_ALIASES = ["새벽고래", "숲토끼", "별다람쥐", "파도해달", "노을팬더", "하늘사슴"];
+function randomAlias(): string {
+  return ANIMAL_ALIASES[Math.floor(Math.random() * ANIMAL_ALIASES.length)];
+}
+
+async function createAutoCheer(params: {
+  senderId: string;
+  receiverId: string;
+  challengeId: string;
+  verificationId: string;
+  delta: number;
+  senderAlias: string;
+  memberTarget24: string | null;
+  verificationDate: string;
+  memberTimezone: string;
+  nowISO: string;
+}): Promise<void> {
+  if (!process.env.CHEERS_TABLE) return;
+  const {
+    senderId, receiverId, challengeId, verificationId, delta, senderAlias,
+    memberTarget24, verificationDate, memberTimezone, nowISO,
+  } = params;
+
+  if (!memberTarget24) return;
+
+  const memberTargetISO = buildTargetDateTimeISO(verificationDate, memberTarget24, memberTimezone);
+  if (!memberTargetISO) return;
+
+  const memberTargetMs = new Date(memberTargetISO).getTime();
+  const nowMs = new Date(nowISO).getTime();
+  const scheduledMs = memberTargetMs - delta * 60000;
+  const isImmediate = scheduledMs <= nowMs;
+
+  const cheerId = uuidv4();
+  const cheer: Record<string, any> = {
+    cheerId,
+    senderId,
+    receiverId,
+    verificationId,
+    challengeId,
+    cheerType: isImmediate ? "immediate" : "scheduled",
+    message: null,
+    senderDelta: delta,
+    senderAlias,
+    scheduledTime: isImmediate ? null : new Date(scheduledMs).toISOString(),
+    status: isImmediate ? "sent" : "pending",
+    isRead: false,
+    isThanked: false,
+    thankedAt: null,
+    replyMessage: null,
+    repliedAt: null,
+    reactionType: null,
+    reactedAt: null,
+    createdAt: nowISO,
+    sentAt: isImmediate ? nowISO : null,
+  };
+
+  await docClient.send(new PutCommand({
+    TableName: process.env.CHEERS_TABLE!,
+    Item: cheer,
+  }));
+
+  if (isImmediate && process.env.SNS_TOPIC_ARN) {
+    try {
+      await snsClient.send(new PublishCommand({
+        TopicArn: process.env.SNS_TOPIC_ARN!,
+        Message: JSON.stringify({
+          userId: receiverId,
+          notification: {
+            title: "응원이 도착했어요! 💪",
+            body: `${senderAlias}님이 응원을 보냈어요!`,
+            data: { type: "cheer_immediate", timestamp: nowISO },
+          },
+        }),
+      }));
+    } catch (snsErr) {
+      console.error("Auto cheer SNS error (non-fatal):", snsErr);
+    }
+  }
+}
+
+async function autoThankReceivedCheers(
+  userId: string,
+  challengeId: string,
+  nowISO: string,
+): Promise<void> {
+  if (!process.env.CHEERS_TABLE) return;
+
+  const result = await docClient.send(new QueryCommand({
+    TableName: process.env.CHEERS_TABLE!,
+    IndexName: "receiverId-index",
+    KeyConditionExpression: "receiverId = :userId",
+    FilterExpression: "challengeId = :challengeId AND isThanked = :false AND #status = :sent",
+    ExpressionAttributeNames: { "#status": "status" },
+    ExpressionAttributeValues: {
+      ":userId": userId,
+      ":challengeId": challengeId,
+      ":false": false,
+      ":sent": "sent",
+    },
+  }));
+
+  for (const cheer of (result.Items || [])) {
+    try {
+      await docClient.send(new UpdateCommand({
+        TableName: process.env.CHEERS_TABLE!,
+        Key: { cheerId: cheer.cheerId },
+        UpdateExpression: "SET isThanked = :true, thankedAt = :now",
+        ConditionExpression: "isThanked = :false AND receiverId = :userId",
+        ExpressionAttributeValues: {
+          ":true": true,
+          ":false": false,
+          ":userId": userId,
+          ":now": nowISO,
+        },
+      }));
+      if (process.env.SNS_TOPIC_ARN) {
+        await snsClient.send(new PublishCommand({
+          TopicArn: process.env.SNS_TOPIC_ARN!,
+          Message: JSON.stringify({
+            userId: cheer.senderId,
+            notification: {
+              title: "당신의 응원이 힘이 됐어요! ❤️",
+              body: "응원한 분이 목표 시간 전에 인증했어요!",
+              data: { type: "cheer_thanked", timestamp: nowISO },
+            },
+          }),
+        }));
+      }
+    } catch (e: any) {
+      if (e?.name !== "ConditionalCheckFailedException") {
+        console.error("Auto-thank single cheer error:", e);
+      }
+    }
+  }
 }
 
 export const handler = async (
@@ -677,30 +816,47 @@ export const handler = async (
       cheerTicketGranted: false,
     };
 
-    if (isEarlyCompletion) {
+    if (isEarlyCompletion && userChallenge.groupId) {
       try {
-        const incompleteCheck = await checkIncompleteUsers(
-          userChallenge.groupId,
-          input.day,
-        );
+        const membersResult = await docClient.send(new QueryCommand({
+          TableName: process.env.USER_CHALLENGES_TABLE!,
+          IndexName: "groupId-index",
+          KeyConditionExpression: "groupId = :groupId",
+          ExpressionAttributeValues: { ":groupId": userChallenge.groupId },
+        }));
 
-        cheerOpportunity = {
-          ...incompleteCheck,
-          canCheerNow: incompleteCheck.hasIncompletePeople,
-          cheerTicketGranted: !incompleteCheck.hasIncompletePeople,
-        };
+        const incompleteMembers = (membersResult.Items || []).filter((member: any) => {
+          if (member.userId === userId || member.status !== "active") return false;
+          const mp = normalizeProgress(member.progress);
+          const todayEntry = mp.find((p: any) => Number(p.day) === input.day);
+          return !isDayComplete(todayEntry);
+        });
 
-        if (!incompleteCheck.hasIncompletePeople) {
-          await createCheerTicket(
-            userId,
+        const senderAlias = randomAlias();
+        for (const member of incompleteMembers) {
+          const memberTarget24 = member.personalTarget?.time24 || challengeTargetTime24;
+          await createAutoCheer({
+            senderId: userId,
+            receiverId: member.userId,
             challengeId,
             verificationId,
-            delta || 0,
-            "early_completion",
-          );
+            delta: delta || 0,
+            senderAlias,
+            memberTarget24,
+            verificationDate,
+            memberTimezone: member.personalTarget?.timezone || timezone,
+            nowISO,
+          });
         }
+
+        cheerOpportunity = {
+          hasIncompletePeople: incompleteMembers.length > 0,
+          incompleteCount: incompleteMembers.length,
+          canCheerNow: false,
+          cheerTicketGranted: false,
+        };
       } catch (cheerError) {
-        console.error("Early completion cheer ticket error:", cheerError);
+        console.error("Auto cheer creation error:", cheerError);
       }
     }
 
@@ -733,6 +889,14 @@ export const handler = async (
         cheerOpportunity.cheerTicketGranted = true;
       } catch (cheerError) {
         console.error("Complete cheer ticket error:", cheerError);
+      }
+    }
+
+    if (isEarlyCompletion) {
+      try {
+        await autoThankReceivedCheers(userId, challengeId, nowISO);
+      } catch (thankError) {
+        console.error("Auto-thank error (non-fatal):", thankError);
       }
     }
 
