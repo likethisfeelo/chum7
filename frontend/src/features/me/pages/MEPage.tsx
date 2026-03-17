@@ -22,15 +22,6 @@ import toast from 'react-hot-toast';
 
 type METab = 'active' | 'pending' | 'completed';
 
-const DAY_STATUS_COLORS: Record<string, string> = {
-  completed: 'bg-green-500',
-  success:   'bg-green-500',
-  partial:   'bg-amber-400',
-  failed:    'bg-red-300',
-  remedy:    'bg-purple-400',
-  skipped:   'bg-gray-200',
-  pending:   'bg-gray-100 border-2 border-gray-300',
-};
 
 function getChallengeTypeLabel(challenge: any) {
   const type = String(challenge?.challenge?.challengeType || challenge?.challenge?.type || 'leader_personal');
@@ -642,9 +633,6 @@ export const MEPage = () => {
                           const progress = challenge.progress || [];
                           const { durationDays } = getChallengeDisplayMeta(challenge);
                           const challengeDay = getCalendarChallengeDay(challenge);
-                          const isMixedChallenge =
-                            challenge.challenge?.challengeType === 'leader_personal' ||
-                            challenge.challenge?.challengeType === 'mixed';
                           const uid = challenge.userChallengeId;
                           const isExpanded = expandedCards.has(uid);
 
@@ -694,9 +682,7 @@ export const MEPage = () => {
                               {!isExpanded && (lastVerified || fallbackLastVerifiedEntry) && (() => {
                                 const src = lastVerified || fallbackLastVerifiedEntry!;
                                 const p = src.entry;
-                                const verif = p.verificationId ? verificationMap.get(p.verificationId) : undefined;
                                 const timeStr = formatVerificationTime(p.timestamp);
-                                const note = verif?.todayNote || '';
                                 const isSuccessEntry = p.status === 'success';
                                 return (
                                   <div className="flex items-center gap-2.5 pt-1">
