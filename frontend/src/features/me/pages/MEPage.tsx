@@ -159,12 +159,25 @@ function getCalendarChallengeDay(challenge: any): number {
 }
 
 function isTodayVerified(challenge: any): boolean {
-  // Use calendar day, not storedCurrentDay which is incremented to day+1 after verification.
+  const progress = Array.isArray(challenge?.progress) ? challenge.progress : [];
+  const verifiedStatuses = new Set(['success', 'partial', 'completed', 'remedy', 'failed']);
+
+  // Primary: check timestamp field on progress entries (always set by submit Lambda)
+  // This avoids reliance on calendarDay calculation which fails when startDate is missing.
+  const todayKst = new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' });
+  for (const entry of progress) {
+    const s = String(entry?.status || '').toLowerCase();
+    if (!verifiedStatuses.has(s)) continue;
+    if (!entry?.timestamp) continue;
+    const entryKst = new Date(entry.timestamp).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' });
+    if (entryKst === todayKst) return true;
+  }
+
+  // Fallback: calendar day based check (when timestamp is absent)
   const calendarDay = getCalendarChallengeDay(challenge);
-  const target = getProgressEntryByDay(challenge?.progress, calendarDay);
+  const target = getProgressEntryByDay(progress, calendarDay);
   const status = String(target?.status || '').toLowerCase();
-  // 'partial': leader_personal 챌린지에서 한 쪽만 인증한 경우 → 섹션 3에 표시
-  return status === 'success' || status === 'partial' || status === 'completed' || status === 'remedy' || status === 'failed';
+  return verifiedStatuses.has(status);
 }
 
 
