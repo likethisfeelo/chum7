@@ -51,7 +51,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string | undefined;
 
-    if (event.httpMethod === 'GET') {
+    // HTTP API payload format v2 uses requestContext.http.method; v1 uses event.httpMethod
+    const httpMethod = event.httpMethod || (event.requestContext as any)?.http?.method;
+
+    if (httpMethod === 'GET') {
       const params = event.queryStringParameters || {};
       const limit = Math.max(1, Math.min(100, Number(params.limit || '50')));
       const cursor = decodeCursor(params.cursor);

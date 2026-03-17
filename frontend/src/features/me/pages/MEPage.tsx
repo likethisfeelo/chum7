@@ -359,10 +359,8 @@ export const MEPage = () => {
 
   // 섹션1: 오늘 기준 목표 시간이 가장 가까운 미인증 챌린지 → InlineVerificationForm
   const primaryUnverified = unverifiedChallenges[0] ?? null;
-  // 섹션2: 나머지 미인증 챌린지 (섹션1 제외)
-  const otherUnverified = primaryUnverified
-    ? unverifiedChallenges.filter((c: any) => c.userChallengeId !== primaryUnverified.userChallengeId)
-    : unverifiedChallenges;
+  // 섹션2: 전체 미인증 챌린지 (섹션1과 동일 항목 포함)
+  const otherUnverified = unverifiedChallenges;
 
   useEffect(() => {
     if (!isMeDebugEnabled()) return;
