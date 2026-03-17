@@ -34,10 +34,12 @@ export function CommentSection({ postId, hook }: Props) {
           <p className="text-xs text-gray-500">아직 댓글이 없어요.</p>
         ) : (
           state.comments.map((comment) => (
-            <div key={comment.commentId} className="text-xs text-gray-700">
-              <span className="font-medium mr-1">{comment.animalIcon} 익명</span>
-              <span>{comment.content}</span>
-              {comment.isMine && <span className="ml-1 text-primary-700">(내 댓글)</span>}
+            <div key={comment.commentId} className="text-xs text-gray-700 flex items-start gap-1">
+              <span className="font-medium shrink-0">{comment.animalIcon} 익명</span>
+              <span className="flex-1 break-all">{comment.content}</span>
+              {comment.isMine && (
+                <span className="shrink-0 text-primary-700 font-medium">나</span>
+              )}
             </div>
           ))
         )}
@@ -50,7 +52,7 @@ export function CommentSection({ postId, hook }: Props) {
           disabled={state.isFetchingMore}
           className="mt-2 text-xs text-gray-600 underline disabled:opacity-50"
         >
-          {state.isFetchingMore ? '댓글 불러오는 중...' : '댓글 더보기'}
+          {state.isFetchingMore ? '불러오는 중...' : '댓글 더보기'}
         </button>
       )}
 
@@ -65,18 +67,22 @@ export function CommentSection({ postId, hook }: Props) {
             }
           }}
           placeholder="댓글 달기..."
-          className="flex-1 px-2 py-1.5 text-xs rounded-lg border border-gray-200 bg-white"
+          className="flex-1 px-2 py-1.5 text-xs rounded-lg border border-gray-200 bg-white focus:outline-none focus:border-primary-400"
           maxLength={300}
         />
         <button
           type="button"
           onClick={() => { void hook.submit(postId); }}
-          disabled={state.isSubmitting}
-          className="px-2.5 py-1.5 text-xs rounded-lg border border-primary-200 bg-primary-50 text-primary-700 disabled:opacity-50"
+          disabled={state.isSubmitting || !state.input.trim()}
+          className="px-2.5 py-1.5 text-xs rounded-lg border border-primary-200 bg-primary-50 text-primary-700 disabled:opacity-40"
         >
           {state.isSubmitting ? '등록 중...' : '등록'}
         </button>
       </div>
+
+      {state.submitError && (
+        <p className="mt-1.5 text-xs text-red-500">{state.submitError}</p>
+      )}
     </div>
   );
 }

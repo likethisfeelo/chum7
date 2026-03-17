@@ -128,6 +128,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         animalIcon,
         content,
         createdAt: now,
+        isMine: true,
       },
     });
   } catch (error: any) {
