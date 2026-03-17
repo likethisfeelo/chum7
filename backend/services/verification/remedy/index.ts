@@ -184,8 +184,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const certDate = certDateFromIso(nowIso, timezone); // REMEDY 업로드 날짜 기준
 
     const verificationId = uuidv4();
-    const basePoints = Number(originalDayProgress.score || 10);
-    const scoreEarned = remedyScore(basePoints);
+    const basePoints = Number(originalDayProgress.score || 1);
+    const scoreEarned = Math.max(1, remedyScore(basePoints));
 
     const verification = {
       verificationId,

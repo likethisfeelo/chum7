@@ -697,17 +697,13 @@ export const MEPage = () => {
                                 const verif = p.verificationId ? verificationMap.get(p.verificationId) : undefined;
                                 const timeStr = formatVerificationTime(p.timestamp);
                                 const note = verif?.todayNote || '';
-                                const dotColor = (DAY_STATUS_COLORS[p.status] || 'bg-gray-200').split(' ')[0];
+                                const isSuccessEntry = p.status === 'success';
                                 return (
                                   <div className="flex items-center gap-2.5 pt-1">
-                                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dotColor}`} />
-                                    <p className="text-xs text-gray-500 truncate flex-1 min-w-0">
-                                      <span className="font-semibold text-gray-700">{src.day}일차</span>
-                                      {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
-                                      {isMixedChallenge && (p.leaderQuestDone != null || p.personalQuestDone != null) && (
-                                        <span className="text-gray-400"> · 리더 {p.leaderQuestDone ? '✅' : '⬜'} 개인 {p.personalQuestDone ? '✅' : '⬜'}</span>
-                                      )}
-                                      {note && <span className="text-gray-400"> · {note}</span>}
+                                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isSuccessEntry ? 'bg-green-500' : 'bg-gray-200'}`} />
+                                    <p className="text-xs truncate flex-1 min-w-0">
+                                      <span className={`font-semibold ${isSuccessEntry ? 'text-gray-700' : 'text-gray-400'}`}>{src.day}일차</span>
+                                      {isSuccessEntry && timeStr && <span className="text-gray-400"> · {timeStr}</span>}
                                     </p>
                                   </div>
                                 );
@@ -732,34 +728,27 @@ export const MEPage = () => {
                                         p = { day, status: 'success', timestamp: fbVerif.performedAt || fbVerif.createdAt, verificationId: fbVerif.verificationId };
                                       }
                                     }
-                                    const isPending = status === 'pending';
-                                    const verif = p?.verificationId ? verificationMap.get(p.verificationId) : undefined;
-                                    const timeStr = formatVerificationTime(p?.timestamp);
-                                    const note = verif?.todayNote || '';
-                                    const dotColor = (DAY_STATUS_COLORS[status] || 'bg-gray-200').split(' ')[0];
+                                    const isSuccess = status === 'success';
+                                    const timeStr = isSuccess ? formatVerificationTime(p?.timestamp) : null;
                                     const isLastItem = i === durationDays - 1;
                                     return (
                                       <div key={day} className="flex items-start gap-3">
                                         {/* 왼쪽: 점 + 세로선 */}
                                         <div className="flex flex-col items-center flex-shrink-0" style={{ width: 16 }}>
-                                          <div className={`w-2.5 h-2.5 rounded-full mt-1 ${dotColor}`} />
+                                          <div className={`w-2.5 h-2.5 rounded-full mt-1 ${isSuccess ? 'bg-green-500' : 'bg-gray-200'}`} />
                                           {!isLastItem && (
-                                            <div className={`mt-0.5 flex-1 min-h-[22px] ${isPending ? 'border-l border-dashed border-gray-200' : 'w-px bg-gray-200'}`} />
+                                            <div className={`mt-0.5 flex-1 min-h-[22px] ${isSuccess ? 'w-px bg-gray-200' : 'border-l border-dashed border-gray-200'}`} />
                                           )}
                                         </div>
                                         {/* 오른쪽: 텍스트 */}
                                         <div className="flex-1 min-w-0 pb-2.5">
-                                          {isPending ? (
-                                            <p className="text-xs text-gray-300 mt-0.5">{day}일차</p>
-                                          ) : (
+                                          {isSuccess ? (
                                             <p className="text-xs text-gray-500 truncate mt-0.5">
                                               <span className="font-semibold text-gray-700">{day}일차</span>
                                               {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
-                                              {isMixedChallenge && p && (p.leaderQuestDone != null || p.personalQuestDone != null) && (
-                                                <span className="text-gray-400"> · 리더 {p.leaderQuestDone ? '✅' : '⬜'} 개인 {p.personalQuestDone ? '✅' : '⬜'}</span>
-                                              )}
-                                              {note && <span className="text-gray-400"> · {note}</span>}
                                             </p>
+                                          ) : (
+                                            <p className="text-xs text-gray-300 mt-0.5">{day}일차</p>
                                           )}
                                         </div>
                                       </div>

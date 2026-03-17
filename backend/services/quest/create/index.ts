@@ -40,7 +40,7 @@ const createQuestSchema = z.object({
   allowedVerificationTypes: z.array(z.enum(['image', 'video', 'link', 'text'])).min(1).optional(),
   verificationGuide: z.string().min(1).max(500).optional(),       // 제출 방법 안내
   verificationConfig: verificationConfigSchema,
-  rewardPoints: z.number().int().min(0).max(1000).default(10),
+  rewardPoints: z.number().int().min(0).max(1000).default(1),
   rewardBadgeId: z.string().max(50).optional().nullable(),
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional().nullable(),             // null = 기간 무제한
