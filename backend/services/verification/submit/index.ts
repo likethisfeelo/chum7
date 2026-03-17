@@ -845,7 +845,7 @@ export const handler = async (
             memberTarget24,
             verificationDate,
             memberTimezone: member.personalTarget?.timezone || timezone,
-            nowISO,
+            nowISO: nowIso,
           });
         }
 
@@ -894,7 +894,7 @@ export const handler = async (
 
     if (isEarlyCompletion) {
       try {
-        await autoThankReceivedCheers(userId, challengeId, nowISO);
+        await autoThankReceivedCheers(userId, challengeId, nowIso);
       } catch (thankError) {
         console.error("Auto-thank error (non-fatal):", thankError);
       }

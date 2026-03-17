@@ -259,7 +259,7 @@ export const TodayPage = () => {
             <EmptyState icon="📭" title="아직 보낸 응원이 없어요" description="챌린지 피드에서 응원을 보내보세요" />
           ) : (
             <div className="space-y-3">
-              {sentCheers.slice(0, 10).map((cheer: any) => (
+              {sentCheers.map((cheer: any) => (
                 <div key={cheer.cheerId} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                   <p className="text-sm text-gray-700">{cheer.message}</p>
                   <p className="text-xs text-gray-400 mt-1">
