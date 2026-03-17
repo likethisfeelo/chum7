@@ -24,11 +24,12 @@ type METab = 'active' | 'pending' | 'completed';
 
 const DAY_STATUS_COLORS: Record<string, string> = {
   completed: 'bg-green-500',
-  success: 'bg-green-500',
-  failed: 'bg-red-300',
-  remedy: 'bg-purple-400',
-  skipped: 'bg-gray-200',
-  pending: 'bg-gray-100 border-2 border-gray-300',
+  success:   'bg-green-500',
+  partial:   'bg-amber-400',
+  failed:    'bg-red-300',
+  remedy:    'bg-purple-400',
+  skipped:   'bg-gray-200',
+  pending:   'bg-gray-100 border-2 border-gray-300',
 };
 
 function getChallengeTypeLabel(challenge: any) {
@@ -410,6 +411,15 @@ export const MEPage = () => {
   // 섹션2: 전체 미인증 챌린지 (섹션1과 동일 항목 포함)
   const otherUnverified = unverifiedChallenges;
 
+  // 섹션1 완료 배너용: 내일 목표시간 가장 빠른 챌린지
+  const earliestTargetChallenge = useMemo(() => {
+    const withTarget = activeChallenges.filter((c: any) => c.personalTarget);
+    if (withTarget.length === 0) return null;
+    return withTarget.reduce((prev: any, curr: any) =>
+      getPersonalTargetMinutes(curr) < getPersonalTargetMinutes(prev) ? curr : prev
+    );
+  }, [activeChallenges]);
+
   useEffect(() => {
     if (!isMeDebugEnabled()) return;
 
@@ -507,8 +517,8 @@ export const MEPage = () => {
                   <EmptyState icon="🏃" title="진행 중인 챌린지가 없어요" description="챌린지에 참여하고 오늘부터 시작해보세요" />
                 ) : (
                   <>
-                    {/* 섹션 1: 오늘 인증 (가장 가까운 시간대 → InlineVerificationForm) */}
-                    {primaryUnverified && (
+                    {/* 섹션 1: 오늘 인증 or 모두 완료 배너 */}
+                    {primaryUnverified ? (
                       <motion.div
                         initial={{ opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -538,6 +548,19 @@ export const MEPage = () => {
                             void queryClient.invalidateQueries({ queryKey: ['verifications', 'mine-all'] });
                           }}
                         />
+                      </motion.div>
+                    ) : unverifiedChallenges.length === 0 && verifiedTodayChallenges.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-emerald-50 rounded-2xl px-5 py-4 border border-emerald-100 shadow-sm"
+                      >
+                        <p className="font-bold text-emerald-800 text-sm">🎉 오늘 모든 인증 완료!</p>
+                        {earliestTargetChallenge && (
+                          <p className="text-xs text-emerald-700 mt-1">
+                            내일 목표 시간: {formatPersonalTarget(earliestTargetChallenge)}
+                          </p>
+                        )}
                       </motion.div>
                     )}
 
@@ -586,8 +609,11 @@ export const MEPage = () => {
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">인증 완료</p>
                         {verifiedTodayChallenges.map((challenge: any, index: number) => {
                           const progress = challenge.progress || [];
-                          const { durationDays, participatedDays, completionRate } = getChallengeDisplayMeta(challenge);
+                          const { durationDays } = getChallengeDisplayMeta(challenge);
                           const challengeDay = getCalendarChallengeDay(challenge);
+                          const isMixedChallenge =
+                            challenge.challenge?.challengeType === 'leader_personal' ||
+                            challenge.challenge?.challengeType === 'mixed';
                           const uid = challenge.userChallengeId;
                           const isExpanded = expandedCards.has(uid);
 
@@ -610,7 +636,7 @@ export const MEPage = () => {
                                 <span className="text-2xl flex-shrink-0">{challenge.challenge?.badgeIcon || '🎯'}</span>
                                 <div className="flex-1 min-w-0">
                                   <p className="font-semibold text-gray-900 text-sm truncate">{challenge.challenge?.title}</p>
-                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · 경과 Day {challengeDay} / {durationDays} · 참여 {participatedDays}일 · 진행률 {completionRate}%</p>
+                                  <p className="text-xs text-green-600 mt-0.5">✅ 인증 완료 · Day {challengeDay} / {durationDays}</p>
                                 </div>
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                   <span className="text-xl font-bold text-gray-800">{challenge.score || 0}</span>
@@ -632,6 +658,9 @@ export const MEPage = () => {
                                     <p className="text-xs text-gray-500 truncate flex-1 min-w-0">
                                       <span className="font-semibold text-gray-700">{lastVerified.day}일차</span>
                                       {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
+                                      {isMixedChallenge && (p.leaderQuestDone != null || p.personalQuestDone != null) && (
+                                        <span className="text-gray-400"> · 리더 {p.leaderQuestDone ? '✅' : '⬜'} 개인 {p.personalQuestDone ? '✅' : '⬜'}</span>
+                                      )}
                                       {note && <span className="text-gray-400"> · {note}</span>}
                                     </p>
                                   </div>
@@ -669,6 +698,9 @@ export const MEPage = () => {
                                             <p className="text-xs text-gray-500 truncate mt-0.5">
                                               <span className="font-semibold text-gray-700">{day}일차</span>
                                               {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
+                                              {isMixedChallenge && p && (p.leaderQuestDone != null || p.personalQuestDone != null) && (
+                                                <span className="text-gray-400"> · 리더 {p.leaderQuestDone ? '✅' : '⬜'} 개인 {p.personalQuestDone ? '✅' : '⬜'}</span>
+                                              )}
                                               {note && <span className="text-gray-400"> · {note}</span>}
                                             </p>
                                           )}
