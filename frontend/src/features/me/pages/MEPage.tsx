@@ -59,6 +59,14 @@ function getMinutesUntilTarget(challenge: any): number {
   return (targetMinutes - nowMinutes + 24 * 60) % (24 * 60);
 }
 
+// ISO 타임스탬프가 KST 기준으로 오늘인지 확인
+function isSameKstDate(iso: string | undefined | null): boolean {
+  if (!iso) return false;
+  const todayKst = new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' });
+  const targetKst = new Date(iso).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' });
+  return todayKst === targetKst;
+}
+
 // Asia/Seoul 기준 오늘 날짜를 로컬 Date(자정)로 반환
 function getTodayInSeoul(): Date {
   const seoulStr = new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }); // "YYYY-MM-DD"
@@ -226,6 +234,8 @@ export const MEPage = () => {
       return response.data.data;
     },
     refetchInterval: 60 * 1000,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 
   const { data: extraCountData } = useQuery({
@@ -240,10 +250,12 @@ export const MEPage = () => {
   const { data: myVerificationsData } = useQuery({
     queryKey: ['verifications', 'mine-all'],
     queryFn: async () => {
-      const response = await apiClient.get('/verifications?mine=true&isExtra=false&limit=20');
+      const response = await apiClient.get('/verifications?mine=true&isExtra=false&limit=50');
       return response.data.data;
     },
     refetchInterval: 60 * 1000,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 
   const verificationMap = useMemo(() => {
@@ -251,6 +263,19 @@ export const MEPage = () => {
     const map = new Map<string, any>();
     items.forEach((v: any) => map.set(v.verificationId, v));
     return map;
+  }, [myVerificationsData]);
+
+  // verifications 테이블 기반으로 오늘 1차 인증(non-extra)한 challengeId 세트
+  // progress 배열 스탈 데이터(GSI 지연, 혼합형 partial 쓰기 실패) 보완용
+  const todayVerifiedChallengeIds = useMemo(() => {
+    const set = new Set<string>();
+    const items: any[] = myVerificationsData?.verifications || [];
+    for (const v of items) {
+      if (v.challengeId && !v.isExtra && isSameKstDate(v.performedAt || v.createdAt)) {
+        set.add(v.challengeId);
+      }
+    }
+    return set;
   }, [myVerificationsData]);
 
   const personalQuestTargetChallenges = useMemo(
@@ -335,14 +360,22 @@ export const MEPage = () => {
   );
 
   const completedChallenges = useMemo(
-    () => (completedChallengesData?.challenges || []).filter((challenge: any) => resolveChallengeBucket(challenge) === 'completed'),
+    () => (completedChallengesData?.challenges || []).filter((challenge: any) => {
+      const bucket = resolveChallengeBucket(challenge);
+      return bucket === 'completed' || bucket === 'gave_up';
+    }),
     [completedChallengesData],
   );
+
+  // progress 배열 + verifications 테이블 이중 확인으로 오늘 인증 여부 판단
+  // (혼합형 partial 쓰기 실패 또는 GSI 일관성 지연 시에도 정확하게 동작)
+  const isVerifiedToday = (c: any) =>
+    isTodayVerified(c) || todayVerifiedChallengeIds.has(c.challengeId);
 
   // 미인증 챌린지: personalTarget 시간 기준으로 현재와 가장 가까운 순 정렬
   const unverifiedChallenges = useMemo(
     () => activeChallenges
-      .filter((c: any) => !isTodayVerified(c) && getChallengeDay(c) <= resolveChallengeDurationDays(c))
+      .filter((c: any) => !isVerifiedToday(c) && getChallengeDay(c) <= resolveChallengeDurationDays(c))
       .sort((a: any, b: any) => {
         const minuteDiff = getMinutesUntilTarget(a) - getMinutesUntilTarget(b);
         if (minuteDiff !== 0) return minuteDiff;
@@ -353,13 +386,15 @@ export const MEPage = () => {
 
         return String(a.userChallengeId || '').localeCompare(String(b.userChallengeId || ''));
       }),
-    [activeChallenges],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeChallenges, todayVerifiedChallengeIds],
   );
 
   // 오늘 인증 완료 챌린지
   const verifiedTodayChallenges = useMemo(
-    () => activeChallenges.filter((c: any) => isTodayVerified(c) || isChallengePeriodCompleted(c)),
-    [activeChallenges],
+    () => activeChallenges.filter((c: any) => isVerifiedToday(c) || isChallengePeriodCompleted(c)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeChallenges, todayVerifiedChallengeIds],
   );
 
   const TAB_CONFIG: { key: METab; label: string; count: number }[] = [
@@ -499,6 +534,8 @@ export const MEPage = () => {
                           allowedVerificationTypes={primaryUnverified.challenge?.allowedVerificationTypes}
                           onSuccess={() => {
                             void queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
+                            void queryClient.invalidateQueries({ queryKey: ['my-challenges-completed', 'all'] });
+                            void queryClient.invalidateQueries({ queryKey: ['verifications', 'mine-all'] });
                           }}
                         />
                       </motion.div>
@@ -792,32 +829,39 @@ export const MEPage = () => {
             {activeTab === 'completed' && (
               <div className="space-y-3">
                 {completedChallenges.length === 0 ? (
-                  <EmptyState icon="🏆" title="완료한 챌린지가 없어요" description="챌린지를 완주하면 여기에 표시돼요" />
-                ) : completedChallenges.map((challenge: any) => (
-                  <div
-                    key={challenge.userChallengeId || challenge.challengeId}
-                    className={`bg-white rounded-2xl p-5 border space-y-3 ${isFailedChallengeState(challenge) ? 'border-gray-300' : 'border-emerald-200'}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl">{challenge.challenge?.badgeIcon || challenge.badgeIcon || '🏆'}</span>
-                      <div>
-                        <p className="font-semibold text-gray-900">{challenge.challenge?.title || challenge.title}</p>
-                        {isFailedChallengeState(challenge) ? (
-                          <p className="text-xs text-gray-600 mt-0.5">종료(미달성)</p>
-                        ) : (
-                          <p className="text-xs text-emerald-700 mt-0.5">완주 완료 🎉</p>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
-                      className="w-full py-2.5 rounded-xl border border-primary-200 text-primary-700 bg-primary-50 text-sm font-medium hover:bg-primary-100 transition-colors"
+                  <EmptyState icon="🏆" title="완료한 챌린지가 없어요" description="챌린지를 완주하거나 중도 포기하면 여기에 표시돼요" />
+                ) : completedChallenges.map((challenge: any) => {
+                  const bucket = resolveChallengeBucket(challenge);
+                  const isGaveUp = bucket === 'gave_up';
+                  const borderColor = isGaveUp ? 'border-gray-200' : isFailedChallengeState(challenge) ? 'border-gray-300' : 'border-emerald-200';
+                  return (
+                    <div
+                      key={challenge.userChallengeId || challenge.challengeId}
+                      className={`bg-white rounded-2xl p-5 border space-y-3 ${borderColor}`}
                     >
-                      챌린지 피드 →
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl">{challenge.challenge?.badgeIcon || challenge.badgeIcon || '🏆'}</span>
+                        <div>
+                          <p className="font-semibold text-gray-900">{challenge.challenge?.title || challenge.title}</p>
+                          {isGaveUp ? (
+                            <p className="text-xs text-gray-500 mt-0.5">중도 포기 🏳️</p>
+                          ) : isFailedChallengeState(challenge) ? (
+                            <p className="text-xs text-gray-600 mt-0.5">종료(미달성)</p>
+                          ) : (
+                            <p className="text-xs text-emerald-700 mt-0.5">완주 완료 🎉</p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                        className="w-full py-2.5 rounded-xl border border-primary-200 text-primary-700 bg-primary-50 text-sm font-medium hover:bg-primary-100 transition-colors"
+                      >
+                        챌린지 피드 →
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </>
