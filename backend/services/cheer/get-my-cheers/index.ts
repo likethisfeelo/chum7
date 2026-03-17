@@ -60,13 +60,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let result;
 
     if (type === 'received') {
-      // 받은 응원
+      // 받은 응원 (발송 완료된 것만)
       result = await docClient.send(new QueryCommand({
         TableName: process.env.CHEERS_TABLE!,
         IndexName: 'receiverId-index',
         KeyConditionExpression: 'receiverId = :receiverId',
+        FilterExpression: '#st = :statusSent',
+        ExpressionAttributeNames: {
+          '#st': 'status'
+        },
         ExpressionAttributeValues: {
-          ':receiverId': userId
+          ':receiverId': userId,
+          ':statusSent': 'sent'
         },
         ScanIndexForward: false, // 최신순
         Limit: limit

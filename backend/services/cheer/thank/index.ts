@@ -326,8 +326,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }));
 
-    // 5. 발신자에게 알림 발송
-    await sendThankNotification(cheer.senderId, '🐰'); // TODO: 실제 아이콘
+    // 5. 수신자 아이콘 조회 후 발신자에게 알림 발송
+    let receiverIcon = '🐰';
+    try {
+      const userResult = await docClient.send(new GetCommand({
+        TableName: process.env.USERS_TABLE!,
+        Key: { userId },
+        ProjectionExpression: 'animalIcon'
+      }));
+      if (userResult.Item?.animalIcon) {
+        receiverIcon = userResult.Item.animalIcon;
+      }
+    } catch {
+      // fallback to default icon
+    }
+    await sendThankNotification(cheer.senderId, receiverIcon);
 
     return response(200, {
       success: true,
