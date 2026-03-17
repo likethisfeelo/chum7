@@ -78,11 +78,13 @@ new VerificationStack(app, `chme-${stage}-verification`, {
   uploadsBucket: coreStack.uploadsBucket,
   challengesTable: coreStack.challengesTable,
   userCheerTicketsTable: coreStack.userCheerTicketsTable,
+  cheersTable: coreStack.cheersTable,
   badgesTable: coreStack.badgesTable,
   plazaPostsTable: coreStack.plazaPostsTable,
   plazaCommentsTable: coreStack.plazaCommentsTable,
   plazaReactionsTable: coreStack.plazaReactionsTable,
   plazaRecommendationsTable: coreStack.plazaRecommendationsTable,
+  snsTopic: coreStack.snsTopic,
   plazaConvertFailureAlertEmail,
 });
 

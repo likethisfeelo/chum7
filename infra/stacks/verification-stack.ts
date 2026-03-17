@@ -25,12 +25,14 @@ interface VerificationStackProps extends StackProps {
   userChallengesTable: Table;
   challengesTable: Table;
   userCheerTicketsTable: Table;
+  cheersTable: Table;
   badgesTable: Table;
   plazaPostsTable: Table;
   plazaCommentsTable: Table;
   plazaReactionsTable: Table;
   plazaRecommendationsTable: Table;
   uploadsBucket: IBucket;
+  snsTopic: sns.Topic;
   plazaConvertFailureAlertEmail?: string;
 }
 
@@ -46,12 +48,14 @@ export class VerificationStack extends Stack {
       userChallengesTable,
       challengesTable,
       userCheerTicketsTable,
+      cheersTable,
       badgesTable,
       plazaPostsTable,
       plazaCommentsTable,
       plazaReactionsTable,
       plazaRecommendationsTable,
       uploadsBucket,
+      snsTopic,
       plazaConvertFailureAlertEmail,
     } = props;
 
@@ -61,12 +65,14 @@ export class VerificationStack extends Stack {
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
       CHALLENGES_TABLE: challengesTable.tableName,
       USER_CHEER_TICKETS_TABLE: userCheerTicketsTable.tableName,
+      CHEERS_TABLE: cheersTable.tableName,
       BADGES_TABLE: badgesTable.tableName,
       PLAZA_POSTS_TABLE: plazaPostsTable.tableName,
       PLAZA_COMMENTS_TABLE: plazaCommentsTable.tableName,
       PLAZA_REACTIONS_TABLE: plazaReactionsTable.tableName,
       PLAZA_RECOMMENDATIONS_TABLE: plazaRecommendationsTable.tableName,
       UPLOADS_BUCKET: uploadsBucket.bucketName,
+      SNS_TOPIC_ARN: snsTopic.topicArn,
     };
 
     const commonProps = {
@@ -95,7 +101,9 @@ export class VerificationStack extends Stack {
     userChallengesTable.grantReadWriteData(submitFn);
     challengesTable.grantReadData(submitFn);
     userCheerTicketsTable.grantReadWriteData(submitFn);
+    cheersTable.grantReadWriteData(submitFn);
     badgesTable.grantReadWriteData(submitFn);
+    snsTopic.grantPublish(submitFn);
     apiGateway.addRoutes({
       path: "/verifications",
       methods: [HttpMethod.POST],
