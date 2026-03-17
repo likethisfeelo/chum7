@@ -266,8 +266,23 @@ export const MEPage = () => {
     return map;
   }, [myVerificationsData]);
 
-  // challengeId + day → verification (non-extra)
+  // (challengeId|userChallengeId) + day → verification (non-extra)
   // progress GSI 지연 보완: progress 엔트리가 없을 때 verifications 테이블로 fallback
+  // userChallengeId를 우선 키로 사용 (challengeId 누락 케이스 대응)
+  const verifiedDaysByUCIdMap = useMemo(() => {
+    const map = new Map<string, Map<number, any>>();
+    const items: any[] = myVerificationsData?.verifications || [];
+    for (const v of items) {
+      if (!v.userChallengeId || v.isExtra) continue;
+      const day = Number(v.day);
+      if (!Number.isFinite(day) || day < 1) continue;
+      if (!map.has(v.userChallengeId)) map.set(v.userChallengeId, new Map());
+      const dayMap = map.get(v.userChallengeId)!;
+      if (!dayMap.has(day)) dayMap.set(day, v);
+    }
+    return map;
+  }, [myVerificationsData]);
+
   const verifiedDaysByChallengeMap = useMemo(() => {
     const map = new Map<string, Map<number, any>>();
     const items: any[] = myVerificationsData?.verifications || [];
@@ -638,7 +653,10 @@ export const MEPage = () => {
                           // progress GSI 지연 보완: progress 없을 때 verifications 테이블로 fallback
                           const fallbackLastVerifiedEntry = (() => {
                             if (lastVerified) return null;
-                            const dayMap = verifiedDaysByChallengeMap.get(challenge.challengeId);
+                            // userChallengeId 우선, challengeId fallback
+                            const dayMap =
+                              verifiedDaysByUCIdMap.get(challenge.userChallengeId) ||
+                              verifiedDaysByChallengeMap.get(challenge.challengeId);
                             if (!dayMap || dayMap.size === 0) return null;
                             let latestDay = 0;
                             let latestVerif: any = null;
@@ -704,8 +722,11 @@ export const MEPage = () => {
                                     let p = getProgressEntryByDay(progress, day);
                                     let status = resolveVerificationStatusForDay(progress, day, challengeDay);
                                     // progress GSI 지연 보완: 엔트리 없을 때 verifications 테이블 fallback
+                                    // userChallengeId 우선, challengeId fallback
                                     if (!p && (status === 'pending' || status === 'skipped')) {
-                                      const fbVerif = verifiedDaysByChallengeMap.get(challenge.challengeId)?.get(day);
+                                      const fbVerif =
+                                        verifiedDaysByUCIdMap.get(challenge.userChallengeId)?.get(day) ||
+                                        verifiedDaysByChallengeMap.get(challenge.challengeId)?.get(day);
                                       if (fbVerif) {
                                         status = 'success';
                                         p = { day, status: 'success', timestamp: fbVerif.performedAt || fbVerif.createdAt, verificationId: fbVerif.verificationId };
