@@ -662,6 +662,7 @@ export const ChallengeFeedPage = () => {
                                 queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
                                 queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
                                 queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] });
+                                queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
                               }}
                               onQuestSuccess={() => queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] })}
                             />
@@ -700,6 +701,7 @@ export const ChallengeFeedPage = () => {
                               onSuccess={() => {
                                 queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
                                 queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
+                                queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
                               }}
                               onQuestSuccess={() => queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] })}
                             />
@@ -729,6 +731,7 @@ export const ChallengeFeedPage = () => {
                 onSuccess={() => {
                   queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
                   queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
+                  queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
                 }}
                 openVideoPickerSignal={openVideoPickerSignal}
               />
