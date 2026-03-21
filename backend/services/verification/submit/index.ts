@@ -600,7 +600,7 @@ export const handler = async (
 
     const isEarlyCompletion = !isExtra && (delta || 0) > 0;
     // 온타임 포함(delta >= 0)이면 감사 자동 발송 (응원 발송은 delta > 0 유지)
-    const isThanksEligible = !isExtra && (delta || 0) >= 0;
+    const isThanksEligible = !isExtra && delta !== null && delta >= 0;
 
     const verificationId = uuidv4();
 
