@@ -9,15 +9,17 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 type CheerRecord = {
   cheerId: string;
   cheerType?: string;
-  message?: string;
+  message?: string | null;
   senderDelta?: number;
-  scheduledTime?: string;
+  senderAlias?: string | null;
+  scheduledTime?: string | null;
   status?: string;
   isRead?: boolean;
   readAt?: string | null;
   isThanked?: boolean;
+  thankedAt?: string | null;
   createdAt?: string;
-  sentAt?: string;
+  sentAt?: string | null;
   replyMessage?: string | null;
   repliedAt?: string | null;
   reactionType?: string | null;
@@ -60,21 +62,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let result;
 
     if (type === 'received') {
-      // 받은 응원 (발송 완료된 것만)
-      // 주의: DynamoDB Limit은 FilterExpression 적용 전에 동작하므로
-      // Limit + FilterExpression 조합 시 pending 응원이 많으면 0건 반환될 수 있음.
-      // 전체 조회 후 애플리케이션 레이어에서 limit을 적용한다.
+      // 받은 응원 (sent + pending 모두 포함)
+      // status='sent' 필터를 제거: 예약 응원(pending)도 수신자에게 표시해야 함.
+      // 프론트에서 status 뱃지로 구분 처리.
       result = await docClient.send(new QueryCommand({
         TableName: process.env.CHEERS_TABLE!,
         IndexName: 'receiverId-index',
         KeyConditionExpression: 'receiverId = :receiverId',
-        FilterExpression: '#st = :statusSent',
-        ExpressionAttributeNames: {
-          '#st': 'status'
-        },
         ExpressionAttributeValues: {
           ':receiverId': userId,
-          ':statusSent': 'sent'
         },
         ScanIndexForward: false, // 최신순
       }));
@@ -157,19 +153,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         cheers: cheers.map(cheer => ({
           cheerId: cheer.cheerId,
           type: cheer.cheerType,
-          message: cheer.message,
-          delta: cheer.senderDelta,
-          scheduledTime: cheer.scheduledTime,
+          message: cheer.message ?? null,
+          senderAlias: cheer.senderAlias ?? null,
+          delta: cheer.senderDelta ?? null,
+          scheduledTime: cheer.scheduledTime ?? null,
           status: cheer.status,
           isRead: cheer.isRead,
           readAt: cheer.readAt ?? null,
-          isThanked: cheer.isThanked,
+          isThanked: cheer.isThanked ?? false,
+          thankedAt: cheer.thankedAt ?? null,
           replyMessage: cheer.replyMessage ?? null,
           repliedAt: cheer.repliedAt ?? null,
           reactionType: cheer.reactionType ?? null,
           reactedAt: cheer.reactedAt ?? null,
           createdAt: cheer.createdAt,
-          sentAt: cheer.sentAt
+          sentAt: cheer.sentAt ?? null,
         })),
         stats
       }
