@@ -75,6 +75,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           ':receiverId': userId,
         },
         ScanIndexForward: false, // 최신순
+        Limit: limit,
       }));
     } else {
       // 보낸 응원 (filter 없으므로 Limit 그대로 사용 가능)
@@ -91,8 +92,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const allItems = (result.Items || []) as CheerRecord[];
-    // received는 애플리케이션 레이어에서 limit 적용
-    const cheers = type === 'received' ? allItems.slice(0, limit) : allItems;
+    const cheers = allItems;
 
     // 받은 응원 조회 시 unread를 읽음 처리
     if (type === 'received') {

@@ -895,19 +895,17 @@ export const handler = async (
       }
     }
 
-    let newBadges: string[] = [];
-    try {
-      newBadges = await grantBadges({
-        userId,
-        challengeId,
-        verificationId,
-        day: input.day,
-        consecutiveDays,
-        isRemedy: false,
-      });
-    } catch (badgeError) {
+    const newBadges = await grantBadges({
+      userId,
+      challengeId,
+      verificationId,
+      day: input.day,
+      consecutiveDays,
+      isRemedy: false,
+    }).catch((badgeError: any) => {
       console.error("Badge grant error (non-fatal):", badgeError);
-    }
+      return [] as string[];
+    });
 
     const message = isEarlyCompletion
       ? `Day ${input.day} 완료! 목표보다 ${delta}분 일찍!`

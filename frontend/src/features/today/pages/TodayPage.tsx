@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 import { motion } from 'framer-motion';
 import { Loading } from '@/shared/components/Loading';
@@ -12,11 +13,31 @@ import {
   isVerificationDayCompleted,
 } from '@/features/challenge/utils/challengeLifecycle';
 
+type StatsPeriod = 'day' | 'week' | 'month';
+
+const PERIOD_LABEL: Record<StatsPeriod, string> = {
+  day: '오늘',
+  week: '이번 주',
+  month: '이번 달',
+};
+
+function toWeekInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const jan1 = new Date(year, 0, 1);
+  const weekNum = Math.ceil(((date.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
+  return `${year}-W${String(weekNum).padStart(2, '0')}`;
+}
+
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
 
 export const TodayPage = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [replyDraftByCheer, setReplyDraftByCheer] = useState<Record<string, string>>({});
+  const [statsPeriod, setStatsPeriod] = useState<StatsPeriod>('day');
+  const [statsDateValue, setStatsDateValue] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [statsWeekValue, setStatsWeekValue] = useState(toWeekInputValue(new Date()));
+  const [statsMonthValue, setStatsMonthValue] = useState(format(new Date(), 'yyyy-MM'));
 
   const { data: cheers, isLoading: cheersLoading } = useQuery({
     queryKey: ['my-cheers', 'received'],
@@ -95,8 +116,18 @@ export const TodayPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
-        <h1 className="text-2xl font-bold text-gray-900">오늘 📊</h1>
-        <p className="text-sm text-gray-500">📅 {today}</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">오늘 📊</h1>
+            <p className="text-sm text-gray-500">📅 {today}</p>
+          </div>
+          <button
+            onClick={() => navigate('/admin/docs')}
+            className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded"
+          >
+            운영 Docs
+          </button>
+        </div>
       </div>
 
       <div className="p-6 space-y-6">
@@ -241,10 +272,50 @@ export const TodayPage = () => {
           )}
         </section>
 
-        {/* 보낸 응원 — 이미 발송된 것만 */}
+        {/* 응원 통계 기간 필터 */}
+        <section className="bg-white border border-gray-100 rounded-2xl p-4 space-y-3">
+          <h2 className="text-base font-bold text-gray-900">응원 통계</h2>
+          <div className="flex gap-2">
+            {(['day', 'week', 'month'] as StatsPeriod[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setStatsPeriod(p)}
+                className={`px-3 py-1 text-xs rounded-full border ${statsPeriod === p ? 'bg-primary-500 text-white border-primary-500' : 'bg-white text-gray-600 border-gray-200'}`}
+              >
+                {PERIOD_LABEL[p]}
+              </button>
+            ))}
+          </div>
+          {statsPeriod === 'day' && (
+            <input
+              type="date"
+              value={statsDateValue}
+              onChange={(e) => setStatsDateValue(e.target.value)}
+              className="border rounded-xl px-3 py-1.5 text-xs"
+            />
+          )}
+          {statsPeriod === 'week' && (
+            <input
+              type="week"
+              value={statsWeekValue}
+              onChange={(e) => setStatsWeekValue(e.target.value)}
+              className="border rounded-xl px-3 py-1.5 text-xs"
+            />
+          )}
+          {statsPeriod === 'month' && (
+            <input
+              type="month"
+              value={statsMonthValue}
+              onChange={(e) => setStatsMonthValue(e.target.value)}
+              className="border rounded-xl px-3 py-1.5 text-xs"
+            />
+          )}
+        </section>
+
+        {/* 내가 보낸 응원 ✉️ — 이미 발송된 것만 */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-900">📤 보낸 응원</h2>
+            <h2 className="text-lg font-bold text-gray-900">내가 보낸 응원 ✉️</h2>
           </div>
           {sentCheersLoading ? (
             <Loading />
