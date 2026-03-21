@@ -61,6 +61,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     if (type === 'received') {
       // 받은 응원 (발송 완료된 것만)
+      // 주의: DynamoDB Limit은 FilterExpression 적용 전에 동작하므로
+      // Limit + FilterExpression 조합 시 pending 응원이 많으면 0건 반환될 수 있음.
+      // 전체 조회 후 애플리케이션 레이어에서 limit을 적용한다.
       result = await docClient.send(new QueryCommand({
         TableName: process.env.CHEERS_TABLE!,
         IndexName: 'receiverId-index',
@@ -74,10 +77,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           ':statusSent': 'sent'
         },
         ScanIndexForward: false, // 최신순
-        Limit: limit
       }));
     } else {
-      // 보낸 응원
+      // 보낸 응원 (filter 없으므로 Limit 그대로 사용 가능)
       result = await docClient.send(new QueryCommand({
         TableName: process.env.CHEERS_TABLE!,
         IndexName: 'senderId-index',
@@ -90,7 +92,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }));
     }
 
-    const cheers = (result.Items || []) as CheerRecord[];
+    const allItems = (result.Items || []) as CheerRecord[];
+    // received는 애플리케이션 레이어에서 limit 적용
+    const cheers = type === 'received' ? allItems.slice(0, limit) : allItems;
 
     // 받은 응원 조회 시 unread를 읽음 처리
     if (type === 'received') {
