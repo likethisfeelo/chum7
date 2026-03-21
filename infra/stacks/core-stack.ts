@@ -100,7 +100,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-users`,
       partitionKey: { name: 'userId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
       stream: StreamViewType.NEW_AND_OLD_IMAGES,
     });
@@ -114,7 +114,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-challenges`,
       partitionKey: { name: 'challengeId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     // [MIGRATION STAGE 1] 기존 category-index를 일시적으로 유지 (Stage 2에서 삭제 예정)
@@ -144,7 +144,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-user-challenges`,
       partitionKey: { name: 'userChallengeId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
       stream: StreamViewType.NEW_AND_OLD_IMAGES,
     });
@@ -171,7 +171,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-verifications`,
       partitionKey: { name: 'verificationId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
       stream: StreamViewType.NEW_AND_OLD_IMAGES,
     });
@@ -198,7 +198,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-cheers`,
       partitionKey: { name: 'cheerId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     this.cheersTable.addGlobalSecondaryIndex({
@@ -225,7 +225,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-cheer-dead-letters`,
       partitionKey: { name: 'cheerId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
       timeToLiveAttribute: 'ttl',
     });
@@ -241,7 +241,7 @@ export class CoreStack extends Stack {
       partitionKey: { name: 'badgeId', type: AttributeType.STRING },
       sortKey: { name: 'userId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     this.badgesTable.addGlobalSecondaryIndex({
@@ -256,7 +256,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-quests`,
       partitionKey: { name: 'questId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     // GSI: 챌린지별 퀘스트 목록
@@ -281,7 +281,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-quest-submissions`,
       partitionKey: { name: 'submissionId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
       stream: StreamViewType.NEW_AND_OLD_IMAGES,
     });
@@ -318,7 +318,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-active-quest-submissions`,
       partitionKey: { name: 'activeSubmissionId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     // GSI: 퀘스트별 현재 pending/approved 현황 (관리자 대시보드용)
@@ -334,7 +334,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-personal-quest-proposals`,
       partitionKey: { name: 'proposalId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     this.personalQuestProposalsTable.addGlobalSecondaryIndex({
@@ -354,7 +354,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-notifications`,
       partitionKey: { name: 'notificationId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     this.notificationsTable.addGlobalSecondaryIndex({
@@ -369,7 +369,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-bulletin-posts`,
       partitionKey: { name: 'postId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     // GSI: challengePhaseKey = `${challengeId}#${phase}` 로 게시판 피드 조회
@@ -391,7 +391,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-bulletin-comments`,
       partitionKey: { name: 'commentId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     // GSI: 포스트별 댓글 목록
@@ -407,7 +407,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-bulletin-likes`,
       partitionKey: { name: 'likeId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     // GSI: 포스트별 좋아요 수 집계
@@ -424,7 +424,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-challenge-boards`,
       partitionKey: { name: 'challengeId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
 
@@ -432,7 +432,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-challenge-comments`,
       partitionKey: { name: 'commentId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     this.challengeCommentsTable.addGlobalSecondaryIndex({
@@ -446,7 +446,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-challenge-previews`,
       partitionKey: { name: 'challengeId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
 
@@ -454,7 +454,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-payout-audit-logs`,
       partitionKey: { name: 'auditLogId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     this.payoutAuditLogsTable.addGlobalSecondaryIndex({
@@ -468,7 +468,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-plaza-posts`,
       partitionKey: { name: 'plazaPostId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     this.plazaPostsTable.addGlobalSecondaryIndex({
@@ -494,7 +494,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-plaza-comments`,
       partitionKey: { name: 'commentId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     this.plazaCommentsTable.addGlobalSecondaryIndex({
@@ -508,7 +508,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-plaza-reactions`,
       partitionKey: { name: 'reactionId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     this.plazaReactionsTable.addGlobalSecondaryIndex({
@@ -528,7 +528,7 @@ export class CoreStack extends Stack {
       tableName: `chme-${stage}-plaza-recommendations`,
       partitionKey: { name: 'recommendationId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
       timeToLiveAttribute: 'expiresAtTimestamp',
     });
@@ -544,7 +544,7 @@ export class CoreStack extends Stack {
       partitionKey: { name: 'slug', type: AttributeType.STRING },
       sortKey: { name: 'bannerId', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
+      pointInTimeRecovery: isProd,
       removalPolicy,
     });
     this.categoryBannersTable.addGlobalSecondaryIndex({
