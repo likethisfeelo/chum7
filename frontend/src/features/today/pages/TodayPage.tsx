@@ -10,7 +10,6 @@ import toast from 'react-hot-toast';
 import {
   getChallengeDisplayMeta,
   isVerificationDayCompleted,
-  resolveChallengeBucket,
 } from '@/features/challenge/utils/challengeLifecycle';
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
@@ -89,8 +88,10 @@ export const TodayPage = () => {
   const today = format(new Date(), 'yyyy.MM.dd (E)', { locale: ko });
   const unreadCheers = cheers?.filter((c: any) => !c.isRead) || [];
 
+  // 백엔드가 이미 ?status=active 로 필터했으므로 추가 필터 불필요.
+  // resolveChallengeBucket 이중 필터 시 lifecycle='recruiting' 챌린지가 누락되는 버그 수정.
   const activeChallenges = useMemo(
-    () => (myChallengesData?.challenges || []).filter((c: any) => resolveChallengeBucket(c) === 'active'),
+    () => myChallengesData?.challenges || [],
     [myChallengesData]
   );
 
