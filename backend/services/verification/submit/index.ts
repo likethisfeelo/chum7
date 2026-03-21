@@ -260,23 +260,23 @@ async function autoThankReceivedCheers(
   userId: string,
   challengeId: string,
   nowISO: string,
-): Promise<void> {
-  if (!process.env.CHEERS_TABLE) return;
+): Promise<{ count: number; cheerIds: string[] }> {
+  if (!process.env.CHEERS_TABLE) return { count: 0, cheerIds: [] };
 
+  // status 필터 제거: pending(알람 미발송) 포함 모든 미감사 응원에 즉시 감사 처리
   const result = await docClient.send(new QueryCommand({
     TableName: process.env.CHEERS_TABLE!,
     IndexName: "receiverId-index",
     KeyConditionExpression: "receiverId = :userId",
-    FilterExpression: "challengeId = :challengeId AND isThanked = :false AND #status = :sent",
-    ExpressionAttributeNames: { "#status": "status" },
+    FilterExpression: "challengeId = :challengeId AND isThanked = :false",
     ExpressionAttributeValues: {
       ":userId": userId,
       ":challengeId": challengeId,
       ":false": false,
-      ":sent": "sent",
     },
   }));
 
+  const thankedCheerIds: string[] = [];
   for (const cheer of (result.Items || [])) {
     try {
       await docClient.send(new UpdateCommand({
@@ -291,6 +291,7 @@ async function autoThankReceivedCheers(
           ":now": nowISO,
         },
       }));
+      thankedCheerIds.push(cheer.cheerId);
       if (process.env.SNS_TOPIC_ARN) {
         await snsClient.send(new PublishCommand({
           TopicArn: process.env.SNS_TOPIC_ARN!,
@@ -298,7 +299,7 @@ async function autoThankReceivedCheers(
             userId: cheer.senderId,
             notification: {
               title: "당신의 응원이 힘이 됐어요! ❤️",
-              body: "응원한 분이 목표 시간 전에 인증했어요!",
+              body: "응원한 분이 목표 시간 내에 인증했어요!",
               data: { type: "cheer_thanked", timestamp: nowISO },
             },
           }),
@@ -310,6 +311,7 @@ async function autoThankReceivedCheers(
       }
     }
   }
+  return { count: thankedCheerIds.length, cheerIds: thankedCheerIds };
 }
 
 export const handler = async (
@@ -597,6 +599,8 @@ export const handler = async (
     }
 
     const isEarlyCompletion = !isExtra && (delta || 0) > 0;
+    // 온타임 포함(delta >= 0)이면 감사 자동 발송 (응원 발송은 delta > 0 유지)
+    const isThanksEligible = !isExtra && (delta || 0) >= 0;
 
     const verificationId = uuidv4();
 
@@ -879,9 +883,13 @@ export const handler = async (
       }
     }
 
-    if (isEarlyCompletion) {
+    let autoThankedCount = 0;
+    let autoThankedCheerIds: string[] = [];
+    if (isThanksEligible) {
       try {
-        await autoThankReceivedCheers(userId, challengeId, nowIso);
+        const thankResult = await autoThankReceivedCheers(userId, challengeId, nowIso);
+        autoThankedCount = thankResult.count;
+        autoThankedCheerIds = thankResult.cheerIds;
       } catch (thankError) {
         console.error("Auto-thank error (non-fatal):", thankError);
       }
@@ -924,6 +932,8 @@ export const handler = async (
         consecutiveDays,
         cheerOpportunity,
         newBadges,
+        autoThankedCount,
+        autoThankedCheerIds,
       },
     });
   } catch (error: any) {

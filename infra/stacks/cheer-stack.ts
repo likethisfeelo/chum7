@@ -314,6 +314,23 @@ export class CheerStack extends Stack {
       authorizer,
     });
 
+    // 10-1. Thank Message (인증 완료 후 감사 메시지 추가) (protected)
+    const thankMessageFn = new NodejsFunction(this, 'ThankMessageFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-cheer-thank-message`,
+      entry: path.join(__dirname, '../../backend/services/cheer/thank-message/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheersTable.grantReadWriteData(thankMessageFn);
+    snsTopic.grantPublish(thankMessageFn);
+    apiGateway.addRoutes({
+      path: '/cheers/thank-message',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('ThankMessageIntegration', thankMessageFn),
+      authorizer,
+    });
+
     // 10. Cheer stats materializer (scheduled batch)
     const statsMaterializerFn = new NodejsFunction(this, 'CheerStatsMaterializerFn', {
       ...commonProps,

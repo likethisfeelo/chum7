@@ -10,6 +10,7 @@ import { resolveMediaUrl } from "@/shared/utils/mediaUrl";
 import { InlineVerificationForm } from "@/features/verification/components/InlineVerificationForm";
 import { BottomSheet } from "@/shared/components/BottomSheet";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
+import { ThankYouMessageModal } from "@/features/cheer/components/ThankYouMessageModal";
 import {
   getRemedyType,
   getRemainingRemedyCount,
@@ -199,6 +200,17 @@ export const ChallengeFeedPage = () => {
   });
   const [showGiveUpConfirm, setShowGiveUpConfirm] = useState(false);
   const [openVideoPickerSignal, setOpenVideoPickerSignal] = useState(0);
+  const [thankModal, setThankModal] = useState<{ count: number; cheerIds: string[] } | null>(null);
+
+  const handleVerificationSuccess = (data: any) => {
+    const count: number = data?.data?.autoThankedCount ?? 0;
+    const cheerIds: string[] = data?.data?.autoThankedCheerIds ?? [];
+    if (count > 0) setThankModal({ count, cheerIds });
+    queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
+    queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
+    queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] });
+    queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
+  };
 
   // 퀘스트 분류 및 정렬
   const leaderQuests: any[] = useMemo(
@@ -735,12 +747,9 @@ export const ChallengeFeedPage = () => {
                             <InlineVerificationForm
                               userChallenge={userChallenge}
                               quest={q}
-                              onSuccess={() => {
+                              onSuccess={(data) => {
                                 setExpandedLeaderQuestId(null);
-                                queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
-                                queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
-                                queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] });
-                                queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
+                                handleVerificationSuccess(data);
                               }}
                               onQuestSuccess={() => queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] })}
                             />
@@ -779,11 +788,7 @@ export const ChallengeFeedPage = () => {
                               userChallenge={userChallenge}
                               quest={personalQuest}
                               defaultExpanded
-                              onSuccess={() => {
-                                queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
-                                queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
-                                queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
-                              }}
+                              onSuccess={handleVerificationSuccess}
                               onQuestSuccess={() => queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] })}
                             />
                           </div>
@@ -812,11 +817,7 @@ export const ChallengeFeedPage = () => {
                 <InlineVerificationForm
                   userChallenge={userChallenge}
                   allowedVerificationTypes={challengeData?.allowedVerificationTypes}
-                  onSuccess={() => {
-                    queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
-                    queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
-                    queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
-                  }}
+                  onSuccess={handleVerificationSuccess}
                   openVideoPickerSignal={openVideoPickerSignal}
                 />
               </section>
@@ -1023,6 +1024,14 @@ export const ChallengeFeedPage = () => {
           </button>
         </div>
       </div>
+
+      {/* 감사 메시지 팝업 */}
+      <ThankYouMessageModal
+        isOpen={thankModal !== null}
+        autoThankedCount={thankModal?.count ?? 0}
+        autoThankedCheerIds={thankModal?.cheerIds ?? []}
+        onClose={() => setThankModal(null)}
+      />
     </div>
   );
 };
