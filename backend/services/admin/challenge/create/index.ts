@@ -45,10 +45,12 @@ const createChallengeSchema = z.object({
     allowExtraVisibilityToggle: z.boolean().default(true),
   }).default({}),
   defaultRemedyPolicy: z.object({
-    type: z.enum(['strict', 'limited', 'open']).default('open'),
-    maxRemedyDays: z.number().int().min(1).max(2).nullable().default(null),
-    allowBulk: z.boolean().nullable().default(null),
-  }).default({ type: 'open', maxRemedyDays: null, allowBulk: null }),
+    // anytime: 언제든 지난 빈날 채우기 가능 (규칙 1)
+    // last_day: 마지막 날(Day durationDays)에만 보완 가능, maxRemedyDays 설정 (규칙 2)
+    // disabled: 보완 불가 (규칙 3)
+    type: z.enum(['anytime', 'last_day', 'disabled']).default('anytime'),
+    maxRemedyDays: z.number().int().min(1).max(30).nullable().default(null), // last_day 전용
+  }).default({ type: 'anytime', maxRemedyDays: null }),
   personalQuestEnabled: z.boolean().default(false),
   personalQuestAutoApprove: z.boolean().default(false),
   requireStartConfirmation: z.boolean().default(false),
@@ -133,6 +135,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const body = JSON.parse(event.body || '{}');
     const input = createChallengeSchema.parse(body);
 
+    // last_day 정책: maxRemedyDays는 durationDays - 1을 초과할 수 없음
+    const rp = input.defaultRemedyPolicy;
+    if (rp.type === 'last_day' && rp.maxRemedyDays !== null && rp.maxRemedyDays > input.durationDays - 1) {
+      return response(400, {
+        error: 'INVALID_MAX_REMEDY_DAYS',
+        message: `최대 보완 횟수는 챌린지 기간 - 1(${input.durationDays - 1})을 초과할 수 없습니다`,
+      });
+    }
+
     // Timeline 순서 검증
     const recruitingStart = new Date(input.recruitingStartAt);
     const recruitingEnd = new Date(input.recruitingEndAt);
@@ -183,7 +194,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       maxParticipants: input.maxParticipants ?? null,
       challengeType: input.challengeType,
       layerPolicy: normalizedLayerPolicy,
-      defaultRemedyPolicy: input.defaultRemedyPolicy,
+      defaultRemedyPolicy: {
+        type: input.defaultRemedyPolicy.type,
+        maxRemedyDays: input.defaultRemedyPolicy.type === 'last_day' ? input.defaultRemedyPolicy.maxRemedyDays : null,
+      },
       personalQuestEnabled: resolvePersonalQuestEnabled(input.challengeType),
       personalQuestAutoApprove: input.personalQuestAutoApprove,
       requireStartConfirmation: input.requireStartConfirmation,

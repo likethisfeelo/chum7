@@ -150,8 +150,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         }
       : null;
 
-    const remedyPolicy = challenge.defaultRemedyPolicy || { type: 'open', maxRemedyDays: null, allowBulk: null };
     const proposalDeadline = getProposalDeadline(challenge.challengeStartAt);
+
+    // last_day 정책: 마지막 날(durationDays)이 보완 전용 → 정규 인증 day = durationDays - 1
+    // anytime / disabled: 전체 durationDays가 정규 인증 day
+    const remedyPolicyType = challenge.defaultRemedyPolicy?.type ?? 'anytime';
+    const totalDays = challenge.durationDays ?? 7;
+    const regularDays = remedyPolicyType === 'last_day' ? Math.max(totalDays - 1, 1) : totalDays;
 
     const userChallenge = {
       userChallengeId,
@@ -161,7 +166,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       phase: 'preparing',         // preparing → active (챌린지 시작일에 lifecycle-manager가 전환)
       status: requiresApproval ? 'pending' : 'active',
       currentDay: 0,
-      progress: Array.from({ length: challenge.durationDays ?? 7 }, (_, i) => ({
+      progress: Array.from({ length: regularDays }, (_, i) => ({
         day: i + 1,
         status: null,
       })),
@@ -176,7 +181,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       refundStatus: 'none',
       refundLockedAt: challenge.challengeStartAt ?? null,
       consecutiveDays: 0,
-      remedyPolicy,
       createdAt: now,
       updatedAt: now,
     };
