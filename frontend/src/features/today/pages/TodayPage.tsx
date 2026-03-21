@@ -166,85 +166,106 @@ export const TodayPage = () => {
             />
           ) : (
             <div className="space-y-3">
-              {cheers.map((cheer: any, index: number) => (
-                <motion.div
-                  key={cheer.cheerId}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className={`bg-white rounded-2xl p-5 shadow-sm border ${!cheer.isRead ? 'border-primary-200' : 'border-gray-100'}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 flex-1">
-                      <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center text-xl flex-shrink-0">
-                        💖
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-900 mb-1">익명의 응원자</p>
-                        <p className="text-gray-700 text-sm leading-relaxed">{cheer.message}</p>
-                        <p className="text-xs text-gray-400 mt-2">
-                          {format(new Date(cheer.createdAt || cheer.sentAt), 'MM/dd HH:mm', { locale: ko })}
-                        </p>
-
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {cheer.reactionType ? (
-                            <span className="px-2 py-1 text-xs rounded-lg bg-emerald-50 text-emerald-700">리액션 {cheer.reactionType}</span>
-                          ) : REACTION_OPTIONS.map((emoji) => (
-                            <button
-                              key={emoji}
-                              onClick={() => reactionMutation.mutate({ cheerId: cheer.cheerId, reactionType: emoji })}
-                              className="px-2 py-1 text-xs rounded-lg bg-gray-100 hover:bg-gray-200"
-                              disabled={reactionMutation.isPending}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
+              {cheers.map((cheer: any, index: number) => {
+                const isPending = cheer.status === 'pending';
+                const senderName = cheer.senderAlias || '익명의 응원자';
+                const displayMessage = cheer.message
+                  || (cheer.delta ? `${cheer.delta}분 일찍 인증하고 응원을 보냈어요 💪` : '응원을 보냈어요 💪');
+                return (
+                  <motion.div
+                    key={cheer.cheerId}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className={`bg-white rounded-2xl p-5 shadow-sm border ${isPending ? 'border-amber-200 opacity-80' : !cheer.isRead ? 'border-primary-200' : 'border-gray-100'}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 flex-1">
+                        <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center text-xl flex-shrink-0">
+                          💖
                         </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-semibold text-gray-900">{senderName}</p>
+                            {isPending ? (
+                              <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-50 text-amber-600 rounded-md">예약됨</span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-600 rounded-md">도착</span>
+                            )}
+                          </div>
+                          <p className="text-gray-700 text-sm leading-relaxed">{displayMessage}</p>
+                          <p className="text-xs text-gray-400 mt-2">
+                            {isPending && cheer.scheduledTime
+                              ? `${format(new Date(cheer.scheduledTime), 'MM/dd HH:mm', { locale: ko })} 도착 예정`
+                              : format(new Date(cheer.sentAt || cheer.createdAt), 'MM/dd HH:mm', { locale: ko })}
+                          </p>
 
-                        <div className="mt-2">
-                          {cheer.replyMessage ? (
-                            <div className="space-y-1">
-                              <p className="text-xs text-indigo-700 bg-indigo-50 rounded-xl p-2">답장: {cheer.replyMessage}</p>
-                              <p className="text-[11px] text-gray-500">답장은 1회 작성 정책으로 수정/삭제할 수 없어요.</p>
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              <p className="text-[11px] text-gray-500 mb-1">답장은 1회 작성 정책이며 전송 후 수정/삭제할 수 없어요.</p>
-                              <div className="flex gap-2">
-                                <input
-                                  value={replyDraftByCheer[cheer.cheerId] ?? ''}
-                                  onChange={(e) => setReplyDraftByCheer((prev) => ({ ...prev, [cheer.cheerId]: e.target.value }))}
-                                  placeholder="응원에 답장 남기기"
-                                  className="flex-1 border rounded-xl px-3 py-2 text-xs"
-                                />
-                                <button
-                                  onClick={() => replyMutation.mutate({ cheerId: cheer.cheerId, message: (replyDraftByCheer[cheer.cheerId] ?? '').trim() })}
-                                  className="px-3 py-2 bg-indigo-50 text-indigo-600 text-xs font-semibold rounded-xl"
-                                  disabled={replyMutation.isPending || !(replyDraftByCheer[cheer.cheerId] ?? '').trim()}
-                                >
-                                  답장
-                                </button>
+                          {!isPending && (
+                            <>
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                {cheer.reactionType ? (
+                                  <span className="px-2 py-1 text-xs rounded-lg bg-emerald-50 text-emerald-700">리액션 {cheer.reactionType}</span>
+                                ) : REACTION_OPTIONS.map((emoji) => (
+                                  <button
+                                    key={emoji}
+                                    onClick={() => reactionMutation.mutate({ cheerId: cheer.cheerId, reactionType: emoji })}
+                                    className="px-2 py-1 text-xs rounded-lg bg-gray-100 hover:bg-gray-200"
+                                    disabled={reactionMutation.isPending}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
                               </div>
-                            </div>
+
+                              <div className="mt-2">
+                                {cheer.replyMessage ? (
+                                  <div className="space-y-1">
+                                    <p className="text-xs text-indigo-700 bg-indigo-50 rounded-xl p-2">답장: {cheer.replyMessage}</p>
+                                    <p className="text-[11px] text-gray-500">답장은 1회 작성 정책으로 수정/삭제할 수 없어요.</p>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-1">
+                                    <p className="text-[11px] text-gray-500 mb-1">답장은 1회 작성 정책이며 전송 후 수정/삭제할 수 없어요.</p>
+                                    <div className="flex gap-2">
+                                      <input
+                                        value={replyDraftByCheer[cheer.cheerId] ?? ''}
+                                        onChange={(e) => setReplyDraftByCheer((prev) => ({ ...prev, [cheer.cheerId]: e.target.value }))}
+                                        placeholder="응원에 답장 남기기"
+                                        className="flex-1 border rounded-xl px-3 py-2 text-xs"
+                                      />
+                                      <button
+                                        onClick={() => replyMutation.mutate({ cheerId: cheer.cheerId, message: (replyDraftByCheer[cheer.cheerId] ?? '').trim() })}
+                                        className="px-3 py-2 bg-indigo-50 text-indigo-600 text-xs font-semibold rounded-xl"
+                                        disabled={replyMutation.isPending || !(replyDraftByCheer[cheer.cheerId] ?? '').trim()}
+                                      >
+                                        답장
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </>
                           )}
                         </div>
                       </div>
+                      {!isPending && (
+                        !cheer.isThanked ? (
+                          <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => thankMutation.mutate(cheer.cheerId)}
+                            disabled={thankMutation.isPending}
+                            className="flex-shrink-0 px-3 py-2 bg-primary-50 text-primary-600 text-xs font-semibold rounded-xl hover:bg-primary-100 transition-colors disabled:opacity-50"
+                          >
+                            감사 💝
+                          </motion.button>
+                        ) : (
+                          <span className="flex-shrink-0 px-3 py-2 bg-gray-50 text-gray-400 text-xs rounded-xl">감사 완료</span>
+                        )
+                      )}
                     </div>
-                    {!cheer.isThanked ? (
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => thankMutation.mutate(cheer.cheerId)}
-                        disabled={thankMutation.isPending}
-                        className="flex-shrink-0 px-3 py-2 bg-primary-50 text-primary-600 text-xs font-semibold rounded-xl hover:bg-primary-100 transition-colors disabled:opacity-50"
-                      >
-                        감사 💝
-                      </motion.button>
-                    ) : (
-                      <span className="flex-shrink-0 px-3 py-2 bg-gray-50 text-gray-400 text-xs rounded-xl">감사 완료</span>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </section>
@@ -257,29 +278,51 @@ export const TodayPage = () => {
           {sentCheersLoading ? (
             <Loading />
           ) : !sentCheers || sentCheers.length === 0 ? (
-            <EmptyState icon="📭" title="아직 보낸 응원이 없어요" description="챌린지 피드에서 응원을 보내보세요" />
+            <EmptyState icon="📭" title="아직 보낸 응원이 없어요" description="목표 시간보다 일찍 인증하면 자동 응원이 발송돼요" />
           ) : (
             <div className="space-y-3">
-              {sentCheers.map((cheer: any) => (
-                <div key={cheer.cheerId} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                  <p className="text-sm text-gray-700">{cheer.message}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {format(new Date(cheer.createdAt || cheer.sentAt), 'MM/dd HH:mm', { locale: ko })}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                    {cheer.replyMessage ? (
-                      <span className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700">답장 도착</span>
-                    ) : (
-                      <span className="px-2 py-1 rounded-lg bg-gray-100 text-gray-600">답장 대기</span>
+              {sentCheers.map((cheer: any) => {
+                const isPending = cheer.status === 'pending';
+                const displayMessage = cheer.message
+                  || (cheer.delta ? `${cheer.delta}분 일찍 인증해서 보낸 자동 응원` : '자동 응원');
+                return (
+                  <div key={cheer.cheerId} className={`bg-white rounded-2xl p-4 shadow-sm border ${isPending ? 'border-amber-100' : 'border-gray-100'}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm text-gray-700 flex-1">{displayMessage}</p>
+                      {/* 감사 수신 여부 — 핵심 기록 */}
+                      {cheer.isThanked ? (
+                        <span className="flex-shrink-0 px-2 py-1 text-xs font-semibold bg-rose-50 text-rose-500 rounded-lg">감사받음 ❤️</span>
+                      ) : isPending ? (
+                        <span className="flex-shrink-0 px-2 py-1 text-xs font-semibold bg-amber-50 text-amber-500 rounded-lg">예약됨 ⏰</span>
+                      ) : (
+                        <span className="flex-shrink-0 px-2 py-1 text-xs bg-gray-100 text-gray-500 rounded-lg">감사 대기</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {isPending && cheer.scheduledTime
+                        ? `${format(new Date(cheer.scheduledTime), 'MM/dd HH:mm', { locale: ko })} 발송 예정`
+                        : format(new Date(cheer.sentAt || cheer.createdAt), 'MM/dd HH:mm', { locale: ko })}
+                    </p>
+                    {cheer.isThanked && cheer.thankedAt && (
+                      <p className="text-xs text-rose-400 mt-0.5">
+                        {format(new Date(cheer.thankedAt), 'MM/dd HH:mm', { locale: ko })} 인증 완료로 감사 수신
+                      </p>
                     )}
-                    {cheer.reactionType ? (
-                      <span className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">리액션 {cheer.reactionType}</span>
-                    ) : (
-                      <span className="px-2 py-1 rounded-lg bg-gray-100 text-gray-600">리액션 대기</span>
-                    )}
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                      {cheer.replyMessage ? (
+                        <span className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700">답장 도착</span>
+                      ) : !isPending ? (
+                        <span className="px-2 py-1 rounded-lg bg-gray-100 text-gray-600">답장 대기</span>
+                      ) : null}
+                      {cheer.reactionType ? (
+                        <span className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">리액션 {cheer.reactionType}</span>
+                      ) : !isPending ? (
+                        <span className="px-2 py-1 rounded-lg bg-gray-100 text-gray-600">리액션 대기</span>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
