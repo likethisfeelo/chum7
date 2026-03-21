@@ -11,13 +11,12 @@ type CheerRecord = {
   cheerType?: string;
   message?: string | null;
   senderDelta?: number;
-  senderAlias?: string | null;
   scheduledTime?: string | null;
   status?: string;
   isRead?: boolean;
   readAt?: string | null;
-  isThanked?: boolean;
-  thankedAt?: string | null;
+  isThankScoreGranted?: boolean;
+  thankScoreGrantedAt?: string | null;
   thankMessage?: string | null;
   thankMessageAt?: string | null;
   createdAt?: string;
@@ -75,6 +74,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           ':receiverId': userId,
         },
         ScanIndexForward: false, // 최신순
+        Limit: limit,
       }));
     } else {
       // 보낸 응원 (filter 없으므로 Limit 그대로 사용 가능)
@@ -91,8 +91,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const allItems = (result.Items || []) as CheerRecord[];
-    // received는 애플리케이션 레이어에서 limit 적용
-    const cheers = type === 'received' ? allItems.slice(0, limit) : allItems;
+    const cheers = allItems;
 
     // 받은 응원 조회 시 unread를 읽음 처리
     if (type === 'received') {
@@ -145,7 +144,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       total: cheers.length,
       immediate: cheers.filter(c => c.cheerType === 'immediate').length,
       scheduled: cheers.filter(c => c.cheerType === 'scheduled').length,
-      thanked: cheers.filter(c => c.isThanked).length,
+      thankScoreGranted: cheers.filter(c => c.isThankScoreGranted).length,
       unread: cheers.filter(c => !c.isRead).length
     };
 
@@ -156,20 +155,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           cheerId: cheer.cheerId,
           type: cheer.cheerType,
           message: cheer.message ?? null,
-          senderAlias: cheer.senderAlias ?? null,
           delta: cheer.senderDelta ?? null,
           scheduledTime: cheer.scheduledTime ?? null,
           status: cheer.status,
           isRead: cheer.isRead,
           readAt: cheer.readAt ?? null,
-          isThanked: cheer.isThanked ?? false,
-          thankedAt: cheer.thankedAt ?? null,
+          isThankScoreGranted: cheer.isThankScoreGranted ?? false,
+          thankScoreGrantedAt: cheer.thankScoreGrantedAt ?? null,
           thankMessage: cheer.thankMessage ?? null,
           thankMessageAt: cheer.thankMessageAt ?? null,
           replyMessage: cheer.replyMessage ?? null,
           repliedAt: cheer.repliedAt ?? null,
-          reactionType: cheer.reactionType ?? null,
-          reactedAt: cheer.reactedAt ?? null,
           createdAt: cheer.createdAt,
           sentAt: cheer.sentAt ?? null,
         })),

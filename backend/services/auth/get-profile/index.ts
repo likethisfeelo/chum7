@@ -1,7 +1,7 @@
 // backend/services/auth/get-profile/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -43,45 +43,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const user = result.Item;
 
-    const fallbackCheerTickets = Number(user.cheerTickets || 0);
-    let availableCheerTickets = Number.isFinite(fallbackCheerTickets)
-      ? Math.max(0, Math.floor(fallbackCheerTickets))
-      : 0;
-    if (process.env.USER_CHEER_TICKETS_TABLE) {
-      try {
-        let lastEvaluatedKey: Record<string, any> | undefined = undefined;
-        let totalCount = 0;
-
-        do {
-          const ticketResult = await docClient.send(new QueryCommand({
-            TableName: process.env.USER_CHEER_TICKETS_TABLE,
-            IndexName: 'userId-status-index',
-            KeyConditionExpression: 'userId = :userId AND #status = :status',
-            ExpressionAttributeNames: {
-              '#status': 'status'
-            },
-            ExpressionAttributeValues: {
-              ':userId': userId,
-              ':status': 'available'
-            },
-            Select: 'COUNT',
-            ExclusiveStartKey: lastEvaluatedKey
-          }));
-
-          const pageCount = Number(ticketResult.Count || 0);
-          totalCount += Number.isFinite(pageCount) ? Math.max(0, Math.floor(pageCount)) : 0;
-          lastEvaluatedKey = ticketResult.LastEvaluatedKey;
-        } while (lastEvaluatedKey);
-
-        availableCheerTickets = totalCount;
-      } catch (ticketCountError) {
-        console.error('Failed to compute ticket count from USER_CHEER_TICKETS_TABLE, fallback to user.cheerTickets', {
-          userId,
-          ticketCountError
-        });
-      }
-    }
-
     return response(200, {
       success: true,
       data: {
@@ -93,7 +54,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         level: user.level,
         exp: user.exp,
         animalIcon: user.animalIcon,
-        cheerTickets: availableCheerTickets,
         stats: user.stats,
         createdAt: user.createdAt
       }

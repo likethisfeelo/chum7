@@ -51,7 +51,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
 
     const items = batchResult.Responses?.[process.env.CHEERS_TABLE!] ?? [];
-    const validCheers = items.filter((item: any) => item.receiverId === userId && item.isThanked === true);
+    const validCheers = items.filter((item: any) => item.receiverId === userId && item.isThankScoreGranted === true);
 
     if (validCheers.length === 0) {
       return response(404, { error: 'NO_VALID_CHEERS', message: '업데이트할 수 있는 응원이 없습니다' });
@@ -65,7 +65,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         TableName: process.env.CHEERS_TABLE!,
         Key: { cheerId: cheer.cheerId },
         UpdateExpression: 'SET thankMessage = :message, thankMessageAt = :now',
-        ConditionExpression: 'receiverId = :userId AND isThanked = :true',
+        ConditionExpression: 'receiverId = :userId AND isThankScoreGranted = :true',
         ExpressionAttributeValues: {
           ':message': message,
           ':now': nowISO,

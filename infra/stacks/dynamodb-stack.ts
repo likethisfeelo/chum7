@@ -19,7 +19,6 @@ export class DynamoDBStack extends Stack {
   public readonly userChallengesTable: dynamodb.Table;
   public readonly verificationsTable: dynamodb.Table;
   public readonly cheersTable: dynamodb.Table;
-  public readonly userCheerTicketsTable: dynamodb.Table;
   public readonly categoryBannersTable: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: DynamoDBStackProps) {
@@ -276,50 +275,7 @@ export class DynamoDBStack extends Stack {
       projectionType: dynamodb.ProjectionType.ALL
     });
 
-    // ==========================================
-    // 6. UserCheerTickets 테이블 (응원권)
-    // ==========================================
-    this.userCheerTicketsTable = new dynamodb.Table(this, 'UserCheerTicketsTable', {
-      tableName: `chme-${stage}-user-cheer-tickets`,
-      partitionKey: { 
-        name: 'ticketId', 
-        type: dynamodb.AttributeType.STRING 
-      },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: stage === 'prod',
-      removalPolicy: stage === 'prod'
-        ? RemovalPolicy.RETAIN
-        : RemovalPolicy.DESTROY,
-      timeToLiveAttribute: 'expiresAtTimestamp' // 자동 삭제
-    });
-
-    // GSI: userId로 사용자의 응원권 조회
-    this.userCheerTicketsTable.addGlobalSecondaryIndex({
-      indexName: 'userId-status-index',
-      partitionKey: { 
-        name: 'userId', 
-        type: dynamodb.AttributeType.STRING 
-      },
-      sortKey: {
-        name: 'status',
-        type: dynamodb.AttributeType.STRING // 'available', 'used', 'expired'
-      },
-      projectionType: dynamodb.ProjectionType.ALL
-    });
-
-    // GSI: 만료 예정 응원권 조회
-    this.userCheerTicketsTable.addGlobalSecondaryIndex({
-      indexName: 'status-expires-index',
-      partitionKey: { 
-        name: 'status', 
-        type: dynamodb.AttributeType.STRING
-      },
-      sortKey: {
-        name: 'expiresAt',
-        type: dynamodb.AttributeType.STRING
-      },
-      projectionType: dynamodb.ProjectionType.ALL
-    });
+    // (removed: UserCheerTickets 테이블 — 티켓제 폐지, 점수제로 대체)
 
     // ==========================================
     // 7. CategoryBanners 테이블
@@ -373,11 +329,6 @@ export class DynamoDBStack extends Stack {
     new CfnOutput(this, 'CheersTableName', {
       value: this.cheersTable.tableName,
       exportName: `chme-${stage}-cheers-table-name`
-    });
-
-    new CfnOutput(this, 'UserCheerTicketsTableName', {
-      value: this.userCheerTicketsTable.tableName,
-      exportName: `chme-${stage}-user-cheer-tickets-table-name`
     });
 
     new CfnOutput(this, 'CategoryBannersTableName', {

@@ -22,7 +22,6 @@ interface CheerStackProps extends StackProps {
   authorizer: HttpJwtAuthorizer;
   cheersTable: Table;
   cheerDeadLettersTable: Table;
-  userCheerTicketsTable: Table;
   userChallengesTable: Table;
   usersTable: Table;
   challengesTable: Table;
@@ -34,12 +33,11 @@ export class CheerStack extends Stack {
   constructor(scope: Construct, id: string, props: CheerStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, authorizer, cheersTable, cheerDeadLettersTable, userCheerTicketsTable, userChallengesTable, usersTable, challengesTable, snsTopic, eventBus } = props;
+    const { stage, apiGateway, authorizer, cheersTable, cheerDeadLettersTable, userChallengesTable, usersTable, challengesTable, snsTopic, eventBus } = props;
 
     const commonEnv = {
       STAGE: stage,
       CHEERS_TABLE: cheersTable.tableName,
-      USER_CHEER_TICKETS_TABLE: userCheerTicketsTable.tableName,
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
       USERS_TABLE: usersTable.tableName,
       CHALLENGES_TABLE: challengesTable.tableName,
@@ -111,43 +109,7 @@ export class CheerStack extends Stack {
     };
 
 
-    // 1. Send Immediate Cheer
-    const sendImmediateFn = new NodejsFunction(this, 'SendImmediateFn', {
-      ...commonProps,
-      functionName: `chme-${stage}-cheer-send-immediate`,
-      entry: path.join(__dirname, '../../backend/services/cheer/send-immediate/index.ts'),
-      handler: 'handler',
-      environment: commonEnv,
-    });
-    cheersTable.grantReadWriteData(sendImmediateFn);
-    userCheerTicketsTable.grantReadWriteData(sendImmediateFn);
-    snsTopic.grantPublish(sendImmediateFn);
-    apiGateway.addRoutes({
-      path: '/cheer/send-immediate',
-      methods: [HttpMethod.POST],
-      integration: new HttpLambdaIntegration('SendImmediateIntegration', sendImmediateFn),
-      authorizer,
-    });
-
-    // 2. Use Ticket (예약 응원 생성) (protected)
-    const useTicketFn = new NodejsFunction(this, 'UseTicketFn', {
-      ...commonProps,
-      functionName: `chme-${stage}-cheer-use-ticket`,
-      entry: path.join(__dirname, '../../backend/services/cheer/use-ticket/index.ts'),
-      handler: 'handler',
-      environment: commonEnv,
-    });
-    cheersTable.grantReadWriteData(useTicketFn);
-    userCheerTicketsTable.grantReadWriteData(useTicketFn);
-    eventBus.grantPutEventsTo(useTicketFn);
-    apiGateway.addRoutes({
-      path: '/cheer/use-ticket',
-      methods: [HttpMethod.POST],
-      integration: new HttpLambdaIntegration('UseTicketIntegration', useTicketFn),
-      authorizer,
-    });
-
-    // 3. Send Scheduled (EventBridge 트리거 - API 없음)
+    // 1. Send Scheduled (EventBridge 트리거 - API 없음)
     const sendScheduledFn = new NodejsFunction(this, 'SendScheduledFn', {
       ...commonProps,
       functionName: `chme-${stage}-cheer-send-scheduled`,
@@ -166,49 +128,7 @@ export class CheerStack extends Stack {
       targets: [new LambdaFunction(sendScheduledFn)],
     });
 
-    // 4. Get Cheer Targets
-    const getTargetsFn = new NodejsFunction(this, 'GetTargetsFn', {
-      ...commonProps,
-      functionName: `chme-${stage}-cheer-get-targets`,
-      entry: path.join(__dirname, '../../backend/services/cheer/get-targets/index.ts'),
-      handler: 'handler',
-      environment: commonEnv,
-    });
-    userChallengesTable.grantReadData(getTargetsFn);
-    usersTable.grantReadData(getTargetsFn);
-    challengesTable.grantReadData(getTargetsFn);
-    cheersTable.grantReadData(getTargetsFn);
-    apiGateway.addRoutes({
-      path: '/cheer/targets',
-      methods: [HttpMethod.GET],
-      integration: new HttpLambdaIntegration('GetTargetsIntegration', getTargetsFn),
-      authorizer,
-    });
-
-    // 5. Thank (감사 반응) (protected)
-    const thankFn = new NodejsFunction(this, 'ThankFn', {
-      ...commonProps,
-      functionName: `chme-${stage}-cheer-thank`,
-      entry: path.join(__dirname, '../../backend/services/cheer/thank/index.ts'),
-      handler: 'handler',
-      environment: commonEnv,
-    });
-    cheersTable.grantReadWriteData(thankFn);
-    apiGateway.addRoutes({
-      path: '/cheers/{cheerId}/thank',
-      methods: [HttpMethod.POST],
-      integration: new HttpLambdaIntegration('ThankByIdIntegration', thankFn),
-      authorizer,
-    });
-    // 하위 호환: 구형 클라이언트(body cheerId) 지원
-    apiGateway.addRoutes({
-      path: '/cheer/thank',
-      methods: [HttpMethod.POST],
-      integration: new HttpLambdaIntegration('ThankLegacyIntegration', thankFn),
-      authorizer,
-    });
-
-    // 6. Get My Cheers (받은 응원 조회) (protected)
+    // 2. Get My Cheers (받은 응원 조회) (protected)
     const getMyCheers = new NodejsFunction(this, 'GetMyCheers', {
       ...commonProps,
       functionName: `chme-${stage}-cheer-get-my-cheers`,
@@ -224,40 +144,7 @@ export class CheerStack extends Stack {
       authorizer,
     });
 
-    // 7. Get Scheduled Cheers (예약된 응원 조회) (protected)
-    const getScheduledFn = new NodejsFunction(this, 'GetScheduledFn', {
-      ...commonProps,
-      functionName: `chme-${stage}-cheer-get-scheduled`,
-      entry: path.join(__dirname, '../../backend/services/cheer/get-scheduled/index.ts'),
-      handler: 'handler',
-      environment: commonEnv,
-    });
-    cheersTable.grantReadData(getScheduledFn);
-    apiGateway.addRoutes({
-      path: '/cheer/scheduled',
-      methods: [HttpMethod.GET],
-      integration: new HttpLambdaIntegration('GetScheduledIntegration', getScheduledFn),
-      authorizer,
-    });
-
-
-    // 7-1. Cancel Scheduled Cheer (protected)
-    const cancelScheduledFn = new NodejsFunction(this, 'CancelScheduledFn', {
-      ...commonProps,
-      functionName: `chme-${stage}-cheer-cancel-scheduled`,
-      entry: path.join(__dirname, '../../backend/services/cheer/cancel-scheduled/index.ts'),
-      handler: 'handler',
-      environment: commonEnv,
-    });
-    cheersTable.grantReadWriteData(cancelScheduledFn);
-    apiGateway.addRoutes({
-      path: '/cheer/scheduled/{cheerId}',
-      methods: [HttpMethod.DELETE],
-      integration: new HttpLambdaIntegration('CancelScheduledIntegration', cancelScheduledFn),
-      authorizer,
-    });
-
-    // 8. Cheer Stats (기간/챌린지 필터) (protected)
+    // 3. Cheer Stats (기간/챌린지 필터) (protected)
     const cheerStatsFn = new NodejsFunction(this, 'CheerStatsFn', {
       ...commonProps,
       functionName: `chme-${stage}-cheer-stats`,
