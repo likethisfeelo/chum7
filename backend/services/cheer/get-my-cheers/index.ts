@@ -18,6 +18,8 @@ type CheerRecord = {
   readAt?: string | null;
   isThanked?: boolean;
   thankedAt?: string | null;
+  thankMessage?: string | null;
+  thankMessageAt?: string | null;
   createdAt?: string;
   sentAt?: string | null;
   replyMessage?: string | null;
@@ -162,6 +164,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           readAt: cheer.readAt ?? null,
           isThanked: cheer.isThanked ?? false,
           thankedAt: cheer.thankedAt ?? null,
+          thankMessage: cheer.thankMessage ?? null,
+          thankMessageAt: cheer.thankMessageAt ?? null,
           replyMessage: cheer.replyMessage ?? null,
           repliedAt: cheer.repliedAt ?? null,
           reactionType: cheer.reactionType ?? null,

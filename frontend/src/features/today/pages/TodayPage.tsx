@@ -42,20 +42,6 @@ export const TodayPage = () => {
     },
   });
 
-  const thankMutation = useMutation({
-    mutationFn: async (cheerId: string) => {
-      const response = await apiClient.post(`/cheers/${cheerId}/thank`);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-cheers'] });
-      toast.success('감사 표현을 보냈어요 💖');
-    },
-    onError: () => {
-      toast.error('이미 감사 표현을 했거나 오류가 발생했습니다');
-    },
-  });
-
   const reactionMutation = useMutation({
     mutationFn: async ({ cheerId, reactionType }: { cheerId: string; reactionType: string }) => {
       const response = await apiClient.post(`/cheers/${cheerId}/reaction`, { reactionType });
@@ -242,17 +228,10 @@ export const TodayPage = () => {
                           </div>
                         </div>
                       </div>
-                      {!cheer.isThanked ? (
-                        <motion.button
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => thankMutation.mutate(cheer.cheerId)}
-                          disabled={thankMutation.isPending}
-                          className="flex-shrink-0 px-3 py-2 bg-primary-50 text-primary-600 text-xs font-semibold rounded-xl hover:bg-primary-100 transition-colors disabled:opacity-50"
-                        >
-                          감사 💝
-                        </motion.button>
+                      {cheer.isThanked ? (
+                        <span className="flex-shrink-0 px-3 py-2 bg-rose-50 text-rose-400 text-xs rounded-xl">감사 완료 💝</span>
                       ) : (
-                        <span className="flex-shrink-0 px-3 py-2 bg-gray-50 text-gray-400 text-xs rounded-xl">감사 완료</span>
+                        <span className="flex-shrink-0 px-3 py-2 bg-gray-50 text-gray-400 text-xs rounded-xl">감사 대기</span>
                       )}
                     </div>
                   </motion.div>
@@ -331,6 +310,9 @@ export const TodayPage = () => {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-rose-700">{senderName}의 응원에 감사를 보냈어요</p>
                       <p className="text-xs text-gray-500 truncate mt-0.5">{displayMessage}</p>
+                      {cheer.thankMessage && (
+                        <p className="text-xs text-rose-600 mt-1">💬 {cheer.thankMessage}</p>
+                      )}
                     </div>
                     {cheer.thankedAt && (
                       <p className="text-[11px] text-gray-400 flex-shrink-0">
@@ -344,11 +326,11 @@ export const TodayPage = () => {
           </section>
         )}
 
-        {/* 예약 응원 — 도착 예정 + 발송 예정 */}
+        {/* 알람 예정 응원 — 응원 자체는 도착, 알람만 예정 */}
         {(pendingReceived.length > 0 || pendingSent.length > 0) && (
           <section>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-bold text-gray-900">⏰ 예약 응원</h2>
+              <h2 className="text-lg font-bold text-gray-900">🔔 알람 예정</h2>
               <span className="text-xs text-gray-400">{pendingReceived.length + pendingSent.length}건</span>
             </div>
             <div className="space-y-2">
@@ -361,7 +343,7 @@ export const TodayPage = () => {
                     <span className="text-lg flex-shrink-0">📨</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="text-[10px] font-semibold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">도착 예정</span>
+                        <span className="text-[10px] font-semibold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">알람 예정</span>
                         <p className="text-xs font-medium text-gray-700 truncate">{senderName}</p>
                       </div>
                       <p className="text-xs text-gray-500 truncate">{displayMessage}</p>
@@ -382,7 +364,7 @@ export const TodayPage = () => {
                     <span className="text-lg flex-shrink-0">📤</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="text-[10px] font-semibold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">발송 예정</span>
+                        <span className="text-[10px] font-semibold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">알람 예정</span>
                       </div>
                       <p className="text-xs text-gray-500 truncate">{displayMessage}</p>
                     </div>
