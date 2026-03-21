@@ -13,9 +13,7 @@
  *      - attemptNumber        → 몇 번째 시도인지
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
-  DynamoDBDocumentClient,
   GetCommand,
   QueryCommand,
   TransactWriteCommand,
@@ -23,9 +21,8 @@ import {
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeQuestSubmissionContent, validateQuestSubmissionContent } from '../../../shared/lib/quest-submit-validation';
-
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+import { docClient } from '../../../shared/lib/dynamodb-client';
+import { response } from '../../../shared/lib/api-response';
 
 const submitSchema = z.object({
   userChallengeId: z.string().uuid().optional(),
@@ -41,13 +38,6 @@ const submitSchema = z.object({
   }),
 });
 
-function response(statusCode: number, body: any): APIGatewayProxyResult {
-  return {
-    statusCode,
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    body: JSON.stringify(body),
-  };
-}
 
 function isTransactionConditionFailed(error: any): boolean {
   if (error?.name !== 'TransactionCanceledException') return false;

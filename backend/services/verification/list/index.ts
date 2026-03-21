@@ -1,17 +1,14 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import {
-  DynamoDBDocumentClient,
   QueryCommand,
   ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
-import { resolveVerificationType } from "../../../shared/lib/verification-normalization";
+import { resolveVerificationType } from "../../../shared/lib/verification-type";
 import { extractImageS3Key, isLikelySignedAssetUrl } from "../../../shared/lib/media-key";
-
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+import { docClient } from "../../../shared/lib/dynamodb-client";
+import { response } from "../../../shared/lib/api-response";
 
 type VerificationItem = Record<string, any>;
 
@@ -51,17 +48,6 @@ async function toRenderableMediaUrl(
   }
 }
 
-function response(statusCode: number, body: any): APIGatewayProxyResult {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Credentials": true,
-    },
-    body: JSON.stringify(body),
-  };
-}
 
 function isPublicVerification(v: VerificationItem): boolean {
   const isPublic = v.isPublic === "true" || v.isPublic === true;
