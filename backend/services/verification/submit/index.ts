@@ -1,8 +1,6 @@
 // backend/services/verification/submit/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
-  DynamoDBDocumentClient,
   PutCommand,
   GetCommand,
   UpdateCommand,
@@ -17,13 +15,13 @@ import {
   safeTimezone,
   validatePracticeAt,
 } from "../../../shared/lib/challenge-quest-policy";
-import { inferVerificationType } from "../../../shared/lib/verification-type";
+import { resolveVerificationType } from "../../../shared/lib/verification-type";
 import { isValidTrimRange } from "../../../shared/lib/trim-validation";
 import { normalizeProgress } from "../../../shared/lib/progress";
 import { grantBadges } from "../../../shared/lib/badge-grant";
+import { docClient } from "../../../shared/lib/dynamodb-client";
+import { response } from "../../../shared/lib/api-response";
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const snsClient = new SNSClient({});
 
 const submitSchema = z.object({
@@ -58,17 +56,6 @@ const submitSchema = z.object({
 
 type SubmitInput = z.infer<typeof submitSchema>;
 
-export function response(statusCode: number, body: any): APIGatewayProxyResult {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Credentials": true,
-    },
-    body: JSON.stringify(body),
-  };
-}
 
 function parseIsoToMs(value: string): number | null {
   const ms = new Date(value).getTime();
@@ -331,7 +318,7 @@ export const handler = async (
   try {
     const body = JSON.parse(event.body || "{}");
     const input: SubmitInput = submitSchema.parse(body);
-    const verificationType = inferVerificationType(input);
+    const verificationType = resolveVerificationType(input);
 
     if (verificationType === "image" && !input.imageUrl) {
       return response(400, {

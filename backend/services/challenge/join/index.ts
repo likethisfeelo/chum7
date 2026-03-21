@@ -1,13 +1,11 @@
 // backend/services/challenge/join/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { resolveJoinRequirements } from '../../../shared/lib/join-requirements';
-
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+import { docClient } from '../../../shared/lib/dynamodb-client';
+import { response } from '../../../shared/lib/api-response';
 
 const personalTargetSchema = z.object({
   hour12: z.number().int().min(1).max(12),
@@ -46,17 +44,6 @@ function getProposalDeadline(challengeStartAt?: string): string | null {
   return new Date(kst.getTime() - KST_MS).toISOString();
 }
 
-function response(statusCode: number, body: any): APIGatewayProxyResult {
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Credentials': true,
-    },
-    body: JSON.stringify(body),
-  };
-}
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
