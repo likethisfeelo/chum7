@@ -24,7 +24,6 @@ interface VerificationStackProps extends StackProps {
   verificationsTable: Table;
   userChallengesTable: Table;
   challengesTable: Table;
-  userCheerTicketsTable: Table;
   cheersTable: Table;
   badgesTable: Table;
   plazaPostsTable: Table;
@@ -47,7 +46,6 @@ export class VerificationStack extends Stack {
       verificationsTable,
       userChallengesTable,
       challengesTable,
-      userCheerTicketsTable,
       cheersTable,
       badgesTable,
       plazaPostsTable,
@@ -64,7 +62,6 @@ export class VerificationStack extends Stack {
       VERIFICATIONS_TABLE: verificationsTable.tableName,
       USER_CHALLENGES_TABLE: userChallengesTable.tableName,
       CHALLENGES_TABLE: challengesTable.tableName,
-      USER_CHEER_TICKETS_TABLE: userCheerTicketsTable.tableName,
       CHEERS_TABLE: cheersTable.tableName,
       BADGES_TABLE: badgesTable.tableName,
       PLAZA_POSTS_TABLE: plazaPostsTable.tableName,
@@ -100,7 +97,6 @@ export class VerificationStack extends Stack {
     verificationsTable.grantReadWriteData(submitFn);
     userChallengesTable.grantReadWriteData(submitFn);
     challengesTable.grantReadData(submitFn);
-    userCheerTicketsTable.grantReadWriteData(submitFn);
     cheersTable.grantReadWriteData(submitFn);
     badgesTable.grantReadWriteData(submitFn);
     snsTopic.grantPublish(submitFn);

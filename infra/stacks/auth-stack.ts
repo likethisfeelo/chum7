@@ -17,21 +17,19 @@ interface AuthStackProps extends StackProps {
   userPool: UserPool;
   userPoolClient: UserPoolClient;
   usersTable: Table;
-  userCheerTicketsTable: Table;
 }
 
 export class AuthStack extends Stack {
   constructor(scope: Construct, id: string, props: AuthStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, authorizer, userPool, userPoolClient, usersTable, userCheerTicketsTable } = props;
+    const { stage, apiGateway, authorizer, userPool, userPoolClient, usersTable } = props;
 
     const commonEnv = {
       STAGE: stage,
       USERS_TABLE: usersTable.tableName,
       USER_POOL_ID: userPool.userPoolId,
       USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
-      USER_CHEER_TICKETS_TABLE: userCheerTicketsTable.tableName,
     };
 
     const commonProps = {
@@ -103,7 +101,6 @@ export class AuthStack extends Stack {
       environment: commonEnv,
     });
     usersTable.grantReadData(getProfileFn);
-    userCheerTicketsTable.grantReadData(getProfileFn);
     apiGateway.addRoutes({
       path: '/auth/me',
       methods: [HttpMethod.GET],

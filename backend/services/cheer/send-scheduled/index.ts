@@ -41,21 +41,18 @@ function getBackoffMinutes(retryCountAfterIncrement: number): number {
 // 푸시 알림 발송
 async function sendPushNotification(
   userId: string,
-  message: string,
-  senderIcon: string,
-  minutesRemaining: number
+  cheerId: string
 ): Promise<void> {
   await snsClient.send(new PublishCommand({
     TopicArn: process.env.SNS_TOPIC_ARN!,
     Message: JSON.stringify({
       userId,
       notification: {
-        title: '응원이 도착했어요! 💪',
-        body: `${senderIcon}님이 응원을 보냈어요! ${minutesRemaining}분 남았어요`,
+        title: '응원이 도착했어요',
+        body: '당신을 응원합니다',
         data: {
-          type: 'cheer_scheduled',
-          message,
-          minutesRemaining,
+          type: 'cheer_received',
+          cheerId,
           timestamp: new Date().toISOString()
         }
       }
@@ -186,15 +183,7 @@ export const handler = async (event: EventBridgeEvent<string, any>) => {
           continue;
         }
 
-        // 남은 시간 계산 (발신자의 델타)
-        const minutesRemaining = cheer.senderDelta || 0;
-
-        await sendPushNotification(
-          cheer.receiverId,
-          cheer.message,
-          '🐻', // TODO: 발신자 아이콘 조회
-          minutesRemaining
-        );
+        await sendPushNotification(cheer.receiverId, cheer.cheerId);
 
         await docClient.send(new UpdateCommand({
           TableName: process.env.CHEERS_TABLE!,

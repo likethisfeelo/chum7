@@ -36,7 +36,6 @@ export class CoreStack extends Stack {
   public readonly userChallengesTable: Table;
   public readonly verificationsTable: Table;
   public readonly cheersTable: Table;
-  public readonly userCheerTicketsTable: Table;
   public readonly cheerDeadLettersTable: Table;
   public readonly badgesTable: Table;
 
@@ -234,21 +233,6 @@ export class CoreStack extends Stack {
       indexName: 'failedAt-index',
       partitionKey: { name: 'status', type: AttributeType.STRING },
       sortKey: { name: 'failedAt', type: AttributeType.STRING },
-      projectionType: ProjectionType.ALL,
-    });
-
-    this.userCheerTicketsTable = new Table(this, 'UserCheerTicketsTable', {
-      tableName: `chme-${stage}-user-cheer-tickets`,
-      partitionKey: { name: 'ticketId', type: AttributeType.STRING },
-      billingMode: BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: isProd },
-      removalPolicy,
-      timeToLiveAttribute: 'expiresAtTimestamp',
-    });
-    this.userCheerTicketsTable.addGlobalSecondaryIndex({
-      indexName: 'userId-status-index',
-      partitionKey: { name: 'userId', type: AttributeType.STRING },
-      sortKey: { name: 'status', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
 

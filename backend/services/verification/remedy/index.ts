@@ -36,37 +36,6 @@ function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
-async function createCheerTicket(
-  userId: string,
-  challengeId: string,
-  verificationId: string,
-  delta: number
-): Promise<void> {
-  const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(23, 59, 59, 999);
-
-  const ticket = {
-    ticketId: uuidv4(),
-    userId,
-    source: 'remedy',
-    challengeId,
-    verificationId,
-    delta,
-    status: 'available',
-    usedAt: null,
-    usedForCheerId: null,
-    expiresAt: tomorrow.toISOString(),
-    expiresAtTimestamp: Math.floor(tomorrow.getTime() / 1000),
-    createdAt: now.toISOString()
-  };
-
-  await docClient.send(new PutCommand({
-    TableName: process.env.USER_CHEER_TICKETS_TABLE!,
-    Item: ticket
-  }));
-}
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -250,23 +219,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }));
 
-    await createCheerTicket(
-      userId,
-      userChallenge.challengeId,
-      verificationId,
-      0
-    );
-
     return response(200, {
       success: true,
-      message: `Day ${input.originalDay} 보완 완료! 응원권 1장을 받았어요 🎟`,
+      message: `Day ${input.originalDay} 보완 완료!`,
       data: {
         verificationId,
         originalDay: input.originalDay,
         scoreEarned,
         totalScore,
         remainingRemedyDays: remedyPolicy.type === 'limited' && remedyPolicy.maxRemedyDays !== null ? Math.max(remedyPolicy.maxRemedyDays - (alreadyRemediedCount + 1), 0) : Math.max(failedDays.length - (alreadyRemediedCount + 1), 0),
-        cheerTicketGranted: true,
         newBadges: []
       }
     });

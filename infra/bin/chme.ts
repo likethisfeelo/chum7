@@ -51,7 +51,6 @@ new AuthStack(app, `chme-${stage}-auth`, {
   userPool: coreStack.userPool,
   userPoolClient: coreStack.userPoolClient,
   usersTable: coreStack.usersTable,
-  userCheerTicketsTable: coreStack.userCheerTicketsTable,
 });
 
 new ChallengeStack(app, `chme-${stage}-challenge`, {
@@ -77,7 +76,6 @@ new VerificationStack(app, `chme-${stage}-verification`, {
   userChallengesTable: coreStack.userChallengesTable,
   uploadsBucket: coreStack.uploadsBucket,
   challengesTable: coreStack.challengesTable,
-  userCheerTicketsTable: coreStack.userCheerTicketsTable,
   cheersTable: coreStack.cheersTable,
   badgesTable: coreStack.badgesTable,
   plazaPostsTable: coreStack.plazaPostsTable,
@@ -95,7 +93,6 @@ new CheerStack(app, `chme-${stage}-cheer`, {
   authorizer: apiStack.cognitoAuthorizer,
   cheersTable: coreStack.cheersTable,
   cheerDeadLettersTable: coreStack.cheerDeadLettersTable,
-  userCheerTicketsTable: coreStack.userCheerTicketsTable,
   userChallengesTable: coreStack.userChallengesTable,
   usersTable: coreStack.usersTable,
   challengesTable: coreStack.challengesTable,
