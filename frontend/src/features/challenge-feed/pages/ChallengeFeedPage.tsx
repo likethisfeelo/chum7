@@ -493,9 +493,11 @@ export const ChallengeFeedPage = () => {
                 {Array.from({ length: durationDays }, (_, i) => i + 1).map((day) => {
                   const p = progressList.find((pr: any) => Number(pr?.day) === day);
                   const isDone = isMixedChallengeType
-                    ? p?.leaderQuestDone && p?.personalQuestDone
-                    : p?.status === "success";
-                  const isPartial = p && !isDone;
+                    ? Boolean(p?.leaderQuestDone && p?.personalQuestDone)
+                    : p?.status === "success" || p?.status === "completed" || p?.status === "remedy";
+                  const isPartial = isMixedChallengeType
+                    ? Boolean(p && !isDone && (p?.leaderQuestDone || p?.personalQuestDone))
+                    : p?.status === "partial";
                   const isToday = day === todayDay;
                   const isPastMissed = day < todayDay && !isDone;
 
