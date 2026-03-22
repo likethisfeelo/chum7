@@ -512,6 +512,8 @@ export const InlineVerificationForm = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (verificationMutation.isPending) return;
+
     if (selectedType === "image" && !mediaFile) {
       toast.error("사진을 첨부해주세요.");
       return;

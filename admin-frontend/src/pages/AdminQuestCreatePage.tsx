@@ -5,6 +5,7 @@ import { apiClient } from '@/lib/api-client';
 type VerificationType = 'image' | 'link' | 'text' | 'video';
 type QuestLayer = 'A' | 'B' | 'D';
 type QuestScope = 'leader' | 'personal' | 'mixed';
+type RemedyType = 'anytime' | 'last_day' | 'disabled';
 
 const VERIFICATION_TYPES: { value: VerificationType; label: string }[] = [
   { value: 'image', label: '📸 사진' },
@@ -43,7 +44,7 @@ const INITIAL = {
   questLayer:      'A' as QuestLayer,
   questScope:      'leader' as QuestScope,
   requireOnJoinInput: false,
-  remedyType: 'open' as 'strict'|'limited'|'open',
+  remedyType: 'anytime' as RemedyType,
   maxRemedyDays: 1,
   allowBulk: false,
   startDay: '',
@@ -60,7 +61,7 @@ export const AdminQuestCreatePage = () => {
   const [form, setForm] = useState(INITIAL);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
-  const [challengeOptions, setChallengeOptions] = useState<Array<{ challengeId: string; title: string; lifecycle?: string; allowedVerificationTypes?: string[]; personalQuestAutoApprove?: boolean; challengeStartAt?: string; challengeEndAt?: string }>>([]);
+  const [challengeOptions, setChallengeOptions] = useState<Array<{ challengeId: string; title: string; lifecycle?: string; allowedVerificationTypes?: string[]; personalQuestAutoApprove?: boolean; challengeStartAt?: string; challengeEndAt?: string; defaultRemedyPolicy?: { type: RemedyType; maxRemedyDays?: number | null } }>>([]);
   const [challengeLoading, setChallengeLoading] = useState(false);
 
   useEffect(() => {
@@ -84,6 +85,7 @@ export const AdminQuestCreatePage = () => {
               allowedVerificationTypes: challenge.allowedVerificationTypes,
               challengeStartAt: challenge.challengeStartAt,
               challengeEndAt: challenge.challengeEndAt,
+              defaultRemedyPolicy: challenge.defaultRemedyPolicy,
             }))
         );
       } catch {
@@ -122,6 +124,13 @@ export const AdminQuestCreatePage = () => {
     // 챌린지의 personalQuestAutoApprove → approvalRequired 자동 연동
     if (selectedChallenge?.personalQuestAutoApprove !== undefined) {
       set('approvalRequired', !selectedChallenge.personalQuestAutoApprove);
+    }
+    // 챌린지의 defaultRemedyPolicy → remedyType 자동 연동 (퀘스트별 재설정 불가)
+    if (selectedChallenge?.defaultRemedyPolicy?.type) {
+      set('remedyType', selectedChallenge.defaultRemedyPolicy.type as RemedyType);
+      if (selectedChallenge.defaultRemedyPolicy.maxRemedyDays) {
+        set('maxRemedyDays', selectedChallenge.defaultRemedyPolicy.maxRemedyDays as any);
+      }
     }
     // 리더 스코프 퀘스트는 챌린지 기간으로 기간 자동 설정
     if (form.questScope === 'leader' && selectedChallenge) {
@@ -164,8 +173,8 @@ export const AdminQuestCreatePage = () => {
         requireOnJoinInput: form.requireOnJoinInput,
         remedyPolicy: {
           type: form.remedyType,
-          maxRemedyDays: form.remedyType === 'limited' ? Number(form.maxRemedyDays) : null,
-          allowBulk: form.remedyType === 'open' ? Boolean(form.allowBulk) : null,
+          maxRemedyDays: form.remedyType === 'last_day' ? Number(form.maxRemedyDays) : null,
+          allowBulk: form.remedyType === 'anytime' ? Boolean(form.allowBulk) : null,
         },
         startDay: form.questLayer === 'D' && form.startDay ? Number(form.startDay) : null,
         endDay: form.questLayer === 'D' && form.endDay ? Number(form.endDay) : null,
@@ -371,22 +380,20 @@ export const AdminQuestCreatePage = () => {
           )}
 
 
-          <div className="mt-4 pt-4 border-t space-y-3">
+          <div className="mt-4 pt-4 border-t space-y-2">
             <p className="text-sm font-semibold text-gray-700">보완(Remedy) 정책</p>
-            <div className="flex gap-4">
-              {([
-                { value: 'strict',  label: '엄격 (strict)' },
-                { value: 'limited', label: '제한부 (limited)' },
-                { value: 'open',    label: '자유 (open)' },
-              ] as const).map((t) => (
-                <label key={t.value} className="text-sm flex items-center gap-1">
-                  <input type="radio" checked={form.remedyType === t.value} onChange={() => set('remedyType', t.value as any)} />
-                  {t.label}
-                </label>
-              ))}
-            </div>
-            {form.remedyType === 'limited' && <select value={form.maxRemedyDays} onChange={(e)=>set('maxRemedyDays', Number(e.target.value) as any)} className="px-3 py-2 border rounded-lg"><option value={1}>1일</option><option value={2}>2일</option></select>}
-            {form.remedyType === 'open' && <label className="text-sm flex items-center gap-2"><input type="checkbox" checked={form.allowBulk} onChange={(e)=>set('allowBulk', e.target.checked as any)} /> 몰아서 제출 허용</label>}
+            {challengeId && selectedChallenge?.defaultRemedyPolicy ? (
+              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700">
+                {{
+                  'disabled': '보완 불가',
+                  'last_day': `마지막날 보완 (최대 ${selectedChallenge.defaultRemedyPolicy.maxRemedyDays ?? 1}회)`,
+                  'anytime': '자유 보완',
+                }[form.remedyType] ?? form.remedyType}
+                <span className="ml-2 text-xs text-gray-400">(챌린지에서 설정된 정책)</span>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400">챌린지를 선택하면 해당 챌린지의 보완 정책이 자동 적용됩니다.</p>
+            )}
           </div>
           {form.questLayer === 'D' && (
             <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
