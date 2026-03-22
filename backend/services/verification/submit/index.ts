@@ -579,9 +579,25 @@ export const handler = async (
       });
     }
 
-    const isEarlyCompletion = !isExtra && (delta || 0) > 0;
+    // 이 인증으로 하루가 완료되는지 미리 판단 (score / 응원·감사 집계 기준)
+    const _existingLeaderQuestIds: string[] = dayProgress?.leaderQuestIds ?? [];
+    const _newLeaderQuestIds: string[] =
+      resolvedQuestType === "leader" && input.questId && !_existingLeaderQuestIds.includes(input.questId)
+        ? [..._existingLeaderQuestIds, input.questId]
+        : _existingLeaderQuestIds;
+    const _leaderDone: boolean = resolvedQuestType === "leader"
+      ? (totalLeaderQuestCount === 0 ? true : _newLeaderQuestIds.length >= totalLeaderQuestCount)
+      : (dayProgress?.leaderQuestDone === true);
+    const _personalDone: boolean =
+      resolvedQuestType === "personal" ? true : (dayProgress?.personalQuestDone === true);
+    const dayNowComplete: boolean = isMixedType
+      ? _leaderDone && _personalDone
+      : isLeaderOnlyType ? _leaderDone : true;
+
+    // 응원·감사 집계는 당일 모든 퀘스트 완료 시점에만 적용
+    const isEarlyCompletion = !isExtra && dayNowComplete && (delta || 0) > 0;
     // 온타임 포함(delta >= 0)이면 감사 자동 발송 (응원 발송은 delta > 0 유지)
-    const isThanksEligible = !isExtra && delta !== null && delta >= 0;
+    const isThanksEligible = !isExtra && dayNowComplete && delta !== null && delta >= 0;
 
     const verificationId = uuidv4();
 
@@ -619,8 +635,8 @@ export const handler = async (
       completedAt: performedAt,
       targetTime: effectiveTargetTime || null,
       delta,
-      score: isExtra ? 0 : 1,
-      scoreEarned: isExtra ? 0 : 1,
+      score: (isExtra || !dayNowComplete) ? 0 : 1,
+      scoreEarned: (isExtra || !dayNowComplete) ? 0 : 1,
       cheerCount: 0,
       isPublic: input.isPublic ? "true" : "false",
       isAnonymous: input.isAnonymous,
@@ -677,13 +693,6 @@ export const handler = async (
     const personalQuestDone = resolvedQuestType === "personal"
       ? true
       : (existingDayEntry?.personalQuestDone ?? (isPersonalOnlyType ? false : undefined));
-
-    // 이 인증으로 하루 완료가 되는지 판단
-    const dayNowComplete = isMixedType
-      ? leaderQuestDone === true && personalQuestDone === true
-      : isLeaderOnlyType
-        ? leaderQuestDone === true
-        : true; // personal-only or unknown: one submission = complete
 
     // 하루 완료 전이면 partial 처리 후 early return
     if (!dayNowComplete) {
