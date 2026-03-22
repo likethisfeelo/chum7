@@ -204,8 +204,8 @@ export const ChallengeFeedPage = () => {
   const [thankModal, setThankModal] = useState<{ count: number; cheerIds: string[] } | null>(null);
 
   const handleVerificationSuccess = (data: any) => {
-    const count: number = data?.data?.autoThankedCount ?? 0;
-    const cheerIds: string[] = data?.data?.autoThankedCheerIds ?? [];
+    const count: number = data?.data?.cheerOpportunity?.incompleteCount ?? 0;
+    const cheerIds: string[] = data?.data?.eligibleCheerIds ?? [];
     if (count > 0) setThankModal({ count, cheerIds });
     queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
     queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });

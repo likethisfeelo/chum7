@@ -836,6 +836,7 @@ export const handler = async (
         cheerOpportunity = {
           hasIncompletePeople: incompleteMembers.length > 0,
           incompleteCount: incompleteMembers.length,
+          cheerTicketGranted: incompleteMembers.length > 0,
         };
       } catch (cheerError) {
         console.error("Auto cheer creation error:", cheerError);

@@ -65,10 +65,10 @@ export const ThankYouMessageModal = ({
 
             <div className="text-center mb-5">
               <div className="text-4xl mb-3">💝</div>
-              <h2 className="text-lg font-bold text-gray-900">감사가 전달됐어요!</h2>
+              <h2 className="text-lg font-bold text-gray-900">응원을 보냈어요!</h2>
               <p className="text-sm text-gray-500 mt-1">
-                응원해 준 <span className="font-semibold text-rose-500">{autoThankedCount}명</span>에게
-                감사를 보냈어요.
+                미완료 참여자 <span className="font-semibold text-rose-500">{autoThankedCount}명</span>에게
+                응원을 보냈어요.
               </p>
             </div>
 
