@@ -425,7 +425,15 @@ export const handler = async (
     }
 
     const nowIso = new Date().toISOString();
-    const performedAt = input.performedAt || input.completedAt || nowIso;
+    const CLOCK_SKEW_TOLERANCE_MS = 60_000; // 60초 허용 (NTP 드리프트 등 클라이언트 시계 편차)
+    const performedAtRaw = input.performedAt || input.completedAt || nowIso;
+    const performedAtMs = new Date(performedAtRaw).getTime();
+    const nowMs = new Date(nowIso).getTime();
+    // 클라이언트 시계가 서버보다 최대 60초 앞선 경우 서버 시각으로 대체 (오탐 방지)
+    const performedAt =
+      performedAtMs > nowMs && performedAtMs - nowMs <= CLOCK_SKEW_TOLERANCE_MS
+        ? nowIso
+        : performedAtRaw;
     const timezone = safeTimezone(
       ((event.headers?.["x-user-timezone"] ||
         event.headers?.["X-User-Timezone"]) as string | undefined) ||
@@ -634,6 +642,7 @@ export const handler = async (
       new PutCommand({
         TableName: process.env.VERIFICATIONS_TABLE!,
         Item: verification,
+        ConditionExpression: "attribute_not_exists(verificationId)",
       }),
     );
 
