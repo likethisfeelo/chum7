@@ -7,6 +7,7 @@ export type ProgressRecord = {
   score: number;
   remedied: boolean;
   leaderQuestDone?: boolean;
+  leaderQuestIds?: string[];
   personalQuestDone?: boolean;
   leaderVerificationId?: string;
   personalVerificationId?: string;
@@ -43,6 +44,7 @@ export function normalizeProgress(progress: unknown): ProgressRecord[] {
       score: toSafeNumber(item.score, 0),
       remedied: item.remedied === true,
       leaderQuestDone: item.leaderQuestDone === true ? true : undefined,
+      leaderQuestIds: Array.isArray(item.leaderQuestIds) ? (item.leaderQuestIds as string[]) : undefined,
       personalQuestDone: item.personalQuestDone === true ? true : undefined,
       leaderVerificationId:
         typeof item.leaderVerificationId === 'string' ? item.leaderVerificationId : undefined,

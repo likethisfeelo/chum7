@@ -401,6 +401,7 @@ export const InlineVerificationForm = ({
         day: getChallengeDay(userChallenge),
         verificationType: selectedType,
         questType: selectedQuestType,
+        ...(quest?.questId ? { questId: quest.questId } : {}),
         ...(selectedType === "image" && uploadedUrl
           ? { imageUrl: uploadedUrl }
           : {}),

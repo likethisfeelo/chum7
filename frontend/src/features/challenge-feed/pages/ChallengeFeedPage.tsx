@@ -355,6 +355,28 @@ export const ChallengeFeedPage = () => {
     [myChallengeVerifications],
   );
 
+  // 리더 퀘스트 N개 모두 완료 여부 (mySubmission 기반 + 낙관적 상태)
+  const allLeaderQuestsDoneToday = useMemo(
+    () =>
+      leaderQuests.length > 0 &&
+      leaderQuests.every((q: any) =>
+        todaySubmittedQuestIds.has(q.questId) ||
+        q.mySubmission?.status === "approved" ||
+        q.mySubmission?.status === "auto_approved",
+      ),
+    [leaderQuests, todaySubmittedQuestIds],
+  );
+
+  const someLeaderQuestsDoneToday = useMemo(
+    () =>
+      leaderQuests.some((q: any) =>
+        todaySubmittedQuestIds.has(q.questId) ||
+        q.mySubmission?.status === "approved" ||
+        q.mySubmission?.status === "auto_approved",
+      ),
+    [leaderQuests, todaySubmittedQuestIds],
+  );
+
   const iDidTodayPersonalQuestVerification = useMemo(
     () =>
       myChallengeVerifications.some(
@@ -416,8 +438,10 @@ export const ChallengeFeedPage = () => {
   const progressList: any[] = userChallenge?.progress || [];
 
   const isTodayAllDone = isMixedChallengeType
-    ? iDidTodayLeaderQuestVerification && (personalQuest === null || iDidTodayPersonalQuestVerification)
-    : iDidTodayVerification;
+    ? allLeaderQuestsDoneToday && (personalQuest === null || iDidTodayPersonalQuestVerification)
+    : leaderQuests.length > 0
+      ? allLeaderQuestsDoneToday
+      : iDidTodayVerification;
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -508,13 +532,14 @@ export const ChallengeFeedPage = () => {
                   const isToday = day === todayDay;
                   const isDone = isMixedChallengeType
                     ? Boolean(p?.leaderQuestDone && p?.personalQuestDone) ||
-                      (isToday && iDidTodayLeaderQuestVerification && (personalQuest === null || iDidTodayPersonalQuestVerification))
+                      (isToday && allLeaderQuestsDoneToday && (personalQuest === null || iDidTodayPersonalQuestVerification))
                     : p?.status === "success" || p?.status === "completed" || p?.status === "remedy" ||
-                      (isToday && iDidTodayVerification);
+                      (isToday && (leaderQuests.length > 0 ? allLeaderQuestsDoneToday : iDidTodayVerification));
                   const isPartial = isMixedChallengeType
                     ? Boolean(p && !isDone && (p?.leaderQuestDone || p?.personalQuestDone)) ||
-                      (isToday && !isDone && (iDidTodayLeaderQuestVerification || iDidTodayPersonalQuestVerification))
-                    : p?.status === "partial";
+                      (isToday && !isDone && (someLeaderQuestsDoneToday || iDidTodayPersonalQuestVerification))
+                    : p?.status === "partial" ||
+                      (isToday && !isDone && leaderQuests.length > 0 && someLeaderQuestsDoneToday);
                   const isPastMissed = day < todayDay && !isDone;
 
                   return (
@@ -730,8 +755,7 @@ export const ChallengeFeedPage = () => {
                     const isDone =
                       todaySubmittedQuestIds.has(q.questId) ||
                       sub?.status === "approved" ||
-                      sub?.status === "auto_approved" ||
-                      (isMixedChallengeType ? iDidTodayLeaderQuestVerification : iDidTodayVerification);
+                      sub?.status === "auto_approved";
                     const isPending = !isDone && sub?.status === "pending";
                     const isExpanded = expandedLeaderQuestId === q.questId;
                     return (

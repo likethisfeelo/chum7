@@ -29,6 +29,7 @@ const submitSchema = z.object({
   day: z.number().min(1).max(30),
   verificationType: z.enum(["text", "image", "video", "link"]).optional(),
   questType: z.enum(["leader", "personal"]).optional(),
+  questId: z.string().optional(),
   imageUrl: z.string().url().optional(),
   videoUrl: z.string().url().optional(),
   videoDurationSec: z.number().min(0).max(60).optional(),
@@ -433,6 +434,26 @@ export const handler = async (
       }
     }
 
+    // 리더 퀘스트 전체 목록 조회 (N개 모두 완료 요건 판단용)
+    let totalLeaderQuestCount = 0;
+    let totalLeaderQuestIds: string[] = [];
+    if (process.env.QUESTS_TABLE) {
+      try {
+        const leaderQuestResult = await docClient.send(new QueryCommand({
+          TableName: process.env.QUESTS_TABLE,
+          IndexName: 'challengeId-index',
+          KeyConditionExpression: 'challengeId = :cid',
+          FilterExpression: '#status = :active AND questScope <> :personal',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':cid': challengeId, ':active': 'active', ':personal': 'personal' },
+        }));
+        totalLeaderQuestIds = (leaderQuestResult.Items ?? []).map((q: any) => q.questId as string);
+        totalLeaderQuestCount = totalLeaderQuestIds.length;
+      } catch (leaderQuestErr: any) {
+        console.warn('Failed to fetch leader quests (non-fatal):', leaderQuestErr?.message);
+      }
+    }
+
     if (!allowedTypes.includes(verificationType)) {
       return response(400, {
         error: "UNSUPPORTED_VERIFICATION_TYPE",
@@ -492,28 +513,36 @@ export const handler = async (
       // mixed: null → 아래 isExtra 판단에서 처리
     }
 
+    // 리더 퀘스트 all-done 판단 (totalLeaderQuestCount=0이면 레거시 boolean 폴백)
+    function isLeaderAllDone(dp: any): boolean {
+      if (!dp) return false;
+      if (totalLeaderQuestCount === 0) return dp.leaderQuestDone === true;
+      return (dp.leaderQuestIds?.length ?? 0) >= totalLeaderQuestCount;
+    }
+
     // 하루 인증 완료 여부 판단 (challengeType 기반)
     function isDayComplete(dp: any): boolean {
       if (!dp) return false;
-      if (isMixedType) {
-        return dp.leaderQuestDone === true && dp.personalQuestDone === true;
-      }
-      if (isLeaderOnlyType) return dp.leaderQuestDone === true;
+      if (isMixedType) return isLeaderAllDone(dp) && dp.personalQuestDone === true;
+      if (isLeaderOnlyType) return isLeaderAllDone(dp);
       if (isPersonalOnlyType) return dp.personalQuestDone === true;
-      // fallback: 기존 status 방식
       return dp.status === "success";
     }
 
-    // 이미 해당 퀘스트 타입을 오늘 인증했는지 확인 (혼합형에서 같은 퀘스트 중복 방지)
-    function isQuestAlreadyDone(dp: any, qt: "leader" | "personal" | null): boolean {
+    // 이미 해당 퀘스트를 오늘 인증했는지 확인 (중복 방지)
+    function isQuestAlreadyDone(dp: any, qt: "leader" | "personal" | null, questId?: string | null): boolean {
       if (!dp) return false;
-      if (qt === "leader") return dp.leaderQuestDone === true;
+      if (qt === "leader") {
+        if (totalLeaderQuestCount === 0) return dp.leaderQuestDone === true;
+        const submittedIds: string[] = dp.leaderQuestIds ?? [];
+        return questId ? submittedIds.includes(questId) : submittedIds.length >= totalLeaderQuestCount;
+      }
       if (qt === "personal") return dp.personalQuestDone === true;
-      // questType 미지정 + 기존 완료 상태
       return dp.status === "success";
     }
 
-    const isExtra = isDayComplete(dayProgress) || (isMixedType && resolvedQuestType !== null && isQuestAlreadyDone(dayProgress, resolvedQuestType));
+    const isExtra = isDayComplete(dayProgress) ||
+      (resolvedQuestType !== null && isQuestAlreadyDone(dayProgress, resolvedQuestType, input.questId));
 
     const verificationDate =
       input.verificationDate || practiceValidation.certDate;
@@ -635,8 +664,15 @@ export const handler = async (
 
     // 기존 progress 항목 기반으로 questType 플래그 업데이트
     const existingDayEntry = existingIndex >= 0 ? updatedProgress[existingIndex] : null;
-    const leaderQuestDone = resolvedQuestType === "leader"
-      ? true
+
+    // 리더 퀘스트 ID 배열 누적 (중복 제거)
+    const existingLeaderQuestIds: string[] = existingDayEntry?.leaderQuestIds ?? [];
+    const leaderQuestIds: string[] = resolvedQuestType === "leader" && input.questId && !existingLeaderQuestIds.includes(input.questId)
+      ? [...existingLeaderQuestIds, input.questId]
+      : existingLeaderQuestIds;
+
+    const leaderQuestDone: boolean | undefined = resolvedQuestType === "leader"
+      ? (totalLeaderQuestCount === 0 ? true : leaderQuestIds.length >= totalLeaderQuestCount)
       : (existingDayEntry?.leaderQuestDone ?? (isLeaderOnlyType ? false : undefined));
     const personalQuestDone = resolvedQuestType === "personal"
       ? true
@@ -645,10 +681,12 @@ export const handler = async (
     // 이 인증으로 하루 완료가 되는지 판단
     const dayNowComplete = isMixedType
       ? leaderQuestDone === true && personalQuestDone === true
-      : true; // single-quest type: 이 인증이 첫 번째 유효 인증이므로 완료
+      : isLeaderOnlyType
+        ? leaderQuestDone === true
+        : true; // personal-only or unknown: one submission = complete
 
-    // 혼합형에서 첫 번째 퀘스트 인증은 partial → progress 기록 후 안내 반환
-    if (isMixedType && !dayNowComplete) {
+    // 하루 완료 전이면 partial 처리 후 early return
+    if (!dayNowComplete) {
       const partialEntry = {
         ...(existingDayEntry ?? {}),
         day: input.day,
@@ -657,6 +695,7 @@ export const handler = async (
         timestamp: existingDayEntry?.timestamp ?? performedAt,
         delta: 0,
         score: 0,
+        leaderQuestIds,
         leaderQuestDone: leaderQuestDone === true,
         personalQuestDone: personalQuestDone === true,
         ...(resolvedQuestType === "leader" ? { leaderVerificationId: verificationId } : {}),
@@ -682,11 +721,14 @@ export const handler = async (
       } catch (partialWriteErr: any) {
         console.error("Partial progress write error (non-fatal):", partialWriteErr?.message);
       }
+      const partialMsg = isMixedType
+        ? (resolvedQuestType === "leader"
+            ? "리더 퀘스트 인증 완료! 개인 퀘스트도 인증해야 오늘 인증이 완료됩니다 🎯"
+            : "개인 퀘스트 인증 완료! 리더 퀘스트도 인증해야 오늘 인증이 완료됩니다 🎯")
+        : `리더 퀘스트 ${leaderQuestIds.length}/${totalLeaderQuestCount} 완료! 나머지 리더 퀘스트도 인증해야 오늘이 완료됩니다 🎯`;
       return response(200, {
         success: true,
-        message: resolvedQuestType === "leader"
-          ? "리더 퀘스트 인증 완료! 개인 퀘스트도 인증해야 오늘 인증이 완료됩니다 🎯"
-          : "개인 퀘스트 인증 완료! 리더 퀘스트도 인증해야 오늘 인증이 완료됩니다 🎯",
+        message: partialMsg,
         data: {
           verificationId,
           isExtra: false,
@@ -706,6 +748,7 @@ export const handler = async (
       timestamp: performedAt,
       delta: dayNowComplete ? (delta || 0) : 0,
       score: dayNowComplete ? 1 : 0,
+      leaderQuestIds,
       leaderQuestDone: leaderQuestDone ?? false,
       personalQuestDone: personalQuestDone ?? false,
       ...(isMixedType && resolvedQuestType === "leader" ? { leaderVerificationId: verificationId } : {}),
