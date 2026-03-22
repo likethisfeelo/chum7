@@ -5,7 +5,9 @@ import { z } from 'zod';
 import { calculateEffectiveCurrentDay, isChallengePeriodEnded, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 
 const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 
 const visibilitySchema = z.object({
   isPersonalOnly: z.literal(false)

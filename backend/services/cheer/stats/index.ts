@@ -31,7 +31,9 @@ type BucketedStatsResult = {
 };
 
 const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 
 function response(statusCode: number, body: unknown): APIGatewayProxyResult {
   return {

@@ -12,7 +12,9 @@ function normalizeProgress(progress: any): any[] {
 }
 
 const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 const snsClient = new SNSClient({});
 
 const MAX_RETRIES = Number(process.env.CHEER_SCHEDULED_MAX_RETRIES ?? '3');

@@ -7,7 +7,9 @@ import { normalizeProgress } from '../../../shared/lib/progress';
 import { matchesRequestedChallengeStatus, resolveNormalizedChallengeState } from '../../../shared/lib/challenge-state';
 
 const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 
 function isDebugEnabled(params: Record<string, string | undefined>): boolean {
   const raw = String(params.debug || '').toLowerCase();

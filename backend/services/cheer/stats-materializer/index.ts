@@ -46,7 +46,9 @@ type ScanOptions = {
 };
 
 const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 const DEFAULT_MAX_RETRIES = 5;
 const DEFAULT_SCAN_PAGE_SIZE = 500;
 const MAX_SCAN_PAGE_SIZE = 1000;

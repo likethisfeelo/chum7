@@ -5,7 +5,9 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
 const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 const MIN_PREPARING_GAP_MS = 60 * 1000;
 
 /**

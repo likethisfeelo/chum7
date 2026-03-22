@@ -24,7 +24,9 @@ import { calculateChallengeEndAt, calculateSyncedCurrentDay, isCompletedProgress
 import { normalizeProgress } from '../../../shared/lib/progress';
 
 const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 
 const CHALLENGES_TABLE = process.env.CHALLENGES_TABLE!;
 const USER_CHALLENGES_TABLE = process.env.USER_CHALLENGES_TABLE!;
