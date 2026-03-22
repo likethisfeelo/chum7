@@ -585,6 +585,9 @@ export const handler = async (
 
     // 응원·감사 집계는 당일 모든 퀘스트 완료 시점에만 적용
     const isEarlyCompletion = !isExtra && dayNowComplete && (delta || 0) > 0;
+    // 응원 생성 자격: personal_only는 목표시간 없이 완료 자체로 응원 가능, 기타 타입은 목표 시간 이전 완료 필요
+    const isCheerEligible =
+      !isExtra && dayNowComplete && (isPersonalOnlyType || (delta || 0) > 0);
 
     const verificationId = uuidv4();
 
@@ -799,7 +802,7 @@ export const handler = async (
       incompleteCount: 0,
     };
 
-    if (isEarlyCompletion && userChallenge.groupId) {
+    if (isCheerEligible && userChallenge.groupId) {
       try {
         const membersResult = await docClient.send(new QueryCommand({
           TableName: process.env.USER_CHALLENGES_TABLE!,
