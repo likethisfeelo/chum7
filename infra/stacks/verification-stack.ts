@@ -369,6 +369,29 @@ export class VerificationStack extends Stack {
       authorizer,
     });
 
+    // 5-2. Delete Verification (오늘 인증 삭제, protected)
+    const deleteFn = new NodejsFunction(this, "DeleteVerificationFn", {
+      ...commonProps,
+      functionName: `chme-${stage}-verification-delete`,
+      entry: path.join(
+        __dirname,
+        "../../backend/services/verification/delete/index.ts",
+      ),
+      handler: "handler",
+      environment: commonEnv,
+    });
+    verificationsTable.grantReadWriteData(deleteFn);
+    userChallengesTable.grantReadWriteData(deleteFn);
+    apiGateway.addRoutes({
+      path: "/verifications/{verificationId}",
+      methods: [HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration(
+        "DeleteVerificationIntegration",
+        deleteFn,
+      ),
+      authorizer,
+    });
+
     // 6. Remedy Verification (Day 6 보완) (protected)
     const remedyFn = new NodejsFunction(this, "RemedyFn", {
       ...commonProps,
