@@ -212,8 +212,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return response(400, { error: 'INSECURE_LINK', message: '링크는 https://로 시작해야 합니다' });
     }
 
-    // 10. practiceAt 미래 시간 차단
-    const performedAt = input.practiceAt || input.completedAt || nowIso;
+    // 10. practiceAt 미래 시간 차단 (클라이언트 시계 편차 60초 허용)
+    const CLOCK_SKEW_TOLERANCE_MS = 60_000;
+    const performedAtRaw = input.practiceAt || input.completedAt || nowIso;
+    const _performedAtMs = new Date(performedAtRaw).getTime();
+    const _nowMs = new Date(nowIso).getTime();
+    // 클라이언트 시계가 서버보다 최대 60초 앞선 경우 서버 시각으로 대체 (오탐 방지)
+    const performedAt =
+      _performedAtMs > _nowMs && _performedAtMs - _nowMs <= CLOCK_SKEW_TOLERANCE_MS
+        ? nowIso
+        : performedAtRaw;
     if (new Date(performedAt).getTime() > new Date(nowIso).getTime()) {
       return response(400, { error: 'FUTURE_PRACTICE_TIME', message: 'practiceAt이 현재 시간보다 미래입니다' });
     }
