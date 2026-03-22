@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { motion, AnimatePresence } from "framer-motion";
 import { FiCamera, FiFileText, FiLink, FiVideo, FiX } from "react-icons/fi";
@@ -187,8 +187,24 @@ export const InlineVerificationForm = ({
   const forcedQuestType: 'leader' | 'personal' | null = quest
     ? (quest.questScope === 'personal' ? 'personal' : 'leader')
     : null;
-  const showQuestTypeSelector = !forcedQuestType && isMixedType; // 혼합형만 선택UI 표시, quest 연동 시 숨김
-  const defaultQuestType: 'leader' | 'personal' = forcedQuestType ?? (isPersonalOnlyType ? 'personal' : 'leader');
+
+  // 혼합형 챌린지에서만 리더 퀘스트 존재 여부 확인 (실제 퀘스트가 없으면 선택 UI 숨김)
+  const challengeId = userChallenge?.challengeId;
+  const { data: questsForType } = useQuery({
+    queryKey: ["challenge-quests", challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/quests?challengeId=${challengeId}&status=active`);
+      return (res.data?.data?.quests ?? []) as any[];
+    },
+    enabled: Boolean(challengeId) && isMixedType && !forcedQuestType,
+    staleTime: 60_000,
+  });
+  const hasLeaderQuests = isMixedType
+    ? (questsForType ?? []).some((q: any) => q.questScope !== "personal")
+    : true;
+
+  const showQuestTypeSelector = !forcedQuestType && isMixedType && hasLeaderQuests; // 혼합형 + 리더 퀘스트 존재 시만 선택UI 표시
+  const defaultQuestType: 'leader' | 'personal' = forcedQuestType ?? ((isPersonalOnlyType || (isMixedType && !hasLeaderQuests)) ? 'personal' : 'leader');
 
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [selectedType, setSelectedType] = useState<VerificationType>(
@@ -226,6 +242,13 @@ export const InlineVerificationForm = ({
       setSelectedType(availableTypes[0]);
     }
   }, [availableTypes, selectedType]);
+
+  // 쿼리 완료 후 리더 퀘스트가 없는 것으로 확인되면 'personal'로 전환
+  useEffect(() => {
+    if (isMixedType && !hasLeaderQuests && selectedQuestType === 'leader') {
+      setSelectedQuestType('personal');
+    }
+  }, [hasLeaderQuests, isMixedType, selectedQuestType]);
 
   useEffect(() => {
     if (!openVideoPickerSignal) return;
