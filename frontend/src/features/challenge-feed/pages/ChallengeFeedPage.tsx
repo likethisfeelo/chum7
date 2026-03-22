@@ -347,13 +347,6 @@ export const ChallengeFeedPage = () => {
     [myChallengeVerifications],
   );
 
-  const iDidTodayLeaderQuestVerification = useMemo(
-    () =>
-      myChallengeVerifications.some(
-        (item: any) => !item.isExtra && isSameKstDate(item.performedAt || item.createdAt) && item.questType === "leader",
-      ),
-    [myChallengeVerifications],
-  );
 
   // 리더 퀘스트 N개 모두 완료 여부 (mySubmission 기반 + 낙관적 상태)
   const allLeaderQuestsDoneToday = useMemo(
