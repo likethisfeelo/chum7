@@ -173,6 +173,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         status: null,
       })),
       score: 0,
+      cheerScore: 0,
+      thankScore: 0,
       deltaSum: 0,
       cheerCount: 0,
       groupId,

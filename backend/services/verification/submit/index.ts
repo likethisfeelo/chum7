@@ -347,6 +347,7 @@ export const handler = async (
     let challengeCategory: string | null = null;
     let challengeType: string = "leader_personal";
     let challengeDurationDays: number = 7;
+    let challengeCreatorId: string | null = null;
     if (process.env.CHALLENGES_TABLE) {
       try {
         const challengeResult = await docClient.send(
@@ -386,6 +387,12 @@ export const handler = async (
         if (Number.isFinite(rawDuration) && rawDuration > 0) {
           challengeDurationDays = Math.floor(rawDuration);
         }
+        challengeCreatorId =
+          typeof challengeResult.Item?.creatorId === "string"
+            ? challengeResult.Item.creatorId
+            : typeof challengeResult.Item?.createdBy === "string"
+              ? challengeResult.Item.createdBy
+              : null;
       } catch (challengeErr: any) {
         console.warn("Failed to fetch challenge data (non-fatal):", {
           challengeId,
@@ -822,30 +829,89 @@ export const handler = async (
           return !isDayComplete(todayEntry);
         });
 
-        const senderAlias = randomAlias();
-        for (const member of incompleteMembers) {
-          const memberTarget24 = member.personalTarget?.time24 || challengeTargetTime24;
-          const createdCheerId = await createAutoCheer({
-            senderId: userId,
-            receiverId: member.userId,
-            challengeId,
-            verificationId,
-            delta: delta || 0,
-            senderAlias,
-            memberTarget24,
-            verificationDate,
-            memberTimezone: member.personalTarget?.timezone || timezone,
-            nowISO: nowIso,
-            day: input.day,
-          });
-          if (createdCheerId) eligibleCheerIds.push(createdCheerId);
-        }
+        if (incompleteMembers.length === 0) {
+          // 전원 완료 보너스: 마지막 완료자가 조기 완료한 경우
+          const allActive = (membersResult.Items || []).filter((m: any) => m.status === "active");
+          const completedCount =
+            allActive.filter((m: any) => {
+              const mp = normalizeProgress(m.progress);
+              return isDayComplete(mp.find((p: any) => Number(p.day) === input.day));
+            }).length + 1; // +1 = 자신
 
-        cheerOpportunity = {
-          hasIncompletePeople: incompleteMembers.length > 0,
-          incompleteCount: incompleteMembers.length,
-          cheerTicketGranted: incompleteMembers.length > 0,
-        };
+          // 마지막 완료자(자신) thankScore += completedCount
+          await docClient.send(new UpdateCommand({
+            TableName: process.env.USER_CHALLENGES_TABLE!,
+            Key: { userChallengeId: userChallenge.userChallengeId },
+            UpdateExpression: "ADD thankScore :n SET updatedAt = :now",
+            ExpressionAttributeValues: { ":n": completedCount, ":now": nowIso },
+          }));
+
+          // 전체 참여자 cheerScore (리더 10배)
+          const selfCheer = userId === challengeCreatorId ? completedCount * 10 : completedCount;
+          await docClient.send(new UpdateCommand({
+            TableName: process.env.USER_CHALLENGES_TABLE!,
+            Key: { userChallengeId: userChallenge.userChallengeId },
+            UpdateExpression: "ADD cheerScore :n SET updatedAt = :now",
+            ExpressionAttributeValues: { ":n": selfCheer, ":now": nowIso },
+          }));
+
+          for (const member of allActive) {
+            if (!member.userChallengeId) continue;
+            const memberCheer = member.userId === challengeCreatorId ? completedCount * 10 : completedCount;
+            await docClient.send(new UpdateCommand({
+              TableName: process.env.USER_CHALLENGES_TABLE!,
+              Key: { userChallengeId: member.userChallengeId },
+              UpdateExpression: "ADD cheerScore :n SET updatedAt = :now",
+              ExpressionAttributeValues: { ":n": memberCheer, ":now": nowIso },
+            }));
+          }
+
+          cheerOpportunity = {
+            hasIncompletePeople: false,
+            incompleteCount: 0,
+            cheerTicketGranted: false,
+            allGroupComplete: true,
+            completedCount,
+          };
+        } else {
+          // 미완료 멤버 있음 → auto-cheer 생성
+          const senderAlias = randomAlias();
+          for (const member of incompleteMembers) {
+            const memberTarget24 = member.personalTarget?.time24 || challengeTargetTime24;
+            const createdCheerId = await createAutoCheer({
+              senderId: userId,
+              receiverId: member.userId,
+              challengeId,
+              verificationId,
+              delta: delta || 0,
+              senderAlias,
+              memberTarget24,
+              verificationDate,
+              memberTimezone: member.personalTarget?.timezone || timezone,
+              nowISO: nowIso,
+              day: input.day,
+            });
+            if (createdCheerId) eligibleCheerIds.push(createdCheerId);
+          }
+
+          // 발송한 응원 수만큼 cheerScore 즉시 지급 (creator면 ×10)
+          const cheerCount = incompleteMembers.length;
+          const cheerGain = userId === challengeCreatorId ? cheerCount * 10 : cheerCount;
+          if (cheerGain > 0) {
+            await docClient.send(new UpdateCommand({
+              TableName: process.env.USER_CHALLENGES_TABLE!,
+              Key: { userChallengeId: userChallenge.userChallengeId },
+              UpdateExpression: "ADD cheerScore :n SET updatedAt = :now",
+              ExpressionAttributeValues: { ":n": cheerGain, ":now": nowIso },
+            }));
+          }
+
+          cheerOpportunity = {
+            hasIncompletePeople: true,
+            incompleteCount: incompleteMembers.length,
+            cheerTicketGranted: true,
+          };
+        }
       } catch (cheerError) {
         console.error("Auto cheer creation error:", cheerError);
       }
@@ -862,6 +928,71 @@ export const handler = async (
       console.error("Badge grant error (non-fatal):", badgeError);
       return [] as string[];
     });
+
+    // 수신자(나)가 당일 인증 완료 시 → 내게 보낸 status='sent' 응원의 발신자 감사 점수 적립
+    if (!isExtra && process.env.CHEERS_TABLE) {
+      try {
+        const receivedCheersResult = await docClient.send(new QueryCommand({
+          TableName: process.env.CHEERS_TABLE!,
+          IndexName: "receiverId-index",
+          KeyConditionExpression: "receiverId = :userId",
+          FilterExpression:
+            "challengeId = :challengeId AND #day = :day AND #status = :sent AND (attribute_not_exists(isThankScoreGranted) OR isThankScoreGranted = :false)",
+          ExpressionAttributeNames: {
+            "#status": "status",
+            "#day": "day",
+          },
+          ExpressionAttributeValues: {
+            ":userId": userId,
+            ":challengeId": challengeId,
+            ":day": input.day,
+            ":sent": "sent",
+            ":false": false,
+          },
+        }));
+
+        for (const cheer of (receivedCheersResult.Items ?? [])) {
+          await Promise.allSettled([
+            docClient.send(new UpdateCommand({
+              TableName: process.env.CHEERS_TABLE!,
+              Key: { cheerId: cheer.cheerId },
+              UpdateExpression: "SET #status = :done, isThankScoreGranted = :true, thankScoreGrantedAt = :now",
+              ConditionExpression: "#status = :sent",
+              ExpressionAttributeNames: { "#status": "status" },
+              ExpressionAttributeValues: {
+                ":done": "receiver_completed",
+                ":sent": "sent",
+                ":true": true,
+                ":now": nowIso,
+              },
+            })),
+            (async () => {
+              const senderResult = await docClient.send(new QueryCommand({
+                TableName: process.env.USER_CHALLENGES_TABLE!,
+                IndexName: "userId-index",
+                KeyConditionExpression: "userId = :senderId",
+                FilterExpression: "challengeId = :challengeId",
+                ExpressionAttributeValues: {
+                  ":senderId": cheer.senderId,
+                  ":challengeId": challengeId,
+                },
+              }));
+              const senderChallenge = senderResult.Items?.[0];
+              if (senderChallenge?.userChallengeId) {
+                await docClient.send(new UpdateCommand({
+                  TableName: process.env.USER_CHALLENGES_TABLE!,
+                  Key: { userChallengeId: senderChallenge.userChallengeId },
+                  UpdateExpression: "ADD thankScore :one SET updatedAt = :now",
+                  ExpressionAttributeValues: { ":one": 1, ":now": nowIso },
+                }));
+              }
+            })(),
+          ]);
+        }
+      } catch (e) {
+        console.error("Failed to grant thank scores on receiver completion:", e);
+      }
+    }
 
     const message = isEarlyCompletion
       ? `Day ${input.day} 완료! 목표보다 ${delta}분 일찍!`

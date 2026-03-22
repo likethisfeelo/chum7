@@ -51,7 +51,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
 
     const items = batchResult.Responses?.[process.env.CHEERS_TABLE!] ?? [];
-    const validCheers = items.filter((item: any) => item.receiverId === userId && item.isThankScoreGranted === true);
+    const validCheers = items.filter((item: any) => item.senderId === userId);
 
     if (validCheers.length === 0) {
       return response(404, { error: 'NO_VALID_CHEERS', message: '업데이트할 수 있는 응원이 없습니다' });
@@ -78,7 +78,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         await snsClient.send(new PublishCommand({
           TopicArn: process.env.SNS_TOPIC_ARN!,
           Message: JSON.stringify({
-            userId: cheer.senderId,
+            userId: cheer.receiverId,
             notification: {
               title: '감사 메시지가 도착했어요 💝',
               body: message,

@@ -10,7 +10,6 @@ import { resolveMediaUrl } from "@/shared/utils/mediaUrl";
 import { InlineVerificationForm } from "@/features/verification/components/InlineVerificationForm";
 import { BottomSheet } from "@/shared/components/BottomSheet";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
-import { ThankYouMessageModal } from "@/features/cheer/components/ThankYouMessageModal";
 import {
   getRemedyType,
   getRemainingRemedyCount,
@@ -201,12 +200,7 @@ export const ChallengeFeedPage = () => {
   });
   const [showGiveUpConfirm, setShowGiveUpConfirm] = useState(false);
   const [openVideoPickerSignal, setOpenVideoPickerSignal] = useState(0);
-  const [thankModal, setThankModal] = useState<{ count: number; cheerIds: string[] } | null>(null);
-
-  const handleVerificationSuccess = (data: any) => {
-    const count: number = data?.data?.cheerOpportunity?.incompleteCount ?? 0;
-    const cheerIds: string[] = data?.data?.eligibleCheerIds ?? [];
-    if (count > 0) setThankModal({ count, cheerIds });
+  const handleVerificationSuccess = (_data: any) => {
     queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
     queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
     queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] });
@@ -1061,13 +1055,6 @@ export const ChallengeFeedPage = () => {
         </div>
       </div>
 
-      {/* 감사 메시지 팝업 */}
-      <ThankYouMessageModal
-        isOpen={thankModal !== null}
-        autoThankedCount={thankModal?.count ?? 0}
-        autoThankedCheerIds={thankModal?.cheerIds ?? []}
-        onClose={() => setThankModal(null)}
-      />
     </div>
   );
 };
