@@ -2,31 +2,19 @@ import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import toast from 'react-hot-toast';
-import {
-  getChallengeDisplayMeta,
-  isVerificationDayCompleted,
-} from '@/features/challenge/utils/challengeLifecycle';
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
-
-// 오늘 날짜 progress 항목에서 verificationId 찾기
-function getTodayVerificationId(progress: any[], day: number): string | null {
-  const entry = (progress || []).find((p: any) => Number(p?.day) === day);
-  return entry?.verificationId ?? null;
-}
 
 export const TodayPage = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [replyDraftByCheer, setReplyDraftByCheer] = useState<Record<string, string>>({});
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const { data: cheers, isLoading: cheersLoading } = useQuery({
     queryKey: ['my-cheers', 'received'],
@@ -44,7 +32,7 @@ export const TodayPage = () => {
     },
   });
 
-  const { data: myChallengesData, isLoading: challengesLoading } = useQuery({
+  const { data: myChallengesData } = useQuery({
     queryKey: ['my-challenges-today'],
     queryFn: async () => {
       const res = await apiClient.get('/challenges/my?status=active');
@@ -77,19 +65,6 @@ export const TodayPage = () => {
     onError: () => toast.error('답장 전송 중 오류가 발생했습니다'),
   });
 
-  const deleteVerificationMutation = useMutation({
-    mutationFn: async (verificationId: string) => {
-      await apiClient.delete(`/verifications/${verificationId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-challenges-today'] });
-      setConfirmDeleteId(null);
-      setMenuOpenId(null);
-      toast.success('인증이 삭제됐어요. 오늘 다시 인증할 수 있어요.');
-    },
-    onError: () => toast.error('삭제 중 오류가 발생했습니다'),
-  });
-
   const today = format(new Date(), 'yyyy.MM.dd (E)', { locale: ko });
 
   // 받은 응원: sent 상태만 (receiver_completed는 알림 안 왔으므로 미표시)
@@ -116,7 +91,6 @@ export const TodayPage = () => {
     () => (cheers || []).filter((c: any) => c.status === 'pending'),
     [cheers],
   );
-
   const thanksSent = useMemo(
     () => (cheers || []).filter((c: any) => c.isThanked === true),
     [cheers],
@@ -126,8 +100,6 @@ export const TodayPage = () => {
     () => myChallengesData?.challenges || [],
     [myChallengesData],
   );
-
-  // 전체 thankScore 합산 (챌린지별)
   const totalThankScore = useMemo(
     () => activeChallenges.reduce((sum: number, c: any) => sum + (c.thankScore || 0), 0),
     [activeChallenges],
@@ -135,7 +107,6 @@ export const TodayPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 헤더 */}
       <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
         <div className="flex items-center justify-between">
           <div>
@@ -153,128 +124,7 @@ export const TodayPage = () => {
 
       <div className="p-6 space-y-6">
 
-        {/* 오늘의 인증 */}
-        <section className="bg-white border border-gray-100 rounded-2xl p-4 space-y-3">
-          <h2 className="text-base font-bold text-gray-900">오늘의 인증</h2>
-          {challengesLoading ? (
-            <Loading />
-          ) : activeChallenges.length === 0 ? (
-            <p className="text-sm text-gray-500">진행 중인 챌린지가 없어요</p>
-          ) : (
-            <div className="space-y-2">
-              {activeChallenges.map((challenge: any) => {
-                const progress = challenge.progress || [];
-                const { currentDay, durationDays, isChallengeCompleted, participatedDays, completionRate } = getChallengeDisplayMeta(challenge);
-                const todayDone = isChallengeCompleted || isVerificationDayCompleted(progress, currentDay);
-                const todayVerificationId = getTodayVerificationId(progress, currentDay);
-                const isMenuOpen = menuOpenId === challenge.userChallengeId;
-
-                return (
-                  <div key={challenge.userChallengeId} className="relative">
-                    <div className="flex items-center justify-between gap-3 py-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{challenge.challenge?.badgeIcon || '🎯'}</span>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{challenge.challenge?.title}</p>
-                          {isChallengeCompleted ? (
-                            <p className="text-xs text-emerald-600">🏁 챌린지 완료</p>
-                          ) : (
-                            <>
-                              <p className="text-xs text-gray-500">Day {currentDay} / {durationDays}</p>
-                              <p className="text-[11px] text-gray-400">참여 {participatedDays}일 · 진행률 {completionRate}%</p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {todayDone ? (
-                          <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg">✅ 완료</span>
-                        ) : (
-                          <span className="text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg">⏳ 대기</span>
-                        )}
-                        {todayDone && todayVerificationId && !isChallengeCompleted && (
-                          <button
-                            onClick={() => setMenuOpenId(isMenuOpen ? null : challenge.userChallengeId)}
-                            className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-                          >
-                            ···
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* 드롭다운 메뉴 */}
-                    <AnimatePresence>
-                      {isMenuOpen && todayVerificationId && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -4 }}
-                          className="absolute right-0 top-10 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden"
-                        >
-                          <button
-                            onClick={() => {
-                              setConfirmDeleteId(todayVerificationId);
-                              setMenuOpenId(null);
-                            }}
-                            className="w-full px-4 py-3 text-left text-sm text-red-500 hover:bg-red-50 flex items-center gap-2"
-                          >
-                            🗑️ 인증 삭제
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* 삭제 확인 바텀시트 */}
-        <AnimatePresence>
-          {confirmDeleteId && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.4 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black z-30"
-                onClick={() => setConfirmDeleteId(null)}
-              />
-              <motion.div
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-40 p-6 space-y-4"
-              >
-                <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto" />
-                <div className="text-center space-y-1">
-                  <p className="font-bold text-gray-900">오늘 인증을 삭제할까요?</p>
-                  <p className="text-sm text-gray-500">삭제 후 오늘 다시 인증할 수 있어요</p>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setConfirmDeleteId(null)}
-                    className="flex-1 py-3 border border-gray-200 rounded-2xl text-gray-600 font-semibold text-sm"
-                  >
-                    취소
-                  </button>
-                  <button
-                    onClick={() => deleteVerificationMutation.mutate(confirmDeleteId)}
-                    disabled={deleteVerificationMutation.isPending}
-                    className="flex-1 py-3 bg-red-500 text-white rounded-2xl font-semibold text-sm disabled:opacity-60"
-                  >
-                    {deleteVerificationMutation.isPending ? '삭제 중...' : '삭제'}
-                  </button>
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-
-        {/* 감사 점수 (thankScore > 0 인 경우만) */}
+        {/* 감사 점수 */}
         {totalThankScore > 0 && (
           <section className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100 rounded-2xl p-4">
             <div className="flex items-center gap-3">
@@ -380,7 +230,7 @@ export const TodayPage = () => {
           )}
         </section>
 
-        {/* 내가 보낸 응원 — 실제 발송된 것 */}
+        {/* 내가 보낸 응원 */}
         {(normalSent.length > 0 || sentCheersLoading) && (
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">내가 보낸 응원 ✉️</h2>
@@ -422,7 +272,7 @@ export const TodayPage = () => {
           </section>
         )}
 
-        {/* 이미 완료한 팀원 응원 — receiver_completed */}
+        {/* 효과적인 응원 — receiver_completed */}
         {receiverCompletedSent.length > 0 && (
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">🎯 효과적인 응원</h2>
