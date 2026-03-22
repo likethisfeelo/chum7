@@ -59,6 +59,7 @@ export const TodayPageDebug = () => {
     receivedTotal: receivedAll.length,
     receivedSent: receivedAll.filter((c: any) => c.status === 'sent').length,
     receivedPending: receivedAll.filter((c: any) => c.status === 'pending').length,
+    totalCheerScore: activeChallenges.reduce((s: number, c: any) => s + (c.cheerScore || 0), 0),
     totalThankScore: activeChallenges.reduce((s: number, c: any) => s + (c.thankScore || 0), 0),
   }), [sentAll, receivedAll, activeChallenges]);
 
@@ -94,7 +95,11 @@ export const TodayPageDebug = () => {
           <h2 className="text-yellow-400 text-sm font-bold mb-3">📊 응원 시스템 현황</h2>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="bg-gray-700 rounded-lg p-2">
-              <p className="text-gray-400">thankScore (합산)</p>
+              <p className="text-gray-400">🎟 cheerScore (합산)</p>
+              <p className="text-orange-300 text-lg font-bold">{stats.totalCheerScore}</p>
+            </div>
+            <div className="bg-gray-700 rounded-lg p-2">
+              <p className="text-gray-400">✨ thankScore (합산)</p>
               <p className="text-yellow-300 text-lg font-bold">{stats.totalThankScore}</p>
             </div>
             <div className="bg-gray-700 rounded-lg p-2">
@@ -129,7 +134,7 @@ export const TodayPageDebug = () => {
                 <div key={c.userChallengeId} className="bg-gray-700 rounded-lg p-3 text-xs">
                   <p className="text-white font-semibold">{c.challenge?.title}</p>
                   <p className="text-gray-400 mt-1">
-                    score={c.score ?? 0} · thankScore=<span className="text-yellow-300">{c.thankScore ?? 0}</span>
+                    score={c.score ?? 0} · <span className="text-orange-300">cheerScore={c.cheerScore ?? 0}</span> · <span className="text-yellow-300">thankScore={c.thankScore ?? 0}</span>
                   </p>
                 </div>
               ))}
