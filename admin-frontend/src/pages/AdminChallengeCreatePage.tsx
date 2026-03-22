@@ -6,7 +6,7 @@ import { lifecycleLabel } from '@/utils/lifecycle';
 type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
 type ChallengeType = 'leader_only' | 'personal_only' | 'leader_personal';
 type VerificationType = 'image' | 'text' | 'link' | 'video';
-type RemedyType = 'strict' | 'limited' | 'open';
+type RemedyType = 'anytime' | 'last_day' | 'disabled';
 type Category = 'health' | 'habit' | 'development' | 'creativity' | 'relationship' | 'mindfulness' | 'expand' | 'impact';
 
 const CATEGORIES: Array<{ value: Category; label: string }> = [
@@ -74,8 +74,7 @@ interface FormState {
   requirePersonalTargetOnJoin: boolean;
   allowExtraVisibilityToggle: boolean;
   remedyType: RemedyType;
-  maxRemedyDays: 1 | 2;
-  allowBulk: boolean;
+  maxRemedyDays: number;
   personalQuestAutoApprove: boolean;
   joinApprovalRequired: boolean;
   allowedVerificationTypes: VerificationType[];
@@ -97,9 +96,8 @@ const INITIAL: FormState = {
   challengeType: 'leader_personal',
   requirePersonalTargetOnJoin: true,
   allowExtraVisibilityToggle: true,
-  remedyType: 'open',
+  remedyType: 'anytime',
   maxRemedyDays: 1,
-  allowBulk: false,
   personalQuestAutoApprove: true,
   joinApprovalRequired: false,
   allowedVerificationTypes: ['image', 'text', 'link', 'video'],
@@ -172,8 +170,7 @@ export const AdminChallengeCreatePage = () => {
         challengeType:   form.challengeType,
         defaultRemedyPolicy: {
           type:          form.remedyType,
-          maxRemedyDays: form.remedyType === 'limited' ? form.maxRemedyDays : null,
-          allowBulk:     form.remedyType === 'open'    ? form.allowBulk     : null,
+          maxRemedyDays: form.remedyType === 'last_day' && form.maxRemedyDays > 0 ? form.maxRemedyDays : null,
         },
         layerPolicy: {
           requirePersonalGoalOnJoin,
@@ -579,13 +576,13 @@ export const AdminChallengeCreatePage = () => {
         <div className={S}>
           <div>
             <h2 className="font-bold text-gray-800">⑥ 보완 인증 정책</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Day 6에 이전 실패일을 보완 인증할 수 있는 정책</p>
+            <p className="text-xs text-gray-500 mt-0.5">챌린지 기간 내 이전 실패일을 보완 인증할 수 있는 정책</p>
           </div>
           <div className="grid grid-cols-3 gap-2">
             {([
-              { value: 'open'    as RemedyType, icon: '🔓', label: '자유',  desc: '횟수 제한 없음' },
-              { value: 'limited' as RemedyType, icon: '🔢', label: '제한',  desc: '최대 N회' },
-              { value: 'strict'  as RemedyType, icon: '🔒', label: '엄격',  desc: '보완 불가' },
+              { value: 'anytime'  as RemedyType, icon: '🔓', label: '자유',       desc: '언제든 빈날 채우기' },
+              { value: 'last_day' as RemedyType, icon: '🔢', label: '마지막날',   desc: '최대 N회' },
+              { value: 'disabled' as RemedyType, icon: '🔒', label: '보완 불가',  desc: '보완 없음' },
             ]).map(t => (
               <button
                 key={t.value}
@@ -606,33 +603,21 @@ export const AdminChallengeCreatePage = () => {
             ))}
           </div>
 
-          {form.remedyType === 'limited' && (
+          {form.remedyType === 'last_day' && (
             <div className="flex items-center gap-3">
               <label className="text-sm text-gray-700 font-medium">최대 보완 횟수</label>
               <select
                 value={form.maxRemedyDays}
-                onChange={e => set('maxRemedyDays', Number(e.target.value) as 1 | 2)}
+                onChange={e => set('maxRemedyDays', Number(e.target.value))}
                 className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                <option value={1}>1회</option>
-                <option value={2}>2회</option>
+                {Array.from({ length: Math.max(form.durationDays - 1, 1) }, (_, i) => i + 1).map(n => (
+                  <option key={n} value={n}>{n}회</option>
+                ))}
+                <option value={0}>제한 없음 (전체 실패일)</option>
               </select>
+              <p className="text-xs text-gray-400">최대 {form.durationDays - 1}회 (기간-1)</p>
             </div>
-          )}
-
-          {form.remedyType === 'open' && (
-            <label className="flex items-start gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.allowBulk}
-                onChange={e => set('allowBulk', e.target.checked)}
-                className="mt-0.5 w-4 h-4 text-primary-600 rounded"
-              />
-              <div>
-                <span className="text-sm font-medium text-gray-700">몰아서 제출 허용</span>
-                <p className="text-xs text-gray-400 mt-0.5">여러 날 실패분을 한 번에 보완 제출할 수 있습니다</p>
-              </div>
-            </label>
           )}
         </div>
 
