@@ -4,6 +4,7 @@ import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/li
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { resolveJoinRequirements } from '../../../shared/lib/join-requirements';
+import { certDateFromIso, DEFAULT_TIMEZONE } from '../../../shared/lib/challenge-quest-policy';
 import { docClient } from '../../../shared/lib/dynamodb-client';
 import { response } from '../../../shared/lib/api-response';
 
@@ -134,7 +135,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // 3. startDate = challenge.challengeStartAt (모든 참여자 동일)
-    const startDate = challenge.challengeStartAt.split('T')[0]; // YYYY-MM-DD
+    // KST 기준 날짜로 변환 (UTC split 시 하루 빠지는 문제 방지)
+    const startDate = certDateFromIso(challenge.challengeStartAt, DEFAULT_TIMEZONE); // YYYY-MM-DD
 
     // groupId = challengeId (같은 챌린지 = 같은 코호트)
     const groupId = challengeId;
