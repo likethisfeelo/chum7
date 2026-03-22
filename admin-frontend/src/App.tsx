@@ -11,6 +11,7 @@ import { AdminAuditLogsPage } from '@/pages/AdminAuditLogsPage';
 import { AdminPersonalQuestProposalsPage } from '@/pages/AdminPersonalQuestProposalsPage';
 import { AdminNotificationsPage } from '@/pages/AdminNotificationsPage';
 import { AdminCategoryBannersPage } from '@/pages/AdminCategoryBannersPage';
+import { AdminCheerMonitorPage } from '@/pages/AdminCheerMonitorPage';
 import '@/styles/index.css';
 
 const queryClient = new QueryClient({
@@ -116,6 +117,7 @@ const Sidebar = () => {
     nav.push({ path: '/admin/quests/submissions', label: '📋 제출물 심사' });
     nav.push({ path: '/admin/personal-quest-proposals', label: '📝 개인퀘스트 심사' });
     nav.push({ path: '/admin/notifications', label: '🔔 알림함' });
+    nav.push({ path: '/admin/cheer/monitor', label: '📣 응원 모니터' });
   }
 
   const handleLogout = () => {
@@ -300,6 +302,17 @@ export default function App() {
               <RoleRoute roles={['admins', 'productowners']}>
                 <Layout>
                   <AdminCategoryBannersPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/admin/cheer/monitor"
+            element={
+              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
+                <Layout>
+                  <AdminCheerMonitorPage />
                 </Layout>
               </RoleRoute>
             }

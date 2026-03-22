@@ -296,6 +296,23 @@ export class AdminStack extends Stack {
       authorizer,
     });
 
+    // 10-0. Cheer Monitor (Ops) — 응원 점수/알람 현황 조회
+    const cheerMonitorFn = new NodejsFunction(this, 'CheerMonitorFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-admin-cheer-monitor`,
+      entry: path.join(__dirname, '../../backend/services/admin/cheer/monitor/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    cheersTable.grantReadData(cheerMonitorFn);
+    userChallengesTable.grantReadData(cheerMonitorFn);
+    apiGateway.addRoutes({
+      path: '/admin/cheer/monitor',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('AdminCheerMonitorIntegration', cheerMonitorFn),
+      authorizer,
+    });
+
     // 10. Cheer Dead Letters (Ops)
     const cheerDeadLetterListFn = new NodejsFunction(this, 'CheerDeadLetterListFn', {
       ...commonProps,
