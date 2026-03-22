@@ -863,6 +863,71 @@ export const handler = async (
       return [] as string[];
     });
 
+    // 수신자(나)가 당일 인증 완료 시 → 내게 보낸 status='sent' 응원의 발신자 감사 점수 적립
+    if (!isExtra && process.env.CHEERS_TABLE) {
+      try {
+        const receivedCheersResult = await docClient.send(new QueryCommand({
+          TableName: process.env.CHEERS_TABLE!,
+          IndexName: "receiverId-index",
+          KeyConditionExpression: "receiverId = :userId",
+          FilterExpression:
+            "challengeId = :challengeId AND #day = :day AND #status = :sent AND (attribute_not_exists(isThankScoreGranted) OR isThankScoreGranted = :false)",
+          ExpressionAttributeNames: {
+            "#status": "status",
+            "#day": "day",
+          },
+          ExpressionAttributeValues: {
+            ":userId": userId,
+            ":challengeId": challengeId,
+            ":day": input.day,
+            ":sent": "sent",
+            ":false": false,
+          },
+        }));
+
+        for (const cheer of (receivedCheersResult.Items ?? [])) {
+          await Promise.allSettled([
+            docClient.send(new UpdateCommand({
+              TableName: process.env.CHEERS_TABLE!,
+              Key: { cheerId: cheer.cheerId },
+              UpdateExpression: "SET #status = :done, isThankScoreGranted = :true, thankScoreGrantedAt = :now",
+              ConditionExpression: "#status = :sent",
+              ExpressionAttributeNames: { "#status": "status" },
+              ExpressionAttributeValues: {
+                ":done": "receiver_completed",
+                ":sent": "sent",
+                ":true": true,
+                ":now": nowIso,
+              },
+            })),
+            (async () => {
+              const senderResult = await docClient.send(new QueryCommand({
+                TableName: process.env.USER_CHALLENGES_TABLE!,
+                IndexName: "userId-index",
+                KeyConditionExpression: "userId = :senderId",
+                FilterExpression: "challengeId = :challengeId",
+                ExpressionAttributeValues: {
+                  ":senderId": cheer.senderId,
+                  ":challengeId": challengeId,
+                },
+              }));
+              const senderChallenge = senderResult.Items?.[0];
+              if (senderChallenge?.userChallengeId) {
+                await docClient.send(new UpdateCommand({
+                  TableName: process.env.USER_CHALLENGES_TABLE!,
+                  Key: { userChallengeId: senderChallenge.userChallengeId },
+                  UpdateExpression: "ADD thankScore :one SET updatedAt = :now",
+                  ExpressionAttributeValues: { ":one": 1, ":now": nowIso },
+                }));
+              }
+            })(),
+          ]);
+        }
+      } catch (e) {
+        console.error("Failed to grant thank scores on receiver completion:", e);
+      }
+    }
+
     const message = isEarlyCompletion
       ? `Day ${input.day} 완료! 목표보다 ${delta}분 일찍!`
       : `Day ${input.day} 완료!`;
