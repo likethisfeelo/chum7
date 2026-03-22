@@ -416,7 +416,7 @@ export const ChallengeFeedPage = () => {
   const progressList: any[] = userChallenge?.progress || [];
 
   const isTodayAllDone = isMixedChallengeType
-    ? iDidTodayLeaderQuestVerification && iDidTodayPersonalQuestVerification
+    ? iDidTodayLeaderQuestVerification && (personalQuest === null || iDidTodayPersonalQuestVerification)
     : iDidTodayVerification;
 
   return (
@@ -508,7 +508,7 @@ export const ChallengeFeedPage = () => {
                   const isToday = day === todayDay;
                   const isDone = isMixedChallengeType
                     ? Boolean(p?.leaderQuestDone && p?.personalQuestDone) ||
-                      (isToday && iDidTodayLeaderQuestVerification && iDidTodayPersonalQuestVerification)
+                      (isToday && iDidTodayLeaderQuestVerification && (personalQuest === null || iDidTodayPersonalQuestVerification))
                     : p?.status === "success" || p?.status === "completed" || p?.status === "remedy" ||
                       (isToday && iDidTodayVerification);
                   const isPartial = isMixedChallengeType
