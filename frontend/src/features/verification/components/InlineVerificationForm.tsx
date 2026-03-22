@@ -498,7 +498,8 @@ export const InlineVerificationForm = ({
         toast(`새 뱃지: ${payload.newBadges.join(", ")}`, { icon: "🏅" });
       }
       if (payload?.cheerOpportunity?.cheerTicketGranted) {
-        toast("응원권 1장을 획득했어요 🎟", { icon: "🎉" });
+        const cnt = payload.cheerOpportunity.incompleteCount ?? 1;
+        toast(`${cnt}명에게 응원을 보냈어요 🎟`, { icon: "🎉" });
       }
 
       if (selectedType === "video") {
