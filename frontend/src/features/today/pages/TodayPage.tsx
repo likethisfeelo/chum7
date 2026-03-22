@@ -91,11 +91,6 @@ export const TodayPage = () => {
     () => (cheers || []).filter((c: any) => c.status === 'pending'),
     [cheers],
   );
-  const thanksSent = useMemo(
-    () => (cheers || []).filter((c: any) => c.isThanked === true),
-    [cheers],
-  );
-
   const activeChallenges = useMemo(
     () => myChallengesData?.challenges || [],
     [myChallengesData],
@@ -298,9 +293,9 @@ export const TodayPage = () => {
                   <div className="flex items-start gap-3">
                     <span className="text-2xl flex-shrink-0">🎉</span>
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-emerald-800">상대방이 먼저 완료했어요!</p>
+                      <p className="text-sm font-semibold text-emerald-800">팀원이 완료했어요!</p>
                       <p className="text-xs text-emerald-600 mt-0.5">
-                        {cheer.delta ? `${cheer.delta}분 일찍 인증한 덕분에 ` : ''}응원을 예약했더니 상대방이 목표 시간 전에 완료했어요.
+                        {cheer.delta ? `${cheer.delta}분 일찍 인증하고 보낸 응원을 받은 ` : '내 응원을 받은 '}팀원이 목표 시간 전에 완료했어요.
                       </p>
                       <p className="text-xs font-semibold text-amber-600 mt-1">감사 점수 +1이 적립됐어요 ✨</p>
                     </div>
@@ -312,40 +307,6 @@ export const TodayPage = () => {
                   </div>
                 </div>
               ))}
-            </div>
-          </section>
-        )}
-
-        {/* 보낸 감사 */}
-        {thanksSent.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-bold text-gray-900">💝 보낸 감사</h2>
-              <span className="text-xs text-gray-400">{thanksSent.length}건</span>
-            </div>
-            <div className="space-y-2">
-              {thanksSent.map((cheer: any) => {
-                const senderName = cheer.senderAlias || '익명의 응원자';
-                const displayMessage = cheer.message
-                  || (cheer.delta ? `${cheer.delta}분 일찍 인증하고 응원을 보냈어요 💪` : '응원을 보냈어요 💪');
-                return (
-                  <div key={cheer.cheerId} className="bg-rose-50 rounded-xl p-3 border border-rose-100 flex items-center gap-3">
-                    <span className="text-lg flex-shrink-0">💝</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-rose-700">{senderName}의 응원에 감사를 보냈어요</p>
-                      <p className="text-xs text-gray-500 truncate mt-0.5">{displayMessage}</p>
-                      {cheer.thankMessage && (
-                        <p className="text-xs text-rose-600 mt-1">💬 {cheer.thankMessage}</p>
-                      )}
-                    </div>
-                    {cheer.thankedAt && (
-                      <p className="text-[11px] text-gray-400 flex-shrink-0">
-                        {format(new Date(cheer.thankedAt), 'HH:mm', { locale: ko })}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
             </div>
           </section>
         )}
