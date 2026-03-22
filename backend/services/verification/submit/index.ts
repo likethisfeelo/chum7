@@ -396,6 +396,9 @@ export const handler = async (
     // 리더 퀘스트 전체 목록 조회 (N개 모두 완료 요건 판단용)
     let totalLeaderQuestCount = 0;
     let totalLeaderQuestIds: string[] = [];
+    // leaderQuestsFetched=true → QUESTS_TABLE 조회 성공 (0개 포함)
+    // leaderQuestsFetched=false → 테이블 미설정 또는 조회 실패 → 레거시 boolean 폴백
+    let leaderQuestsFetched = false;
     if (process.env.QUESTS_TABLE) {
       try {
         const leaderQuestResult = await docClient.send(new QueryCommand({
@@ -408,6 +411,7 @@ export const handler = async (
         }));
         totalLeaderQuestIds = (leaderQuestResult.Items ?? []).map((q: any) => q.questId as string);
         totalLeaderQuestCount = totalLeaderQuestIds.length;
+        leaderQuestsFetched = true;
       } catch (leaderQuestErr: any) {
         console.warn('Failed to fetch leader quests (non-fatal):', leaderQuestErr?.message);
       }
@@ -472,10 +476,23 @@ export const handler = async (
       // mixed: null → 아래 isExtra 판단에서 처리
     }
 
-    // 리더 퀘스트 all-done 판단 (totalLeaderQuestCount=0이면 레거시 boolean 폴백)
+    // 리더 퀘스트 제출인데 등록된 퀘스트가 없으면 거부
+    if (resolvedQuestType === "leader" && leaderQuestsFetched && totalLeaderQuestCount === 0) {
+      return response(400, {
+        error: "NO_LEADER_QUESTS_REGISTERED",
+        message: "등록된 리더 퀘스트가 없습니다. 리더가 퀘스트를 먼저 등록해야 합니다",
+      });
+    }
+
+    // 리더 퀘스트 all-done 판단
+    // leaderQuestsFetched && count=0 → 퀘스트 미등록 상태 → 완료 불가
+    // !leaderQuestsFetched && count=0 → 레거시 챌린지 → boolean 폴백
     function isLeaderAllDone(dp: any): boolean {
       if (!dp) return false;
-      if (totalLeaderQuestCount === 0) return dp.leaderQuestDone === true;
+      if (totalLeaderQuestCount === 0) {
+        if (leaderQuestsFetched) return false;
+        return dp.leaderQuestDone === true;
+      }
       return (dp.leaderQuestIds?.length ?? 0) >= totalLeaderQuestCount;
     }
 
@@ -492,7 +509,10 @@ export const handler = async (
     function isQuestAlreadyDone(dp: any, qt: "leader" | "personal" | null, questId?: string | null): boolean {
       if (!dp) return false;
       if (qt === "leader") {
-        if (totalLeaderQuestCount === 0) return dp.leaderQuestDone === true;
+        if (totalLeaderQuestCount === 0) {
+          if (leaderQuestsFetched) return false;
+          return dp.leaderQuestDone === true;
+        }
         const submittedIds: string[] = dp.leaderQuestIds ?? [];
         return questId ? submittedIds.includes(questId) : submittedIds.length >= totalLeaderQuestCount;
       }
@@ -545,7 +565,9 @@ export const handler = async (
         ? [..._existingLeaderQuestIds, input.questId]
         : _existingLeaderQuestIds;
     const _leaderDone: boolean = resolvedQuestType === "leader"
-      ? (totalLeaderQuestCount === 0 ? true : _newLeaderQuestIds.length >= totalLeaderQuestCount)
+      ? (totalLeaderQuestCount === 0
+          ? (leaderQuestsFetched ? false : true)
+          : _newLeaderQuestIds.length >= totalLeaderQuestCount)
       : (dayProgress?.leaderQuestDone === true);
     const _personalDone: boolean =
       resolvedQuestType === "personal" ? true : (dayProgress?.personalQuestDone === true);
@@ -645,7 +667,9 @@ export const handler = async (
       : existingLeaderQuestIds;
 
     const leaderQuestDone: boolean | undefined = resolvedQuestType === "leader"
-      ? (totalLeaderQuestCount === 0 ? true : leaderQuestIds.length >= totalLeaderQuestCount)
+      ? (totalLeaderQuestCount === 0
+          ? (leaderQuestsFetched ? false : true)
+          : leaderQuestIds.length >= totalLeaderQuestCount)
       : (existingDayEntry?.leaderQuestDone ?? (isLeaderOnlyType ? false : undefined));
     const personalQuestDone = resolvedQuestType === "personal"
       ? true
