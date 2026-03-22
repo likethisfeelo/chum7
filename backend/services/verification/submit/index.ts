@@ -347,6 +347,7 @@ export const handler = async (
     let challengeCategory: string | null = null;
     let challengeType: string = "leader_personal";
     let challengeDurationDays: number = 7;
+    let challengeCreatorId: string | null = null;
     if (process.env.CHALLENGES_TABLE) {
       try {
         const challengeResult = await docClient.send(
@@ -386,6 +387,12 @@ export const handler = async (
         if (Number.isFinite(rawDuration) && rawDuration > 0) {
           challengeDurationDays = Math.floor(rawDuration);
         }
+        challengeCreatorId =
+          typeof challengeResult.Item?.creatorId === "string"
+            ? challengeResult.Item.creatorId
+            : typeof challengeResult.Item?.createdBy === "string"
+              ? challengeResult.Item.createdBy
+              : null;
       } catch (challengeErr: any) {
         console.warn("Failed to fetch challenge data (non-fatal):", {
           challengeId,
@@ -822,30 +829,77 @@ export const handler = async (
           return !isDayComplete(todayEntry);
         });
 
-        const senderAlias = randomAlias();
-        for (const member of incompleteMembers) {
-          const memberTarget24 = member.personalTarget?.time24 || challengeTargetTime24;
-          const createdCheerId = await createAutoCheer({
-            senderId: userId,
-            receiverId: member.userId,
-            challengeId,
-            verificationId,
-            delta: delta || 0,
-            senderAlias,
-            memberTarget24,
-            verificationDate,
-            memberTimezone: member.personalTarget?.timezone || timezone,
-            nowISO: nowIso,
-            day: input.day,
-          });
-          if (createdCheerId) eligibleCheerIds.push(createdCheerId);
-        }
+        if (incompleteMembers.length === 0) {
+          // 전원 완료 보너스: 마지막 완료자가 조기 완료한 경우
+          const allActive = (membersResult.Items || []).filter((m: any) => m.status === "active");
+          const completedCount =
+            allActive.filter((m: any) => {
+              const mp = normalizeProgress(m.progress);
+              return isDayComplete(mp.find((p: any) => Number(p.day) === input.day));
+            }).length + 1; // +1 = 자신
 
-        cheerOpportunity = {
-          hasIncompletePeople: incompleteMembers.length > 0,
-          incompleteCount: incompleteMembers.length,
-          cheerTicketGranted: incompleteMembers.length > 0,
-        };
+          // 마지막 완료자(자신) thankScore += completedCount
+          await docClient.send(new UpdateCommand({
+            TableName: process.env.USER_CHALLENGES_TABLE!,
+            Key: { userChallengeId: userChallenge.userChallengeId },
+            UpdateExpression: "ADD thankScore :n SET updatedAt = :now",
+            ExpressionAttributeValues: { ":n": completedCount, ":now": nowIso },
+          }));
+
+          // 전체 참여자 cheerScore (리더 10배)
+          const selfCheer = userId === challengeCreatorId ? completedCount * 10 : completedCount;
+          await docClient.send(new UpdateCommand({
+            TableName: process.env.USER_CHALLENGES_TABLE!,
+            Key: { userChallengeId: userChallenge.userChallengeId },
+            UpdateExpression: "ADD cheerScore :n SET updatedAt = :now",
+            ExpressionAttributeValues: { ":n": selfCheer, ":now": nowIso },
+          }));
+
+          for (const member of allActive) {
+            if (!member.userChallengeId) continue;
+            const memberCheer = member.userId === challengeCreatorId ? completedCount * 10 : completedCount;
+            await docClient.send(new UpdateCommand({
+              TableName: process.env.USER_CHALLENGES_TABLE!,
+              Key: { userChallengeId: member.userChallengeId },
+              UpdateExpression: "ADD cheerScore :n SET updatedAt = :now",
+              ExpressionAttributeValues: { ":n": memberCheer, ":now": nowIso },
+            }));
+          }
+
+          cheerOpportunity = {
+            hasIncompletePeople: false,
+            incompleteCount: 0,
+            cheerTicketGranted: false,
+            allGroupComplete: true,
+            completedCount,
+          };
+        } else {
+          // 미완료 멤버 있음 → auto-cheer 생성
+          const senderAlias = randomAlias();
+          for (const member of incompleteMembers) {
+            const memberTarget24 = member.personalTarget?.time24 || challengeTargetTime24;
+            const createdCheerId = await createAutoCheer({
+              senderId: userId,
+              receiverId: member.userId,
+              challengeId,
+              verificationId,
+              delta: delta || 0,
+              senderAlias,
+              memberTarget24,
+              verificationDate,
+              memberTimezone: member.personalTarget?.timezone || timezone,
+              nowISO: nowIso,
+              day: input.day,
+            });
+            if (createdCheerId) eligibleCheerIds.push(createdCheerId);
+          }
+
+          cheerOpportunity = {
+            hasIncompletePeople: true,
+            incompleteCount: incompleteMembers.length,
+            cheerTicketGranted: true,
+          };
+        }
       } catch (cheerError) {
         console.error("Auto cheer creation error:", cheerError);
       }
