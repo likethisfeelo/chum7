@@ -11,7 +11,9 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {

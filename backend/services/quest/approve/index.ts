@@ -27,7 +27,9 @@ import {
 import { z } from 'zod';
 
 const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 
 const reviewSchema = z.object({
   action:     z.enum(['approve', 'reject']),

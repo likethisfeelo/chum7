@@ -8,7 +8,9 @@ import { certDateFromIso, remedyScore, safeTimezone, calculateChallengeDay } fro
 import { normalizeProgress } from '../../../shared/lib/progress';
 
 const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 
 const remedySchema = z.object({
   userChallengeId: z.string().uuid(),

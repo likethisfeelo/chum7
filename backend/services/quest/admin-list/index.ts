@@ -14,7 +14,9 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 const s3Client = new S3Client({});
 
 function response(statusCode: number, body: any): APIGatewayProxyResult {

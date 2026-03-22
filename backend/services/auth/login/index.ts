@@ -11,7 +11,9 @@ import {
 import { z } from 'zod';
 
 const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 const cognitoClient = new CognitoIdentityProviderClient({});
 
 const loginSchema = z.object({
