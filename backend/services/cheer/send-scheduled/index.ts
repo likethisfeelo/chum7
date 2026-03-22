@@ -4,6 +4,13 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 
+function normalizeProgress(progress: any): any[] {
+  if (!progress) return [];
+  if (Array.isArray(progress)) return progress;
+  if (typeof progress === 'object') return Object.values(progress);
+  return [];
+}
+
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const snsClient = new SNSClient({});
@@ -36,6 +43,85 @@ function getBackoffMinutes(retryCountAfterIncrement: number): number {
 
   const index = Math.min(retryCountAfterIncrement - 1, RETRY_BACKOFF_MINUTES.length - 1);
   return RETRY_BACKOFF_MINUTES[index];
+}
+
+// 수신자가 해당 day를 완료했는지 확인
+async function isReceiverCompletedToday(
+  receiverId: string,
+  challengeId: string,
+  day: number,
+): Promise<boolean> {
+  if (!process.env.USER_CHALLENGES_TABLE) return false;
+
+  const result = await docClient.send(new QueryCommand({
+    TableName: process.env.USER_CHALLENGES_TABLE!,
+    IndexName: 'userId-index',
+    KeyConditionExpression: 'userId = :userId',
+    FilterExpression: 'challengeId = :challengeId',
+    ExpressionAttributeValues: {
+      ':userId': receiverId,
+      ':challengeId': challengeId,
+    },
+  }));
+
+  const userChallenge = result.Items?.[0];
+  if (!userChallenge) return false;
+
+  const progress = normalizeProgress(userChallenge.progress);
+  const dayEntry = progress.find((p: any) => Number(p?.day) === day);
+  return dayEntry?.status === 'success';
+}
+
+// 발신자에게 감사 점수 적립 (수신자가 이미 완료한 경우)
+async function grantThankScoreToSender(
+  senderId: string,
+  cheerId: string,
+  challengeId: string,
+  nowDate: Date,
+): Promise<void> {
+  const nowIso = nowDate.toISOString();
+
+  // 1. cheer: status = receiver_completed, isThankScoreGranted = true
+  await docClient.send(new UpdateCommand({
+    TableName: process.env.CHEERS_TABLE!,
+    Key: { cheerId },
+    UpdateExpression: 'SET #status = :done, isThankScoreGranted = :true, thankScoreGrantedAt = :now',
+    ConditionExpression: '#status = :pending',
+    ExpressionAttributeNames: { '#status': 'status' },
+    ExpressionAttributeValues: {
+      ':done': 'receiver_completed',
+      ':pending': 'pending',
+      ':true': true,
+      ':now': nowIso,
+    },
+  }));
+
+  // 2. 발신자 userChallenge: thankScore += 1
+  if (!process.env.USER_CHALLENGES_TABLE) return;
+
+  const senderResult = await docClient.send(new QueryCommand({
+    TableName: process.env.USER_CHALLENGES_TABLE!,
+    IndexName: 'userId-index',
+    KeyConditionExpression: 'userId = :userId',
+    FilterExpression: 'challengeId = :challengeId',
+    ExpressionAttributeValues: {
+      ':userId': senderId,
+      ':challengeId': challengeId,
+    },
+  }));
+
+  const senderChallenge = senderResult.Items?.[0];
+  if (!senderChallenge?.userChallengeId) return;
+
+  await docClient.send(new UpdateCommand({
+    TableName: process.env.USER_CHALLENGES_TABLE!,
+    Key: { userChallengeId: senderChallenge.userChallengeId },
+    UpdateExpression: 'ADD thankScore :one SET updatedAt = :now',
+    ExpressionAttributeValues: {
+      ':one': 1,
+      ':now': nowIso,
+    },
+  }));
 }
 
 // 푸시 알림 발송
@@ -171,6 +257,7 @@ export const handler = async (event: EventBridgeEvent<string, any>) => {
       deadLettered: 0,
       skipped: 0,
       raceSkipped: 0,
+      senderScoreGranted: 0,
     };
 
     for (const cheer of pendingCheers) {
@@ -183,25 +270,36 @@ export const handler = async (event: EventBridgeEvent<string, any>) => {
           continue;
         }
 
-        await sendPushNotification(cheer.receiverId, cheer.cheerId);
+        // 수신자가 이미 완료했으면 알림 대신 발신자에게 감사 점수 적립
+        const receiverDone = cheer.day != null
+          ? await isReceiverCompletedToday(cheer.receiverId, cheer.challengeId, cheer.day)
+          : false;
 
-        await docClient.send(new UpdateCommand({
-          TableName: process.env.CHEERS_TABLE!,
-          Key: { cheerId: cheer.cheerId },
-          UpdateExpression: 'SET #status = :sent, sentAt = :sentAt REMOVE nextRetryAt, failureCode, deadLetterReason',
-          ConditionExpression: '#status = :pending',
-          ExpressionAttributeNames: {
-            '#status': 'status'
-          },
-          ExpressionAttributeValues: {
-            ':pending': 'pending',
-            ':sent': 'sent',
-            ':sentAt': processNow.toISOString()
-          }
-        }));
+        if (receiverDone) {
+          await grantThankScoreToSender(cheer.senderId, cheer.cheerId, cheer.challengeId, processNow);
+          summary.senderScoreGranted += 1;
+          console.log(`Cheer ${cheer.cheerId}: receiver already done, granted thank score to sender ${cheer.senderId}`);
+        } else {
+          await sendPushNotification(cheer.receiverId, cheer.cheerId);
 
-        summary.sent += 1;
-        console.log(`Cheer ${cheer.cheerId} sent successfully`);
+          await docClient.send(new UpdateCommand({
+            TableName: process.env.CHEERS_TABLE!,
+            Key: { cheerId: cheer.cheerId },
+            UpdateExpression: 'SET #status = :sent, sentAt = :sentAt REMOVE nextRetryAt, failureCode, deadLetterReason',
+            ConditionExpression: '#status = :pending',
+            ExpressionAttributeNames: {
+              '#status': 'status'
+            },
+            ExpressionAttributeValues: {
+              ':pending': 'pending',
+              ':sent': 'sent',
+              ':sentAt': processNow.toISOString()
+            }
+          }));
+
+          summary.sent += 1;
+          console.log(`Cheer ${cheer.cheerId} sent successfully`);
+        }
       } catch (error: any) {
         if (error?.name === 'ConditionalCheckFailedException') {
           summary.raceSkipped += 1;

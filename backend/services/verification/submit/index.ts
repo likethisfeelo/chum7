@@ -158,11 +158,12 @@ async function createAutoCheer(params: {
   verificationDate: string;
   memberTimezone: string;
   nowISO: string;
+  day: number;
 }): Promise<void> {
   if (!process.env.CHEERS_TABLE) return;
   const {
     senderId, receiverId, challengeId, verificationId, delta, senderAlias,
-    memberTarget24, verificationDate, memberTimezone, nowISO,
+    memberTarget24, verificationDate, memberTimezone, nowISO, day,
   } = params;
 
   if (!memberTarget24) return;
@@ -183,6 +184,7 @@ async function createAutoCheer(params: {
     verificationId,
     challengeId,
     cheerType: isImmediate ? "immediate" : "scheduled",
+    day,
     message: null,
     senderDelta: delta,
     senderAlias,
@@ -223,49 +225,6 @@ async function createAutoCheer(params: {
   }
 }
 
-async function grantThankScoreForReceivedCheers(
-  userId: string,
-  challengeId: string,
-  nowISO: string,
-): Promise<{ count: number; cheerIds: string[] }> {
-  if (!process.env.CHEERS_TABLE) return { count: 0, cheerIds: [] };
-
-  const result = await docClient.send(new QueryCommand({
-    TableName: process.env.CHEERS_TABLE!,
-    IndexName: "receiverId-index",
-    KeyConditionExpression: "receiverId = :userId",
-    FilterExpression: "challengeId = :challengeId AND isThankScoreGranted = :false",
-    ExpressionAttributeValues: {
-      ":userId": userId,
-      ":challengeId": challengeId,
-      ":false": false,
-    },
-  }));
-
-  const grantedCheerIds: string[] = [];
-  for (const cheer of (result.Items || [])) {
-    try {
-      await docClient.send(new UpdateCommand({
-        TableName: process.env.CHEERS_TABLE!,
-        Key: { cheerId: cheer.cheerId },
-        UpdateExpression: "SET isThankScoreGranted = :true, thankScoreGrantedAt = :now",
-        ConditionExpression: "isThankScoreGranted = :false AND receiverId = :userId",
-        ExpressionAttributeValues: {
-          ":true": true,
-          ":false": false,
-          ":userId": userId,
-          ":now": nowISO,
-        },
-      }));
-      grantedCheerIds.push(cheer.cheerId);
-    } catch (e: any) {
-      if (e?.name !== "ConditionalCheckFailedException") {
-        console.error("Grant thank score error:", e);
-      }
-    }
-  }
-  return { count: grantedCheerIds.length, cheerIds: grantedCheerIds };
-}
 
 export const handler = async (
   event: APIGatewayProxyEvent,
@@ -596,8 +555,6 @@ export const handler = async (
 
     // 응원·감사 집계는 당일 모든 퀘스트 완료 시점에만 적용
     const isEarlyCompletion = !isExtra && dayNowComplete && (delta || 0) > 0;
-    // 온타임 포함(delta >= 0)이면 감사 자동 발송 (응원 발송은 delta > 0 유지)
-    const isThanksEligible = !isExtra && dayNowComplete && delta !== null && delta >= 0;
 
     const verificationId = uuidv4();
 
@@ -839,6 +796,7 @@ export const handler = async (
             verificationDate,
             memberTimezone: member.personalTarget?.timezone || timezone,
             nowISO: nowIso,
+            day: input.day,
           });
         }
 
@@ -851,15 +809,7 @@ export const handler = async (
       }
     }
 
-    let eligibleCheerIds: string[] = [];
-    if (isThanksEligible) {
-      try {
-        const thankResult = await grantThankScoreForReceivedCheers(userId, challengeId, nowIso);
-        eligibleCheerIds = thankResult.cheerIds;
-      } catch (thankError) {
-        console.error("Thank score grant error (non-fatal):", thankError);
-      }
-    }
+    const eligibleCheerIds: string[] = [];
 
     const newBadges = await grantBadges({
       userId,

@@ -137,6 +137,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         startDate: uc.startDate,
         durationDays,
         score: uc.score,
+        thankScore: uc.thankScore ?? 0,
         cheerCount: uc.cheerCount,
         consecutiveDays: uc.consecutiveDays,
         personalGoal: uc.personalGoal ?? null,

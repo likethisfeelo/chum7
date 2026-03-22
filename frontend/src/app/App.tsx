@@ -15,6 +15,7 @@ import { ChallengeBoardPage } from '@/features/challenge-board/pages/ChallengeBo
 import { MEPage } from '@/features/me/pages/MEPage';
 import { MyRecordsPage } from '@/features/me/pages/MyRecordsPage';
 import { TodayPage } from '@/features/today/pages/TodayPage';
+import { TodayPageDebug } from '@/features/today/pages/TodayPageDebug';
 import { FeedPage } from '@/features/feed/pages/FeedPage';
 import { ProfilePage } from '@/features/profile/pages/ProfilePage';
 import { BadgeCollectionPage } from '@/features/profile/pages/BadgeCollectionPage';
@@ -183,6 +184,14 @@ export default function App() {
               <MainLayout>
                 <TodayPage />
               </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/today/debug"
+          element={
+            <ProtectedRoute>
+              <TodayPageDebug />
             </ProtectedRoute>
           }
         />
