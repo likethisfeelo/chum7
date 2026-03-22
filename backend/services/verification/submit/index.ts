@@ -894,6 +894,18 @@ export const handler = async (
             if (createdCheerId) eligibleCheerIds.push(createdCheerId);
           }
 
+          // 발송한 응원 수만큼 cheerScore 즉시 지급 (creator면 ×10)
+          const cheerCount = incompleteMembers.length;
+          const cheerGain = userId === challengeCreatorId ? cheerCount * 10 : cheerCount;
+          if (cheerGain > 0) {
+            await docClient.send(new UpdateCommand({
+              TableName: process.env.USER_CHALLENGES_TABLE!,
+              Key: { userChallengeId: userChallenge.userChallengeId },
+              UpdateExpression: "ADD cheerScore :n SET updatedAt = :now",
+              ExpressionAttributeValues: { ":n": cheerGain, ":now": nowIso },
+            }));
+          }
+
           cheerOpportunity = {
             hasIncompletePeople: true,
             incompleteCount: incompleteMembers.length,
