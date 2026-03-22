@@ -80,6 +80,7 @@ async function normalizeVerification(v: VerificationItem) {
     userName: v.userName || null,
     day: v.day,
     verificationType,
+    questType: v.questType || null,
     todayNote: v.todayNote,
     imageUrl: verificationType === "image" ? mediaUrl : null,
     videoUrl: verificationType === "video" ? mediaUrl : null,
