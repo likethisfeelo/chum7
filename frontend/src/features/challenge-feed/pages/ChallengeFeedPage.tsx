@@ -192,6 +192,7 @@ export const ChallengeFeedPage = () => {
   const [activeQuestTab, setActiveQuestTab] = useState<"leader" | "personal">("leader");
   const [feedTab, setFeedTab] = useState<"leader" | "personal">("leader");
   const [expandedLeaderQuestId, setExpandedLeaderQuestId] = useState<string | null>(null);
+  const [todaySubmittedQuestIds, setTodaySubmittedQuestIds] = useState<Set<string>>(new Set());
   const [isProposalFormOpen, setIsProposalFormOpen] = useState(false);
   const [proposalForm, setProposalForm] = useState({
     title: "",
@@ -504,13 +505,16 @@ export const ChallengeFeedPage = () => {
               <div className="flex flex-wrap gap-2">
                 {Array.from({ length: durationDays }, (_, i) => i + 1).map((day) => {
                   const p = progressList.find((pr: any) => Number(pr?.day) === day);
-                  const isDone = isMixedChallengeType
-                    ? Boolean(p?.leaderQuestDone && p?.personalQuestDone)
-                    : p?.status === "success" || p?.status === "completed" || p?.status === "remedy";
-                  const isPartial = isMixedChallengeType
-                    ? Boolean(p && !isDone && (p?.leaderQuestDone || p?.personalQuestDone))
-                    : p?.status === "partial";
                   const isToday = day === todayDay;
+                  const isDone = isMixedChallengeType
+                    ? Boolean(p?.leaderQuestDone && p?.personalQuestDone) ||
+                      (isToday && iDidTodayLeaderQuestVerification && iDidTodayPersonalQuestVerification)
+                    : p?.status === "success" || p?.status === "completed" || p?.status === "remedy" ||
+                      (isToday && iDidTodayVerification);
+                  const isPartial = isMixedChallengeType
+                    ? Boolean(p && !isDone && (p?.leaderQuestDone || p?.personalQuestDone)) ||
+                      (isToday && !isDone && (iDidTodayLeaderQuestVerification || iDidTodayPersonalQuestVerification))
+                    : p?.status === "partial";
                   const isPastMissed = day < todayDay && !isDone;
 
                   return (
@@ -724,6 +728,7 @@ export const ChallengeFeedPage = () => {
                   {leaderQuests.map((q: any) => {
                     const sub = q.mySubmission;
                     const isDone =
+                      todaySubmittedQuestIds.has(q.questId) ||
                       sub?.status === "approved" ||
                       sub?.status === "auto_approved" ||
                       (isMixedChallengeType ? iDidTodayLeaderQuestVerification : iDidTodayVerification);
@@ -758,6 +763,7 @@ export const ChallengeFeedPage = () => {
                               quest={q}
                               onSuccess={(data) => {
                                 setExpandedLeaderQuestId(null);
+                                setTodaySubmittedQuestIds(prev => new Set([...prev, q.questId]));
                                 handleVerificationSuccess(data);
                               }}
                               onQuestSuccess={() => queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] })}
@@ -776,6 +782,7 @@ export const ChallengeFeedPage = () => {
                   {personalQuest ? (() => {
                     const sub = personalQuest.mySubmission;
                     const isDone =
+                      todaySubmittedQuestIds.has(personalQuest.questId) ||
                       sub?.status === "approved" ||
                       sub?.status === "auto_approved" ||
                       (isMixedChallengeType ? iDidTodayPersonalQuestVerification : iDidTodayVerification);
@@ -797,7 +804,10 @@ export const ChallengeFeedPage = () => {
                               userChallenge={userChallenge}
                               quest={personalQuest}
                               defaultExpanded
-                              onSuccess={handleVerificationSuccess}
+                              onSuccess={(data) => {
+                                setTodaySubmittedQuestIds(prev => new Set([...prev, personalQuest.questId]));
+                                handleVerificationSuccess(data);
+                              }}
                               onQuestSuccess={() => queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] })}
                             />
                           </div>
