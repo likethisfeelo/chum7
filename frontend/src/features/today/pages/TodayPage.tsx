@@ -104,6 +104,10 @@ export const TodayPage = () => {
     () => activeChallenges.reduce((sum: number, c: any) => sum + (c.thankScore || 0), 0),
     [activeChallenges],
   );
+  const totalCheerScore = useMemo(
+    () => activeChallenges.reduce((sum: number, c: any) => sum + (c.cheerScore || 0), 0),
+    [activeChallenges],
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -124,17 +128,29 @@ export const TodayPage = () => {
 
       <div className="p-6 space-y-6">
 
-        {/* 감사 점수 */}
-        {totalThankScore > 0 && (
-          <section className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100 rounded-2xl p-4">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">✨</span>
-              <div>
-                <p className="text-sm font-bold text-amber-800">나의 감사 점수</p>
-                <p className="text-xs text-amber-600">팀원이 먼저 완료했을 때 쌓이는 점수예요</p>
+        {/* 포인트 */}
+        {(totalCheerScore > 0 || totalThankScore > 0) && (
+          <section className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100 rounded-2xl p-4 space-y-3">
+            {totalCheerScore > 0 && (
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🎟</span>
+                <div>
+                  <p className="text-sm font-bold text-amber-800">응원 점수</p>
+                  <p className="text-xs text-amber-600">목표 시간 전에 인증하고 응원을 보낼 때 쌓여요</p>
+                </div>
+                <span className="ml-auto text-2xl font-bold text-amber-700">{totalCheerScore}점</span>
               </div>
-              <span className="ml-auto text-2xl font-bold text-amber-700">{totalThankScore}점</span>
-            </div>
+            )}
+            {totalThankScore > 0 && (
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">✨</span>
+                <div>
+                  <p className="text-sm font-bold text-amber-800">감사 점수</p>
+                  <p className="text-xs text-amber-600">내가 보낸 응원을 받은 팀원이 완료할 때 쌓여요</p>
+                </div>
+                <span className="ml-auto text-2xl font-bold text-amber-700">{totalThankScore}점</span>
+              </div>
+            )}
           </section>
         )}
 
