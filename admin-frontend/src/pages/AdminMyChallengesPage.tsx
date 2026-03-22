@@ -333,7 +333,9 @@ export const AdminMyChallengesPage = () => {
             <button
               type="button"
               onClick={() => navigate(`/admin/quests/create?challengeId=${selectedChallengeId}`)}
-              className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors"
+              disabled={selectedChallenge?.challengeType === 'personal_only'}
+              title={selectedChallenge?.challengeType === 'personal_only' ? '개인 퀘스트형 챌린지는 리더 퀘스트를 추가할 수 없습니다' : undefined}
+              className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               + 퀘스트 추가
             </button>

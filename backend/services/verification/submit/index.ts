@@ -159,17 +159,17 @@ async function createAutoCheer(params: {
   memberTimezone: string;
   nowISO: string;
   day: number;
-}): Promise<void> {
-  if (!process.env.CHEERS_TABLE) return;
+}): Promise<string | null> {
+  if (!process.env.CHEERS_TABLE) return null;
   const {
     senderId, receiverId, challengeId, verificationId, delta, senderAlias,
     memberTarget24, verificationDate, memberTimezone, nowISO, day,
   } = params;
 
-  if (!memberTarget24) return;
+  if (!memberTarget24) return null;
 
   const memberTargetISO = buildTargetDateTimeISO(verificationDate, memberTarget24, memberTimezone);
-  if (!memberTargetISO) return;
+  if (!memberTargetISO) return null;
 
   const memberTargetMs = new Date(memberTargetISO).getTime();
   const nowMs = new Date(nowISO).getTime();
@@ -223,6 +223,8 @@ async function createAutoCheer(params: {
       console.error("Auto cheer SNS error (non-fatal):", snsErr);
     }
   }
+
+  return cheerId;
 }
 
 
@@ -579,9 +581,12 @@ export const handler = async (
       : (dayProgress?.leaderQuestDone === true);
     const _personalDone: boolean =
       resolvedQuestType === "personal" ? true : (dayProgress?.personalQuestDone === true);
+    // personal_only: 개인 퀘스트 1개 제출로 완료 (기존 `: true` fallthrough 버그 수정)
     const dayNowComplete: boolean = isMixedType
       ? _leaderDone && _personalDone
-      : isLeaderOnlyType ? _leaderDone : true;
+      : isLeaderOnlyType ? _leaderDone
+      : isPersonalOnlyType ? _personalDone
+      : true;
 
     // 응원·감사 집계는 당일 모든 퀘스트 완료 시점에만 적용
     const isEarlyCompletion = !isExtra && dayNowComplete && (delta || 0) > 0;
@@ -799,6 +804,8 @@ export const handler = async (
       incompleteCount: 0,
     };
 
+    const eligibleCheerIds: string[] = [];
+
     if (isEarlyCompletion && userChallenge.groupId) {
       try {
         const membersResult = await docClient.send(new QueryCommand({
@@ -818,7 +825,7 @@ export const handler = async (
         const senderAlias = randomAlias();
         for (const member of incompleteMembers) {
           const memberTarget24 = member.personalTarget?.time24 || challengeTargetTime24;
-          await createAutoCheer({
+          const createdCheerId = await createAutoCheer({
             senderId: userId,
             receiverId: member.userId,
             challengeId,
@@ -831,6 +838,7 @@ export const handler = async (
             nowISO: nowIso,
             day: input.day,
           });
+          if (createdCheerId) eligibleCheerIds.push(createdCheerId);
         }
 
         cheerOpportunity = {
@@ -842,8 +850,6 @@ export const handler = async (
         console.error("Auto cheer creation error:", cheerError);
       }
     }
-
-    const eligibleCheerIds: string[] = [];
 
     const newBadges = await grantBadges({
       userId,
