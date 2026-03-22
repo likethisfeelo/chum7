@@ -45,7 +45,7 @@ export const RemedyPage = () => {
 
   const remainingRemedy = getRemainingRemedyCount(currentChallenge?.remedyPolicy, currentChallenge?.progress || []);
   const remedyType = getRemedyType(currentChallenge?.remedyPolicy);
-  const canSubmitRemedy = remedyType !== 'strict' && (remainingRemedy === null || remainingRemedy > 0);
+  const canSubmitRemedy = remedyType !== 'disabled' && (remainingRemedy === null || remainingRemedy > 0);
 
   const remedyMutation = useMutation({
     mutationFn: async (data: any) => {

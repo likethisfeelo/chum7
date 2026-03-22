@@ -964,7 +964,7 @@ export const ChallengeFeedPage = () => {
             if (!userChallenge) return null;
             if (isGaveUp) return null;
             const remedyType = getRemedyType(userChallenge.remedyPolicy);
-            if (remedyType === "strict") return null;
+            if (remedyType === "disabled") return null;
             const remaining = getRemainingRemedyCount(userChallenge.remedyPolicy, userChallenge.progress || []);
             const failedDays = (userChallenge.progress || []).filter(
               (p: any) => p.day <= 5 && p.status !== "success" && !p.remedied,
