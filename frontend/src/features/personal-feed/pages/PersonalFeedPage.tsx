@@ -803,6 +803,7 @@ export function PersonalFeedPage() {
             </div>
             {isOwn && profile && (
               <p className="text-white/60 text-xs mt-0.5">
+                {profile.feedHandle ? `@${profile.feedHandle} · ` : ''}
                 {profile.feedSettings.isPublic ? '🌍 공개 중' : '🔒 비공개'}
               </p>
             )}

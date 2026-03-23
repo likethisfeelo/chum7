@@ -374,7 +374,29 @@ export class PersonalFeedStack extends Stack {
       authorizer,
     });
 
-    // 10. Feed Settings Lambda — 피드 공개 설정 (PUT /personal-feed/me/settings)
+    // 10. Feed Handle Lambda — 핸들 설정 (PUT/DELETE /personal-feed/me/handle)
+    const handleFn = new NodejsFunction(this, 'PersonalFeedHandleFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-personal-feed-handle`,
+      entry: path.join(__dirname, '../../backend/services/personal-feed/handle/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    usersTable.grantReadWriteData(handleFn);
+    apiGateway.addRoutes({
+      path: '/personal-feed/me/handle',
+      methods: [HttpMethod.PUT],
+      integration: new HttpLambdaIntegration('PersonalFeedHandlePutIntegration', handleFn),
+      authorizer,
+    });
+    apiGateway.addRoutes({
+      path: '/personal-feed/me/handle',
+      methods: [HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration('PersonalFeedHandleDeleteIntegration', handleFn),
+      authorizer,
+    });
+
+    // 11. Feed Settings Lambda — 피드 공개 설정 (PUT /personal-feed/me/settings)
     const feedSettingsFn = new NodejsFunction(this, 'PersonalFeedSettingsFn', {
       ...commonProps,
       functionName: `chme-${stage}-personal-feed-settings`,

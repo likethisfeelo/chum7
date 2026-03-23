@@ -2,6 +2,7 @@ import { apiClient } from '@/lib/api-client';
 
 export interface FeedProfile {
   userId: string;
+  feedHandle: string | null;
   displayName: string;
   animalIcon: string;
   isOwn: boolean;
@@ -301,6 +302,16 @@ export const personalFeedApi = {
     const params = nextToken ? `?nextToken=${encodeURIComponent(nextToken)}` : '';
     const res = await apiClient.get(`/personal-feed/me/saved-posts${params}`);
     return res.data.data;
+  },
+
+  // ── Feed Handle ─────────────────────────────────────────────────────
+  updateFeedHandle: async (handle: string): Promise<{ feedHandle: string }> => {
+    const res = await apiClient.put('/personal-feed/me/handle', { handle });
+    return res.data.data;
+  },
+
+  deleteFeedHandle: async (): Promise<void> => {
+    await apiClient.delete('/personal-feed/me/handle');
   },
 
   // ── Notifications ────────────────────────────────────────────────────

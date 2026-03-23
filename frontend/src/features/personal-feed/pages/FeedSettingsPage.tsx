@@ -2,7 +2,119 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loading } from '@/shared/components/Loading';
-import { personalFeedApi, FollowRequestItem, FollowerItem, InviteLink, BlockedItem } from '../api/personalFeedApi';
+import { personalFeedApi, FollowRequestItem, FollowerItem, InviteLink, BlockedItem, FeedProfile } from '../api/personalFeedApi';
+
+// ─── 핸들 설정 섹션 ───────────────────────────────────────────────────
+function HandleSection({ profile }: { profile: FeedProfile }) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [input, setInput] = useState(profile.feedHandle ?? '');
+  const [error, setError] = useState<string | null>(null);
+
+  const saveMutation = useMutation({
+    mutationFn: (handle: string) => personalFeedApi.updateFeedHandle(handle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['personal-feed-profile', 'me'] });
+      setEditing(false);
+      setError(null);
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) => {
+      setError(err?.response?.data?.message ?? '핸들 저장에 실패했어요');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => personalFeedApi.deleteFeedHandle(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['personal-feed-profile', 'me'] });
+      setInput('');
+      setEditing(false);
+    },
+  });
+
+  const handleUrl = profile.feedHandle
+    ? `${window.location.origin}/personal-feed/@${profile.feedHandle}`
+    : null;
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div className="px-4 pt-4 pb-2">
+        <h3 className="text-sm font-semibold text-gray-700">피드 핸들</h3>
+        <p className="text-xs text-gray-400 mt-0.5">고유 주소를 설정하면 @handle 형식으로 공유할 수 있어요</p>
+      </div>
+      <div className="px-4 pb-4">
+        {editing ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400 text-sm">@</span>
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                placeholder="my_handle"
+                maxLength={20}
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400"
+              />
+            </div>
+            {error && <p className="text-xs text-red-500">{error}</p>}
+            <p className="text-[11px] text-gray-400">영문 소문자로 시작, 영숫자·_ 사용 가능, 3~20자</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => saveMutation.mutate(input)}
+                disabled={saveMutation.isPending || input.length < 3}
+                className="px-4 py-1.5 bg-primary-500 text-white text-xs font-semibold rounded-full hover:bg-primary-600 disabled:opacity-50 transition-colors"
+              >
+                {saveMutation.isPending ? '저장 중...' : '저장'}
+              </button>
+              <button
+                onClick={() => { setEditing(false); setInput(profile.feedHandle ?? ''); setError(null); }}
+                className="px-4 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full hover:bg-gray-200 transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        ) : profile.feedHandle ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-mono text-gray-800">@{profile.feedHandle}</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setEditing(true); setInput(profile.feedHandle!); }}
+                  className="text-xs text-primary-600 font-semibold hover:text-primary-700"
+                >
+                  변경
+                </button>
+                <button
+                  onClick={() => deleteMutation.mutate()}
+                  disabled={deleteMutation.isPending}
+                  className="text-xs text-red-400 font-semibold hover:text-red-600"
+                >
+                  삭제
+                </button>
+              </div>
+            </div>
+            {handleUrl && (
+              <button
+                onClick={() => navigator.clipboard.writeText(handleUrl)}
+                className="text-[11px] text-gray-400 hover:text-primary-500 transition-colors text-left truncate w-full"
+              >
+                🔗 {handleUrl}
+              </button>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={() => setEditing(true)}
+            className="text-sm text-primary-600 font-semibold hover:text-primary-700 transition-colors"
+          >
+            + 핸들 설정하기
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ─── 팔로우 요청 섹션 ─────────────────────────────────────────────────
 function FollowRequestsSection() {
@@ -287,6 +399,9 @@ export function FeedSettingsPage() {
       </div>
 
       <div className="p-4 space-y-4">
+        {/* 핸들 설정 */}
+        {profile && <HandleSection profile={profile} />}
+
         {/* 공개 설정 */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="px-4 pt-4 pb-2">

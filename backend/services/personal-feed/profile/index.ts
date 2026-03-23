@@ -105,10 +105,27 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const userIdParam = event.pathParameters?.userId;
-    const targetUserId = userIdParam === 'me' ? requesterId : userIdParam;
+    const rawParam = userIdParam === 'me' ? requesterId : userIdParam;
 
-    if (!targetUserId) {
+    if (!rawParam) {
       return response(400, { error: 'MISSING_USER_ID', message: 'userId가 필요합니다' });
+    }
+
+    // @handle 형식이면 feedHandle-index GSI로 userId 조회
+    let targetUserId = rawParam;
+    if (rawParam.startsWith('@')) {
+      const handle = rawParam.slice(1).toLowerCase();
+      const handleResult = await docClient.send(new QueryCommand({
+        TableName: process.env.USERS_TABLE!,
+        IndexName: 'feedHandle-index',
+        KeyConditionExpression: 'feedHandle = :h',
+        ExpressionAttributeValues: { ':h': handle },
+        Limit: 1,
+      }));
+      if (!handleResult.Items?.length) {
+        return response(404, { error: 'HANDLE_NOT_FOUND', message: '핸들을 찾을 수 없습니다' });
+      }
+      targetUserId = handleResult.Items[0].userId as string;
     }
 
     const isOwn = targetUserId === requesterId;
@@ -167,6 +184,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       success: true,
       data: {
         userId: user.userId,
+        feedHandle: (user.feedHandle as string | undefined) ?? null,
         displayName: user.name,
         animalIcon: user.animalIcon ?? '🐰',
         isOwn,
