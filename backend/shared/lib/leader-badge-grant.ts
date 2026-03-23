@@ -15,8 +15,7 @@ import {
   QueryCommand,
   PutCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { isCompletedProgressStatus } from './challenge-day-sync';
-import { normalizeProgress } from './progress';
+import { sendNotification } from './notification';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient, {
@@ -139,6 +138,13 @@ export async function checkAndGrantLeaderBadges(
 
   const granted: string[] = [];
 
+  const BADGE_NAMES: Record<string, string> = {
+    'leader-debut': '리더 데뷔 🎖️',
+    'leader-active': '활동 리더 🏆',
+    'leader-expert': '전문 리더 👑',
+    'leader-streak': '연속 리더 🔗',
+  };
+
   // ── leader-debut: 1회 이상 완료 ────────────────────────────────────
   if (totalCompleted >= 1) {
     const ok = await grantLeaderBadge('leader-debut', leaderId, completedChallengeId);
@@ -161,6 +167,19 @@ export async function checkAndGrantLeaderBadges(
   if (hasMonthlyStreak(summaries, 3)) {
     const ok = await grantLeaderBadge('leader-streak', leaderId, completedChallengeId);
     if (ok) granted.push('leader-streak');
+  }
+
+  // 새로 부여된 뱃지 알림 발송
+  for (const badgeId of granted) {
+    sendNotification({
+      recipientId: leaderId,
+      type: 'feed_leader_badge_updated',
+      title: '리더 뱃지를 획득했어요!',
+      body: `${BADGE_NAMES[badgeId] ?? badgeId} 뱃지가 개인 피드 업적 탭에 추가됐어요`,
+      relatedId: completedChallengeId,
+      relatedType: 'challenge',
+      deepLink: '/personal-feed/me?tab=achievements',
+    }).catch(() => {});
   }
 
   return granted;

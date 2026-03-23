@@ -18,6 +18,7 @@ import {
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { randomUUID, randomBytes } from 'crypto';
+import { sendNotification } from '../../../shared/lib/notification';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient, {
@@ -76,6 +77,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         UpdateExpression: 'SET usedCount = usedCount + :one',
         ExpressionAttributeValues: { ':one': 1 },
       }));
+
+      // 링크 주인에게 알림 (본인이 직접 사용하는 경우 제외)
+      if (link.ownerId !== requesterId) {
+        sendNotification({
+          recipientId: link.ownerId,
+          type: 'feed_invite_link_used',
+          title: '초대 링크가 사용됐어요',
+          body: '누군가 내 초대 링크로 피드를 방문했어요',
+          relatedId: link.inviteLinkId,
+          relatedType: 'feed_invite_link',
+          deepLink: '/personal-feed/settings',
+        }).catch(() => {});
+      }
 
       return res(200, {
         success: true,

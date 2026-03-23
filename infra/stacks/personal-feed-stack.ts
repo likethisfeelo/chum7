@@ -26,6 +26,7 @@ interface PersonalFeedStackProps extends StackProps {
   personalPostsTable: Table;
   savedPostsTable: Table;
   plazaPostsTable: Table;
+  notificationsTable: Table;
 }
 
 export class PersonalFeedStack extends Stack {
@@ -49,6 +50,7 @@ export class PersonalFeedStack extends Stack {
       personalPostsTable,
       savedPostsTable,
       plazaPostsTable,
+      notificationsTable,
     } = props;
 
     const commonProps = {
@@ -77,6 +79,7 @@ export class PersonalFeedStack extends Stack {
       PERSONAL_POSTS_TABLE: personalPostsTable.tableName,
       SAVED_POSTS_TABLE: savedPostsTable.tableName,
       PLAZA_POSTS_TABLE: plazaPostsTable.tableName,
+      NOTIFICATIONS_TABLE: notificationsTable.tableName,
     };
 
     // 1. GET /personal-feed/{userId} — 피드 프로필 + 레이어 판단
@@ -370,5 +373,35 @@ export class PersonalFeedStack extends Stack {
       integration: new HttpLambdaIntegration('PersonalFeedSavedPostsListIntegration', savedPostsFn),
       authorizer,
     });
+
+    // 10. Notification Settings Lambda — 알림 설정 CRUD
+    const notificationSettingsFn = new NodejsFunction(this, 'NotificationSettingsFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-notification-settings`,
+      entry: path.join(__dirname, '../../backend/services/notifications/settings/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    usersTable.grantReadWriteData(notificationSettingsFn);
+
+    // GET /notifications/settings
+    apiGateway.addRoutes({
+      path: '/notifications/settings',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('NotificationSettingsGetIntegration', notificationSettingsFn),
+      authorizer,
+    });
+    // PUT /notifications/settings
+    apiGateway.addRoutes({
+      path: '/notifications/settings',
+      methods: [HttpMethod.PUT],
+      integration: new HttpLambdaIntegration('NotificationSettingsPutIntegration', notificationSettingsFn),
+      authorizer,
+    });
+
+    // invite Lambda에 notifications 테이블 write 권한
+    notificationsTable.grantWriteData(inviteFn);
+    // follow Lambda에 notifications 테이블 write 권한 (이미 sendNotification 사용 중)
+    notificationsTable.grantWriteData(followFn);
   }
 }

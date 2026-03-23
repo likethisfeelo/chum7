@@ -184,6 +184,7 @@ new PersonalFeedStack(app, `chme-${stage}-personal-feed`, {
   personalPostsTable: coreStack.personalPostsTable,
   savedPostsTable: coreStack.savedPostsTable,
   plazaPostsTable: coreStack.plazaPostsTable,
+  notificationsTable: coreStack.notificationsTable,
 });
 
 new FrontendStack(app, `chme-${stage}-frontend`, {

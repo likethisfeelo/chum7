@@ -343,6 +343,15 @@ export function FeedSettingsPage() {
 
         {/* 차단 목록 */}
         <BlockedUsersSection />
+
+        {/* 알림 설정 링크 */}
+        <button
+          onClick={() => navigate('/notifications/settings')}
+          className="w-full bg-white rounded-2xl shadow-sm px-4 py-4 flex items-center justify-between text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          <span>알림 설정</span>
+          <span className="text-gray-400">→</span>
+        </button>
       </div>
     </div>
   );

@@ -29,6 +29,7 @@ import { AdminDocsPage } from '@/features/admin/pages/AdminDocsPage';
 import { AdminAccessDeniedPage } from '@/features/admin/pages/AdminAccessDeniedPage';
 import { PersonalFeedPage } from '@/features/personal-feed/pages/PersonalFeedPage';
 import { FeedSettingsPage } from '@/features/personal-feed/pages/FeedSettingsPage';
+import { NotificationSettingsPage } from '@/features/notifications/pages/NotificationSettingsPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -304,6 +305,16 @@ export default function App() {
         />
 
         <Route path="/design-mockup/gentle-challenge" element={<GentleChallengeMockupPage />} />
+
+        {/* 알림 설정 */}
+        <Route
+          path="/notifications/settings"
+          element={
+            <ProtectedRoute>
+              <NotificationSettingsPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* 개인 피드 */}
         <Route
