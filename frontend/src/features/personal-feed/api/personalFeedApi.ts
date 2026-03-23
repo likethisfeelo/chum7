@@ -91,6 +91,27 @@ export interface InviteLink {
   createdAt: string;
 }
 
+export interface PersonalPost {
+  postId: string;
+  userId: string;
+  content: string;
+  imageUrls: (string | null)[];
+  visibility: 'private' | 'followers' | 'mutual';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedPostItem {
+  saveId: string;
+  plazaPostId: string;
+  savedAt: string;
+  postSnapshot: {
+    postType: string;
+    content: string;
+    createdAt: string;
+  };
+}
+
 export const personalFeedApi = {
   // ── Profile ─────────────────────────────────────────────────────────
   getProfile: async (userId: string): Promise<FeedProfile> => {
@@ -192,5 +213,63 @@ export const personalFeedApi = {
   // ── Feed Settings ───────────────────────────────────────────────────
   updateFeedSettings: async (settings: { isPublic?: boolean; tab02Public?: boolean }): Promise<void> => {
     await apiClient.put('/personal-feed/me/settings', settings);
+  },
+
+  // ── Personal Posts ──────────────────────────────────────────────────
+  getPostUploadUrl: async (contentType: string): Promise<{ uploadUrl: string; key: string }> => {
+    const res = await apiClient.post('/personal-feed/me/posts/upload-url', { contentType });
+    return res.data.data;
+  },
+
+  createPost: async (params: {
+    content: string;
+    imageKeys?: string[];
+    visibility: 'private' | 'followers' | 'mutual';
+  }): Promise<{ postId: string; visibility: string; createdAt: string }> => {
+    const res = await apiClient.post('/personal-feed/me/posts', params);
+    return res.data.data;
+  },
+
+  getPosts: async (
+    userId: string,
+    nextToken?: string,
+  ): Promise<{ posts: PersonalPost[]; nextToken: string | null }> => {
+    const params = nextToken ? `?nextToken=${encodeURIComponent(nextToken)}` : '';
+    const res = await apiClient.get(`/personal-feed/${userId}/posts${params}`);
+    return res.data.data;
+  },
+
+  updatePost: async (
+    postId: string,
+    params: { content?: string; imageKeys?: string[]; visibility?: string },
+  ): Promise<void> => {
+    await apiClient.put(`/personal-feed/me/posts/${postId}`, params);
+  },
+
+  deletePost: async (postId: string): Promise<void> => {
+    await apiClient.delete(`/personal-feed/me/posts/${postId}`);
+  },
+
+  // ── Saved Posts ─────────────────────────────────────────────────────
+  savePlazaPost: async (plazaPostId: string): Promise<{ saveId: string; savedAt: string }> => {
+    const res = await apiClient.post(`/plaza/${plazaPostId}/save`);
+    return res.data.data;
+  },
+
+  unsavePlazaPost: async (plazaPostId: string): Promise<void> => {
+    await apiClient.delete(`/plaza/${plazaPostId}/save`);
+  },
+
+  getPlazaPostSaveStatus: async (plazaPostId: string): Promise<{ saved: boolean; saveId: string | null }> => {
+    const res = await apiClient.get(`/plaza/${plazaPostId}/save/status`);
+    return res.data.data;
+  },
+
+  getSavedPosts: async (
+    nextToken?: string,
+  ): Promise<{ savedPosts: SavedPostItem[]; nextToken: string | null }> => {
+    const params = nextToken ? `?nextToken=${encodeURIComponent(nextToken)}` : '';
+    const res = await apiClient.get(`/personal-feed/me/saved-posts${params}`);
+    return res.data.data;
   },
 };

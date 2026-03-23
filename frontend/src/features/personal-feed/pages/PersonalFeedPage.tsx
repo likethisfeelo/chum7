@@ -10,6 +10,8 @@ import {
   FeedAchievements,
   VerificationFeedItem,
   ChallengeFeedItem,
+  PersonalPost,
+  SavedPostItem,
 } from '../api/personalFeedApi';
 
 type FeedTab = 'verifications' | 'challenges' | 'achievements' | 'posts';
@@ -397,6 +399,284 @@ function ComingSoonTab({ label }: { label: string }) {
   );
 }
 
+// ─── Tab 04: 자유 게시물 ──────────────────────────────────────────────
+const VISIBILITY_META = {
+  private: { label: '나만 보기', icon: '🔒' },
+  followers: { label: '팔로워', icon: '👥' },
+  mutual: { label: '맞팔만', icon: '💚' },
+};
+
+function PersonalPostEditor({ onCreated }: { onCreated: () => void }) {
+  const queryClient = useQueryClient();
+  const [content, setContent] = useState('');
+  const [visibility, setVisibility] = useState<'private' | 'followers' | 'mutual'>('followers');
+  const [imageKeys, setImageKeys] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  const createMutation = useMutation({
+    mutationFn: () => personalFeedApi.createPost({ content, imageKeys, visibility }),
+    onSuccess: () => {
+      setContent('');
+      setImageKeys([]);
+      queryClient.invalidateQueries({ queryKey: ['personal-feed-posts', 'me'] });
+      onCreated();
+    },
+  });
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { uploadUrl, key } = await personalFeedApi.getPostUploadUrl(file.type);
+      await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+      setImageKeys((prev) => [...prev, key]);
+    } catch {
+      // ignore upload errors
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
+      <textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        placeholder="자유롭게 기록해보세요..."
+        rows={3}
+        className="w-full text-sm text-gray-700 placeholder-gray-400 resize-none outline-none"
+      />
+      {imageKeys.length > 0 && (
+        <div className="flex gap-2 mt-2 flex-wrap">
+          {imageKeys.map((key, i) => (
+            <div key={key} className="relative">
+              <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center text-xs text-gray-400">
+                {i + 1}
+              </div>
+              <button
+                onClick={() => setImageKeys((prev) => prev.filter((k) => k !== key))}
+                className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+        <div className="flex items-center gap-2">
+          {/* 이미지 첨부 */}
+          <label className="cursor-pointer text-gray-400 hover:text-gray-600 text-sm">
+            📎
+            <input type="file" accept="image/*" className="hidden" onChange={handleImageSelect} disabled={uploading || imageKeys.length >= 5} />
+          </label>
+          {uploading && <span className="text-xs text-gray-400">업로드 중...</span>}
+          {/* visibility 선택 */}
+          <select
+            value={visibility}
+            onChange={(e) => setVisibility(e.target.value as 'private' | 'followers' | 'mutual')}
+            className="text-xs text-gray-500 border border-gray-200 rounded-lg px-2 py-1 bg-white"
+          >
+            {(Object.keys(VISIBILITY_META) as Array<keyof typeof VISIBILITY_META>).map((v) => (
+              <option key={v} value={v}>
+                {VISIBILITY_META[v].icon} {VISIBILITY_META[v].label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          onClick={() => createMutation.mutate()}
+          disabled={(!content.trim() && imageKeys.length === 0) || createMutation.isPending}
+          className="px-4 py-1.5 text-xs font-semibold rounded-full bg-primary-500 text-white disabled:opacity-40 hover:bg-primary-600 transition-colors"
+        >
+          {createMutation.isPending ? '게시 중...' : '게시'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PersonalPostCard({ post, isOwn }: { post: PersonalPost; isOwn: boolean }) {
+  const queryClient = useQueryClient();
+  const visibilityMeta = VISIBILITY_META[post.visibility] ?? VISIBILITY_META.followers;
+
+  const deleteMutation = useMutation({
+    mutationFn: () => personalFeedApi.deletePost(post.postId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['personal-feed-posts'] }),
+  });
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] text-gray-400">
+          {visibilityMeta.icon} {visibilityMeta.label} · {formatDate(post.createdAt)}
+        </span>
+        {isOwn && (
+          <button
+            onClick={() => deleteMutation.mutate()}
+            disabled={deleteMutation.isPending}
+            className="text-xs text-red-400 hover:text-red-600"
+          >
+            삭제
+          </button>
+        )}
+      </div>
+      {post.content && (
+        <p className="text-sm text-gray-700 whitespace-pre-wrap">{post.content}</p>
+      )}
+      {post.imageUrls.length > 0 && (
+        <div className="grid grid-cols-2 gap-1.5 mt-3">
+          {post.imageUrls.filter(Boolean).map((url, i) => (
+            <img
+              key={i}
+              src={url!}
+              alt=""
+              loading="lazy"
+              className="w-full aspect-square object-cover rounded-xl"
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SavedPostCard({ item }: { item: SavedPostItem }) {
+  const queryClient = useQueryClient();
+
+  const unsaveMutation = useMutation({
+    mutationFn: () => personalFeedApi.unsavePlazaPost(item.plazaPostId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['personal-feed-saved-posts'] }),
+  });
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-gray-700 line-clamp-2">
+            {item.postSnapshot?.content || '(내용 없음)'}
+          </p>
+          <p className="text-[11px] text-gray-400 mt-1.5">
+            {formatDate(item.savedAt)} 저장 · 광장 게시물
+          </p>
+        </div>
+        <button
+          onClick={() => unsaveMutation.mutate()}
+          disabled={unsaveMutation.isPending}
+          className="text-yellow-500 hover:text-gray-400 text-lg flex-shrink-0"
+          title="저장 취소"
+        >
+          🔖
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PostsTab({ userId, isOwn }: { userId: string; isOwn: boolean }) {
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
+
+  const {
+    data: postsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: postsLoading,
+  } = useInfiniteQuery({
+    queryKey: ['personal-feed-posts', userId],
+    queryFn: ({ pageParam }) =>
+      personalFeedApi.getPosts(userId, pageParam as string | undefined),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextToken ?? undefined,
+  });
+
+  const {
+    data: savedData,
+    isLoading: savedLoading,
+  } = useQuery({
+    queryKey: ['personal-feed-saved-posts'],
+    queryFn: () => personalFeedApi.getSavedPosts(),
+    enabled: isOwn,
+  });
+
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (observerRef.current) observerRef.current.disconnect();
+      if (!node) return;
+      observerRef.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      });
+      observerRef.current.observe(node);
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage],
+  );
+
+  const allPosts = postsData?.pages.flatMap((p) => p.posts) ?? [];
+  const savedPosts = savedData?.savedPosts ?? [];
+
+  return (
+    <div className="space-y-3 pb-20">
+      {/* 본인 피드: 게시 버튼 */}
+      {isOwn && (
+        <button
+          onClick={() => setShowEditor((v) => !v)}
+          className="w-full bg-white rounded-2xl shadow-sm px-4 py-3 text-sm text-gray-400 text-left hover:bg-gray-50 transition-colors"
+        >
+          ✏️ 자유롭게 기록해보세요...
+        </button>
+      )}
+
+      {showEditor && isOwn && (
+        <PersonalPostEditor onCreated={() => setShowEditor(false)} />
+      )}
+
+      {/* 자유 게시물 목록 */}
+      {postsLoading ? (
+        <Loading />
+      ) : allPosts.length === 0 && !isOwn ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-3xl mb-2">📝</p>
+          <p className="text-sm font-semibold text-gray-700">아직 게시물이 없어요</p>
+        </div>
+      ) : (
+        <>
+          {allPosts.map((post) => (
+            <PersonalPostCard key={post.postId} post={post} isOwn={isOwn} />
+          ))}
+          <div ref={sentinelRef} className="h-4" />
+          {isFetchingNextPage && (
+            <div className="py-4 text-center text-sm text-gray-400">불러오는 중...</div>
+          )}
+        </>
+      )}
+
+      {/* 저장된 광장 게시물 (본인만) */}
+      {isOwn && (
+        <>
+          <div className="pt-4 pb-2">
+            <h3 className="text-sm font-semibold text-gray-500">저장한 광장 게시물</h3>
+          </div>
+          {savedLoading ? (
+            <Loading />
+          ) : savedPosts.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm p-4 text-center">
+              <p className="text-sm text-gray-400">광장 게시물에서 북마크를 눌러 저장해보세요 🔖</p>
+            </div>
+          ) : (
+            savedPosts.map((item) => (
+              <SavedPostCard key={item.saveId} item={item} />
+            ))
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── 메인 페이지 ──────────────────────────────────────────────────────
 export function PersonalFeedPage() {
   const { userId: userIdParam } = useParams<{ userId: string }>();
@@ -516,7 +796,11 @@ export function PersonalFeedPage() {
             )}
           </LayerGate>
         )}
-        {activeTab === 'posts' && <ComingSoonTab label="자유 게시물" />}
+        {activeTab === 'posts' && (
+          <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 4}>
+            <PostsTab userId={resolvedUserId} isOwn={isOwn} />
+          </LayerGate>
+        )}
       </div>
     </div>
   );

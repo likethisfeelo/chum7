@@ -180,6 +180,9 @@ new PersonalFeedStack(app, `chme-${stage}-personal-feed`, {
   feedFollowsTable: coreStack.feedFollowsTable,
   feedBlocksTable: coreStack.feedBlocksTable,
   feedInviteLinksTable: coreStack.feedInviteLinksTable,
+  personalPostsTable: coreStack.personalPostsTable,
+  savedPostsTable: coreStack.savedPostsTable,
+  plazaPostsTable: coreStack.plazaPostsTable,
 });
 
 new FrontendStack(app, `chme-${stage}-frontend`, {

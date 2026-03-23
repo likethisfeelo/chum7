@@ -67,6 +67,10 @@ export class CoreStack extends Stack {
   public readonly feedBlocksTable: Table;
   public readonly feedInviteLinksTable: Table;
 
+  // Personal Feed Content Tables
+  public readonly personalPostsTable: Table;
+  public readonly savedPostsTable: Table;
+
   public readonly uploadsBucket: IBucket;
   public readonly snsTopic: Topic;
   public readonly eventBus: EventBus;
@@ -615,6 +619,44 @@ export class CoreStack extends Stack {
     this.feedInviteLinksTable.addGlobalSecondaryIndex({
       indexName: 'token-index',
       partitionKey: { name: 'token', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    // ==================== Personal Feed Content Tables ====================
+
+    // personalPostsTable: 자유 게시물 (PK = postId, GSI: userId)
+    this.personalPostsTable = new Table(this, 'PersonalPostsTable', {
+      tableName: `chme-${stage}-personal-posts`,
+      partitionKey: { name: 'postId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+    });
+    this.personalPostsTable.addGlobalSecondaryIndex({
+      indexName: 'userId-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    // savedPostsTable: 광장 게시물 저장 (PK = saveId, GSI: userId)
+    this.savedPostsTable = new Table(this, 'SavedPostsTable', {
+      tableName: `chme-${stage}-saved-posts`,
+      partitionKey: { name: 'saveId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+    });
+    this.savedPostsTable.addGlobalSecondaryIndex({
+      indexName: 'userId-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'savedAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    this.savedPostsTable.addGlobalSecondaryIndex({
+      indexName: 'plazaPostId-index',
+      partitionKey: { name: 'plazaPostId', type: AttributeType.STRING },
+      sortKey: { name: 'userId', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
 
