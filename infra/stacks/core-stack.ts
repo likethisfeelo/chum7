@@ -118,6 +118,11 @@ export class CoreStack extends Stack {
       partitionKey: { name: 'email', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
+    this.usersTable.addGlobalSecondaryIndex({
+      indexName: 'feedHandle-index',
+      partitionKey: { name: 'feedHandle', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
 
     this.challengesTable = new Table(this, 'ChallengesTable', {
       tableName: `chme-${stage}-challenges`,
