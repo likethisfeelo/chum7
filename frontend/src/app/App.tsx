@@ -30,6 +30,7 @@ import { AdminAccessDeniedPage } from '@/features/admin/pages/AdminAccessDeniedP
 import { PersonalFeedPage } from '@/features/personal-feed/pages/PersonalFeedPage';
 import { FeedSettingsPage } from '@/features/personal-feed/pages/FeedSettingsPage';
 import { NotificationsPage } from '@/features/personal-feed/pages/NotificationsPage';
+import { InviteLandingPage } from '@/features/personal-feed/pages/InviteLandingPage';
 import { NotificationSettingsPage } from '@/features/notifications/pages/NotificationSettingsPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -318,6 +319,14 @@ export default function App() {
         />
 
         {/* 개인 피드 */}
+        <Route
+          path="/personal-feed/invite/:token"
+          element={
+            <ProtectedRoute>
+              <InviteLandingPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/personal-feed/notifications"
           element={

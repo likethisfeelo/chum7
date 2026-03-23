@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
@@ -56,7 +56,7 @@ function formatDate(iso: string | null): string {
 }
 
 // ─── Follow Button ────────────────────────────────────────────────────
-function FollowButton({ profile, targetUserId }: { profile: FeedProfile; targetUserId: string }) {
+function FollowButton({ profile, targetUserId, effectiveLayer }: { profile: FeedProfile; targetUserId: string; effectiveLayer: number }) {
   const queryClient = useQueryClient();
 
   const requestMutation = useMutation({
@@ -73,7 +73,8 @@ function FollowButton({ profile, targetUserId }: { profile: FeedProfile; targetU
     },
   });
 
-  const { followStatus, currentLayer } = profile;
+  const { followStatus } = profile;
+  const currentLayer = effectiveLayer;
 
   // layer -1 = blocked
   if (currentLayer === -1) return null;
@@ -737,10 +738,12 @@ function PostsTab({ userId, isOwn }: { userId: string; isOwn: boolean }) {
 export function PersonalFeedPage() {
   const { userId: userIdParam } = useParams<{ userId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<FeedTab>('achievements');
 
   const resolvedUserId = userIdParam ?? 'me';
+  const fromInvite = (location.state as { fromInvite?: boolean } | null)?.fromInvite === true;
 
   const { data: profile } = useQuery({
     queryKey: ['personal-feed-profile', resolvedUserId],
@@ -756,7 +759,9 @@ export function PersonalFeedPage() {
   const topLeaderBadge = achievements?.leaderBadges?.[0];
 
   const isOwn = profile?.isOwn ?? (userIdParam === 'me');
-  const currentLayer = profile?.currentLayer ?? 0;
+  const serverLayer = profile?.currentLayer ?? 0;
+  // 초대 링크로 접속한 경우 팔로우 버튼을 노출하기 위해 layer를 최소 2로 상향
+  const currentLayer = fromInvite && serverLayer >= 0 ? Math.max(serverLayer, 2) : serverLayer;
   const displayName = profile?.displayName ?? (isOwn ? (user?.name ?? '나') : '...');
   const displayIcon = profile?.animalIcon ?? (isOwn ? (user?.animalIcon ?? '🐰') : '🐰');
 
@@ -808,7 +813,7 @@ export function PersonalFeedPage() {
             )}
           </div>
           {!isOwn && profile && (
-            <FollowButton profile={profile} targetUserId={resolvedUserId} />
+            <FollowButton profile={profile} targetUserId={resolvedUserId} effectiveLayer={currentLayer} />
           )}
         </div>
       </div>

@@ -374,7 +374,23 @@ export class PersonalFeedStack extends Stack {
       authorizer,
     });
 
-    // 10. Notification Settings Lambda — 알림 설정 CRUD
+    // 10. Feed Settings Lambda — 피드 공개 설정 (PUT /personal-feed/me/settings)
+    const feedSettingsFn = new NodejsFunction(this, 'PersonalFeedSettingsFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-personal-feed-settings`,
+      entry: path.join(__dirname, '../../backend/services/personal-feed/settings/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    usersTable.grantReadWriteData(feedSettingsFn);
+    apiGateway.addRoutes({
+      path: '/personal-feed/me/settings',
+      methods: [HttpMethod.PUT],
+      integration: new HttpLambdaIntegration('PersonalFeedSettingsIntegration', feedSettingsFn),
+      authorizer,
+    });
+
+    // 11. Notification Settings Lambda — 알림 설정 CRUD
     const notificationSettingsFn = new NodejsFunction(this, 'NotificationSettingsFn', {
       ...commonProps,
       functionName: `chme-${stage}-notification-settings`,
