@@ -129,6 +129,19 @@ export interface SavedPostItem {
   };
 }
 
+export interface FeedNotification {
+  notificationId: string;
+  recipientId: string;
+  type: string;
+  title: string;
+  body: string;
+  relatedId: string;
+  relatedType: string;
+  deepLink?: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
 export const personalFeedApi = {
   // ── Profile ─────────────────────────────────────────────────────────
   getProfile: async (userId: string): Promise<FeedProfile> => {
@@ -288,5 +301,15 @@ export const personalFeedApi = {
     const params = nextToken ? `?nextToken=${encodeURIComponent(nextToken)}` : '';
     const res = await apiClient.get(`/personal-feed/me/saved-posts${params}`);
     return res.data.data;
+  },
+
+  // ── Notifications ────────────────────────────────────────────────────
+  getNotifications: async (includeRead = false): Promise<FeedNotification[]> => {
+    const res = await apiClient.get(`/users/me/notifications${includeRead ? '?includeRead=true' : ''}`);
+    return res.data.data;
+  },
+
+  markNotificationRead: async (notificationId: string): Promise<void> => {
+    await apiClient.patch(`/users/me/notifications/${notificationId}/read`);
   },
 };

@@ -11,7 +11,7 @@
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient, {
@@ -43,6 +43,30 @@ async function getFollowStatus(
   return result.Item.status as 'none' | 'pending' | 'accepted';
 }
 
+async function countSharedCompletedChallenges(userId1: string, userId2: string): Promise<number> {
+  if (!process.env.USER_CHALLENGES_TABLE) return 0;
+  const [r1, r2] = await Promise.all([
+    docClient.send(new QueryCommand({
+      TableName: process.env.USER_CHALLENGES_TABLE,
+      IndexName: 'userId-index',
+      KeyConditionExpression: 'userId = :uid',
+      FilterExpression: 'bucketState = :completed',
+      ExpressionAttributeValues: { ':uid': userId1, ':completed': 'completed' },
+      ProjectionExpression: 'challengeId',
+    })),
+    docClient.send(new QueryCommand({
+      TableName: process.env.USER_CHALLENGES_TABLE,
+      IndexName: 'userId-index',
+      KeyConditionExpression: 'userId = :uid',
+      FilterExpression: 'bucketState = :completed',
+      ExpressionAttributeValues: { ':uid': userId2, ':completed': 'completed' },
+      ProjectionExpression: 'challengeId',
+    })),
+  ]);
+  const ids1 = new Set((r1.Items ?? []).map((i) => i.challengeId));
+  return (r2.Items ?? []).filter((i) => ids1.has(i.challengeId)).length;
+}
+
 async function isBlocked(blockerId: string, blockedUserId: string): Promise<boolean> {
   if (!process.env.FEED_BLOCKS_TABLE) return false;
   const result = await docClient.send(new GetCommand({
@@ -59,6 +83,7 @@ function resolveLayer(params: {
   followStatus: 'none' | 'pending' | 'accepted';
   isMutual: boolean;
   isBlocked: boolean;
+  hasSharedChallengeEligibility: boolean;
 }): number {
   if (params.isOwn) return 4;
   if (params.isBlocked) return -1;
@@ -66,6 +91,8 @@ function resolveLayer(params: {
     if (params.isMutual || params.tab02Public) return 4;
     return 3;
   }
+  // L2: 공통 챌린지 10회 완주 조건 충족 시 팔로우 버튼 노출
+  if (params.hasSharedChallengeEligibility) return 2;
   if (params.isPublic) return 1;
   return 0;
 }
@@ -115,6 +142,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const isMutual = followStatus === 'accepted' && reverseFollowStatus === 'accepted';
 
+    // 공통 챌린지 10회 완주 조건(경로 B): 팔로우 관계가 없는 타인 피드만 확인
+    let hasSharedChallengeEligibility = false;
+    if (!isOwn && !blockedByTarget && followStatus !== 'accepted') {
+      const sharedCount = await countSharedCompletedChallenges(requesterId, targetUserId);
+      hasSharedChallengeEligibility = sharedCount >= 10;
+    }
+
     const layer = resolveLayer({
       isOwn,
       isPublic,
@@ -122,6 +156,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       followStatus,
       isMutual,
       isBlocked: blockedByTarget,
+      hasSharedChallengeEligibility,
     });
 
     if (layer === -1) {
