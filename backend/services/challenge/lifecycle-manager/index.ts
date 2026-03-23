@@ -22,6 +22,7 @@ import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/li
 import { sendNotification } from '../../../shared/lib/notification';
 import { calculateChallengeEndAt, calculateSyncedCurrentDay, isCompletedProgressStatus, resolveChallengeActualStartAt, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 import { normalizeProgress } from '../../../shared/lib/progress';
+import { checkAndGrantLeaderBadges } from '../../../shared/lib/leader-badge-grant';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient, {
@@ -558,6 +559,19 @@ export const handler = async (): Promise<void> => {
 
         if (rule.from === 'active' && rule.to === 'completed') {
           await finalizeUserChallenges(challenge.challengeId, resolveDurationDays(challenge.durationDays, undefined));
+
+          // 개설자 리더 뱃지 조건 체크
+          if (challenge.createdBy) {
+            checkAndGrantLeaderBadges(challenge.createdBy, challenge.challengeId)
+              .then((granted) => {
+                if (granted.length > 0) {
+                  console.log(`[lifecycle-manager] leader badges granted to ${challenge.createdBy}: ${granted.join(', ')}`);
+                }
+              })
+              .catch((err) => {
+                console.error('[lifecycle-manager] leader badge check error', err);
+              });
+          }
         }
       } catch (err: any) {
         if (err.name === 'ConditionalCheckFailedException') {

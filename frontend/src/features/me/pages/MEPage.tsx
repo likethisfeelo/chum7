@@ -480,12 +480,21 @@ export const MEPage = () => {
             <p className="text-white/80 text-sm">안녕하세요!</p>
             <h1 className="text-white font-bold text-2xl">{user?.name || '챌린저'}님 👋</h1>
           </div>
-          <button
-            onClick={() => navigate('/personal-feed/me')}
-            className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-2xl"
-          >
-            {user?.animalIcon || '🐰'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/personal-feed/notifications')}
+              className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-lg"
+              aria-label="알림"
+            >
+              🔔
+            </button>
+            <button
+              onClick={() => navigate('/personal-feed/me')}
+              className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-2xl"
+            >
+              {user?.animalIcon || '🐰'}
+            </button>
+          </div>
         </div>
       </div>
 

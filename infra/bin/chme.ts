@@ -66,6 +66,7 @@ new ChallengeStack(app, `chme-${stage}-challenge`, {
   notificationsTable: coreStack.notificationsTable,
   payoutAuditLogsTable: coreStack.payoutAuditLogsTable,
   categoryBannersTable: coreStack.categoryBannersTable,
+  badgesTable: coreStack.badgesTable,
 });
 
 new VerificationStack(app, `chme-${stage}-verification`, {
@@ -175,6 +176,15 @@ new PersonalFeedStack(app, `chme-${stage}-personal-feed`, {
   verificationsTable: coreStack.verificationsTable,
   cheersTable: coreStack.cheersTable,
   badgesTable: coreStack.badgesTable,
+  challengesTable: coreStack.challengesTable,
+  uploadsBucket: coreStack.uploadsBucket,
+  feedFollowsTable: coreStack.feedFollowsTable,
+  feedBlocksTable: coreStack.feedBlocksTable,
+  feedInviteLinksTable: coreStack.feedInviteLinksTable,
+  personalPostsTable: coreStack.personalPostsTable,
+  savedPostsTable: coreStack.savedPostsTable,
+  plazaPostsTable: coreStack.plazaPostsTable,
+  notificationsTable: coreStack.notificationsTable,
 });
 
 new FrontendStack(app, `chme-${stage}-frontend`, {
