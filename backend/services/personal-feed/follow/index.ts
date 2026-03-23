@@ -97,6 +97,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         body: '누군가 회원님의 피드에 팔로우를 요청했어요',
         relatedId: fId,
         relatedType: 'feed_follow',
+        deepLink: '/personal-feed/settings',
       }).catch(() => {});
 
       return res(201, { success: true, data: { followId: fId, status: 'pending' } });
