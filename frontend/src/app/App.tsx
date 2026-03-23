@@ -27,6 +27,7 @@ import { ParticipantFlowPlanPage } from '@/features/planning/pages/ParticipantFl
 import { GentleChallengeMockupPage } from '@/features/mockup/pages/GentleChallengeMockupPage';
 import { AdminDocsPage } from '@/features/admin/pages/AdminDocsPage';
 import { AdminAccessDeniedPage } from '@/features/admin/pages/AdminAccessDeniedPage';
+import { PersonalFeedPage } from '@/features/personal-feed/pages/PersonalFeedPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -302,6 +303,16 @@ export default function App() {
         />
 
         <Route path="/design-mockup/gentle-challenge" element={<GentleChallengeMockupPage />} />
+
+        {/* 개인 피드 */}
+        <Route
+          path="/personal-feed/:userId"
+          element={
+            <ProtectedRoute>
+              <PersonalFeedPage />
+            </ProtectedRoute>
+          }
+        />
 
         <Route path="/earth" element={<Navigate to="/outer-space" replace />} />
 

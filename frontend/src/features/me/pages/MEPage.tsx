@@ -481,7 +481,7 @@ export const MEPage = () => {
             <h1 className="text-white font-bold text-2xl">{user?.name || '챌린저'}님 👋</h1>
           </div>
           <button
-            onClick={() => navigate('/profile')}
+            onClick={() => navigate('/personal-feed/me')}
             className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-2xl"
           >
             {user?.animalIcon || '🐰'}
