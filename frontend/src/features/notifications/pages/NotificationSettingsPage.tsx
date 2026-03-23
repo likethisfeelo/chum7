@@ -86,7 +86,7 @@ export function NotificationSettingsPage() {
       await queryClient.cancelQueries({ queryKey: ['notification-settings'] });
       const prev = queryClient.getQueryData<NotificationSettings>(['notification-settings']);
       queryClient.setQueryData<NotificationSettings>(['notification-settings'], (old) =>
-        old ? { ...old, ...updates } : old,
+        old ? ({ ...old, ...updates } as NotificationSettings) : old,
       );
       return { prev };
     },

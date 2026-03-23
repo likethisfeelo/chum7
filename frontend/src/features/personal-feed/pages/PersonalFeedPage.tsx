@@ -455,16 +455,6 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
   );
 }
 
-function ComingSoonTab({ label }: { label: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <p className="text-4xl mb-3">🚧</p>
-      <p className="text-base font-semibold text-gray-700">{label} 탭</p>
-      <p className="text-sm text-gray-400 mt-1">곧 오픈 예정이에요</p>
-    </div>
-  );
-}
-
 // ─── Tab 04: 자유 게시물 ──────────────────────────────────────────────
 const VISIBILITY_META = {
   private: { label: '나만 보기', icon: '🔒' },
