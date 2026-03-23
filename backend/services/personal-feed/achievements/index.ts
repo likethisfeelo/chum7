@@ -19,23 +19,6 @@ function response(statusCode: number, body: unknown): APIGatewayProxyResult {
   };
 }
 
-async function queryAll<T>(params: Parameters<typeof docClient.send>[0]): Promise<T[]> {
-  const results: T[] = [];
-  let lastKey: Record<string, unknown> | undefined;
-  const baseParams = (params as any).input;
-
-  do {
-    const res = await docClient.send(new QueryCommand({
-      ...baseParams,
-      ExclusiveStartKey: lastKey,
-    }));
-    results.push(...((res.Items ?? []) as T[]));
-    lastKey = res.LastEvaluatedKey as Record<string, unknown> | undefined;
-  } while (lastKey);
-
-  return results;
-}
-
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const requesterId = event.requestContext.authorizer?.jwt?.claims?.sub as string | undefined;
@@ -51,7 +34,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // 병렬로 데이터 수집
-    const [userChallengesItems, verificationsItems, sentCheers, receivedCheers, badgesItems] = await Promise.all([
+    const [userChallengesItems, verificationsItems, sentCheers, receivedCheers, badgesItems, leaderChallengesItems] = await Promise.all([
       // 참여한 챌린지 목록
       docClient.send(new QueryCommand({
         TableName: process.env.USER_CHALLENGES_TABLE!,
@@ -91,7 +74,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         Limit: 1000,
       })).then((r) => (r.Items ?? []) as Record<string, unknown>[]),
 
-      // 뱃지
+      // 뱃지 (리더 뱃지 포함)
       docClient.send(new QueryCommand({
         TableName: process.env.BADGES_TABLE!,
         IndexName: 'userId-index',
@@ -99,6 +82,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         ExpressionAttributeValues: { ':userId': targetUserId },
         ScanIndexForward: false,
       })).then((r) => (r.Items ?? []) as Record<string, unknown>[]),
+
+      // 개설한 챌린지 (createdBy-index) — 리더 이력용
+      process.env.CHALLENGES_TABLE
+        ? docClient.send(new QueryCommand({
+            TableName: process.env.CHALLENGES_TABLE,
+            IndexName: 'createdBy-index',
+            KeyConditionExpression: 'createdBy = :uid',
+            ExpressionAttributeValues: { ':uid': targetUserId },
+            ProjectionExpression: 'challengeId, title, lifecycle, durationDays, createdAt, #stats',
+            ExpressionAttributeNames: { '#stats': 'stats' },
+            ScanIndexForward: false,
+          })).then((r) => (r.Items ?? []) as Record<string, unknown>[])
+        : Promise.resolve([] as Record<string, unknown>[]),
     ]);
 
     // 챌린지 통계 집계
@@ -116,18 +112,41 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return sum + (typeof v.score === 'number' ? v.score : 0);
     }, 0);
 
-    // 뱃지 포맷
-    const badges = badgesItems.map((b) => ({
-      badgeId: b.badgeId as string,
-      grantedAt: (b.grantedAt as string) ?? '',
-      challengeId: (b.challengeId as string) ?? null,
-    }));
+    // 뱃지 분류: 일반 뱃지 vs 리더 뱃지
+    const LEADER_BADGE_IDS = new Set(['leader-debut', 'leader-active', 'leader-expert', 'leader-streak']);
+    const badges = badgesItems
+      .filter((b) => !LEADER_BADGE_IDS.has(b.badgeId as string))
+      .map((b) => ({
+        badgeId: b.badgeId as string,
+        grantedAt: (b.grantedAt as string) ?? '',
+        challengeId: (b.challengeId as string) ?? null,
+      }));
+
+    const leaderBadges = badgesItems
+      .filter((b) => LEADER_BADGE_IDS.has(b.badgeId as string))
+      .map((b) => ({
+        badgeId: b.badgeId as string,
+        grantedAt: (b.grantedAt as string) ?? '',
+      }));
+
+    // 리더 이력 집계
+    const completedLeaderChallenges = leaderChallengesItems.filter(
+      (c) => c.lifecycle === 'completed',
+    );
+    const activeLeaderChallenges = leaderChallengesItems.filter(
+      (c) => c.lifecycle === 'active' || c.lifecycle === 'preparing' || c.lifecycle === 'recruiting',
+    );
+    const totalLeaderParticipants = leaderChallengesItems.reduce((sum, c) => {
+      const s = c.stats as Record<string, number> | undefined;
+      return sum + (s?.currentParticipants ?? 0);
+    }, 0);
 
     console.info('[personal-feed/achievements] success', {
       targetUserId,
       challenges: userChallengesItems.length,
       verifications: verificationsItems.length,
       badges: badges.length,
+      leaderChallenges: leaderChallengesItems.length,
     });
 
     return response(200, {
@@ -147,6 +166,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           receivedCount: receivedCheers.length,
         },
         badges,
+        leaderBadges,
+        leaderHistory: {
+          total: leaderChallengesItems.length,
+          completed: completedLeaderChallenges.length,
+          active: activeLeaderChallenges.length,
+          totalParticipants: totalLeaderParticipants,
+          recentChallenges: completedLeaderChallenges.slice(0, 5).map((c) => ({
+            challengeId: c.challengeId,
+            title: c.title,
+            lifecycle: c.lifecycle,
+            createdAt: c.createdAt,
+            participantCount: (c.stats as Record<string, number> | undefined)?.currentParticipants ?? 0,
+          })),
+        },
       },
     });
   } catch (error) {

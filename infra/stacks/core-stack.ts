@@ -148,6 +148,13 @@ export class CoreStack extends Stack {
       sortKey: { name: 'createdAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
+    // GSI: 개설자별 챌린지 조회 (리더 뱃지 조건 체크용)
+    this.challengesTable.addGlobalSecondaryIndex({
+      indexName: 'createdBy-index',
+      partitionKey: { name: 'createdBy', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
 
     this.userChallengesTable = new Table(this, 'UserChallengesTable', {
       tableName: `chme-${stage}-user-challenges`,

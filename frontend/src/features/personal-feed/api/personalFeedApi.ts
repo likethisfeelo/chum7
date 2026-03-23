@@ -33,6 +33,23 @@ export interface FeedAchievements {
     grantedAt: string;
     challengeId: string | null;
   }[];
+  leaderBadges: {
+    badgeId: string;
+    grantedAt: string;
+  }[];
+  leaderHistory: {
+    total: number;
+    completed: number;
+    active: number;
+    totalParticipants: number;
+    recentChallenges: {
+      challengeId: string;
+      title: string;
+      lifecycle: string;
+      createdAt: string;
+      participantCount: number;
+    }[];
+  };
 }
 
 export interface VerificationFeedItem {

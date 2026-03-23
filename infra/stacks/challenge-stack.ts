@@ -21,13 +21,14 @@ interface ChallengeStackProps extends StackProps {
   notificationsTable: Table;
   payoutAuditLogsTable: Table;
   categoryBannersTable: Table;
+  badgesTable: Table;
 }
 
 export class ChallengeStack extends Stack {
   constructor(scope: Construct, id: string, props: ChallengeStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable, personalQuestProposalsTable, questsTable, notificationsTable, payoutAuditLogsTable, categoryBannersTable } = props;
+    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable, personalQuestProposalsTable, questsTable, notificationsTable, payoutAuditLogsTable, categoryBannersTable, badgesTable } = props;
 
     const commonEnv = {
       STAGE: stage,
@@ -38,6 +39,7 @@ export class ChallengeStack extends Stack {
       NOTIFICATIONS_TABLE: notificationsTable.tableName,
       PAYOUT_AUDIT_LOGS_TABLE: payoutAuditLogsTable.tableName,
       CATEGORY_BANNERS_TABLE: categoryBannersTable.tableName,
+      BADGES_TABLE: badgesTable.tableName,
     };
 
     const commonProps = {
@@ -306,6 +308,7 @@ export class ChallengeStack extends Stack {
     challengesTable.grantReadWriteData(lifecycleManagerFn);
     userChallengesTable.grantReadWriteData(lifecycleManagerFn);
     personalQuestProposalsTable.grantReadWriteData(lifecycleManagerFn);
+    badgesTable.grantReadWriteData(lifecycleManagerFn);
 
     new Rule(this, 'LifecycleManagerRule', {
       // 매 1시간 실행 (운영환경에서는 더 짧게 조정 가능)

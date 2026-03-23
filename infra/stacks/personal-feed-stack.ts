@@ -109,6 +109,7 @@ export class PersonalFeedStack extends Stack {
     verificationsTable.grantReadData(achievementsFn);
     cheersTable.grantReadData(achievementsFn);
     badgesTable.grantReadData(achievementsFn);
+    challengesTable.grantReadData(achievementsFn);
     apiGateway.addRoutes({
       path: '/personal-feed/{userId}/achievements',
       methods: [HttpMethod.GET],

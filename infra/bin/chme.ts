@@ -66,6 +66,7 @@ new ChallengeStack(app, `chme-${stage}-challenge`, {
   notificationsTable: coreStack.notificationsTable,
   payoutAuditLogsTable: coreStack.payoutAuditLogsTable,
   categoryBannersTable: coreStack.categoryBannersTable,
+  badgesTable: coreStack.badgesTable,
 });
 
 new VerificationStack(app, `chme-${stage}-verification`, {
