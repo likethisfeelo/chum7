@@ -175,6 +175,8 @@ new PersonalFeedStack(app, `chme-${stage}-personal-feed`, {
   verificationsTable: coreStack.verificationsTable,
   cheersTable: coreStack.cheersTable,
   badgesTable: coreStack.badgesTable,
+  challengesTable: coreStack.challengesTable,
+  uploadsBucket: coreStack.uploadsBucket,
 });
 
 new FrontendStack(app, `chme-${stage}-frontend`, {

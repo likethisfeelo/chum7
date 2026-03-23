@@ -1,10 +1,15 @@
-import { useState } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
 import { Loading } from '@/shared/components/Loading';
-import { personalFeedApi, FeedAchievements } from '../api/personalFeedApi';
+import {
+  personalFeedApi,
+  FeedAchievements,
+  VerificationFeedItem,
+  ChallengeFeedItem,
+} from '../api/personalFeedApi';
 
 type FeedTab = 'verifications' | 'challenges' | 'achievements' | 'posts';
 
@@ -20,10 +25,211 @@ const BADGE_META: Record<string, { icon: string; name: string; desc: string }> =
   '7-day-master': { icon: '⭐', name: '7일 마스터', desc: '7일 연속 퀘스트 완료' },
 };
 
+const VERIFICATION_TYPE_ICON: Record<string, string> = {
+  image: '📸',
+  text: '📝',
+  link: '🔗',
+  video: '🎬',
+};
+
+const BUCKET_STATE_META = {
+  completed: { label: '완주', color: 'bg-green-100 text-green-700 border-green-200' },
+  active: { label: '진행중', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  preparing: { label: '준비중', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+  gave_up: { label: '포기', color: 'bg-gray-100 text-gray-500 border-gray-200' },
+};
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// ─── Tab 01: 인증 게시물 ───────────────────────────────────────────────
+function VerificationCard({ item }: { item: VerificationFeedItem }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      {item.imageUrl && (
+        <img
+          src={item.imageUrl}
+          alt="인증 이미지"
+          loading="lazy"
+          className="w-full h-48 object-cover"
+        />
+      )}
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{VERIFICATION_TYPE_ICON[item.verificationType] ?? '📋'}</span>
+            <div>
+              <p className="text-xs font-semibold text-gray-700 line-clamp-1">
+                {item.challengeTitle ?? '챌린지'}
+              </p>
+              {item.day != null && (
+                <p className="text-[11px] text-gray-400">Day {item.day}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {item.score > 0 && (
+              <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full border border-primary-100">
+                +{item.score}점
+              </span>
+            )}
+          </div>
+        </div>
+        {item.todayNote && (
+          <p className="text-sm text-gray-600 line-clamp-3 mt-1">{item.todayNote}</p>
+        )}
+        <p className="text-[11px] text-gray-400 mt-2">{formatDate(item.createdAt)}</p>
+      </div>
+    </div>
+  );
+}
+
+function VerificationsTab({ userId }: { userId: string }) {
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  } = useInfiniteQuery({
+    queryKey: ['personal-feed-verifications', userId],
+    queryFn: ({ pageParam }) =>
+      personalFeedApi.getVerifications(userId, pageParam as string | undefined),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextToken ?? undefined,
+  });
+
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (observerRef.current) observerRef.current.disconnect();
+      if (!node) return;
+      observerRef.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      });
+      observerRef.current.observe(node);
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage],
+  );
+
+  if (isLoading) return <Loading />;
+
+  const allItems = data?.pages.flatMap((p) => p.items) ?? [];
+
+  if (allItems.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <p className="text-4xl mb-3">📸</p>
+        <p className="text-base font-semibold text-gray-700">아직 인증 게시물이 없어요</p>
+        <p className="text-sm text-gray-400 mt-1">퀘스트를 완료하면 여기에 자동으로 쌓여요</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 pb-20">
+      {allItems.map((item) => (
+        <VerificationCard key={item.verificationId} item={item} />
+      ))}
+      <div ref={sentinelRef} className="h-4" />
+      {isFetchingNextPage && (
+        <div className="py-4 text-center text-sm text-gray-400">불러오는 중...</div>
+      )}
+    </div>
+  );
+}
+
+// ─── Tab 02: 챌린지 목록 ──────────────────────────────────────────────
+function ChallengeHistoryCard({ item }: { item: ChallengeFeedItem }) {
+  const meta = BUCKET_STATE_META[item.bucketState] ?? BUCKET_STATE_META.active;
+  const progressPct = item.durationDays > 0
+    ? Math.round((item.completedDays / item.durationDays) * 100)
+    : 0;
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-4">
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          {item.badgeIcon && <span className="text-2xl flex-shrink-0">{item.badgeIcon}</span>}
+          <div className="min-w-0">
+            <p className="font-semibold text-gray-800 text-sm line-clamp-1">{item.title}</p>
+            {item.category && (
+              <p className="text-xs text-gray-400 mt-0.5">{item.category}</p>
+            )}
+          </div>
+        </div>
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${meta.color}`}>
+          {meta.label}
+        </span>
+      </div>
+
+      {/* 진행 바 */}
+      <div className="mb-2">
+        <div className="flex justify-between text-[11px] text-gray-400 mb-1">
+          <span>{item.completedDays}/{item.durationDays}일 완료</span>
+          <span>{progressPct}%</span>
+        </div>
+        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary-500 rounded-full transition-all"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        {item.score > 0 && (
+          <span className="text-xs font-bold text-primary-600">
+            누적 {item.score.toLocaleString()}점
+          </span>
+        )}
+        {item.startDate && (
+          <span className="text-[11px] text-gray-400 ml-auto">{formatDate(item.startDate)} 시작</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ChallengesTab({ userId }: { userId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['personal-feed-challenges', userId],
+    queryFn: () => personalFeedApi.getChallengeHistory(userId),
+  });
+
+  if (isLoading) return <Loading />;
+
+  const challenges = data?.challenges ?? [];
+
+  if (challenges.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <p className="text-4xl mb-3">🎯</p>
+        <p className="text-base font-semibold text-gray-700">참여한 챌린지가 없어요</p>
+        <p className="text-sm text-gray-400 mt-1">챌린지에 참여하면 여기에 기록이 쌓여요</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 pb-20">
+      {challenges.map((item) => (
+        <ChallengeHistoryCard key={item.userChallengeId} item={item} />
+      ))}
+    </div>
+  );
+}
+
+// ─── Tab 03: 업적 ─────────────────────────────────────────────────────
 function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
   return (
     <div className="space-y-4 pb-20">
-      {/* 스코어 & 활동 통계 */}
       <div className="bg-white rounded-2xl p-5 shadow-sm">
         <h3 className="text-sm font-semibold text-gray-500 mb-3">활동 통계</h3>
         <div className="grid grid-cols-2 gap-3">
@@ -54,7 +260,6 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
         </div>
       </div>
 
-      {/* 응원 통계 */}
       <div className="bg-white rounded-2xl p-5 shadow-sm">
         <h3 className="text-sm font-semibold text-gray-500 mb-3">응원</h3>
         <div className="grid grid-cols-2 gap-3">
@@ -75,15 +280,14 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
         </div>
       </div>
 
-      {/* 뱃지 */}
-      {achievements.badges.length > 0 && (
+      {achievements.badges.length > 0 ? (
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-500 mb-3">
             획득 뱃지 ({achievements.badges.length})
           </h3>
           <div className="grid grid-cols-3 gap-3">
             {achievements.badges.map((badge) => {
-              const meta = BADGE_META[badge.badgeId] || { icon: '🏅', name: badge.badgeId, desc: '' };
+              const meta = BADGE_META[badge.badgeId] ?? { icon: '🏅', name: badge.badgeId, desc: '' };
               return (
                 <div key={badge.badgeId + badge.grantedAt} className="flex flex-col items-center gap-1 bg-gray-50 rounded-xl p-3">
                   <span className="text-3xl">{meta.icon}</span>
@@ -94,9 +298,7 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
             })}
           </div>
         </div>
-      )}
-
-      {achievements.badges.length === 0 && (
+      ) : (
         <div className="bg-white rounded-2xl p-5 shadow-sm text-center">
           <p className="text-4xl mb-2">🏅</p>
           <p className="text-sm font-semibold text-gray-700">아직 획득한 뱃지가 없어요</p>
@@ -112,21 +314,22 @@ function ComingSoonTab({ label }: { label: string }) {
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <p className="text-4xl mb-3">🚧</p>
       <p className="text-base font-semibold text-gray-700">{label} 탭</p>
-      <p className="text-sm text-gray-400 mt-1">Phase 2에서 구현 예정이에요</p>
+      <p className="text-sm text-gray-400 mt-1">곧 오픈 예정이에요</p>
     </div>
   );
 }
 
+// ─── 메인 페이지 ──────────────────────────────────────────────────────
 export function PersonalFeedPage() {
   const { userId: userIdParam } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<FeedTab>('achievements');
 
-  const resolvedUserId = userIdParam === 'me' ? 'me' : (userIdParam ?? 'me');
+  const resolvedUserId = userIdParam ?? 'me';
   const isOwnFeed = userIdParam === 'me';
 
-  const { data: profile, isLoading: profileLoading } = useQuery({
+  const { data: profile } = useQuery({
     queryKey: ['personal-feed-profile', resolvedUserId],
     queryFn: () => personalFeedApi.getProfile(resolvedUserId),
   });
@@ -195,8 +398,14 @@ export function PersonalFeedPage() {
 
       {/* 컨텐츠 */}
       <div className="p-4">
+        {activeTab === 'verifications' && (
+          <VerificationsTab userId={resolvedUserId} />
+        )}
+        {activeTab === 'challenges' && (
+          <ChallengesTab userId={resolvedUserId} />
+        )}
         {activeTab === 'achievements' && (
-          achievementsLoading || profileLoading ? (
+          achievementsLoading ? (
             <Loading />
           ) : achievements ? (
             <AchievementsTab achievements={achievements} />
@@ -204,8 +413,6 @@ export function PersonalFeedPage() {
             <ComingSoonTab label="시스템 업적" />
           )
         )}
-        {activeTab === 'verifications' && <ComingSoonTab label="챌린지 인증 게시물" />}
-        {activeTab === 'challenges' && <ComingSoonTab label="참여한 챌린지 목록" />}
         {activeTab === 'posts' && <ComingSoonTab label="자유 게시물" />}
       </div>
     </div>
