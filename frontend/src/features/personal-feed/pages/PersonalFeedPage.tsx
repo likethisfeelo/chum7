@@ -1,11 +1,12 @@
 import { useRef, useCallback, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
 import { Loading } from '@/shared/components/Loading';
 import {
   personalFeedApi,
+  FeedProfile,
   FeedAchievements,
   VerificationFeedItem,
   ChallengeFeedItem,
@@ -43,6 +44,84 @@ function formatDate(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// ─── Follow Button ────────────────────────────────────────────────────
+function FollowButton({ profile, targetUserId }: { profile: FeedProfile; targetUserId: string }) {
+  const queryClient = useQueryClient();
+
+  const requestMutation = useMutation({
+    mutationFn: () => personalFeedApi.sendFollowRequest(targetUserId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['personal-feed-profile', targetUserId] });
+    },
+  });
+
+  const unfollowMutation = useMutation({
+    mutationFn: () => personalFeedApi.unfollow(targetUserId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['personal-feed-profile', targetUserId] });
+    },
+  });
+
+  const { followStatus, currentLayer } = profile;
+
+  // layer -1 = blocked
+  if (currentLayer === -1) return null;
+
+  if (followStatus === 'accepted') {
+    return (
+      <button
+        onClick={() => unfollowMutation.mutate()}
+        disabled={unfollowMutation.isPending}
+        className="px-4 py-1.5 rounded-full text-xs font-semibold border border-white/30 text-white/80 hover:bg-white/10 transition-colors"
+      >
+        {unfollowMutation.isPending ? '...' : '팔로잉'}
+      </button>
+    );
+  }
+
+  if (followStatus === 'pending') {
+    return (
+      <button
+        disabled
+        className="px-4 py-1.5 rounded-full text-xs font-semibold bg-white/20 text-white/60"
+      >
+        요청 중
+      </button>
+    );
+  }
+
+  // layer 0 = no way to request yet; layer 1+ = can request
+  if (currentLayer >= 1) {
+    return (
+      <button
+        onClick={() => requestMutation.mutate()}
+        disabled={requestMutation.isPending}
+        className="px-4 py-1.5 rounded-full text-xs font-semibold bg-white text-primary-600 hover:bg-white/90 transition-colors"
+      >
+        {requestMutation.isPending ? '...' : '팔로우'}
+      </button>
+    );
+  }
+
+  return null;
+}
+
+// ─── Layer Gate ───────────────────────────────────────────────────────
+function LayerGate({ layer, minLayer, children }: {
+  layer: number;
+  minLayer: number;
+  children: React.ReactNode;
+}) {
+  if (layer >= minLayer) return <>{children}</>;
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <p className="text-4xl mb-3">🔒</p>
+      <p className="text-base font-semibold text-gray-700">비공개 탭이에요</p>
+      <p className="text-sm text-gray-400 mt-1">팔로우가 수락되면 볼 수 있어요</p>
+    </div>
+  );
 }
 
 // ─── Tab 01: 인증 게시물 ───────────────────────────────────────────────
@@ -169,7 +248,6 @@ function ChallengeHistoryCard({ item }: { item: ChallengeFeedItem }) {
         </span>
       </div>
 
-      {/* 진행 바 */}
       <div className="mb-2">
         <div className="flex justify-between text-[11px] text-gray-400 mb-1">
           <span>{item.completedDays}/{item.durationDays}일 완료</span>
@@ -327,7 +405,6 @@ export function PersonalFeedPage() {
   const [activeTab, setActiveTab] = useState<FeedTab>('achievements');
 
   const resolvedUserId = userIdParam ?? 'me';
-  const isOwnFeed = userIdParam === 'me';
 
   const { data: profile } = useQuery({
     queryKey: ['personal-feed-profile', resolvedUserId],
@@ -340,21 +417,33 @@ export function PersonalFeedPage() {
     enabled: activeTab === 'achievements',
   });
 
-  const displayName = profile?.displayName ?? (isOwnFeed ? (user?.name ?? '나') : '...');
-  const displayIcon = profile?.animalIcon ?? (isOwnFeed ? (user?.animalIcon ?? '🐰') : '🐰');
+  const isOwn = profile?.isOwn ?? (userIdParam === 'me');
+  const currentLayer = profile?.currentLayer ?? 0;
+  const displayName = profile?.displayName ?? (isOwn ? (user?.name ?? '나') : '...');
+  const displayIcon = profile?.animalIcon ?? (isOwn ? (user?.animalIcon ?? '🐰') : '🐰');
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
       <div className="bg-gradient-to-br from-primary-500 to-primary-700 pt-12 pb-6 px-6">
-        <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="text-white/80 hover:text-white text-xl"
-          >
-            ←
-          </button>
-          <span className="text-white/80 text-sm">개인 피드</span>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="text-white/80 hover:text-white text-xl"
+            >
+              ←
+            </button>
+            <span className="text-white/80 text-sm">개인 피드</span>
+          </div>
+          {isOwn && (
+            <button
+              onClick={() => navigate('/personal-feed/settings')}
+              className="text-white/70 hover:text-white text-sm px-3 py-1 rounded-full border border-white/20 hover:border-white/40 transition-colors"
+            >
+              설정
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-3xl flex-shrink-0">
@@ -362,12 +451,20 @@ export function PersonalFeedPage() {
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-white font-bold text-xl truncate">{displayName}</h1>
-            {isOwnFeed && profile && (
+            {isOwn && profile && (
               <p className="text-white/60 text-xs mt-0.5">
                 {profile.feedSettings.isPublic ? '🌍 공개 중' : '🔒 비공개'}
               </p>
             )}
+            {!isOwn && profile && (
+              <p className="text-white/60 text-xs mt-0.5">
+                {profile.isMutual ? '💚 서로 팔로우' : profile.followStatus === 'accepted' ? '✅ 팔로잉' : ''}
+              </p>
+            )}
           </div>
+          {!isOwn && profile && (
+            <FollowButton profile={profile} targetUserId={resolvedUserId} />
+          )}
         </div>
       </div>
 
@@ -399,19 +496,25 @@ export function PersonalFeedPage() {
       {/* 컨텐츠 */}
       <div className="p-4">
         {activeTab === 'verifications' && (
-          <VerificationsTab userId={resolvedUserId} />
+          <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 3}>
+            <VerificationsTab userId={resolvedUserId} />
+          </LayerGate>
         )}
         {activeTab === 'challenges' && (
-          <ChallengesTab userId={resolvedUserId} />
+          <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 4}>
+            <ChallengesTab userId={resolvedUserId} />
+          </LayerGate>
         )}
         {activeTab === 'achievements' && (
-          achievementsLoading ? (
-            <Loading />
-          ) : achievements ? (
-            <AchievementsTab achievements={achievements} />
-          ) : (
-            <ComingSoonTab label="시스템 업적" />
-          )
+          <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 1}>
+            {achievementsLoading ? (
+              <Loading />
+            ) : achievements ? (
+              <AchievementsTab achievements={achievements} />
+            ) : (
+              <ComingSoonTab label="시스템 업적" />
+            )}
+          </LayerGate>
         )}
         {activeTab === 'posts' && <ComingSoonTab label="자유 게시물" />}
       </div>

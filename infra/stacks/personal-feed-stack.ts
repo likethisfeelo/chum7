@@ -20,6 +20,9 @@ interface PersonalFeedStackProps extends StackProps {
   badgesTable: Table;
   challengesTable: Table;
   uploadsBucket: IBucket;
+  feedFollowsTable: Table;
+  feedBlocksTable: Table;
+  feedInviteLinksTable: Table;
 }
 
 export class PersonalFeedStack extends Stack {
@@ -37,6 +40,9 @@ export class PersonalFeedStack extends Stack {
       badgesTable,
       challengesTable,
       uploadsBucket,
+      feedFollowsTable,
+      feedBlocksTable,
+      feedInviteLinksTable,
     } = props;
 
     const commonProps = {
@@ -59,9 +65,12 @@ export class PersonalFeedStack extends Stack {
       BADGES_TABLE: badgesTable.tableName,
       CHALLENGES_TABLE: challengesTable.tableName,
       UPLOADS_BUCKET: uploadsBucket.bucketName,
+      FEED_FOLLOWS_TABLE: feedFollowsTable.tableName,
+      FEED_BLOCKS_TABLE: feedBlocksTable.tableName,
+      FEED_INVITE_LINKS_TABLE: feedInviteLinksTable.tableName,
     };
 
-    // 1. GET /personal-feed/{userId} — 피드 프로필 조회
+    // 1. GET /personal-feed/{userId} — 피드 프로필 + 레이어 판단
     const profileFn = new NodejsFunction(this, 'PersonalFeedProfileFn', {
       ...commonProps,
       functionName: `chme-${stage}-personal-feed-profile`,
@@ -70,6 +79,8 @@ export class PersonalFeedStack extends Stack {
       environment: commonEnv,
     });
     usersTable.grantReadData(profileFn);
+    feedFollowsTable.grantReadData(profileFn);
+    feedBlocksTable.grantReadData(profileFn);
     apiGateway.addRoutes({
       path: '/personal-feed/{userId}',
       methods: [HttpMethod.GET],
@@ -127,6 +138,138 @@ export class PersonalFeedStack extends Stack {
       path: '/personal-feed/{userId}/challenges',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('PersonalFeedChallengesIntegration', challengesFn),
+      authorizer,
+    });
+
+    // 5. Follow Lambda — 팔로우 시스템 (POST/PUT/DELETE/GET)
+    const followFn = new NodejsFunction(this, 'PersonalFeedFollowFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-personal-feed-follow`,
+      entry: path.join(__dirname, '../../backend/services/personal-feed/follow/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    feedFollowsTable.grantReadWriteData(followFn);
+    feedBlocksTable.grantReadData(followFn);
+
+    // POST /personal-feed/{userId}/follow-request
+    apiGateway.addRoutes({
+      path: '/personal-feed/{userId}/follow-request',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('PersonalFeedFollowRequestIntegration', followFn),
+      authorizer,
+    });
+    // PUT /personal-feed/follow-requests/{followId}/accept
+    apiGateway.addRoutes({
+      path: '/personal-feed/follow-requests/{followId}/accept',
+      methods: [HttpMethod.PUT],
+      integration: new HttpLambdaIntegration('PersonalFeedFollowAcceptIntegration', followFn),
+      authorizer,
+    });
+    // PUT /personal-feed/follow-requests/{followId}/reject
+    apiGateway.addRoutes({
+      path: '/personal-feed/follow-requests/{followId}/reject',
+      methods: [HttpMethod.PUT],
+      integration: new HttpLambdaIntegration('PersonalFeedFollowRejectIntegration', followFn),
+      authorizer,
+    });
+    // DELETE /personal-feed/{userId}/follow (팔로워 자발 취소)
+    apiGateway.addRoutes({
+      path: '/personal-feed/{userId}/follow',
+      methods: [HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration('PersonalFeedUnfollowIntegration', followFn),
+      authorizer,
+    });
+    // DELETE /personal-feed/followers/{followerId} (강제 해제)
+    apiGateway.addRoutes({
+      path: '/personal-feed/followers/{followerId}',
+      methods: [HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration('PersonalFeedRemoveFollowerIntegration', followFn),
+      authorizer,
+    });
+    // GET /personal-feed/me/followers
+    apiGateway.addRoutes({
+      path: '/personal-feed/me/followers',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('PersonalFeedFollowersIntegration', followFn),
+      authorizer,
+    });
+    // GET /personal-feed/me/follow-requests
+    apiGateway.addRoutes({
+      path: '/personal-feed/me/follow-requests',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('PersonalFeedFollowRequestsIntegration', followFn),
+      authorizer,
+    });
+
+    // 6. Block Lambda — 차단 시스템 (POST/DELETE/GET)
+    const blockFn = new NodejsFunction(this, 'PersonalFeedBlockFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-personal-feed-block`,
+      entry: path.join(__dirname, '../../backend/services/personal-feed/block/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    feedBlocksTable.grantReadWriteData(blockFn);
+
+    // POST /personal-feed/{userId}/block
+    apiGateway.addRoutes({
+      path: '/personal-feed/{userId}/block',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('PersonalFeedBlockIntegration', blockFn),
+      authorizer,
+    });
+    // DELETE /personal-feed/{userId}/block
+    apiGateway.addRoutes({
+      path: '/personal-feed/{userId}/block',
+      methods: [HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration('PersonalFeedUnblockIntegration', blockFn),
+      authorizer,
+    });
+    // GET /personal-feed/me/blocked
+    apiGateway.addRoutes({
+      path: '/personal-feed/me/blocked',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('PersonalFeedBlockedListIntegration', blockFn),
+      authorizer,
+    });
+
+    // 7. Invite Lambda — 초대 링크 시스템 (POST/GET/DELETE + token resolve)
+    const inviteFn = new NodejsFunction(this, 'PersonalFeedInviteFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-personal-feed-invite`,
+      entry: path.join(__dirname, '../../backend/services/personal-feed/invite/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    feedInviteLinksTable.grantReadWriteData(inviteFn);
+
+    // POST /personal-feed/me/invite-links
+    apiGateway.addRoutes({
+      path: '/personal-feed/me/invite-links',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('PersonalFeedInviteCreateIntegration', inviteFn),
+      authorizer,
+    });
+    // GET /personal-feed/me/invite-links
+    apiGateway.addRoutes({
+      path: '/personal-feed/me/invite-links',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('PersonalFeedInviteListIntegration', inviteFn),
+      authorizer,
+    });
+    // DELETE /personal-feed/me/invite-links/{linkId}
+    apiGateway.addRoutes({
+      path: '/personal-feed/me/invite-links/{linkId}',
+      methods: [HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration('PersonalFeedInviteDeleteIntegration', inviteFn),
+      authorizer,
+    });
+    // GET /personal-feed/invite/{token}
+    apiGateway.addRoutes({
+      path: '/personal-feed/invite/{token}',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('PersonalFeedInviteResolveIntegration', inviteFn),
       authorizer,
     });
   }

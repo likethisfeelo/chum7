@@ -177,6 +177,9 @@ new PersonalFeedStack(app, `chme-${stage}-personal-feed`, {
   badgesTable: coreStack.badgesTable,
   challengesTable: coreStack.challengesTable,
   uploadsBucket: coreStack.uploadsBucket,
+  feedFollowsTable: coreStack.feedFollowsTable,
+  feedBlocksTable: coreStack.feedBlocksTable,
+  feedInviteLinksTable: coreStack.feedInviteLinksTable,
 });
 
 new FrontendStack(app, `chme-${stage}-frontend`, {

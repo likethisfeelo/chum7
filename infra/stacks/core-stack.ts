@@ -62,6 +62,11 @@ export class CoreStack extends Stack {
   public readonly plazaRecommendationsTable: Table;
   public readonly categoryBannersTable: Table;
 
+  // Personal Feed Social Tables
+  public readonly feedFollowsTable: Table;
+  public readonly feedBlocksTable: Table;
+  public readonly feedInviteLinksTable: Table;
+
   public readonly uploadsBucket: IBucket;
   public readonly snsTopic: Topic;
   public readonly eventBus: EventBus;
@@ -551,6 +556,65 @@ export class CoreStack extends Stack {
       indexName: 'slug-isActive-index',
       partitionKey: { name: 'slug', type: AttributeType.STRING },
       sortKey: { name: 'isActive', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    // ==================== Personal Feed Social Tables ====================
+
+    // feedFollowsTable: 팔로우 관계 (PK = followerId#followeeId)
+    this.feedFollowsTable = new Table(this, 'FeedFollowsTable', {
+      tableName: `chme-${stage}-feed-follows`,
+      partitionKey: { name: 'followId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+    });
+    this.feedFollowsTable.addGlobalSecondaryIndex({
+      indexName: 'followerId-index',
+      partitionKey: { name: 'followerId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    this.feedFollowsTable.addGlobalSecondaryIndex({
+      indexName: 'followeeId-index',
+      partitionKey: { name: 'followeeId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    // feedBlocksTable: 차단 목록 (PK = blockerId#blockedUserId)
+    this.feedBlocksTable = new Table(this, 'FeedBlocksTable', {
+      tableName: `chme-${stage}-feed-blocks`,
+      partitionKey: { name: 'blockId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+    });
+    this.feedBlocksTable.addGlobalSecondaryIndex({
+      indexName: 'blockerId-index',
+      partitionKey: { name: 'blockerId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    // feedInviteLinksTable: 초대 링크 (PK = inviteLinkId, GSI: ownerId, token)
+    this.feedInviteLinksTable = new Table(this, 'FeedInviteLinksTable', {
+      tableName: `chme-${stage}-feed-invite-links`,
+      partitionKey: { name: 'inviteLinkId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+      timeToLiveAttribute: 'expiresAtTimestamp',
+    });
+    this.feedInviteLinksTable.addGlobalSecondaryIndex({
+      indexName: 'ownerId-index',
+      partitionKey: { name: 'ownerId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    this.feedInviteLinksTable.addGlobalSecondaryIndex({
+      indexName: 'token-index',
+      partitionKey: { name: 'token', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
 
