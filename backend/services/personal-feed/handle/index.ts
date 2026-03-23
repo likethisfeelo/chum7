@@ -7,7 +7,7 @@
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
@@ -55,6 +55,25 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         });
       }
 
+      // 월 1회 변경 제한 확인
+      const userItem = await docClient.send(new GetCommand({
+        TableName: process.env.USERS_TABLE!,
+        Key: { userId },
+        ProjectionExpression: 'feedHandleUpdatedAt',
+      }));
+      const lastUpdated = userItem.Item?.feedHandleUpdatedAt as string | undefined;
+      if (lastUpdated) {
+        const daysSince = (Date.now() - new Date(lastUpdated).getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSince < 30) {
+          const nextAvailable = new Date(new Date(lastUpdated).getTime() + 30 * 24 * 60 * 60 * 1000);
+          return res(429, {
+            error: 'CHANGE_LIMIT_EXCEEDED',
+            message: `핸들은 30일에 한 번만 변경할 수 있어요. 다음 변경 가능일: ${nextAvailable.toLocaleDateString('ko-KR')}`,
+            nextAvailableAt: nextAvailable.toISOString(),
+          });
+        }
+      }
+
       // 중복 확인 (feedHandle-index GSI)
       const existing = await docClient.send(new QueryCommand({
         TableName: process.env.USERS_TABLE!,
@@ -69,14 +88,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         return res(409, { error: 'HANDLE_TAKEN', message: '이미 사용 중인 핸들이에요' });
       }
 
+      const now = new Date().toISOString();
       await docClient.send(new UpdateCommand({
         TableName: process.env.USERS_TABLE!,
         Key: { userId },
-        UpdateExpression: 'SET feedHandle = :h',
-        ExpressionAttributeValues: { ':h': handle },
+        UpdateExpression: 'SET feedHandle = :h, feedHandleUpdatedAt = :now',
+        ExpressionAttributeValues: { ':h': handle, ':now': now },
       }));
 
-      return res(200, { success: true, data: { feedHandle: handle } });
+      return res(200, { success: true, data: { feedHandle: handle, updatedAt: now } });
     }
 
     return res(405, { error: 'METHOD_NOT_ALLOWED' });
