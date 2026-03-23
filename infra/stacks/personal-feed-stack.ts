@@ -389,12 +389,6 @@ export class PersonalFeedStack extends Stack {
       integration: new HttpLambdaIntegration('PersonalFeedHandlePutIntegration', handleFn),
       authorizer,
     });
-    apiGateway.addRoutes({
-      path: '/personal-feed/me/handle',
-      methods: [HttpMethod.DELETE],
-      integration: new HttpLambdaIntegration('PersonalFeedHandleDeleteIntegration', handleFn),
-      authorizer,
-    });
 
     // 11. Feed Settings Lambda — 피드 공개 설정 (PUT /personal-feed/me/settings)
     const feedSettingsFn = new NodejsFunction(this, 'PersonalFeedSettingsFn', {

@@ -30,16 +30,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const method = event.requestContext.http?.method ?? event.httpMethod;
 
-    // ── DELETE /personal-feed/me/handle ──────────────────────────────
-    if (method === 'DELETE') {
-      await docClient.send(new UpdateCommand({
-        TableName: process.env.USERS_TABLE!,
-        Key: { userId },
-        UpdateExpression: 'REMOVE feedHandle',
-      }));
-      return res(200, { success: true });
-    }
-
     // ── PUT /personal-feed/me/handle ──────────────────────────────────
     if (method === 'PUT') {
       let body: { handle?: string } = {};

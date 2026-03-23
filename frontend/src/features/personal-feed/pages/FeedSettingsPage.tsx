@@ -23,15 +23,6 @@ function HandleSection({ profile }: { profile: FeedProfile }) {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: () => personalFeedApi.deleteFeedHandle(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['personal-feed-profile', 'me'] });
-      setInput('');
-      setEditing(false);
-    },
-  });
-
   const handleUrl = profile.feedHandle
     ? `${window.location.origin}/personal-feed/@${profile.feedHandle}`
     : null;
@@ -78,21 +69,12 @@ function HandleSection({ profile }: { profile: FeedProfile }) {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-mono text-gray-800">@{profile.feedHandle}</span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setEditing(true); setInput(profile.feedHandle!); }}
-                  className="text-xs text-primary-600 font-semibold hover:text-primary-700"
-                >
-                  변경
-                </button>
-                <button
-                  onClick={() => deleteMutation.mutate()}
-                  disabled={deleteMutation.isPending}
-                  className="text-xs text-red-400 font-semibold hover:text-red-600"
-                >
-                  삭제
-                </button>
-              </div>
+              <button
+                onClick={() => { setEditing(true); setInput(profile.feedHandle!); }}
+                className="text-xs text-primary-600 font-semibold hover:text-primary-700"
+              >
+                변경
+              </button>
             </div>
             {handleUrl && (
               <button
