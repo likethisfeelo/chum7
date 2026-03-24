@@ -258,6 +258,15 @@ export const ChallengesPage = () => {
           </div>
         </motion.div>
       </AnimatePresence>
+      {/* 챌린지 만들기 FAB */}
+      <button
+        onClick={() => navigate('/challenges/new')}
+        className="fixed bottom-24 right-4 w-13 h-13 bg-primary-500 text-white rounded-full shadow-lg flex items-center justify-center z-20 hover:bg-primary-600 active:scale-95 transition-all"
+        style={{ width: 52, height: 52 }}
+        aria-label="챌린지 만들기"
+      >
+        <span className="text-2xl leading-none">+</span>
+      </button>
     </div>
   );
 };

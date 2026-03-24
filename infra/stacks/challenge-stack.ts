@@ -324,6 +324,55 @@ export class ChallengeStack extends Stack {
       targets: [new LambdaFunction(lifecycleManagerFn)],
     });
 
+    // 사용자 챌린지 생성 (인증 사용자 전용, 그룹 제한 없음)
+    const userCreateFn = new NodejsFunction(this, 'UserCreateFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-user-create`,
+      entry: path.join(__dirname, '../../backend/services/challenge/create/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadWriteData(userCreateFn);
+    userChallengesTable.grantReadWriteData(userCreateFn);
+    apiGateway.addRoutes({
+      path: '/challenges/me/create',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('UserCreateChallengeIntegration', userCreateFn),
+      authorizer,
+    });
+
+    // 내가 만든 챌린지 목록
+    const myCreatedFn = new NodejsFunction(this, 'MyCreatedFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-my-created`,
+      entry: path.join(__dirname, '../../backend/services/challenge/my-created/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadData(myCreatedFn);
+    apiGateway.addRoutes({
+      path: '/challenges/me/created',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('MyCreatedChallengesIntegration', myCreatedFn),
+      authorizer,
+    });
+
+    // 챌린지 공개 (draft → recruiting, 생성자 전용)
+    const publishFn = new NodejsFunction(this, 'PublishFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-publish`,
+      entry: path.join(__dirname, '../../backend/services/challenge/publish/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadWriteData(publishFn);
+    apiGateway.addRoutes({
+      path: '/challenges/{challengeId}/publish',
+      methods: [HttpMethod.PATCH],
+      integration: new HttpLambdaIntegration('PublishChallengeIntegration', publishFn),
+      authorizer,
+    });
+
     // Public: GET /category-banners
     const categoryBannersListFn = new NodejsFunction(this, 'CategoryBannersListFn', {
       ...commonProps,

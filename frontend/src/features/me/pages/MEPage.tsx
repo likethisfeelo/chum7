@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { characterApi } from '@/features/character/api/characterApi';
+import { challengeApi, CreatedChallenge, ChallengeLifecycle } from '@/features/challenge/api/challengeApi';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
 import { Loading } from '@/shared/components/Loading';
@@ -190,6 +191,112 @@ const getProposalStatusMeta = (status?: string) => {
   if (key === 'disqualified') return { label: '자격 제한', color: 'text-gray-700 bg-gray-200 border-gray-300', nextAction: '개인 퀘스트 제안 자격이 제한되었습니다.' };
   return { label: '검토중', color: 'text-amber-700 bg-amber-50 border-amber-200', nextAction: '리더 검토 결과를 기다려주세요.' };
 };
+
+// ─── lifecycle 메타 ───────────────────────────────────────────────────
+const LIFECYCLE_META: Record<ChallengeLifecycle, { icon: string; label: string }> = {
+  draft:      { icon: '🔒', label: '준비 중' },
+  recruiting: { icon: '📣', label: '모집 중' },
+  preparing:  { icon: '⏳', label: '준비 기간' },
+  active:     { icon: '🏃', label: '진행 중' },
+  completed:  { icon: '✅', label: '완료' },
+  archived:   { icon: '📦', label: '보관' },
+};
+
+// ─── 내가 만든 챌린지 섹션 ────────────────────────────────────────────
+function MyCreatedChallengesSection() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const { data: myCreated, isLoading } = useQuery({
+    queryKey: ['my-created-challenges'],
+    queryFn: challengeApi.getMyCreated,
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: (challengeId: string) => challengeApi.publishChallenge(challengeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-created-challenges'] });
+      toast.success('모집이 시작됐어요!');
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message ?? '공개에 실패했어요');
+    },
+  });
+
+  if (isLoading || !myCreated || myCreated.length === 0) return null;
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-sm font-bold text-gray-700">내가 만든 챌린지</h2>
+        <button
+          onClick={() => navigate('/challenges/new')}
+          className="text-xs text-primary-600 font-semibold hover:text-primary-700"
+        >
+          + 새 챌린지
+        </button>
+      </div>
+      {myCreated.map((c: CreatedChallenge) => {
+        const meta = LIFECYCLE_META[c.lifecycle] ?? { icon: '•', label: c.lifecycle };
+        const canPublish = c.lifecycle === 'draft';
+        const canReviewJoins = ['recruiting', 'preparing'].includes(c.lifecycle) && (c.stats.pendingParticipants ?? 0) > 0;
+        const canViewBoard = ['recruiting', 'preparing', 'active', 'completed'].includes(c.lifecycle);
+
+        return (
+          <div key={c.challengeId} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl flex-shrink-0">{c.badgeIcon || '🏆'}</span>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-gray-900 text-sm truncate">{c.title}</p>
+                <span className={`inline-flex items-center gap-1 text-[11px] font-medium mt-0.5 ${
+                  c.lifecycle === 'draft' ? 'text-gray-500' :
+                  c.lifecycle === 'recruiting' ? 'text-blue-600' :
+                  c.lifecycle === 'active' ? 'text-green-600' :
+                  'text-gray-500'
+                }`}>
+                  {meta.icon} {meta.label} · 참여자 {c.stats.totalParticipants}명
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {canPublish && (
+                <button
+                  onClick={() => publishMutation.mutate(c.challengeId)}
+                  disabled={publishMutation.isPending}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-full bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 transition-colors"
+                >
+                  {publishMutation.isPending ? '공개 중...' : '모집 시작하기'}
+                </button>
+              )}
+              {canReviewJoins && (
+                <button
+                  onClick={() => navigate(`/challenges/${c.challengeId}/join-requests`)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-full border border-amber-400 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors"
+                >
+                  참여자 심사 ({c.stats.pendingParticipants}명)
+                </button>
+              )}
+              {canViewBoard && (
+                <button
+                  onClick={() => navigate(`/challenge-board/${c.challengeId}`)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 transition-colors"
+                >
+                  게시판
+                </button>
+              )}
+              <button
+                onClick={() => navigate(`/challenges/${c.challengeId}`)}
+                className="px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 text-gray-500 bg-white hover:bg-gray-50 transition-colors"
+              >
+                상세 보기
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
 
 export const MEPage = () => {
   const navigate = useNavigate();
@@ -996,6 +1103,8 @@ export const MEPage = () => {
             <li>• 보완: 실패한 Day는 보완 인증(70% 점수)으로 연결할 수 있어요.</li>
           </ul>
         </section>
+
+        <MyCreatedChallengesSection />
 
         {!isLoading && (
           <button

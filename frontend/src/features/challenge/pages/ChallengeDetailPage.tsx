@@ -9,6 +9,8 @@ import { Loading } from '@/shared/components/Loading';
 import toast from 'react-hot-toast';
 import { JoinWizardBottomSheet } from '@/features/challenge/components/JoinWizardBottomSheet';
 import { WizardFormState } from '@/features/challenge/components/join-wizard/types';
+import { useAuthStore } from '@/stores/authStore';
+import { challengeApi } from '@/features/challenge/api/challengeApi';
 
 const parseTargetTimeToFormState = (targetTime?: string): WizardFormState => {
   const fallback: WizardFormState = {
@@ -39,6 +41,7 @@ export const ChallengeDetailPage = () => {
   const queryClient = useQueryClient();
   const [isJoinWizardOpen, setIsJoinWizardOpen] = useState(false);
   const useNewJoinWizard = String(import.meta.env.VITE_USE_NEW_JOIN_WIZARD ?? 'true') === 'true';
+  const user = useAuthStore((s) => s.user);
 
   const { data: challenge, isLoading } = useQuery({
     queryKey: ['challenge', challengeId],
@@ -118,10 +121,23 @@ export const ChallengeDetailPage = () => {
     },
   });
 
+  const publishMutation = useMutation({
+    mutationFn: () => challengeApi.publishChallenge(challengeId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['my-created-challenges'] });
+      toast.success('챌린지가 공개되었습니다! 🎉');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || '공개에 실패했습니다');
+    },
+  });
+
   if (isLoading) return <Loading fullScreen />;
   if (!challenge) return <div className="p-6 text-center text-gray-500">챌린지를 찾을 수 없습니다</div>;
 
   const lifecycle = String(challenge.lifecycle || 'draft');
+  const isCreator = challenge.createdBy === user?.userId;
   const alreadyJoined = (myChallengesData?.challenges ?? []).some((item: any) => (item.challengeId ?? item.challenge?.challengeId) === challengeId);
   const canJoin = lifecycle === 'recruiting' && !alreadyJoined;
 
@@ -154,6 +170,35 @@ export const ChallengeDetailPage = () => {
         </button>
         <h1 className="text-lg font-bold text-gray-900">챌린지 상세</h1>
       </div>
+
+      {isCreator && (
+        <div className="bg-primary-50 border-b border-primary-100 px-4 py-3 flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-primary-700 font-semibold">✏️ 내가 만든 챌린지</span>
+          {lifecycle === 'draft' && (
+            <button
+              onClick={() => publishMutation.mutate()}
+              disabled={publishMutation.isPending}
+              className="text-xs bg-primary-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-primary-600 disabled:opacity-50 transition-colors"
+            >
+              {publishMutation.isPending ? '공개 중...' : '모집 시작하기'}
+            </button>
+          )}
+          {['recruiting', 'preparing'].includes(lifecycle) && (stats?.pendingParticipants ?? 0) > 0 && (
+            <button
+              onClick={() => navigate(`/challenges/${challengeId}/join-requests`)}
+              className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-amber-600 transition-colors"
+            >
+              참여자 심사 ({stats?.pendingParticipants}명)
+            </button>
+          )}
+          <button
+            onClick={() => navigate(`/challenge-board/${challengeId}`)}
+            className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
+          >
+            게시판
+          </button>
+        </div>
+      )}
 
       <div className="p-6">
         <motion.div
