@@ -7,7 +7,7 @@ interface MainLayoutProps {
 
 export const MainLayout = ({ children }: MainLayoutProps) => {
   return (
-    <div className="min-h-screen bg-gray-50 max-w-md mx-auto relative">
+    <div className="min-h-screen max-w-md mx-auto relative" style={{ backgroundColor: 'var(--color-bg-app)' }}>
       <main className="pb-20">
         {children}
       </main>

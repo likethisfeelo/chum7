@@ -16,6 +16,7 @@ import { FrontendStack } from '../stacks/frontend-stack';
 import { BadgeStack } from '../stacks/badge-stack';
 import { PersonalFeedStack } from '../stacks/personal-feed-stack';
 import { TodayStack } from '../stacks/today-stack';
+import { CharacterStack } from '../stacks/character-stack';
 
 import { devConfig } from '../config/dev';
 import { prodConfig } from '../config/prod';
@@ -68,6 +69,8 @@ new ChallengeStack(app, `chme-${stage}-challenge`, {
   payoutAuditLogsTable: coreStack.payoutAuditLogsTable,
   categoryBannersTable: coreStack.categoryBannersTable,
   badgesTable: coreStack.badgesTable,
+  usersTable: coreStack.usersTable,
+  charactersTable: coreStack.charactersTable,
 });
 
 new VerificationStack(app, `chme-${stage}-verification`, {
@@ -186,6 +189,15 @@ new PersonalFeedStack(app, `chme-${stage}-personal-feed`, {
   savedPostsTable: coreStack.savedPostsTable,
   plazaPostsTable: coreStack.plazaPostsTable,
   notificationsTable: coreStack.notificationsTable,
+});
+
+new CharacterStack(app, `chme-${stage}-character`, {
+  env,
+  stage,
+  apiGateway: apiStack.apiGateway,
+  authorizer: apiStack.cognitoAuthorizer,
+  charactersTable: coreStack.charactersTable,
+  usersTable: coreStack.usersTable,
 });
 
 new TodayStack(app, `chme-${stage}-today`, {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { characterApi } from '@/features/character/api/characterApi';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
 import { Loading } from '@/shared/components/Loading';
@@ -205,6 +206,13 @@ export const MEPage = () => {
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<METab>('active');
+  const [currentTheme, setCurrentTheme] = useState(
+    () => document.body.getAttribute('data-theme') ?? ''
+  );
+  const applyTheme = (theme: string) => {
+    document.body.setAttribute('data-theme', theme);
+    setCurrentTheme(theme);
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-challenges'],
@@ -218,6 +226,12 @@ export const MEPage = () => {
   });
 
   const challenges = data?.challenges || [];
+
+  const { data: characterStatus } = useQuery({
+    queryKey: ['character', 'status'],
+    queryFn: () => characterApi.getStatus(),
+    staleTime: 60 * 1000,
+  });
 
   const { data: completedChallengesData } = useQuery({
     queryKey: ['my-challenges-completed', 'all'],
@@ -497,6 +511,79 @@ export const MEPage = () => {
           </div>
         </div>
       </div>
+
+      {/* 🎨 테마 테스트 바 (개발용) */}
+      <div className="flex gap-2 px-4 py-2 bg-white border-b border-gray-100 overflow-x-auto scrollbar-hide">
+        {[
+          { theme: '', label: '기본', color: '#FF9B71' },
+          { theme: 'korean', label: '한국', color: '#5A8A3C' },
+          { theme: 'greek', label: '그리스', color: '#C9A227' },
+          { theme: 'norse', label: '북유럽', color: '#5B8CA6' },
+        ].map(({ theme, label, color }) => (
+          <button
+            key={theme || 'default'}
+            onClick={() => applyTheme(theme)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap transition-all ${
+              currentTheme === theme
+                ? 'text-white border-transparent shadow-sm'
+                : 'text-gray-500 border-gray-200 bg-white'
+            }`}
+            style={currentTheme === theme ? { backgroundColor: color, borderColor: color } : {}}
+          >
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* 캐릭터 카드 */}
+      {characterStatus && (
+        <div className="px-4 pt-2 pb-0">
+          {!characterStatus.onboardingDone ? (
+            <button
+              onClick={() => navigate('/character/onboarding')}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-primary-50 to-primary-100 border border-primary-200 text-left"
+            >
+              <span className="text-2xl">✨</span>
+              <div className="flex-1">
+                <div className="font-semibold text-gray-900 text-sm">나의 첫 캐릭터 선택하기</div>
+                <div className="text-xs text-gray-500 mt-0.5">세계관을 선택하고 캐릭터를 완성해요</div>
+              </div>
+              <span className="text-gray-400 text-lg">→</span>
+            </button>
+          ) : characterStatus.activeCharacter ? (
+            <button
+              onClick={() => navigate('/character/viewer')}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white border border-gray-200 shadow-sm text-left"
+            >
+              <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-xl flex-shrink-0">
+                🌟
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-gray-900 text-sm truncate">
+                  {characterStatus.activeCharacter.characterType}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {characterStatus.activeCharacter.filledCount}/{characterStatus.activeCharacter.totalSlots} 조각 완성
+                </div>
+                <div className="flex gap-0.5 mt-1.5">
+                  {Array.from({ length: characterStatus.activeCharacter.totalSlots }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1.5 flex-1 rounded-full ${
+                        i < characterStatus.activeCharacter!.filledCount
+                          ? 'bg-primary-400'
+                          : 'bg-gray-200'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+              <span className="text-gray-400 text-lg">→</span>
+            </button>
+          ) : null}
+        </div>
+      )}
 
       <div className="p-6 space-y-4">
         {isLoading ? (

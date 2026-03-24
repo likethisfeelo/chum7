@@ -8,17 +8,17 @@ export default {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#FF9B71',
-          50: '#FFF4EF',
-          100: '#FFE9DF',
-          200: '#FFD3BF',
-          300: '#FFBD9F',
-          400: '#FFA77F',
-          500: '#FF9B71',
-          600: '#FF7C4D',
-          700: '#FF5D29',
-          800: '#E54400',
-          900: '#B33600',
+          DEFAULT: 'var(--color-primary-500)',
+          50: 'var(--color-primary-50)',
+          100: 'var(--color-primary-100)',
+          200: 'var(--color-primary-200)',
+          300: 'var(--color-primary-300)',
+          400: 'var(--color-primary-400)',
+          500: 'var(--color-primary-500)',
+          600: 'var(--color-primary-600)',
+          700: 'var(--color-primary-700)',
+          800: 'var(--color-primary-800)',
+          900: 'var(--color-primary-900)',
         },
         chakra: {
           health: '#FF6B6B',
@@ -28,6 +28,7 @@ export default {
           relationship: '#98D8C8',
           mindfulness: '#B19CD9',
         },
+        'bg-app': 'var(--color-bg-app)',
       },
       fontFamily: {
         sans: [

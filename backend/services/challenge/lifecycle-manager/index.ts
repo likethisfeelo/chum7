@@ -23,6 +23,7 @@ import { sendNotification } from '../../../shared/lib/notification';
 import { calculateChallengeEndAt, calculateSyncedCurrentDay, isCompletedProgressStatus, resolveChallengeActualStartAt, resolveDurationDays } from '../../../shared/lib/challenge-day-sync';
 import { normalizeProgress } from '../../../shared/lib/progress';
 import { checkAndGrantLeaderBadges } from '../../../shared/lib/leader-badge-grant';
+import { fillCharacterSlot } from '../../../shared/lib/character-slot';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient, {
@@ -32,6 +33,8 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient, {
 const CHALLENGES_TABLE = process.env.CHALLENGES_TABLE!;
 const USER_CHALLENGES_TABLE = process.env.USER_CHALLENGES_TABLE!;
 const PERSONAL_QUEST_PROPOSALS_TABLE = process.env.PERSONAL_QUEST_PROPOSALS_TABLE!;
+const CHARACTERS_TABLE = process.env.CHARACTERS_TABLE!;
+const USERS_TABLE = process.env.USERS_TABLE!;
 
 type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
 
@@ -275,11 +278,11 @@ async function finalizeUserChallenges(challengeId: string, durationDays: number)
     );
 
     const now = new Date().toISOString();
-    const updates = (result.Items ?? []).map((uc: any) => {
+    for (const uc of result.Items ?? []) {
       const completedDays = normalizeProgress(uc.progress).filter((p: any) => isCompletedProgressStatus(p?.status)).length;
       const finalStatus = completedDays >= durationDays ? 'completed' : 'failed';
 
-      return docClient.send(
+      await docClient.send(
         new UpdateCommand({
           TableName: USER_CHALLENGES_TABLE,
           Key: { userChallengeId: uc.userChallengeId },
@@ -292,9 +295,20 @@ async function finalizeUserChallenges(challengeId: string, durationDays: number)
           },
         })
       );
-    });
 
-    await Promise.all(updates);
+      // 챌린지 완주 시 캐릭터 슬롯 +1
+      if (finalStatus === 'completed' && uc.userId) {
+        fillCharacterSlot({
+          userId: uc.userId,
+          challengeId,
+          usersTable: USERS_TABLE,
+          charactersTable: CHARACTERS_TABLE,
+        }).catch((err) => {
+          console.error(`[lifecycle-manager] fillCharacterSlot error userId=${uc.userId}:`, err);
+        });
+      }
+    }
+
     lastKey = result.LastEvaluatedKey;
   } while (lastKey);
 }
