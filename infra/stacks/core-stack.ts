@@ -71,6 +71,9 @@ export class CoreStack extends Stack {
   public readonly personalPostsTable: Table;
   public readonly savedPostsTable: Table;
 
+  // Character & Mythology System
+  public readonly charactersTable: Table;
+
   public readonly uploadsBucket: IBucket;
   public readonly snsTopic: Topic;
   public readonly eventBus: EventBus;
@@ -669,6 +672,22 @@ export class CoreStack extends Stack {
       indexName: 'plazaPostId-index',
       partitionKey: { name: 'plazaPostId', type: AttributeType.STRING },
       sortKey: { name: 'userId', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    // ==================== Character & Mythology System ====================
+
+    this.charactersTable = new Table(this, 'CharactersTable', {
+      tableName: `chme-${stage}-characters`,
+      partitionKey: { name: 'characterId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+    });
+    this.charactersTable.addGlobalSecondaryIndex({
+      indexName: 'userId-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
 

@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
+import { characterApi } from '@/features/character/api/characterApi';
 
 import { MainLayout } from '@/shared/layouts/MainLayout';
 
@@ -32,6 +35,8 @@ import { FeedSettingsPage } from '@/features/personal-feed/pages/FeedSettingsPag
 import { NotificationsPage } from '@/features/personal-feed/pages/NotificationsPage';
 import { InviteLandingPage } from '@/features/personal-feed/pages/InviteLandingPage';
 import { NotificationSettingsPage } from '@/features/notifications/pages/NotificationSettingsPage';
+import { MythologyOnboardingPage } from '@/features/character/pages/MythologyOnboardingPage';
+import { CharacterViewerPage } from '@/features/character/pages/CharacterViewerPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -82,9 +87,27 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+function ThemeApplier() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { data } = useQuery({
+    queryKey: ['character', 'status'],
+    queryFn: () => characterApi.getStatus(),
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    const theme = data?.themeOverride ?? data?.activeMythology ?? '';
+    document.body.setAttribute('data-theme', theme || '');
+  }, [data?.themeOverride, data?.activeMythology]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <ThemeApplier />
       <Routes>
         {/* 공개 라우트 */}
         <Route
@@ -348,6 +371,24 @@ export default function App() {
           element={
             <ProtectedRoute>
               <PersonalFeedPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 캐릭터 */}
+        <Route
+          path="/character/onboarding"
+          element={
+            <ProtectedRoute>
+              <MythologyOnboardingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/character/viewer"
+          element={
+            <ProtectedRoute>
+              <CharacterViewerPage />
             </ProtectedRoute>
           }
         />

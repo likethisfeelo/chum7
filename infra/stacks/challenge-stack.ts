@@ -22,13 +22,15 @@ interface ChallengeStackProps extends StackProps {
   payoutAuditLogsTable: Table;
   categoryBannersTable: Table;
   badgesTable: Table;
+  usersTable: Table;
+  charactersTable: Table;
 }
 
 export class ChallengeStack extends Stack {
   constructor(scope: Construct, id: string, props: ChallengeStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable, personalQuestProposalsTable, questsTable, notificationsTable, payoutAuditLogsTable, categoryBannersTable, badgesTable } = props;
+    const { stage, apiGateway, authorizer, challengesTable, userChallengesTable, personalQuestProposalsTable, questsTable, notificationsTable, payoutAuditLogsTable, categoryBannersTable, badgesTable, usersTable, charactersTable } = props;
 
     const commonEnv = {
       STAGE: stage,
@@ -301,7 +303,11 @@ export class ChallengeStack extends Stack {
       functionName: `chme-${stage}-challenge-lifecycle-manager`,
       entry: path.join(__dirname, '../../backend/services/challenge/lifecycle-manager/index.ts'),
       handler: 'handler',
-      environment: commonEnv,
+      environment: {
+        ...commonEnv,
+        USERS_TABLE: usersTable.tableName,
+        CHARACTERS_TABLE: charactersTable.tableName,
+      },
       timeout: Duration.seconds(120),
       memorySize: 512,
     });
@@ -309,6 +315,8 @@ export class ChallengeStack extends Stack {
     userChallengesTable.grantReadWriteData(lifecycleManagerFn);
     personalQuestProposalsTable.grantReadWriteData(lifecycleManagerFn);
     badgesTable.grantReadWriteData(lifecycleManagerFn);
+    usersTable.grantReadWriteData(lifecycleManagerFn);
+    charactersTable.grantReadWriteData(lifecycleManagerFn);
 
     new Rule(this, 'LifecycleManagerRule', {
       // 매 1시간 실행 (운영환경에서는 더 짧게 조정 가능)
