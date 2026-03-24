@@ -72,4 +72,8 @@ export const characterApi = {
     const res = await apiClient.get('/characters/me/collection');
     return res.data.data as CharacterCollection;
   },
+
+  setTheme: async (mythology: MythologyLine | null): Promise<void> => {
+    await apiClient.put('/characters/me/theme', { mythology });
+  },
 };

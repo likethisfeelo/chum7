@@ -144,12 +144,6 @@ export const TodayPage = () => {
             >
               🌍 월드
             </button>
-            <button
-              onClick={() => navigate('/today/debug')}
-              className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded"
-            >
-              디버그
-            </button>
           </div>
         </div>
         {/* 탭 바 */}
