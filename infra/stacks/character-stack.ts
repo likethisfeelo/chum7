@@ -105,5 +105,21 @@ export class CharacterStack extends Stack {
       integration: new HttpLambdaIntegration('CharacterCollectionIntegration', collectionFn),
       authorizer,
     });
+
+    // PUT /characters/me/theme — 완성한 세계관 테마 적용/해제
+    const themeFn = new NodejsFunction(this, 'CharacterThemeFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-character-theme`,
+      entry: path.join(__dirname, '../../backend/services/character/theme/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    usersTable.grantReadWriteData(themeFn);
+    apiGateway.addRoutes({
+      path: '/characters/me/theme',
+      methods: [HttpMethod.PUT],
+      integration: new HttpLambdaIntegration('CharacterThemeIntegration', themeFn),
+      authorizer,
+    });
   }
 }
