@@ -8,12 +8,14 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import toast from 'react-hot-toast';
+import { WorldPage } from './WorldPage';
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
 
 export const TodayPage = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'today' | 'world'>('today');
   const [replyDraftByCheer, setReplyDraftByCheer] = useState<Record<string, string>>({});
 
   const { data: cheers, isLoading: cheersLoading } = useQuery({
@@ -104,6 +106,28 @@ export const TodayPage = () => {
     [activeChallenges],
   );
 
+  if (activeTab === 'world') {
+    return (
+      <div className="flex flex-col" style={{ height: 'calc(100vh - 64px)' }}>
+        {/* 탭 바 */}
+        <div className="flex bg-gray-950 border-b border-white/10">
+          {(['today', 'world'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+                activeTab === tab ? 'text-white border-b-2 border-white' : 'text-gray-500'
+              }`}
+            >
+              {tab === 'today' ? '오늘' : '월드'}
+            </button>
+          ))}
+        </div>
+        <WorldPage />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
@@ -112,12 +136,37 @@ export const TodayPage = () => {
             <h1 className="text-2xl font-bold text-gray-900">오늘 📊</h1>
             <p className="text-sm text-gray-500">📅 {today}</p>
           </div>
-          <button
-            onClick={() => navigate('/today/debug')}
-            className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded"
-          >
-            디버그 보기
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 월드 탭 전환 */}
+            <button
+              onClick={() => setActiveTab('world')}
+              className="text-xs font-semibold text-purple-600 hover:text-purple-800 px-3 py-1.5 bg-purple-50 rounded-full transition-colors"
+            >
+              🌍 월드
+            </button>
+            <button
+              onClick={() => navigate('/today/debug')}
+              className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded"
+            >
+              디버그
+            </button>
+          </div>
+        </div>
+        {/* 탭 바 */}
+        <div className="flex mt-3 -mx-6 px-6 gap-4 border-t border-gray-100 pt-3">
+          {(['today', 'world'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`text-sm font-semibold pb-1 transition-colors ${
+                activeTab === tab
+                  ? 'text-gray-900 border-b-2 border-gray-900'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              {tab === 'today' ? '오늘' : '🌍 월드'}
+            </button>
+          ))}
         </div>
       </div>
 
