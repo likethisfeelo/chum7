@@ -38,7 +38,16 @@ export async function fillCharacterSlot(params: {
     ProjectionExpression: 'activeCharacterId, activeMythology, completedMythologies',
   }));
   const user = userRes.Item;
-  if (!user?.activeCharacterId) return;
+  if (!user?.activeCharacterId) {
+    // 다음 캐릭터 선택 전 구간: pendingSlotFills에 누적 → next() 호출 시 소급 적용
+    await docClient.send(new UpdateCommand({
+      TableName: usersTable,
+      Key: { userId },
+      UpdateExpression: 'SET pendingSlotFills = if_not_exists(pendingSlotFills, :zero) + :one',
+      ExpressionAttributeValues: { ':zero': 0, ':one': 1 },
+    }));
+    return;
+  }
 
   const charRes = await docClient.send(new GetCommand({
     TableName: charactersTable,

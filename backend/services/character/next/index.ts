@@ -31,7 +31,7 @@ export const handler = async (
     const userRes = await docClient.send(new GetCommand({
       TableName: process.env.USERS_TABLE!,
       Key: { userId },
-      ProjectionExpression: 'activeMythology, activeCharacterId, completedMythologies',
+      ProjectionExpression: 'activeMythology, activeCharacterId, completedMythologies, pendingSlotFills',
     }));
     const user = userRes.Item;
     if (!user) return response(404, { error: 'USER_NOT_FOUND' });
@@ -103,9 +103,55 @@ export const handler = async (
       ExpressionAttributeValues: { ':m': targetMythology, ':c': characterId, ':now': now },
     }));
 
+    // pendingSlotFills 소급 적용: 대기 구간에 쌓인 챌린지 완주를 새 캐릭터 슬롯에 반영
+    const pending = Math.min((user.pendingSlotFills ?? 0), SLOTS_PER_CHARACTER);
+    if (pending > 0) {
+      const pendingSlots = Array.from({ length: pending }, (_, i) => ({
+        slotIndex: i,
+        badgeId: uuidv4(),
+        challengeId: 'pending', // 대기 구간 슬롯 마커
+        filledAt: now,
+      }));
+      const isComplete = pending >= SLOTS_PER_CHARACTER;
+
+      if (isComplete) {
+        await docClient.send(new UpdateCommand({
+          TableName: process.env.CHARACTERS_TABLE!,
+          Key: { characterId },
+          UpdateExpression: 'SET slots = :slots, filledCount = :count, #st = :complete, completedAt = :now',
+          ExpressionAttributeNames: { '#st': 'status' },
+          ExpressionAttributeValues: {
+            ':slots': pendingSlots,
+            ':count': pending,
+            ':complete': 'complete',
+            ':now': now,
+          },
+        }));
+        await docClient.send(new UpdateCommand({
+          TableName: process.env.USERS_TABLE!,
+          Key: { userId },
+          UpdateExpression: 'SET activeCharacterId = :null, pendingSlotFills = :zero, updatedAt = :now',
+          ExpressionAttributeValues: { ':null': null, ':zero': 0, ':now': now },
+        }));
+      } else {
+        await docClient.send(new UpdateCommand({
+          TableName: process.env.CHARACTERS_TABLE!,
+          Key: { characterId },
+          UpdateExpression: 'SET slots = :slots, filledCount = :count',
+          ExpressionAttributeValues: { ':slots': pendingSlots, ':count': pending },
+        }));
+        await docClient.send(new UpdateCommand({
+          TableName: process.env.USERS_TABLE!,
+          Key: { userId },
+          UpdateExpression: 'SET pendingSlotFills = :zero',
+          ExpressionAttributeValues: { ':zero': 0 },
+        }));
+      }
+    }
+
     return response(200, {
       success: true,
-      data: { characterId, mythologyLine: targetMythology, characterType, filledCount: 0, totalSlots: SLOTS_PER_CHARACTER },
+      data: { characterId, mythologyLine: targetMythology, characterType, filledCount: pending, totalSlots: SLOTS_PER_CHARACTER },
     });
   } catch (err) {
     console.error('[character/next] error:', err);
