@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 import { motion } from 'framer-motion';
 import { Loading } from '@/shared/components/Loading';
@@ -14,7 +13,6 @@ const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
 
 export const TodayPage = () => {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'today' | 'world'>('today');
   const [replyDraftByCheer, setReplyDraftByCheer] = useState<Record<string, string>>({});
 
