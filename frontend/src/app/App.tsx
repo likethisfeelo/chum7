@@ -13,6 +13,7 @@ import { EmailVerificationPage } from '@/features/auth/pages/EmailVerificationPa
 import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { ChallengesPage } from '@/features/challenge/pages/ChallengesPage';
 import { ChallengeDetailPage } from '@/features/challenge/pages/ChallengeDetailPage';
+import { ChallengeCreatePage } from '@/features/challenge/pages/ChallengeCreatePage';
 import { ChallengeFeedPage } from '@/features/challenge-feed/pages/ChallengeFeedPage';
 import { ChallengeBoardPage } from '@/features/challenge-board/pages/ChallengeBoardPage';
 import { MEPage } from '@/features/me/pages/MEPage';
@@ -160,6 +161,14 @@ export default function App() {
               <MainLayout>
                 <ChallengesPage />
               </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/challenges/new"
+          element={
+            <ProtectedRoute>
+              <ChallengeCreatePage />
             </ProtectedRoute>
           }
         />
