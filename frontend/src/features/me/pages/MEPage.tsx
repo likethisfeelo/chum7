@@ -206,6 +206,13 @@ export const MEPage = () => {
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<METab>('active');
+  const [currentTheme, setCurrentTheme] = useState(
+    () => document.body.getAttribute('data-theme') ?? ''
+  );
+  const applyTheme = (theme: string) => {
+    document.body.setAttribute('data-theme', theme);
+    setCurrentTheme(theme);
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-challenges'],
@@ -503,6 +510,30 @@ export const MEPage = () => {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* 🎨 테마 테스트 바 (개발용) */}
+      <div className="flex gap-2 px-4 py-2 bg-white border-b border-gray-100 overflow-x-auto scrollbar-hide">
+        {[
+          { theme: '', label: '기본', color: '#FF9B71' },
+          { theme: 'korean', label: '한국', color: '#5A8A3C' },
+          { theme: 'greek', label: '그리스', color: '#C9A227' },
+          { theme: 'norse', label: '북유럽', color: '#5B8CA6' },
+        ].map(({ theme, label, color }) => (
+          <button
+            key={theme || 'default'}
+            onClick={() => applyTheme(theme)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap transition-all ${
+              currentTheme === theme
+                ? 'text-white border-transparent shadow-sm'
+                : 'text-gray-500 border-gray-200 bg-white'
+            }`}
+            style={currentTheme === theme ? { backgroundColor: color, borderColor: color } : {}}
+          >
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* 캐릭터 카드 */}
