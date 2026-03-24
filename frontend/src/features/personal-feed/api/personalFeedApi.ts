@@ -310,10 +310,6 @@ export const personalFeedApi = {
     return res.data.data;
   },
 
-  deleteFeedHandle: async (): Promise<void> => {
-    await apiClient.delete('/personal-feed/me/handle');
-  },
-
   // ── Notifications ────────────────────────────────────────────────────
   getNotifications: async (includeRead = false): Promise<FeedNotification[]> => {
     const res = await apiClient.get(`/users/me/notifications${includeRead ? '?includeRead=true' : ''}`);

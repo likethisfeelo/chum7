@@ -557,10 +557,20 @@ function PersonalPostEditor({ onCreated }: { onCreated: () => void }) {
 function PersonalPostCard({ post, isOwn }: { post: PersonalPost; isOwn: boolean }) {
   const queryClient = useQueryClient();
   const visibilityMeta = VISIBILITY_META[post.visibility] ?? VISIBILITY_META.followers;
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState(post.content ?? '');
 
   const deleteMutation = useMutation({
     mutationFn: () => personalFeedApi.deletePost(post.postId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['personal-feed-posts'] }),
+  });
+
+  const editMutation = useMutation({
+    mutationFn: () => personalFeedApi.updatePost(post.postId, { content: editContent }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['personal-feed-posts'] });
+      setEditing(false);
+    },
   });
 
   return (
@@ -569,18 +579,52 @@ function PersonalPostCard({ post, isOwn }: { post: PersonalPost; isOwn: boolean 
         <span className="text-[11px] text-gray-400">
           {visibilityMeta.icon} {visibilityMeta.label} · {formatDate(post.createdAt)}
         </span>
-        {isOwn && (
-          <button
-            onClick={() => deleteMutation.mutate()}
-            disabled={deleteMutation.isPending}
-            className="text-xs text-red-400 hover:text-red-600"
-          >
-            삭제
-          </button>
+        {isOwn && !editing && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setEditing(true); setEditContent(post.content ?? ''); }}
+              className="text-xs text-gray-400 hover:text-gray-600"
+            >
+              수정
+            </button>
+            <button
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              className="text-xs text-red-400 hover:text-red-600"
+            >
+              삭제
+            </button>
+          </div>
         )}
       </div>
-      {post.content && (
-        <p className="text-sm text-gray-700 whitespace-pre-wrap">{post.content}</p>
+      {editing ? (
+        <div className="space-y-2">
+          <textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            rows={3}
+            className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-primary-400"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => editMutation.mutate()}
+              disabled={editMutation.isPending || !editContent.trim()}
+              className="px-4 py-1.5 text-xs font-semibold rounded-full bg-primary-500 text-white disabled:opacity-40 hover:bg-primary-600 transition-colors"
+            >
+              {editMutation.isPending ? '저장 중...' : '저장'}
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="px-4 py-1.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      ) : (
+        post.content && (
+          <p className="text-sm text-gray-700 whitespace-pre-wrap">{post.content}</p>
+        )
       )}
       {post.imageUrls.length > 0 && (
         <div className="grid grid-cols-2 gap-1.5 mt-3">
@@ -739,11 +783,21 @@ export function PersonalFeedPage() {
   const { userId: userIdParam } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<FeedTab>('achievements');
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
 
   const resolvedUserId = userIdParam ?? 'me';
   const fromInvite = (location.state as { fromInvite?: boolean } | null)?.fromInvite === true;
+
+  const blockMutation = useMutation({
+    mutationFn: () => personalFeedApi.blockUser(resolvedUserId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['personal-feed-profile', resolvedUserId] });
+      navigate(-1);
+    },
+  });
 
   const { data: profile } = useQuery({
     queryKey: ['personal-feed-profile', resolvedUserId],
@@ -785,6 +839,15 @@ export function PersonalFeedPage() {
               className="text-white/70 hover:text-white text-sm px-3 py-1 rounded-full border border-white/20 hover:border-white/40 transition-colors"
             >
               설정
+            </button>
+          )}
+          {!isOwn && profile && currentLayer !== -1 && (
+            <button
+              onClick={() => setShowBlockConfirm(true)}
+              className="text-white/60 hover:text-white/90 text-sm px-2 py-1 rounded-full border border-white/10 hover:border-white/30 transition-colors"
+              title="더보기"
+            >
+              ···
             </button>
           )}
         </div>
@@ -843,6 +906,29 @@ export function PersonalFeedPage() {
           ))}
         </div>
       </div>
+
+      {/* 차단 확인 다이얼로그 */}
+      {showBlockConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setShowBlockConfirm(false)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-md p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-semibold text-gray-900 text-center">이 사용자를 차단할까요?</p>
+            <p className="text-sm text-gray-500 text-center">차단하면 서로의 피드를 볼 수 없어요. 설정에서 해제할 수 있어요.</p>
+            <button
+              onClick={() => blockMutation.mutate()}
+              disabled={blockMutation.isPending}
+              className="w-full py-3 rounded-xl bg-red-500 text-white font-semibold text-sm hover:bg-red-600 disabled:opacity-50 transition-colors"
+            >
+              {blockMutation.isPending ? '처리 중...' : '차단하기'}
+            </button>
+            <button
+              onClick={() => setShowBlockConfirm(false)}
+              className="w-full py-3 rounded-xl bg-gray-100 text-gray-600 font-semibold text-sm hover:bg-gray-200 transition-colors"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 컨텐츠 */}
       <div className="p-4">
