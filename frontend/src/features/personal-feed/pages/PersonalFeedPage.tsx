@@ -4,30 +4,21 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
 import { Loading } from '@/shared/components/Loading';
-import { characterApi } from '@/features/character/api/characterApi';
 import {
   personalFeedApi,
   FeedProfile,
-  FeedAchievements,
   VerificationFeedItem,
   ChallengeFeedItem,
   PersonalPost,
   SavedPostItem,
 } from '../api/personalFeedApi';
 
-type FeedTab = 'character' | 'badges' | 'feed' | 'challenges';
+type FeedTab = 'feed' | 'challenges';
 
 const TAB_CONFIG: { key: FeedTab; label: string }[] = [
-  { key: 'character', label: '캐릭터' },
-  { key: 'badges', label: '뱃지' },
   { key: 'feed', label: '피드' },
   { key: 'challenges', label: '챌린지' },
 ];
-
-const BADGE_META: Record<string, { icon: string; name: string; desc: string }> = {
-  '3-day-streak': { icon: '🔥', name: '3일 연속', desc: '3일 연속 퀘스트 완료' },
-  '7-day-master': { icon: '⭐', name: '7일 마스터', desc: '7일 연속 퀘스트 완료' },
-};
 
 const LEADER_BADGE_META: Record<string, { icon: string; name: string; desc: string }> = {
   'leader-debut': { icon: '🎖️', name: '리더 데뷔', desc: '챌린지 1회 이상 완료 운영' },
@@ -131,162 +122,6 @@ function LayerGate({ layer, minLayer, children }: {
       <p className="text-4xl mb-3">🔒</p>
       <p className="text-base font-semibold text-gray-700">비공개 탭이에요</p>
       <p className="text-sm text-gray-400 mt-1">팔로우가 수락되면 볼 수 있어요</p>
-    </div>
-  );
-}
-
-// ─── 신화 세계관 메타 ─────────────────────────────────────────────────
-const MYTHOLOGY_META = {
-  korean: {
-    emoji: '🐻', label: '한국 신화', color: '#5A8A3C',
-    desc: '단군신화의 웅녀부터 이무기, 봉황까지 — 인내와 변화의 신화',
-    characters: ['웅녀', '이무기', '도깨비', '호랑이', '봉황'],
-  },
-  greek: {
-    emoji: '⚡', label: '그리스 신화', color: '#C9A227',
-    desc: '올림포스의 신들, 영웅들의 이야기 — 도전과 지혜의 신화',
-    characters: ['헤라클레스', '아테나', '아폴론', '아르테미스', '포세이돈'],
-  },
-  norse: {
-    emoji: '🌩️', label: '북유럽 신화', color: '#5B8CA6',
-    desc: '오딘과 토르, 발키리의 세계 — 용기와 운명의 신화',
-    characters: ['오딘', '토르', '발키리', '프레이', '로키'],
-  },
-} as const;
-
-const THEMES = [
-  { theme: '', label: '기본', color: '#FF9B71' },
-  { theme: 'korean', label: '한국', color: '#5A8A3C' },
-  { theme: 'greek', label: '그리스', color: '#C9A227' },
-  { theme: 'norse', label: '북유럽', color: '#5B8CA6' },
-] as const;
-
-// ─── Tab: 캐릭터 ─────────────────────────────────────────────────────
-function CharacterTab({ isOwn }: { isOwn: boolean }) {
-  const navigate = useNavigate();
-  const [currentTheme, setCurrentTheme] = useState(
-    () => document.body.getAttribute('data-theme') ?? '',
-  );
-
-  const { data: characterStatus } = useQuery({
-    queryKey: ['character', 'status'],
-    queryFn: () => characterApi.getStatus(),
-    enabled: isOwn,
-    staleTime: 60 * 1000,
-  });
-
-  const applyTheme = (theme: string) => {
-    document.body.setAttribute('data-theme', theme);
-    setCurrentTheme(theme);
-  };
-
-  return (
-    <div className="space-y-4 pb-20">
-      {/* 캐릭터 카드 */}
-      {isOwn && characterStatus && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-500 mb-3">나의 캐릭터</h3>
-          {!characterStatus.onboardingDone ? (
-            <button
-              onClick={() => navigate('/character/onboarding')}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-primary-50 to-primary-100 border border-primary-200 text-left"
-            >
-              <span className="text-2xl">✨</span>
-              <div className="flex-1">
-                <div className="font-semibold text-gray-900 text-sm">나의 첫 캐릭터 선택하기</div>
-                <div className="text-xs text-gray-500 mt-0.5">세계관을 선택하고 캐릭터를 완성해요</div>
-              </div>
-              <span className="text-gray-400 text-lg">→</span>
-            </button>
-          ) : characterStatus.activeCharacter ? (
-            <button
-              onClick={() => navigate('/character/viewer')}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-br from-primary-50 to-indigo-50 border border-primary-200 shadow-sm text-left"
-            >
-              <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center text-2xl flex-shrink-0">
-                {MYTHOLOGY_META[characterStatus.activeCharacter.mythologyLine as keyof typeof MYTHOLOGY_META]?.emoji ?? '🌟'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-bold text-gray-900 text-base truncate">
-                  {characterStatus.activeCharacter.characterType}
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {characterStatus.activeCharacter.filledCount}/{characterStatus.activeCharacter.totalSlots} 조각 완성
-                </div>
-                <div className="flex gap-0.5 mt-2">
-                  {Array.from({ length: characterStatus.activeCharacter.totalSlots }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`h-2 flex-1 rounded-full ${
-                        i < characterStatus.activeCharacter!.filledCount
-                          ? 'bg-primary-400'
-                          : 'bg-gray-200'
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-              <span className="text-gray-400 text-lg flex-shrink-0">→</span>
-            </button>
-          ) : null}
-        </div>
-      )}
-
-      {/* 테마 선택 */}
-      {isOwn && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-500 mb-3">테마</h3>
-          <div className="flex gap-2 flex-wrap">
-            {THEMES.map(({ theme, label, color }) => (
-              <button
-                key={theme || 'default'}
-                onClick={() => applyTheme(theme)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium border transition-all ${
-                  currentTheme === theme
-                    ? 'text-white border-transparent shadow-sm'
-                    : 'text-gray-600 border-gray-200 bg-white hover:bg-gray-50'
-                }`}
-                style={currentTheme === theme ? { backgroundColor: color, borderColor: color } : {}}
-              >
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 캐릭터 세계관 */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-500 mb-3">캐릭터 세계관</h3>
-        <div className="space-y-3">
-          {(Object.entries(MYTHOLOGY_META) as [string, typeof MYTHOLOGY_META[keyof typeof MYTHOLOGY_META]][]).map(([key, meta]) => {
-            const isActive = characterStatus?.activeMythology === key;
-            const isCompleted = characterStatus?.completedMythologies?.includes(key as any);
-            return (
-              <div
-                key={key}
-                className={`rounded-xl p-3 border ${isActive ? 'border-primary-200 bg-primary-50' : 'border-gray-100 bg-gray-50'}`}
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-lg">{meta.emoji}</span>
-                  <span className="text-sm font-semibold text-gray-800">{meta.label}</span>
-                  {isCompleted && <span className="ml-auto text-xs text-green-600 font-semibold">완성 ✓</span>}
-                  {isActive && !isCompleted && <span className="ml-auto text-xs text-primary-600 font-semibold">진행 중</span>}
-                </div>
-                <p className="text-xs text-gray-500 mb-2">{meta.desc}</p>
-                <div className="flex flex-wrap gap-1">
-                  {meta.characters.map((c) => (
-                    <span key={c} className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-gray-200 text-gray-600">
-                      {c}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 }
@@ -467,148 +302,6 @@ function ChallengesTab({ userId }: { userId: string }) {
       {challenges.map((item) => (
         <ChallengeHistoryCard key={item.userChallengeId} item={item} />
       ))}
-    </div>
-  );
-}
-
-// ─── Tab 03: 업적 ─────────────────────────────────────────────────────
-function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
-  return (
-    <div className="space-y-4 pb-20">
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-500 mb-3">활동 통계</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-primary-50 rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-primary-700">
-              {achievements.verifications.totalScore.toLocaleString()}
-            </p>
-            <p className="text-xs text-primary-500 mt-0.5">누적 스코어</p>
-          </div>
-          <div className="bg-green-50 rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-green-700">
-              {achievements.verifications.total}
-            </p>
-            <p className="text-xs text-green-500 mt-0.5">총 인증 횟수</p>
-          </div>
-          <div className="bg-blue-50 rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-blue-700">
-              {achievements.challenges.completed}
-            </p>
-            <p className="text-xs text-blue-500 mt-0.5">챌린지 완주</p>
-          </div>
-          <div className="bg-orange-50 rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-orange-700">
-              {achievements.challenges.total}
-            </p>
-            <p className="text-xs text-orange-500 mt-0.5">총 참여 챌린지</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-500 mb-3">응원</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex items-center gap-3 bg-pink-50 rounded-xl p-3">
-            <span className="text-2xl">💌</span>
-            <div>
-              <p className="text-lg font-bold text-pink-700">{achievements.cheers.receivedCount}</p>
-              <p className="text-xs text-pink-400">받은 응원</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 bg-purple-50 rounded-xl p-3">
-            <span className="text-2xl">📣</span>
-            <div>
-              <p className="text-lg font-bold text-purple-700">{achievements.cheers.sentCount}</p>
-              <p className="text-xs text-purple-400">보낸 응원</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {achievements.badges.length > 0 ? (
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-500 mb-3">
-            획득 뱃지 ({achievements.badges.length})
-          </h3>
-          <div className="grid grid-cols-3 gap-3">
-            {achievements.badges.map((badge) => {
-              const meta = BADGE_META[badge.badgeId] ?? { icon: '🏅', name: badge.badgeId, desc: '' };
-              return (
-                <div key={badge.badgeId + badge.grantedAt} className="flex flex-col items-center gap-1 bg-gray-50 rounded-xl p-3">
-                  <span className="text-3xl">{meta.icon}</span>
-                  <p className="text-xs font-semibold text-gray-700 text-center">{meta.name}</p>
-                  <p className="text-[10px] text-gray-400 text-center">{meta.desc}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl p-5 shadow-sm text-center">
-          <p className="text-4xl mb-2">🏅</p>
-          <p className="text-sm font-semibold text-gray-700">아직 획득한 뱃지가 없어요</p>
-          <p className="text-xs text-gray-400 mt-1">퀘스트를 완료하면 뱃지를 획득할 수 있어요</p>
-        </div>
-      )}
-
-      {/* 리더 이력 블록 */}
-      {achievements.leaderHistory.total > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">👑</span>
-            <h3 className="text-sm font-semibold text-gray-700">리더 이력</h3>
-          </div>
-
-          {/* 리더 뱃지 */}
-          {achievements.leaderBadges.length > 0 && (
-            <div className="flex gap-2 flex-wrap mb-3">
-              {achievements.leaderBadges.map((badge) => {
-                const meta = LEADER_BADGE_META[badge.badgeId] ?? { icon: '🎖️', name: badge.badgeId, desc: '' };
-                return (
-                  <div key={badge.badgeId} className="flex items-center gap-1.5 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1">
-                    <span className="text-sm">{meta.icon}</span>
-                    <span className="text-xs font-semibold text-yellow-700">{meta.name}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* 리더 통계 */}
-          <div className="grid grid-cols-3 gap-2 mb-3">
-            <div className="bg-amber-50 rounded-xl p-3 text-center">
-              <p className="text-xl font-bold text-amber-700">{achievements.leaderHistory.total}</p>
-              <p className="text-[11px] text-amber-500">총 개설</p>
-            </div>
-            <div className="bg-green-50 rounded-xl p-3 text-center">
-              <p className="text-xl font-bold text-green-700">{achievements.leaderHistory.completed}</p>
-              <p className="text-[11px] text-green-500">완료 운영</p>
-            </div>
-            <div className="bg-blue-50 rounded-xl p-3 text-center">
-              <p className="text-xl font-bold text-blue-700">{achievements.leaderHistory.totalParticipants}</p>
-              <p className="text-[11px] text-blue-500">누적 참여자</p>
-            </div>
-          </div>
-
-          {/* 최근 개설 챌린지 */}
-          {achievements.leaderHistory.recentChallenges.length > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-xs text-gray-400 mb-2">최근 운영 챌린지</p>
-              {achievements.leaderHistory.recentChallenges.map((c) => (
-                <div key={c.challengeId} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
-                  <p className="text-sm font-medium text-gray-700 line-clamp-1 flex-1 min-w-0 pr-2">
-                    {c.title}
-                  </p>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-gray-400">{c.participantCount}명</span>
-                    <span className="text-[11px] text-green-600 font-semibold">완료</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -943,7 +636,7 @@ export function PersonalFeedPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<FeedTab>('character');
+  const [activeTab, setActiveTab] = useState<FeedTab>('feed');
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
 
   const resolvedUserId = userIdParam ?? 'me';
@@ -962,10 +655,10 @@ export function PersonalFeedPage() {
     queryFn: () => personalFeedApi.getProfile(resolvedUserId),
   });
 
-  const { data: achievements, isLoading: achievementsLoading } = useQuery({
+  const { data: achievements } = useQuery({
     queryKey: ['personal-feed-achievements', resolvedUserId],
     queryFn: () => personalFeedApi.getAchievements(resolvedUserId),
-    // 헤더 리더 뱃지 표시를 위해 항상 fetch (enabled 조건 제거)
+    // 헤더 리더 뱃지 표시를 위해 항상 fetch
   });
 
   const topLeaderBadge = achievements?.leaderBadges?.[0];
@@ -1088,18 +781,6 @@ export function PersonalFeedPage() {
 
       {/* 컨텐츠 */}
       <div className="p-4">
-        {activeTab === 'character' && (
-          <CharacterTab isOwn={isOwn} />
-        )}
-        {activeTab === 'badges' && (
-          <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 1}>
-            {achievementsLoading || !achievements ? (
-              <Loading />
-            ) : (
-              <AchievementsTab achievements={achievements} />
-            )}
-          </LayerGate>
-        )}
         {activeTab === 'feed' && (
           <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 3}>
             <div className="space-y-6">

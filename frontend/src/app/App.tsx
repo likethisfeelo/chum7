@@ -18,6 +18,7 @@ import { ChallengeEditPage } from '@/features/challenge/pages/ChallengeEditPage'
 import { ChallengeFeedPage } from '@/features/challenge-feed/pages/ChallengeFeedPage';
 import { ChallengeBoardPage } from '@/features/challenge-board/pages/ChallengeBoardPage';
 import { MEPage } from '@/features/me/pages/MEPage';
+import { MyPage } from '@/features/me/pages/MyPage';
 import { MyRecordsPage } from '@/features/me/pages/MyRecordsPage';
 import { TodayPage } from '@/features/today/pages/TodayPage';
 import { TodayPageDebug } from '@/features/today/pages/TodayPageDebug';
@@ -221,6 +222,16 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MyRecordsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <MyPage />
+              </MainLayout>
             </ProtectedRoute>
           }
         />

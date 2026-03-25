@@ -6,7 +6,7 @@ const NAV_ITEMS = [
   { path: '/outer-space', icon: '🚀', label: '마당' },
   { path: '/me', icon: null, label: 'ME', isME: true },
   { path: '/today', icon: '📊', label: '오늘' },
-  { path: '/assets', icon: '👤', label: '프로필' },
+  { path: '/my', icon: '✨', label: '마이' },
 ];
 
 export const BottomNav = () => {
