@@ -92,6 +92,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       });
     }
 
+    // 생성자는 위자드를 통한 중복 참여 불가 (생성 시 participateAsCreator로 결정)
+    if (challenge.createdBy === userId) {
+      return response(409, { error: 'CREATOR_CANNOT_JOIN', message: '챌린지 생성자는 생성 시 참여 여부를 선택했습니다' });
+    }
+
     // maxParticipants 체크
     if (challenge.maxParticipants !== null) {
       if (challenge.stats.totalParticipants >= challenge.maxParticipants) {

@@ -139,10 +139,10 @@ export const ChallengeDetailPage = () => {
   const lifecycle = String(challenge.lifecycle || 'draft');
   const isCreator = challenge.createdBy === user?.userId;
   const alreadyJoined = (myChallengesData?.challenges ?? []).some((item: any) => (item.challengeId ?? item.challenge?.challengeId) === challengeId);
-  const canJoin = lifecycle === 'recruiting' && !alreadyJoined;
+  const canJoin = lifecycle === 'recruiting' && !alreadyJoined && !isCreator;
 
   const ctaLabelMap: Record<string, string> = {
-    recruiting: alreadyJoined ? '이미 참여신청한 챌린지' : '챌린지 참여 신청하기',
+    recruiting: isCreator ? '내가 만든 챌린지' : alreadyJoined ? '이미 참여신청한 챌린지' : '챌린지 참여 신청하기',
     preparing: '모집이 마감된 챌린지',
     active: '진행 중 (신규 참여 불가)',
     completed: '종료된 챌린지',
