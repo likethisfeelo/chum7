@@ -137,7 +137,7 @@ function LayerGate({ layer, minLayer, children }: {
 // ─── Tab 01: 인증 게시물 ───────────────────────────────────────────────
 function VerificationCard({ item }: { item: VerificationFeedItem }) {
   return (
-    <div className="rounded-2xl overflow-hidden bg-white shadow-sm">
+    <div className="rounded-2xl overflow-hidden glass-card">
       {/* 4:5 비율 이미지 */}
       {item.imageUrl && (
         <div className="aspect-[4/5] overflow-hidden">
@@ -245,7 +245,7 @@ function ChallengeHistoryCard({ item }: { item: ChallengeFeedItem }) {
     : 0;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-4">
+    <div className="glass-card rounded-2xl p-4">
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-2 min-w-0">
           {item.badgeIcon && <span className="text-2xl flex-shrink-0">{item.badgeIcon}</span>}
@@ -495,7 +495,7 @@ function PersonalPostEditor({ onCreated }: { onCreated: () => void }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
+    <div className="glass-card rounded-2xl p-4 mb-4">
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
@@ -573,7 +573,7 @@ function PersonalPostCard({ post, isOwn }: { post: PersonalPost; isOwn: boolean 
   });
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-4">
+    <div className="glass-card rounded-2xl p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[11px] text-gray-400">
           {visibilityMeta.icon} {visibilityMeta.label} · {formatDate(post.createdAt)}
@@ -664,7 +664,7 @@ function SavedPostCard({ item }: { item: SavedPostItem }) {
   });
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-4">
+    <div className="glass-card rounded-2xl p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p className="text-sm text-gray-700 line-clamp-2">
@@ -738,7 +738,7 @@ function PostsTab({ userId, isOwn }: { userId: string; isOwn: boolean }) {
       {isOwn && (
         <button
           onClick={() => setShowEditor((v) => !v)}
-          className="w-full bg-white rounded-2xl shadow-sm px-4 py-3 text-sm text-gray-400 text-left hover:bg-gray-50 transition-colors"
+          className="w-full glass-panel rounded-2xl px-4 py-3 text-sm text-gray-400 text-left hover:bg-white/60 transition-colors"
         >
           ✏️ 자유롭게 기록해보세요...
         </button>
@@ -777,7 +777,7 @@ function PostsTab({ userId, isOwn }: { userId: string; isOwn: boolean }) {
           {savedLoading ? (
             <Loading />
           ) : savedPosts.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-sm p-4 text-center">
+            <div className="glass-card rounded-2xl p-4 text-center">
               <p className="text-sm text-gray-400">광장 게시물에서 북마크를 눌러 저장해보세요 🔖</p>
             </div>
           ) : (

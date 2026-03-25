@@ -60,11 +60,11 @@ export const SideNav = () => {
     <nav
       className="hidden lg:flex fixed left-0 top-0 h-screen w-60 flex-col py-6 z-20"
       style={{
-        background: 'rgba(255, 255, 255, 0.70)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderRight: '1px solid rgba(255, 255, 255, 0.55)',
-        boxShadow: '4px 0 28px rgba(0, 0, 0, 0.05)',
+        background: 'rgba(255, 255, 255, 0.52)',
+        backdropFilter: 'blur(28px)',
+        WebkitBackdropFilter: 'blur(28px)',
+        borderRight: '1px solid rgba(255, 255, 255, 0.45)',
+        boxShadow: '4px 0 32px rgba(0, 0, 0, 0.06)',
       }}
     >
       {/* 로고 */}

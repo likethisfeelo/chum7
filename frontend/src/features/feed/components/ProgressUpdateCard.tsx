@@ -85,7 +85,7 @@ export function ProgressUpdateCard({
   const isVideo = hasMedia && isVideoUrl(post.imageUrl!);
 
   return (
-    <article className="rounded-2xl overflow-hidden bg-white shadow-sm">
+    <article className="rounded-2xl overflow-hidden glass-card">
 
       {/* 미디어 — 4:5 비율, 엣지-투-엣지 */}
       {hasMedia && (

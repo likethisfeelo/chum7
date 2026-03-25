@@ -14,6 +14,9 @@
   --color-primary-800: #63332F;
   --color-primary-900: #421F1C;
   --color-bg-app: #F0EDEB;
+  /* 배경 파스텔 그라데이션 accent */
+  --gradient-accent-1: rgba(212, 142, 137, 0.22);
+  --gradient-accent-2: rgba(165, 155, 210, 0.17);
 }
 
 [data-theme="korean"] {
@@ -28,6 +31,8 @@
   --color-primary-800: #2B4318;
   --color-primary-900: #1C2C0F;
   --color-bg-app: #F0F7E6;
+  --gradient-accent-1: rgba(90, 138, 60, 0.18);
+  --gradient-accent-2: rgba(150, 195, 150, 0.15);
 }
 
 [data-theme="greek"] {
@@ -42,6 +47,8 @@
   --color-primary-800: #664C0F;
   --color-primary-900: #453208;
   --color-bg-app: #FDF6E3;
+  --gradient-accent-1: rgba(201, 162, 39, 0.18);
+  --gradient-accent-2: rgba(210, 185, 120, 0.15);
 }
 
 [data-theme="norse"] {
@@ -56,6 +63,8 @@
   --color-primary-800: #28424F;
   --color-primary-900: #172A33;
   --color-bg-app: #EDF3F8;
+  --gradient-accent-1: rgba(91, 140, 166, 0.20);
+  --gradient-accent-2: rgba(140, 185, 215, 0.16);
 }
 
 @layer base {
@@ -65,7 +74,11 @@
 
   body {
     @apply font-sans antialiased;
-    background-color: var(--color-bg-app);
+    background:
+      radial-gradient(ellipse 65% 45% at 88% 6%, var(--gradient-accent-1) 0%, transparent 100%),
+      radial-gradient(ellipse 55% 50% at 10% 94%, var(--gradient-accent-2) 0%, transparent 100%),
+      var(--color-bg-app);
+    background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -77,11 +90,30 @@
 }
 
 @layer utilities {
+  /* 글래스 레이어 1 — 카드 (가장 투명) */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.58);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.50);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+
+  /* 글래스 레이어 2 — 패널/사이드바 위젯 (중간) */
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.70);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.05);
+  }
+
+  /* 글래스 레이어 3 — 헤더 (가장 불투명) */
   .glass-header {
-    background: rgba(255, 255, 255, 0.78);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.60);
   }
 
   .safe-area-bottom {

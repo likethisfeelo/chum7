@@ -216,7 +216,7 @@ const ChallengeCard = ({
     onClick={() => onNavigate(challenge.challengeId)}
     onMouseEnter={() => onHover(challenge)}
     onMouseLeave={onLeave}
-    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-primary-100/40 hover:border-primary-100 active:scale-[0.98]"
+    className="glass-card rounded-2xl p-5 cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-primary-100/40 active:scale-[0.98]"
   >
     <div className="flex items-start gap-4">
       <div className="w-14 h-14 bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
@@ -715,16 +715,7 @@ export const ChallengesPage = () => {
           onMouseEnter={handlePanelEnter}
           onMouseLeave={handleLeave}
         >
-          <div
-            className="sticky top-24 rounded-2xl p-5 min-h-[360px] overflow-y-auto max-h-[calc(100vh-7rem)]"
-            style={{
-              background: 'rgba(255,255,255,0.72)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-              border: '1px solid rgba(255,255,255,0.55)',
-              boxShadow: '0 2px 20px rgba(0,0,0,0.06)',
-            }}
-          >
+          <div className="sticky top-24 rounded-2xl p-5 glass-panel min-h-[360px] overflow-y-auto max-h-[calc(100vh-7rem)]">
             <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
               챌린지 미리보기
             </div>
