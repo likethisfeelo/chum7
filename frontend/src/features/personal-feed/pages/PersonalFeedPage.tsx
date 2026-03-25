@@ -321,7 +321,7 @@ function ChallengesTab({ userId }: { userId: string }) {
 function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
   return (
     <div className="space-y-4 pb-20">
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
+      <div className="glass-card rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-gray-500 mb-3">활동 통계</h3>
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-primary-50 rounded-xl p-3 text-center">
@@ -351,7 +351,7 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
+      <div className="glass-card rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-gray-500 mb-3">응원</h3>
         <div className="grid grid-cols-2 gap-3">
           <div className="flex items-center gap-3 bg-pink-50 rounded-xl p-3">
@@ -372,7 +372,7 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
       </div>
 
       {achievements.badges.length > 0 ? (
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div className="glass-card rounded-2xl p-5">
           <h3 className="text-sm font-semibold text-gray-500 mb-3">
             획득 뱃지 ({achievements.badges.length})
           </h3>
@@ -380,7 +380,7 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
             {achievements.badges.map((badge) => {
               const meta = BADGE_META[badge.badgeId] ?? { icon: '🏅', name: badge.badgeId, desc: '' };
               return (
-                <div key={badge.badgeId + badge.grantedAt} className="flex flex-col items-center gap-1 bg-gray-50 rounded-xl p-3">
+                <div key={badge.badgeId + badge.grantedAt} className="flex flex-col items-center gap-1 glass-card rounded-xl p-3">
                   <span className="text-3xl">{meta.icon}</span>
                   <p className="text-xs font-semibold text-gray-700 text-center">{meta.name}</p>
                   <p className="text-[10px] text-gray-400 text-center">{meta.desc}</p>
@@ -390,7 +390,7 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl p-5 shadow-sm text-center">
+        <div className="glass-card rounded-2xl p-5 text-center">
           <p className="text-4xl mb-2">🏅</p>
           <p className="text-sm font-semibold text-gray-700">아직 획득한 뱃지가 없어요</p>
           <p className="text-xs text-gray-400 mt-1">퀘스트를 완료하면 뱃지를 획득할 수 있어요</p>
@@ -398,7 +398,7 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
       )}
 
       {achievements.leaderHistory.total > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div className="glass-card rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-lg">👑</span>
             <h3 className="text-sm font-semibold text-gray-700">리더 이력</h3>

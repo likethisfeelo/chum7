@@ -431,8 +431,8 @@ export const ChallengeFeedPage = () => {
       : iDidTodayVerification;
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="mx-auto min-h-screen w-full max-w-3xl lg:max-w-6xl bg-gray-50 pb-20 md:border-x md:border-gray-200 lg:border-x-0">
+    <div className="min-h-screen">
+      <div className="mx-auto min-h-screen w-full max-w-3xl lg:max-w-6xl pb-20">
 
         {/* 헤더 */}
         <div className="sticky top-0 glass-header px-6 py-4 flex items-center gap-4 z-10">
@@ -488,7 +488,7 @@ export const ChallengeFeedPage = () => {
           <div className="space-y-4 lg:sticky lg:top-20">
 
           {/* 1) 챌린지 제목 + 설명 */}
-          <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+          <section className="glass-card rounded-2xl p-5">
             <div className="flex items-start gap-3 mb-2">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{challengeData?.title || "챌린지"}</h2>
@@ -514,7 +514,7 @@ export const ChallengeFeedPage = () => {
 
           {/* 3) 퀘스트 기간 진행 현황 (1~durationDays 체크) */}
           {userChallenge && (
-            <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+            <section className="glass-card rounded-2xl p-5">
               <h3 className="font-bold text-gray-900 mb-3">진행 현황</h3>
               <div className="flex flex-wrap gap-2">
                 {Array.from({ length: durationDays }, (_, i) => i + 1).map((day) => {
@@ -575,11 +575,11 @@ export const ChallengeFeedPage = () => {
 
           {/* 8) 오늘 인증완료 / 전체 참여자 — left sidebar desktop */}
           <section className="hidden lg:grid grid-cols-2 gap-2">
-            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+            <div className="glass-card rounded-2xl p-4">
               <p className="text-xs text-gray-500">오늘 인증</p>
               <p className="mt-1 text-xl font-bold text-gray-900">{todayCompletedCount}명</p>
             </div>
-            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+            <div className="glass-card rounded-2xl p-4">
               <p className="text-xs text-gray-500">내 인증</p>
               <p className="mt-1 text-xl font-bold text-gray-900">{myTotalCount}회</p>
             </div>
@@ -587,14 +587,14 @@ export const ChallengeFeedPage = () => {
 
           {/* My record — left sidebar desktop */}
           {userChallenge && (
-            <section className="hidden lg:block bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+            <section className="hidden lg:block glass-card rounded-2xl p-5">
               <h3 className="font-bold text-gray-900 mb-3">내 기록</h3>
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3">
+                <div className="glass-card rounded-xl p-3">
                   <p className="text-xs text-gray-500">총 인증</p>
                   <p className="text-lg font-bold text-gray-900 mt-0.5">{myTotalCount}회</p>
                 </div>
-                <div className="bg-gray-50 rounded-xl p-3">
+                <div className="glass-card rounded-xl p-3">
                   <p className="text-xs text-gray-500">연속 인증</p>
                   <p className="text-lg font-bold text-gray-900 mt-0.5">{userChallenge?.consecutiveDays ?? 0}일</p>
                 </div>
@@ -620,7 +620,7 @@ export const ChallengeFeedPage = () => {
 
           {/* 2) 챌린지 보드 미리보기 */}
           <section
-            className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm cursor-pointer hover:border-primary-200 transition-colors"
+            className="glass-card rounded-2xl p-5 cursor-pointer hover:shadow-lg transition-shadow"
             onClick={() => navigate(`/challenge-board/${challengeId}`)}
           >
             <div className="flex items-center justify-between mb-2">
@@ -766,10 +766,10 @@ export const ChallengeFeedPage = () => {
 
           {/* 오늘의 퀘스트 인증 — active + 퀘스트 있을 때 */}
           {isActive && questsData && questsData.length > 0 && userChallenge && !isGaveUp && (
-            <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+            <section className="glass-card rounded-2xl p-5">
               {/* 탭 — 혼합형만 */}
               {isMixedChallengeType && (
-                <div className="flex gap-1 mb-4 p-1 bg-gray-100 rounded-xl">
+                <div className="flex gap-1 mb-4 p-1 glass-card rounded-xl">
                   <button
                     type="button"
                     onClick={() => {
@@ -902,7 +902,7 @@ export const ChallengeFeedPage = () => {
             (!iDidTodayVerification || hasInvalidMyVideo) &&
             userChallenge &&
             !isGaveUp && (
-              <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+              <section className="glass-card rounded-2xl p-5">
                 <h3 className="font-bold text-gray-900 mb-3">오늘의 인증</h3>
                 <InlineVerificationForm
                   userChallenge={userChallenge}
@@ -922,9 +922,9 @@ export const ChallengeFeedPage = () => {
           )}
 
           {/* 5) 인증 피드 — 리더퀘스트 / 개인퀘스트 탭 */}
-          <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+          <section className="glass-card rounded-2xl p-5">
             <h3 className="font-bold text-gray-900 mb-3">인증 피드</h3>
-            <div className="flex gap-1 mb-4 p-1 bg-gray-100 rounded-xl">
+            <div className="flex gap-1 mb-4 p-1 glass-card rounded-xl">
               <button
                 type="button"
                 onClick={() => setFeedTab("leader")}
@@ -947,7 +947,7 @@ export const ChallengeFeedPage = () => {
                 </p>
               ) : (
                 currentFeedVerifications.map((item: any) => (
-                  <article key={item.verificationId} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <article key={item.verificationId} className="glass-card rounded-xl p-3">
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-xs text-gray-500">{item.isAnonymous ? "익명 참여자" : item.userName || "참여자"}</p>
                       <p className="text-xs text-gray-400">Day {item.day || "-"}</p>
@@ -996,7 +996,7 @@ export const ChallengeFeedPage = () => {
           {/* 6) 리더퀘스트 보드 (2개 이상일 경우에만) */}
           {leaderQuests.length >= 2 && (
             <section
-              className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm cursor-pointer hover:border-blue-200 transition-colors"
+              className="glass-card rounded-2xl p-5 cursor-pointer hover:shadow-lg transition-shadow"
               onClick={() => navigate(`/quests?challengeId=${challengeId}&scope=leader`)}
             >
               <div className="flex items-center justify-between">
@@ -1022,7 +1022,7 @@ export const ChallengeFeedPage = () => {
           {/* 7) 개인퀘스트 보드 (2개 이상일 경우에만) */}
           {personalQuests.length >= 2 && (
             <section
-              className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm cursor-pointer hover:border-amber-200 transition-colors"
+              className="glass-card rounded-2xl p-5 cursor-pointer hover:shadow-lg transition-shadow"
               onClick={() => navigate(`/quests?challengeId=${challengeId}&scope=personal`)}
             >
               <div className="flex items-center justify-between">
@@ -1035,12 +1035,12 @@ export const ChallengeFeedPage = () => {
 
           {/* 8) 오늘 인증완료 / 전체 참여자 — mobile only */}
           <section className="lg:hidden grid grid-cols-2 gap-2">
-            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+            <div className="glass-card rounded-2xl p-4">
               <p className="text-xs text-gray-500">오늘 인증 완료</p>
               <p className="mt-1 text-xl font-bold text-gray-900">{todayCompletedCount}명</p>
               <p className="text-xs text-gray-500">KST 기준</p>
             </div>
-            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+            <div className="glass-card rounded-2xl p-4">
               <p className="text-xs text-gray-500">전체 참여자</p>
               <p className="mt-1 text-xl font-bold text-gray-900">
                 {challengeData?.stats?.totalParticipants || challengeData?.participantCount || 0}명
@@ -1061,7 +1061,7 @@ export const ChallengeFeedPage = () => {
             );
             const canRemedy = (remaining === null || remaining > 0) && failedDays.length > 0;
             return (
-              <section className="bg-white rounded-2xl p-5 border border-purple-100 shadow-sm">
+              <section className="glass-card rounded-2xl p-5">
                 <h3 className="font-bold text-gray-900 mb-2">보완 인증</h3>
                 <p className="text-xs text-gray-500 mb-3">
                   실패한 Day는 보완 인증(70% 점수)으로 연결할 수 있어요. · 남은 보완{" "}
@@ -1081,14 +1081,14 @@ export const ChallengeFeedPage = () => {
 
           {/* 10) 내 응원권/기록 현황 — mobile only */}
           {userChallenge && (
-            <section className="lg:hidden bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+            <section className="lg:hidden glass-card rounded-2xl p-5">
               <h3 className="font-bold text-gray-900 mb-3">내 응원권 / 기록</h3>
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3">
+                <div className="glass-card rounded-xl p-3">
                   <p className="text-xs text-gray-500">총 인증 횟수</p>
                   <p className="text-lg font-bold text-gray-900 mt-0.5">{myTotalCount}회</p>
                 </div>
-                <div className="bg-gray-50 rounded-xl p-3">
+                <div className="glass-card rounded-xl p-3">
                   <p className="text-xs text-gray-500">연속 인증</p>
                   <p className="text-lg font-bold text-gray-900 mt-0.5">
                     {userChallenge?.consecutiveDays ?? 0}일
