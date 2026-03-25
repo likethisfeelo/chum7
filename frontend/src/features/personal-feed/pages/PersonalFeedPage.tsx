@@ -7,18 +7,26 @@ import { Loading } from '@/shared/components/Loading';
 import {
   personalFeedApi,
   FeedProfile,
+  FeedAchievements,
   VerificationFeedItem,
   ChallengeFeedItem,
   PersonalPost,
   SavedPostItem,
 } from '../api/personalFeedApi';
 
-type FeedTab = 'feed' | 'challenges';
+type FeedTab = 'verifications' | 'challenges' | 'achievements' | 'posts';
 
 const TAB_CONFIG: { key: FeedTab; label: string }[] = [
-  { key: 'feed', label: '피드' },
+  { key: 'verifications', label: '인증' },
   { key: 'challenges', label: '챌린지' },
+  { key: 'achievements', label: '업적' },
+  { key: 'posts', label: '자유' },
 ];
+
+const BADGE_META: Record<string, { icon: string; name: string; desc: string }> = {
+  '3-day-streak': { icon: '🔥', name: '3일 연속', desc: '3일 연속 퀘스트 완료' },
+  '7-day-master': { icon: '⭐', name: '7일 마스터', desc: '7일 연속 퀘스트 완료' },
+};
 
 const LEADER_BADGE_META: Record<string, { icon: string; name: string; desc: string }> = {
   'leader-debut': { icon: '🎖️', name: '리더 데뷔', desc: '챌린지 1회 이상 완료 운영' },
@@ -302,6 +310,144 @@ function ChallengesTab({ userId }: { userId: string }) {
       {challenges.map((item) => (
         <ChallengeHistoryCard key={item.userChallengeId} item={item} />
       ))}
+    </div>
+  );
+}
+
+// ─── Tab 03: 업적 ─────────────────────────────────────────────────────
+function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
+  return (
+    <div className="space-y-4 pb-20">
+      <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-gray-500 mb-3">활동 통계</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-primary-50 rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-primary-700">
+              {achievements.verifications.totalScore.toLocaleString()}
+            </p>
+            <p className="text-xs text-primary-500 mt-0.5">누적 스코어</p>
+          </div>
+          <div className="bg-green-50 rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-green-700">
+              {achievements.verifications.total}
+            </p>
+            <p className="text-xs text-green-500 mt-0.5">총 인증 횟수</p>
+          </div>
+          <div className="bg-blue-50 rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-blue-700">
+              {achievements.challenges.completed}
+            </p>
+            <p className="text-xs text-blue-500 mt-0.5">챌린지 완주</p>
+          </div>
+          <div className="bg-orange-50 rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-orange-700">
+              {achievements.challenges.total}
+            </p>
+            <p className="text-xs text-orange-500 mt-0.5">총 참여 챌린지</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-gray-500 mb-3">응원</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-center gap-3 bg-pink-50 rounded-xl p-3">
+            <span className="text-2xl">💌</span>
+            <div>
+              <p className="text-lg font-bold text-pink-700">{achievements.cheers.receivedCount}</p>
+              <p className="text-xs text-pink-400">받은 응원</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 bg-purple-50 rounded-xl p-3">
+            <span className="text-2xl">📣</span>
+            <div>
+              <p className="text-lg font-bold text-purple-700">{achievements.cheers.sentCount}</p>
+              <p className="text-xs text-purple-400">보낸 응원</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {achievements.badges.length > 0 ? (
+        <div className="bg-white rounded-2xl p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-500 mb-3">
+            획득 뱃지 ({achievements.badges.length})
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            {achievements.badges.map((badge) => {
+              const meta = BADGE_META[badge.badgeId] ?? { icon: '🏅', name: badge.badgeId, desc: '' };
+              return (
+                <div key={badge.badgeId + badge.grantedAt} className="flex flex-col items-center gap-1 bg-gray-50 rounded-xl p-3">
+                  <span className="text-3xl">{meta.icon}</span>
+                  <p className="text-xs font-semibold text-gray-700 text-center">{meta.name}</p>
+                  <p className="text-[10px] text-gray-400 text-center">{meta.desc}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl p-5 shadow-sm text-center">
+          <p className="text-4xl mb-2">🏅</p>
+          <p className="text-sm font-semibold text-gray-700">아직 획득한 뱃지가 없어요</p>
+          <p className="text-xs text-gray-400 mt-1">퀘스트를 완료하면 뱃지를 획득할 수 있어요</p>
+        </div>
+      )}
+
+      {achievements.leaderHistory.total > 0 && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">👑</span>
+            <h3 className="text-sm font-semibold text-gray-700">리더 이력</h3>
+          </div>
+
+          {achievements.leaderBadges.length > 0 && (
+            <div className="flex gap-2 flex-wrap mb-3">
+              {achievements.leaderBadges.map((badge) => {
+                const meta = LEADER_BADGE_META[badge.badgeId] ?? { icon: '🎖️', name: badge.badgeId, desc: '' };
+                return (
+                  <div key={badge.badgeId} className="flex items-center gap-1.5 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1">
+                    <span className="text-sm">{meta.icon}</span>
+                    <span className="text-xs font-semibold text-yellow-700">{meta.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            <div className="bg-amber-50 rounded-xl p-3 text-center">
+              <p className="text-xl font-bold text-amber-700">{achievements.leaderHistory.total}</p>
+              <p className="text-[11px] text-amber-500">총 개설</p>
+            </div>
+            <div className="bg-green-50 rounded-xl p-3 text-center">
+              <p className="text-xl font-bold text-green-700">{achievements.leaderHistory.completed}</p>
+              <p className="text-[11px] text-green-500">완료 운영</p>
+            </div>
+            <div className="bg-blue-50 rounded-xl p-3 text-center">
+              <p className="text-xl font-bold text-blue-700">{achievements.leaderHistory.totalParticipants}</p>
+              <p className="text-[11px] text-blue-500">누적 참여자</p>
+            </div>
+          </div>
+
+          {achievements.leaderHistory.recentChallenges.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-gray-400 mb-2">최근 운영 챌린지</p>
+              {achievements.leaderHistory.recentChallenges.map((c) => (
+                <div key={c.challengeId} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                  <p className="text-sm font-medium text-gray-700 line-clamp-1 flex-1 min-w-0 pr-2">
+                    {c.title}
+                  </p>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xs text-gray-400">{c.participantCount}명</span>
+                    <span className="text-[11px] text-green-600 font-semibold">완료</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -636,7 +782,7 @@ export function PersonalFeedPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<FeedTab>('feed');
+  const [activeTab, setActiveTab] = useState<FeedTab>('verifications');
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
 
   const resolvedUserId = userIdParam ?? 'me';
@@ -655,10 +801,9 @@ export function PersonalFeedPage() {
     queryFn: () => personalFeedApi.getProfile(resolvedUserId),
   });
 
-  const { data: achievements } = useQuery({
+  const { data: achievements, isLoading: achievementsLoading } = useQuery({
     queryKey: ['personal-feed-achievements', resolvedUserId],
     queryFn: () => personalFeedApi.getAchievements(resolvedUserId),
-    // 헤더 리더 뱃지 표시를 위해 항상 fetch
   });
 
   const topLeaderBadge = achievements?.leaderBadges?.[0];
@@ -781,23 +926,28 @@ export function PersonalFeedPage() {
 
       {/* 컨텐츠 */}
       <div className="p-4">
-        {activeTab === 'feed' && (
+        {activeTab === 'verifications' && (
           <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 3}>
-            <div className="space-y-6">
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">인증 기록</p>
-                <VerificationsTab userId={resolvedUserId} />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">자유 게시물</p>
-                <PostsTab userId={resolvedUserId} isOwn={isOwn} />
-              </div>
-            </div>
+            <VerificationsTab userId={resolvedUserId} />
           </LayerGate>
         )}
         {activeTab === 'challenges' && (
           <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 4}>
             <ChallengesTab userId={resolvedUserId} />
+          </LayerGate>
+        )}
+        {activeTab === 'achievements' && (
+          <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 1}>
+            {achievementsLoading || !achievements ? (
+              <Loading />
+            ) : (
+              <AchievementsTab achievements={achievements} />
+            )}
+          </LayerGate>
+        )}
+        {activeTab === 'posts' && (
+          <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 3}>
+            <PostsTab userId={resolvedUserId} isOwn={isOwn} />
           </LayerGate>
         )}
       </div>
