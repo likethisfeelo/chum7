@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -6,11 +6,14 @@ import { useAuthStore } from '@/stores/authStore';
 import { Loading } from '@/shared/components/Loading';
 import { characterApi } from '@/features/character/api/characterApi';
 import { personalFeedApi, FeedAchievements } from '@/features/personal-feed/api/personalFeedApi';
+import { apiClient } from '@/lib/api-client';
+import { resolveChallengeBucket, getChallengeDisplayMeta } from '@/features/challenge/utils/challengeLifecycle';
 
-type MyTab = 'character' | 'badges';
+type MyTab = 'character' | 'challenges' | 'badges';
 
 const TAB_CONFIG: { key: MyTab; label: string }[] = [
   { key: 'character', label: '캐릭터' },
+  { key: 'challenges', label: '챌린지' },
   { key: 'badges', label: '뱃지' },
 ];
 
@@ -174,6 +177,128 @@ function CharacterTab() {
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── 챌린지 탭 ────────────────────────────────────────────────────
+type ChallengeBucketFilter = 'active' | 'preparing' | 'completed' | 'gave_up';
+
+const BUCKET_META: Record<ChallengeBucketFilter, { label: string; color: string; bg: string; activeBg: string }> = {
+  active:    { label: '진행중',  color: 'text-blue-700',  bg: 'bg-blue-50',   activeBg: 'bg-blue-500' },
+  preparing: { label: '준비중',  color: 'text-yellow-700', bg: 'bg-yellow-50', activeBg: 'bg-yellow-500' },
+  completed: { label: '완주',   color: 'text-green-700', bg: 'bg-green-50',  activeBg: 'bg-green-500' },
+  gave_up:   { label: '포기',   color: 'text-gray-500',  bg: 'bg-gray-50',   activeBg: 'bg-gray-400' },
+};
+
+function ChallengesTab() {
+  const navigate = useNavigate();
+  const [filter, setFilter] = useState<ChallengeBucketFilter>('active');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['my-challenges', 'all'],
+    queryFn: async () => {
+      const res = await apiClient.get('/challenges/my?status=all');
+      return res.data.data;
+    },
+  });
+
+  const items: any[] = data?.challenges ?? [];
+
+  const summary = useMemo(() => ({
+    active:    items.filter((i) => resolveChallengeBucket(i) === 'active').length,
+    preparing: items.filter((i) => resolveChallengeBucket(i) === 'preparing').length,
+    completed: items.filter((i) => resolveChallengeBucket(i) === 'completed').length,
+    gave_up:   items.filter((i) => resolveChallengeBucket(i) === 'gave_up').length,
+  }), [items]);
+
+  const filtered = useMemo(
+    () => items.filter((i) => resolveChallengeBucket(i) === filter),
+    [items, filter],
+  );
+
+  if (isLoading) return <Loading />;
+
+  return (
+    <div className="space-y-4 pb-24">
+      {/* 요약 그리드 */}
+      <div className="grid grid-cols-4 gap-2">
+        {(Object.keys(BUCKET_META) as ChallengeBucketFilter[]).map((key) => {
+          const meta = BUCKET_META[key];
+          const isSelected = filter === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`rounded-xl p-3 text-center transition-all ${
+                isSelected ? `${meta.activeBg} text-white shadow-sm` : `${meta.bg} ${meta.color}`
+              }`}
+            >
+              <p className={`text-xl font-bold ${isSelected ? 'text-white' : ''}`}>
+                {summary[key]}
+              </p>
+              <p className={`text-[11px] mt-0.5 ${isSelected ? 'text-white/80' : ''}`}>
+                {meta.label}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 챌린지 목록 */}
+      {filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl p-6 text-center shadow-sm">
+          <p className="text-3xl mb-2">🎯</p>
+          <p className="text-sm font-semibold text-gray-700">
+            {BUCKET_META[filter].label} 챌린지가 없어요
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((item: any) => {
+            const meta = getChallengeDisplayMeta(item);
+            const bucket = resolveChallengeBucket(item);
+            const bMeta = BUCKET_META[bucket as ChallengeBucketFilter] ?? BUCKET_META.active;
+            const progressPct = meta.durationDays > 0
+              ? Math.round((meta.participatedDays / meta.durationDays) * 100)
+              : 0;
+            const title = item.challenge?.title ?? item.title ?? '챌린지';
+            const category = item.challenge?.challengeCategory ?? item.challenge?.category ?? '';
+
+            return (
+              <button
+                key={item.userChallengeId ?? item.challengeId}
+                onClick={() => navigate(`/challenges/${item.challengeId ?? item.challenge?.challengeId}`)}
+                className="w-full bg-white rounded-2xl shadow-sm p-4 text-left"
+              >
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-800 text-sm line-clamp-1">{title}</p>
+                    {category && (
+                      <p className="text-xs text-gray-400 mt-0.5">{category}</p>
+                    )}
+                  </div>
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${bMeta.bg} ${bMeta.color}`}>
+                    {bMeta.label}
+                  </span>
+                </div>
+                <div className="mb-1">
+                  <div className="flex justify-between text-[11px] text-gray-400 mb-1">
+                    <span>Day {meta.currentDay} / {meta.durationDays}일</span>
+                    <span>{progressPct}%</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary-500 rounded-full transition-all"
+                      style={{ width: `${progressPct}%` }}
+                    />
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -401,6 +526,7 @@ export function MyPage() {
       {/* 컨텐츠 */}
       <div className="p-4">
         {activeTab === 'character' && <CharacterTab />}
+        {activeTab === 'challenges' && <ChallengesTab />}
         {activeTab === 'badges' && (
           achievementsLoading || !achievements ? (
             <Loading />
