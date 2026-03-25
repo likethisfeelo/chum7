@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
@@ -19,7 +18,7 @@ function FeedImage({ src }: { src: string }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
     return (
-      <div className="w-full h-48 rounded-xl mt-3 bg-gray-100 flex items-center justify-center text-xs text-gray-400">
+      <div className="w-full h-48 rounded-xl bg-gray-100 flex items-center justify-center text-xs text-gray-400">
         이미지를 불러올 수 없습니다
       </div>
     );
@@ -28,7 +27,7 @@ function FeedImage({ src }: { src: string }) {
     <img
       src={src}
       alt="인증 이미지"
-      className="w-full h-48 object-cover rounded-xl mt-3"
+      className="w-full h-48 object-cover rounded-xl"
       onError={() => setFailed(true)}
     />
   );
@@ -73,7 +72,7 @@ function FeedVideo({ src }: { src: string }) {
       muted
       playsInline
       preload="metadata"
-      className="w-full rounded-xl mt-3 bg-black"
+      className="w-full rounded-xl bg-black"
     />
   );
 }
@@ -96,7 +95,6 @@ export function VerificationCard({
   post,
   likeCount,
   isReacting,
-  commentCount: _commentCount,
   commentHook,
   recommendations,
   onReact,
@@ -106,50 +104,65 @@ export function VerificationCard({
   onUserHashtagClick,
 }: Props) {
   const state = commentHook.getState(post.plazaPostId);
-  const isBadge = post.postType === 'badge_review';
-  const hashtagLabel = post.challengeCategory
+  const categoryLabel = post.challengeCategory
     ? SLUG_TO_LABEL[post.challengeCategory] || post.challengeCategory
     : null;
+  const hasMedia = Boolean(post.imageUrl);
 
   return (
     <article className="border border-gray-200 rounded-2xl p-4 bg-white">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[11px] font-semibold text-emerald-700 flex items-center gap-1">
-            <span>{isBadge ? '🏅' : '🌿'}</span>
-            {isBadge ? '뱃지 후기' : '인증 기록'}
-          </p>
-          <h3 className="mt-1 text-sm font-semibold text-gray-900">{post.challengeTitle || '챌린지'}</h3>
-        </div>
-        {hashtagLabel && (
+
+      {/* 상단: 카테고리 해쉬태그 + 저장 버튼 */}
+      <div className="flex items-center justify-end gap-2 mb-3">
+        {categoryLabel && (
           <button
             type="button"
             onClick={() => onHashtagClick?.(post.challengeCategory!)}
-            className="text-[11px] text-indigo-500 hover:text-indigo-700 hover:underline shrink-0 font-medium transition-colors"
+            className="text-[11px] text-indigo-500 hover:text-indigo-700 hover:underline font-medium transition-colors"
           >
-            #{hashtagLabel}
+            #{categoryLabel}
           </button>
         )}
+        {bookmarkButton}
       </div>
 
-      <p className="mt-1 text-xs text-gray-400">{format(new Date(post.createdAt), 'M월 d일 HH:mm', { locale: ko })}</p>
-
-      {post.imageUrl && (
-        isVideoUrl(post.imageUrl)
-          ? <FeedVideo src={resolveMediaUrl(post.imageUrl)} />
-          : <FeedImage src={resolveMediaUrl(post.imageUrl)} />
+      {/* 미디어 */}
+      {hasMedia && (
+        <div className="mb-3">
+          {isVideoUrl(post.imageUrl!)
+            ? <FeedVideo src={resolveMediaUrl(post.imageUrl!)} />
+            : <FeedImage src={resolveMediaUrl(post.imageUrl!)} />
+          }
+        </div>
       )}
 
+      {/* 본문 텍스트 (텍스트만 있을 경우 내용에 따라 높이 자동 조절) */}
       {post.content && (
-        <p className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{post.content}</p>
+        <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+          {post.content}
+        </p>
       )}
 
-      <div className="mt-3 flex items-center gap-2 flex-wrap">
+      {/* 유저 해쉬태그 — 본문 좌측 아래 */}
+      {post.hashtag && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => onUserHashtagClick?.(post.hashtag!)}
+            className="text-xs font-medium text-indigo-500 hover:text-indigo-700 transition-colors"
+          >
+            #{post.hashtag}
+          </button>
+        </div>
+      )}
+
+      {/* 액션바: 좋아요·댓글 / 날짜 */}
+      <div className="mt-3 flex items-center gap-2">
         <button
           type="button"
           onClick={onReact}
           disabled={isReacting}
-          className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 disabled:opacity-50 transition-colors hover:bg-emerald-100"
+          className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-50 transition-colors hover:bg-gray-50"
         >
           {isReacting ? '...' : `❤️ ${likeCount}`}
         </button>
@@ -160,24 +173,11 @@ export function VerificationCard({
         >
           💬 {state.count}
         </button>
-        {bookmarkButton}
-        {post.hashtag && (
-          <button
-            type="button"
-            onClick={() => onUserHashtagClick?.(post.hashtag!)}
-            className="px-2 py-1 text-xs rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors font-medium"
-          >
-            #{post.hashtag}
-          </button>
-        )}
-        {post.challengeId && (
-          <Link
-            to={`/challenges/${post.challengeId}`}
-            className="ml-auto text-xs text-primary-700 hover:text-primary-900 font-medium"
-          >
-            챌린지 보러가기 →
-          </Link>
-        )}
+
+        {/* 날짜·시간 — 우측 하단에 작게 */}
+        <span className="ml-auto text-[11px] text-gray-400">
+          {format(new Date(post.createdAt), 'M월 d일 HH:mm', { locale: ko })}
+        </span>
       </div>
 
       {state.isOpen && (
