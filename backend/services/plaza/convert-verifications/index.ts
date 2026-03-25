@@ -95,6 +95,7 @@ export const handler = async (_event: EventBridgeEvent<string, unknown>) => {
             createdAt: item.createdAt || convertedAt,
             originalCreatedAt: item.createdAt || null,
             convertedAt,
+            ...(item.hashtag ? { hashtag: item.hashtag } : {}),
           },
           ConditionExpression: 'attribute_not_exists(plazaPostId)',
         })).catch((error: any) => {

@@ -84,6 +84,7 @@ export const VerificationSheet = ({
     todayNote: '',
     tomorrowPromise: '',
     completedAt: toLocalDateTimeInputValue(new Date()),
+    hashtag: '',
   });
   const [submittedPayload, setSubmittedPayload] = useState<any | null>(null);
   const [extraVisibilityPrompt, setExtraVisibilityPrompt] = useState<{ verificationId: string } | null>(null);
@@ -153,6 +154,7 @@ export const VerificationSheet = ({
         imageUrl = uploadData.data.fileUrl;
       }
 
+      const cleanHashtag = formData.hashtag.trim().replace(/^#+/, '');
       const response = await apiClient.post('/verifications', {
         userChallengeId: userChallenge.userChallengeId,
         day: Math.max(1, Number(userChallenge.currentDay || 1)),
@@ -162,6 +164,7 @@ export const VerificationSheet = ({
         performedAt: toIsoFromLocalDateTime(formData.completedAt),
         isPublic: true,
         isAnonymous: true,
+        ...(cleanHashtag ? { hashtag: cleanHashtag } : {}),
       });
 
       return response.data;
@@ -195,6 +198,7 @@ export const VerificationSheet = ({
         todayNote: '',
         tomorrowPromise: '',
         completedAt: toLocalDateTimeInputValue(new Date()),
+        hashtag: '',
       });
 
       if (payload.isExtra && payload.verificationId) {
@@ -323,6 +327,26 @@ export const VerificationSheet = ({
             rows={4}
             required
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">해쉬태그 (선택)</label>
+          <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-500">
+            <span className="px-3 text-gray-400 font-medium select-none">#</span>
+            <input
+              type="text"
+              value={formData.hashtag}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^가-힣a-zA-Z0-9_-]/g, '').slice(0, 20);
+                setFormData({ ...formData, hashtag: val });
+              }}
+              className="flex-1 py-3 pr-3 bg-transparent focus:outline-none text-sm"
+              placeholder="새벽운동 (최대 20자)"
+              maxLength={20}
+            />
+            <span className="pr-3 text-xs text-gray-400">{formData.hashtag.length}/20</span>
+          </div>
+          <p className="mt-1 text-xs text-gray-400">게시물에 태그 1개를 붙일 수 있어요</p>
         </div>
 
         <div>

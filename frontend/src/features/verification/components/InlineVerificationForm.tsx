@@ -218,6 +218,7 @@ export const InlineVerificationForm = ({
   const [formData, setFormData] = useState({
     todayNote: "",
     completedAt: toLocalDateTimeInputValue(new Date()),
+    hashtag: "",
   });
   const [extraVisibilityPrompt, setExtraVisibilityPrompt] = useState<{
     verificationId: string;
@@ -297,6 +298,7 @@ export const InlineVerificationForm = ({
     setFormData({
       todayNote: "",
       completedAt: toLocalDateTimeInputValue(new Date()),
+      hashtag: "",
     });
     setExtraVisibilityPrompt(null);
     setUploadProgress(0);
@@ -442,6 +444,9 @@ export const InlineVerificationForm = ({
           : {}),
         ...(formData.todayNote.trim()
           ? { todayNote: formData.todayNote.trim() }
+          : {}),
+        ...(formData.hashtag.trim().replace(/^#+/, '')
+          ? { hashtag: formData.hashtag.trim().replace(/^#+/, '') }
           : {}),
         performedAt: toIsoFromLocalDateTime(
           payload?.performedAtLocal || formData.completedAt,
@@ -672,6 +677,24 @@ export const InlineVerificationForm = ({
                 placeholder="소감(선택)을 남겨보세요 ✍️"
                 rows={3}
               />
+            </div>
+
+            <div>
+              <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-400">
+                <span className="px-3 text-gray-400 font-medium select-none text-sm">#</span>
+                <input
+                  type="text"
+                  value={formData.hashtag}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^가-힣a-zA-Z0-9_-]/g, '').slice(0, 20);
+                    setFormData({ ...formData, hashtag: val });
+                  }}
+                  className="flex-1 py-2.5 pr-2 bg-transparent focus:outline-none text-sm"
+                  placeholder="해쉬태그 (선택, 최대 20자)"
+                  maxLength={20}
+                />
+                <span className="pr-3 text-xs text-gray-400">{formData.hashtag.length}/20</span>
+              </div>
             </div>
 
             {selectedType === "link" && (

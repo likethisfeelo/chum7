@@ -79,12 +79,19 @@ function normalizeFilter(rawFilter?: string): PlazaFilter {
   return 'all';
 }
 
-function queryByPostType(postType: string, limit: number, exclusiveStartKey?: Record<string, any>) {
+function queryByPostType(postType: string, limit: number, exclusiveStartKey?: Record<string, any>, hashtag?: string) {
+  const useHashtag = hashtag && postType === 'courtyard';
   return ddb.send(new QueryCommand({
     TableName: process.env.PLAZA_POSTS_TABLE!,
     IndexName: 'postType-createdAt-index',
     KeyConditionExpression: 'postType = :postType',
-    ExpressionAttributeValues: { ':postType': postType },
+    ExpressionAttributeValues: {
+      ':postType': postType,
+      ...(useHashtag ? { ':hashtag': hashtag } : {}),
+    },
+    ...(useHashtag ? {
+      FilterExpression: 'hashtag = :hashtag',
+    } : {}),
     ScanIndexForward: false,
     ExclusiveStartKey: exclusiveStartKey,
     Limit: limit,
@@ -161,6 +168,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const limit = Math.max(1, Math.min(50, Number(params.limit || '20')));
     const cursor = decodeCursor(params.cursor);
     const debugEnabled = isDebugEnabled(params.debug);
+    const hashtag = params.hashtag?.trim() || undefined;
     const debugImageSamples: Array<Record<string, unknown>> = [];
 
     const allowTypes = toPostType(filter);
@@ -173,7 +181,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     if (filter !== 'all') {
       const postType = allowTypes[0];
-      const queryRes = await queryByPostType(postType, Math.min(SINGLE_FILTER_QUERY_LIMIT, limit), perTypeCursor[postType]);
+      const queryRes = await queryByPostType(postType, Math.min(SINGLE_FILTER_QUERY_LIMIT, limit), perTypeCursor[postType], hashtag);
 
       const items = (queryRes.Items || [])
         .filter((item: any) => item?.isActive !== false)
@@ -205,7 +213,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const queryLimitPerType = Math.max(limit, ALL_FILTER_PER_TYPE_QUERY_LIMIT);
     const typeResults = await Promise.all(
       allowTypes.map(async (postType) => {
-        const queryRes = await queryByPostType(postType, queryLimitPerType, perTypeCursor[postType]);
+        const queryRes = await queryByPostType(postType, queryLimitPerType, perTypeCursor[postType], hashtag);
         const items = (queryRes.Items || [])
           .filter((item: any) => item?.isActive !== false)
           .map((item: any) => ({
