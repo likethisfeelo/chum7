@@ -31,6 +31,7 @@ export class ApiStack extends Stack {
         CorsHttpMethod.GET,
         CorsHttpMethod.POST,
         CorsHttpMethod.PUT,
+        CorsHttpMethod.PATCH,
         CorsHttpMethod.DELETE,
         CorsHttpMethod.OPTIONS,
       ],
