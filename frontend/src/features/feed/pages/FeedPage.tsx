@@ -39,7 +39,16 @@ function RecruitingChallengeBanner({
   if (!ch) return null;
 
   return (
-    <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <section
+      className="rounded-2xl overflow-hidden"
+      style={{
+        background: 'rgba(255,255,255,0.72)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        border: '1px solid rgba(255,255,255,0.55)',
+        boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
+      }}
+    >
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-bold text-gray-900">🌟 모집 중인 챌린지</h3>
@@ -103,7 +112,16 @@ function HashtagPanel({
     : latestTags;
 
   return (
-    <section className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+    <section
+      className="rounded-2xl p-4"
+      style={{
+        background: 'rgba(255,255,255,0.72)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        border: '1px solid rgba(255,255,255,0.55)',
+        boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
+      }}
+    >
       <h3 className="text-sm font-bold text-gray-900 mb-3"># 해쉬태그</h3>
 
       {/* 검색 */}
@@ -242,10 +260,18 @@ export const FeedPage = () => {
     : null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
 
       {/* ── Sticky Header ── */}
-      <div className="sticky top-0 bg-white border-b border-gray-200 z-10">
+      <div
+        className="sticky top-0 z-10"
+        style={{
+          background: 'rgba(255,255,255,0.78)',
+          backdropFilter: 'blur(18px)',
+          WebkitBackdropFilter: 'blur(18px)',
+          borderBottom: '1px solid rgba(0,0,0,0.07)',
+        }}
+      >
         <div className="px-6 py-4">
           <h1 className="text-2xl font-bold text-gray-900">마당 🚀</h1>
           <p className="text-sm text-gray-600 mt-1">광장 피드 · 반익명 커뮤니티</p>
@@ -321,8 +347,8 @@ export const FeedPage = () => {
             </div>
           )}
 
-          {/* 게시물 목록 */}
-          <div className="space-y-3">
+          {/* 게시물 목록 — 마소너리 (lg: 2-column CSS columns) */}
+          <div>
             {isLoading ? (
               <SkeletonList count={3} />
             ) : isError ? (
@@ -334,20 +360,23 @@ export const FeedPage = () => {
                 description={selectedCategory ? '다른 해쉬태그를 탐색해보세요' : '곧 마당 게시물이 여기에 표시됩니다.'}
               />
             ) : (
-              posts.map((post) => (
-                <PlazaPostCard
-                  key={post.plazaPostId}
-                  post={post}
-                  likeCount={reactions.countMap[post.plazaPostId] ?? Number(post.likeCount ?? 0)}
-                  isReacting={Boolean(reactions.reactingIds[post.plazaPostId])}
-                  commentHook={commentHook}
-                  recommendations={reactions.recommendationsByPost[post.plazaPostId] ?? []}
-                  onReact={() => { void reactions.react(post); }}
-                  onDismissRecommendation={(item) => { void reactions.dismiss(post.plazaPostId, item); }}
-                  initialSaved={savedPostIds.has(post.plazaPostId)}
-                  onUserHashtagClick={handleUserHashtagClick}
-                />
-              ))
+              <div className="lg:columns-2 lg:gap-3 space-y-3 lg:space-y-0">
+                {posts.map((post) => (
+                  <div key={post.plazaPostId} className="break-inside-avoid mb-3">
+                    <PlazaPostCard
+                      post={post}
+                      likeCount={reactions.countMap[post.plazaPostId] ?? Number(post.likeCount ?? 0)}
+                      isReacting={Boolean(reactions.reactingIds[post.plazaPostId])}
+                      commentHook={commentHook}
+                      recommendations={reactions.recommendationsByPost[post.plazaPostId] ?? []}
+                      onReact={() => { void reactions.react(post); }}
+                      onDismissRecommendation={(item) => { void reactions.dismiss(post.plazaPostId, item); }}
+                      initialSaved={savedPostIds.has(post.plazaPostId)}
+                      onUserHashtagClick={handleUserHashtagClick}
+                    />
+                  </div>
+                ))}
+              </div>
             )}
 
             {hasNextPage && (
@@ -355,7 +384,7 @@ export const FeedPage = () => {
                 type="button"
                 onClick={() => { void fetchNextPage(); }}
                 disabled={isFetchingNextPage}
-                className="w-full py-2.5 text-sm rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 transition-colors"
+                className="w-full mt-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 transition-colors"
               >
                 {isFetchingNextPage ? '불러오는 중...' : '게시물 더보기'}
               </button>
