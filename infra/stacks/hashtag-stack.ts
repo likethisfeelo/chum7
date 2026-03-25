@@ -58,6 +58,14 @@ export class HashtagStack extends Stack {
     hashtagFollowsTable.grantReadWriteData(hashtagFn);
     plazaPostsTable.grantReadData(hashtagFn);
 
+    // GET /hashtags — 최신 태그 목록
+    apiGateway.addRoutes({
+      path: '/hashtags',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('HashtagListIntegration', hashtagFn),
+      authorizer,
+    });
+
     // GET /hashtags/{tag} — 태그 메타
     apiGateway.addRoutes({
       path: '/hashtags/{tag}',

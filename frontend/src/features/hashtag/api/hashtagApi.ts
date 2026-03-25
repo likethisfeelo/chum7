@@ -20,7 +20,19 @@ export interface HashtagFollowStatus {
   followId: string | null;
 }
 
+export interface HashtagSummary {
+  hashtag: string;
+  registeredAt: string;
+  postCount: number;
+  creatorAnimalIcon: string | null;
+}
+
 export const hashtagApi = {
+  async getLatest(limit = 7): Promise<HashtagSummary[]> {
+    const r = await apiClient.get(`/hashtags?limit=${limit}`);
+    return r.data.data?.hashtags ?? [];
+  },
+
   async getMeta(tag: string): Promise<HashtagMeta> {
     const r = await apiClient.get(`/hashtags/${encodeURIComponent(tag)}`);
     return r.data.data;

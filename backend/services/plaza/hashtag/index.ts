@@ -7,6 +7,7 @@ import {
   DeleteCommand,
   QueryCommand,
   UpdateCommand,
+  ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
 
@@ -44,9 +45,31 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   const rawPath = (event.requestContext as any)?.http?.path ?? event.path ?? '';
 
   const tag = event.pathParameters?.tag;
-  if (!tag) return res(400, { error: 'TAG_REQUIRED' });
 
   try {
+    // ── GET /hashtags (list — no tag param) ───────────────────────────
+    if (!tag && method === 'GET') {
+      const limit = Math.max(1, Math.min(20, Number(event.queryStringParameters?.limit ?? '7')));
+
+      const result = await ddb.send(new ScanCommand({
+        TableName: process.env.HASHTAGS_TABLE!,
+        ProjectionExpression: 'hashtag, registeredAt, postCount, creatorAnimalIcon, creatorPublic',
+      }));
+
+      const items = (result.Items ?? [])
+        .sort((a: any, b: any) => (b.registeredAt ?? '').localeCompare(a.registeredAt ?? ''))
+        .slice(0, limit)
+        .map((item: any) => ({
+          hashtag: item.hashtag,
+          registeredAt: item.registeredAt,
+          postCount: item.postCount ?? 0,
+          creatorAnimalIcon: item.creatorPublic !== false ? item.creatorAnimalIcon : null,
+        }));
+
+      return res(200, { success: true, data: { hashtags: items } });
+    }
+
+    if (!tag) return res(400, { error: 'TAG_REQUIRED' });
     // ── GET /hashtags/:tag/follow/status ──────────────────────────────
     if (method === 'GET' && rawPath.endsWith('/follow/status')) {
       if (!userId) return res(401, { error: 'UNAUTHORIZED' });
