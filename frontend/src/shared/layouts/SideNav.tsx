@@ -15,7 +15,7 @@ export const SideNav = () => {
   return (
     <nav className="hidden lg:flex fixed left-0 top-0 h-screen w-60 bg-white border-r border-gray-100 flex-col py-6 z-20">
       <div className="px-6 mb-8">
-        <span className="text-2xl font-extrabold" style={{ color: 'var(--color-primary, #FF9B71)' }}>
+        <span className="text-2xl font-extrabold" style={{ color: 'var(--color-primary, #C07A74)' }}>
           CHME
         </span>
         <p className="text-xs text-gray-400 mt-0.5">Challenge Earth with ME</p>
