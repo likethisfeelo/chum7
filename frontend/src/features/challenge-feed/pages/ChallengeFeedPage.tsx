@@ -435,7 +435,7 @@ export const ChallengeFeedPage = () => {
       <div className="mx-auto min-h-screen w-full max-w-3xl lg:max-w-6xl bg-gray-50 pb-20 md:border-x md:border-gray-200 lg:border-x-0">
 
         {/* 헤더 */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4 z-10">
+        <div className="sticky top-0 glass-header px-6 py-4 flex items-center gap-4 z-10">
           <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
             <FiArrowLeft className="w-5 h-5" />
           </button>

@@ -172,7 +172,7 @@ export const FeedPage = () => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   const [isAnonymousMode, setIsAnonymousMode] = useState(false);
-  const [subscribedTags, setSubscribedTags] = useState<string[]>(() => {
+  const [subscribedTags] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem(SUBSCRIBED_HASHTAGS_KEY) || '[]') as string[]; }
     catch { return []; }
   });
@@ -223,14 +223,6 @@ export const FeedPage = () => {
   const handleUserHashtagClick = (hashtag: string) => {
     setSelectedCategory(null);
     setSelectedHashtag((prev) => (prev === hashtag ? null : hashtag));
-  };
-
-  const toggleSubscribe = (slug: string) => {
-    setSubscribedTags((prev) => {
-      const next = prev.includes(slug) ? prev.filter((t) => t !== slug) : [...prev, slug];
-      localStorage.setItem(SUBSCRIBED_HASHTAGS_KEY, JSON.stringify(next));
-      return next;
-    });
   };
 
   const initialCommentCounts = useMemo(

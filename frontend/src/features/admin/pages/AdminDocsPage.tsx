@@ -242,8 +242,8 @@ export const AdminDocsPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4">
+    <div className="min-h-screen pb-24">
+      <div className="sticky top-0 z-10 glass-header px-6 py-4">
         <h1 className="text-2xl font-bold text-gray-900">Admin Docs Hub · Cheer PHASE1</h1>
         <p className="text-sm text-gray-500 mt-1">
           라이브 테스트 운영자가 바로 실행 가능한 명령/체크리스트를 한곳에서 조회합니다.

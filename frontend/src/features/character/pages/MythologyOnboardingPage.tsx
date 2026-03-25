@@ -58,7 +58,7 @@ export function MythologyOnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen flex flex-col">
       {/* 헤더 */}
       <div className="px-5 pt-14 pb-6 text-center">
         <div className="text-4xl mb-3">✨</div>

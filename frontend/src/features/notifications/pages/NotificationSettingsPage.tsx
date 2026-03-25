@@ -110,9 +110,9 @@ export function NotificationSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* 헤더 */}
-      <div className="sticky top-0 z-10 flex items-center gap-3 bg-white px-4 py-3 shadow-sm">
+      <div className="sticky top-0 z-10 glass-header flex items-center gap-3 px-4 py-3">
         <button onClick={() => navigate(-1)} className="text-gray-600 hover:text-gray-900">
           ←
         </button>

@@ -96,7 +96,7 @@ export const RemedyPage = () => {
 
   if (!currentChallenge) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 text-center text-gray-600">
+      <div className="min-h-screen p-6 text-center text-gray-600">
         <p>유효한 챌린지 참여 정보를 찾을 수 없습니다.</p>
         <button onClick={() => navigate('/me')} className="mt-4 px-4 py-2 rounded-xl bg-primary-600 text-white">ME로 이동</button>
       </div>
@@ -104,8 +104,8 @@ export const RemedyPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4 z-10">
+    <div className="min-h-screen">
+      <div className="sticky top-0 glass-header px-6 py-4 flex items-center gap-4 z-10">
         <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <FiArrowLeft className="w-5 h-5" />
         </button>

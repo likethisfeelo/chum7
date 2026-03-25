@@ -4,7 +4,7 @@ export const AdminAccessDeniedPage = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+    <div className="min-h-screen flex items-center justify-center p-6">
       <div className="max-w-md w-full rounded-2xl border border-rose-200 bg-white p-6 text-center shadow-sm">
         <p className="text-4xl">🚫</p>
         <h1 className="mt-3 text-xl font-bold text-gray-900">운영 권한이 필요합니다</h1>
