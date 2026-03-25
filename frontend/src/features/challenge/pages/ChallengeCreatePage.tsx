@@ -502,9 +502,9 @@ export function ChallengeCreatePage() {
   const TOTAL_STEPS = 4;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* 헤더 */}
-      <div className="bg-white border-b border-gray-100 px-4 py-4 flex items-center gap-3">
+      <div className="glass-header px-4 py-4 flex items-center gap-3">
         <button onClick={() => (step > 1 ? setStep((s) => s - 1) : navigate(-1))} className="text-gray-500 text-xl">
           ←
         </button>

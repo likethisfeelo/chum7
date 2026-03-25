@@ -816,7 +816,7 @@ export function PersonalFeedPage() {
   const displayIcon = profile?.animalIcon ?? (isOwn ? (user?.animalIcon ?? '🐰') : '🐰');
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* 헤더 */}
       <div className="bg-gradient-to-br from-primary-500 to-primary-700 pt-12 pb-6 px-6">
         <div className="flex items-center justify-between mb-4">
@@ -879,7 +879,7 @@ export function PersonalFeedPage() {
       </div>
 
       {/* 탭 */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
+      <div className="glass-header sticky top-0 z-10">
         <div className="flex">
           {TAB_CONFIG.map((tab) => (
             <button

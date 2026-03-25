@@ -33,7 +33,7 @@ export function InviteLandingPage() {
 
   if (errorMsg) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-6 text-center">
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
         <p className="text-4xl mb-4">🔗</p>
         <p className="text-base font-semibold text-gray-800 mb-2">링크를 사용할 수 없어요</p>
         <p className="text-sm text-gray-500 mb-6">{errorMsg}</p>
@@ -48,7 +48,7 @@ export function InviteLandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
+    <div className="min-h-screen flex flex-col items-center justify-center">
       <p className="text-3xl mb-4 animate-pulse">🔗</p>
       <p className="text-sm text-gray-500">초대 링크 확인 중...</p>
     </div>

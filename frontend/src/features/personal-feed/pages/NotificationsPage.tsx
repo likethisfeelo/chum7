@@ -61,9 +61,9 @@ export function NotificationsPage() {
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* 헤더 */}
-      <div className="bg-white sticky top-0 z-10 border-b border-gray-100">
+      <div className="glass-header sticky top-0 z-10">
         <div className="flex items-center gap-3 px-4 py-4">
           <button
             onClick={() => navigate(-1)}

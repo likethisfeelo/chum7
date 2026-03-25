@@ -368,9 +368,9 @@ export function FeedSettingsPage() {
   const tab02Public = profile?.feedSettings.tab02Public ?? false;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* 헤더 */}
-      <div className="bg-white border-b border-gray-100 px-4 pt-12 pb-4 flex items-center gap-3">
+      <div className="glass-header px-4 pt-12 pb-4 flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
           className="text-gray-500 hover:text-gray-800 text-xl"

@@ -534,7 +534,7 @@ export const MEPage = () => {
 
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* 헤더 */}
       <div className="bg-gradient-to-br from-primary-500 to-primary-700 pt-12 pb-8 px-6">
         <div className="flex items-center justify-between mb-2">
