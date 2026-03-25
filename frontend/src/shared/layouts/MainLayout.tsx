@@ -8,7 +8,7 @@ interface MainLayoutProps {
 
 export const MainLayout = ({ children }: MainLayoutProps) => {
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--color-bg-app)' }}>
+    <div className="min-h-screen">
       <SideNav />
       {/* lg에서 SideNav 너비(w-60 = 240px)만큼 오프셋 */}
       <div className="lg:ml-60">

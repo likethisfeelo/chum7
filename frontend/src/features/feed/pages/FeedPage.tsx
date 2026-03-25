@@ -39,16 +39,7 @@ function RecruitingChallengeBanner({
   if (!ch) return null;
 
   return (
-    <section
-      className="rounded-2xl overflow-hidden"
-      style={{
-        background: 'rgba(255,255,255,0.72)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        border: '1px solid rgba(255,255,255,0.55)',
-        boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
-      }}
-    >
+    <section className="rounded-2xl overflow-hidden glass-panel">
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-bold text-gray-900">🌟 모집 중인 챌린지</h3>
@@ -112,16 +103,7 @@ function HashtagPanel({
     : latestTags;
 
   return (
-    <section
-      className="rounded-2xl p-4"
-      style={{
-        background: 'rgba(255,255,255,0.72)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        border: '1px solid rgba(255,255,255,0.55)',
-        boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
-      }}
-    >
+    <section className="rounded-2xl p-4 glass-panel">
       <h3 className="text-sm font-bold text-gray-900 mb-3"># 해쉬태그</h3>
 
       {/* 검색 */}

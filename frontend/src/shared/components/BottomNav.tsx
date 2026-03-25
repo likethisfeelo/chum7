@@ -17,11 +17,11 @@ export const BottomNav = () => {
     <nav
       className="fixed bottom-0 left-0 right-0 safe-area-bottom z-30 lg:hidden"
       style={{
-        background: 'rgba(255, 255, 255, 0.80)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderTop: '1px solid rgba(255, 255, 255, 0.60)',
-        boxShadow: '0 -4px 24px rgba(0, 0, 0, 0.06)',
+        background: 'rgba(255, 255, 255, 0.62)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        borderTop: '1px solid rgba(255, 255, 255, 0.52)',
+        boxShadow: '0 -4px 28px rgba(0, 0, 0, 0.07)',
       }}
     >
       <div className="flex items-end justify-around px-2 pt-2 pb-1">
