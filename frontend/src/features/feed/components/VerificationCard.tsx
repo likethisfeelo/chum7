@@ -89,6 +89,7 @@ interface Props {
   onDismissRecommendation: (item: Recommendation) => void;
   bookmarkButton?: React.ReactNode;
   onHashtagClick?: (slug: string) => void;
+  onUserHashtagClick?: (hashtag: string) => void;
 }
 
 export function VerificationCard({
@@ -102,6 +103,7 @@ export function VerificationCard({
   onDismissRecommendation,
   bookmarkButton,
   onHashtagClick,
+  onUserHashtagClick,
 }: Props) {
   const state = commentHook.getState(post.plazaPostId);
   const isBadge = post.postType === 'badge_review';
@@ -159,6 +161,15 @@ export function VerificationCard({
           💬 {state.count}
         </button>
         {bookmarkButton}
+        {post.hashtag && (
+          <button
+            type="button"
+            onClick={() => onUserHashtagClick?.(post.hashtag!)}
+            className="px-2 py-1 text-xs rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors font-medium"
+          >
+            #{post.hashtag}
+          </button>
+        )}
         {post.challengeId && (
           <Link
             to={`/challenges/${post.challengeId}`}

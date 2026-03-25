@@ -10,7 +10,7 @@ function mapFilterToApi(filter: PlazaFilter): 'all' | 'recruiting' | 'in_progres
   return 'all';
 }
 
-export function usePlazaFeed(filter: PlazaFilter, category?: string) {
+export function usePlazaFeed(filter: PlazaFilter, category?: string, hashtag?: string) {
   const {
     data,
     isLoading,
@@ -19,11 +19,12 @@ export function usePlazaFeed(filter: PlazaFilter, category?: string) {
     fetchNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ['plaza-feed', filter, category ?? ''],
+    queryKey: ['plaza-feed', filter, category ?? '', hashtag ?? ''],
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }) => fetchPlazaFeed({
       filter: mapFilterToApi(filter),
       category: category || undefined,
+      hashtag: hashtag || undefined,
       cursor: pageParam,
       limit: 20,
     }),

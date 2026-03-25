@@ -194,6 +194,7 @@ function HashtagPanel({
 export const FeedPage = () => {
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   const [isAnonymousMode, setIsAnonymousMode] = useState(false);
   const [subscribedTags, setSubscribedTags] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem(SUBSCRIBED_HASHTAGS_KEY) || '[]') as string[]; }
@@ -228,10 +229,17 @@ export const FeedPage = () => {
   const { posts, isLoading, isError, hasNextPage, fetchNextPage, isFetchingNextPage } = usePlazaFeed(
     'all',
     selectedCategory ?? undefined,
+    selectedHashtag ?? undefined,
   );
 
   const handleCategorySelect = (slug: string) => {
+    setSelectedHashtag(null);
     setSelectedCategory((prev) => (prev === slug ? null : slug));
+  };
+
+  const handleUserHashtagClick = (hashtag: string) => {
+    setSelectedCategory(null);
+    setSelectedHashtag((prev) => (prev === hashtag ? null : hashtag));
   };
 
   const toggleSubscribe = (slug: string) => {
@@ -282,9 +290,9 @@ export const FeedPage = () => {
         <div className="px-4 pb-3 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
           <button
             type="button"
-            onClick={() => setSelectedCategory(null)}
+            onClick={() => { setSelectedCategory(null); setSelectedHashtag(null); }}
             className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              !selectedCategory ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              !selectedCategory && !selectedHashtag ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
             전체
@@ -321,15 +329,22 @@ export const FeedPage = () => {
           </div>
 
           {/* 활성 해쉬태그 필터 표시 */}
-          {activeCat && (
+          {(activeCat || selectedHashtag) && (
             <div className="flex items-center gap-2 px-1">
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${SLUG_TO_COLOR[activeCat.slug] || 'bg-gray-100 text-gray-600'}`}>
-                {activeCat.emoji} #{SLUG_TO_LABEL[activeCat.slug] || activeCat.label}
-              </span>
+              {activeCat && (
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${SLUG_TO_COLOR[activeCat.slug] || 'bg-gray-100 text-gray-600'}`}>
+                  {activeCat.emoji} #{SLUG_TO_LABEL[activeCat.slug] || activeCat.label}
+                </span>
+              )}
+              {selectedHashtag && (
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600">
+                  #{selectedHashtag}
+                </span>
+              )}
               <span className="text-xs text-gray-400">해쉬태그 필터 중</span>
               <button
                 type="button"
-                onClick={() => setSelectedCategory(null)}
+                onClick={() => { setSelectedCategory(null); setSelectedHashtag(null); }}
                 className="ml-auto text-xs text-gray-400 hover:text-gray-700 flex items-center gap-0.5"
               >
                 ✕ 해제
@@ -362,6 +377,7 @@ export const FeedPage = () => {
                   onDismissRecommendation={(item) => { void reactions.dismiss(post.plazaPostId, item); }}
                   initialSaved={savedPostIds.has(post.plazaPostId)}
                   onHashtagClick={handleCategorySelect}
+                  onUserHashtagClick={handleUserHashtagClick}
                 />
               ))
             )}

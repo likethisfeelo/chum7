@@ -44,6 +44,11 @@ const submitSchema = z.object({
     .optional(),
   todayNote: z.string().max(500).optional(),
   tomorrowPromise: z.string().max(500).optional(),
+  hashtag: z
+    .string()
+    .max(30)
+    .regex(/^[가-힣a-zA-Z0-9_-]*$/, "HASHTAG_INVALID_CHARS")
+    .optional(),
   verificationDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -647,6 +652,7 @@ export const handler = async (
         ? dayProgress?.verificationId || null
         : null,
       isPersonalOnly: isExtra ? true : false,
+      ...(input.hashtag ? { hashtag: input.hashtag.replace(/^#+/, "").trim() } : {}),
       createdAt: nowIso,
     };
 
