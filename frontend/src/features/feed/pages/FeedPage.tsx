@@ -13,6 +13,8 @@ import { usePlazaComments } from '@/features/feed/hooks/usePlazaComments';
 import { usePlazaReactions } from '@/features/feed/hooks/usePlazaReactions';
 import { personalFeedApi } from '@/features/personal-feed/api/personalFeedApi';
 import { apiClient } from '@/lib/api-client';
+import { hashtagApi } from '@/features/hashtag/api/hashtagApi';
+import type { HashtagSummary } from '@/features/hashtag/api/hashtagApi';
 
 const ANONYMITY_STORAGE_KEY = 'outer-space-anonymous-mode';
 const SUBSCRIBED_HASHTAGS_KEY = 'plaza-subscribed-hashtags';
@@ -92,11 +94,15 @@ function HashtagPanel({
   onSelect,
   subscribedTags,
   onToggleSubscribe,
+  latestTags,
+  onUserTagClick,
 }: {
   selectedCategory: string | null;
   onSelect: (slug: string) => void;
   subscribedTags: string[];
   onToggleSubscribe: (slug: string) => void;
+  latestTags: HashtagSummary[];
+  onUserTagClick: (tag: string) => void;
 }) {
   const [search, setSearch] = useState('');
 
@@ -186,6 +192,31 @@ function HashtagPanel({
           </div>
         </div>
       )}
+
+      {/* 최신 유저 해쉬태그 */}
+      {latestTags.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <p className="text-[11px] text-gray-500 font-medium mb-1.5">최근 등록된 태그</p>
+          <div className="space-y-0.5">
+            {latestTags.map((item) => (
+              <button
+                key={item.hashtag}
+                type="button"
+                onClick={() => onUserTagClick(item.hashtag)}
+                className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-left text-indigo-600 hover:bg-indigo-50 transition-colors"
+              >
+                {item.creatorAnimalIcon && (
+                  <span className="text-sm leading-none">{item.creatorAnimalIcon}</span>
+                )}
+                <span className="font-medium">#{item.hashtag}</span>
+                {item.postCount > 0 && (
+                  <span className="ml-auto text-[10px] text-gray-400">{item.postCount}개</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -199,6 +230,13 @@ export const FeedPage = () => {
   const [subscribedTags, setSubscribedTags] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem(SUBSCRIBED_HASHTAGS_KEY) || '[]') as string[]; }
     catch { return []; }
+  });
+
+  // 최신 유저 해쉬태그 (사이드바 표시용)
+  const { data: latestTags = [] } = useQuery({
+    queryKey: ['hashtag-latest'],
+    queryFn: () => hashtagApi.getLatest(7),
+    staleTime: 2 * 60 * 1000,
   });
 
   // 모집 중인 챌린지
@@ -238,8 +276,7 @@ export const FeedPage = () => {
   };
 
   const handleUserHashtagClick = (hashtag: string) => {
-    setSelectedCategory(null);
-    setSelectedHashtag((prev) => (prev === hashtag ? null : hashtag));
+    navigate(`/hashtag/${encodeURIComponent(hashtag)}`);
   };
 
   const toggleSubscribe = (slug: string) => {
@@ -404,6 +441,8 @@ export const FeedPage = () => {
             onSelect={handleCategorySelect}
             subscribedTags={subscribedTags}
             onToggleSubscribe={toggleSubscribe}
+            latestTags={latestTags}
+            onUserTagClick={handleUserHashtagClick}
           />
 
           {/* 모집 중인 챌린지 배너 */}
