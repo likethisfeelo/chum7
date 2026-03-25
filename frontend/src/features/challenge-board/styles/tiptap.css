@@ -1,0 +1,144 @@
+/* TipTap 에디터 ProseMirror 스타일 */
+
+/* 편집 모드 */
+.tiptap-editor .ProseMirror {
+  min-height: 280px;
+  padding: 0.875rem 1rem;
+  outline: none;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 0.75rem;
+  transition: border-color 0.15s;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: #1f2937;
+}
+
+.tiptap-editor .ProseMirror:focus {
+  border-color: var(--color-primary-400, #f6a87c);
+  box-shadow: 0 0 0 3px rgba(246, 168, 124, 0.12);
+}
+
+/* placeholder */
+.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: #9ca3af;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* 뷰어 모드 */
+.tiptap-viewer .ProseMirror {
+  outline: none;
+}
+
+/* 공통 콘텐츠 스타일 (에디터 + 뷰어) */
+.tiptap-editor .ProseMirror h1,
+.tiptap-viewer .ProseMirror h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: #111827;
+  line-height: 1.3;
+}
+
+.tiptap-editor .ProseMirror h2,
+.tiptap-viewer .ProseMirror h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-top: 0.875rem;
+  margin-bottom: 0.4rem;
+  color: #1f2937;
+  line-height: 1.35;
+}
+
+.tiptap-editor .ProseMirror h3,
+.tiptap-viewer .ProseMirror h3 {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.35rem;
+  color: #374151;
+  line-height: 1.4;
+}
+
+.tiptap-editor .ProseMirror p,
+.tiptap-viewer .ProseMirror p {
+  margin-bottom: 0.6rem;
+  color: #374151;
+  line-height: 1.7;
+}
+
+.tiptap-editor .ProseMirror p:last-child,
+.tiptap-viewer .ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+
+.tiptap-editor .ProseMirror strong,
+.tiptap-viewer .ProseMirror strong {
+  font-weight: 700;
+}
+
+.tiptap-editor .ProseMirror em,
+.tiptap-viewer .ProseMirror em {
+  font-style: italic;
+}
+
+.tiptap-editor .ProseMirror u,
+.tiptap-viewer .ProseMirror u {
+  text-decoration: underline;
+}
+
+.tiptap-editor .ProseMirror ul,
+.tiptap-viewer .ProseMirror ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.tiptap-editor .ProseMirror ol,
+.tiptap-viewer .ProseMirror ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.tiptap-editor .ProseMirror li,
+.tiptap-viewer .ProseMirror li {
+  margin-bottom: 0.2rem;
+}
+
+.tiptap-editor .ProseMirror img,
+.tiptap-viewer .ProseMirror img {
+  border-radius: 0.75rem;
+  max-width: 100%;
+  margin: 0.5rem 0;
+  display: block;
+}
+
+.tiptap-editor .ProseMirror a,
+.tiptap-viewer .ProseMirror a {
+  color: #2563eb;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tiptap-editor .ProseMirror a:hover,
+.tiptap-viewer .ProseMirror a:hover {
+  color: #1d4ed8;
+}
+
+.tiptap-editor .ProseMirror blockquote,
+.tiptap-viewer .ProseMirror blockquote {
+  border-left: 3px solid #e5e7eb;
+  padding-left: 1rem;
+  color: #6b7280;
+  margin: 0.5rem 0;
+}
+
+/* 텍스트 정렬 */
+.tiptap-editor .ProseMirror .is-empty,
+.tiptap-viewer .ProseMirror .is-empty {
+  color: #9ca3af;
+}

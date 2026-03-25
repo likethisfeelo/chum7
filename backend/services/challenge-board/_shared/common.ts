@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { QueryCommand, GetCommand, DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { createHash } from 'crypto';
 
-export type BlockType = 'text' | 'image' | 'link' | 'quote';
+export type BlockType = 'text' | 'image' | 'link' | 'quote' | 'rich-text';
 
 export function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
@@ -124,11 +124,17 @@ export function validateBlocks(blocks: any[], allowQuote: boolean): { valid: boo
   for (const block of blocks) {
     if (!block || typeof block !== 'object') return { valid: false, message: 'each block must be an object' };
     if (typeof block.id !== 'string' || !block.id.trim()) return { valid: false, message: 'block.id is required' };
-    if (!['text', 'image', 'link', 'quote'].includes(block.type)) {
+    if (!['text', 'image', 'link', 'quote', 'rich-text'].includes(block.type)) {
       return { valid: false, message: 'invalid block type' };
     }
     if (!allowQuote && block.type === 'quote') {
       return { valid: false, message: 'quote block is not supported in this document' };
+    }
+
+    if (block.type === 'rich-text') {
+      if (!block.content || typeof block.content !== 'object') {
+        return { valid: false, message: 'rich-text.content must be a TipTap JSON object' };
+      }
     }
 
     if (block.type === 'text' || block.type === 'quote') {
