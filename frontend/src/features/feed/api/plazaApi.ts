@@ -55,6 +55,7 @@ export interface PlazaFeedResponse {
 
 export async function fetchPlazaFeed(params: {
   filter: 'all' | 'recruiting' | 'in_progress' | 'completed';
+  category?: string;
   cursor?: string | null;
   limit?: number;
 }): Promise<PlazaFeedResponse> {
@@ -62,6 +63,7 @@ export async function fetchPlazaFeed(params: {
   query.set('filter', params.filter);
   query.set('limit', String(params.limit ?? 20));
   if (params.cursor) query.set('cursor', params.cursor);
+  if (params.category) query.set('category', params.category);
 
   const response = await apiClient.get(`/plaza/feed?${query.toString()}`);
   return response.data?.data || { posts: [], hasMore: false, nextCursor: null };
