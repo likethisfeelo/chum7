@@ -276,7 +276,8 @@ export const FeedPage = () => {
   };
 
   const handleUserHashtagClick = (hashtag: string) => {
-    navigate(`/hashtag/${encodeURIComponent(hashtag)}`);
+    setSelectedCategory(null);
+    setSelectedHashtag((prev) => (prev === hashtag ? null : hashtag));
   };
 
   const toggleSubscribe = (slug: string) => {
@@ -374,9 +375,13 @@ export const FeedPage = () => {
                 </span>
               )}
               {selectedHashtag && (
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600">
-                  #{selectedHashtag}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/hashtag/${encodeURIComponent(selectedHashtag)}`)}
+                  className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                >
+                  #{selectedHashtag} →
+                </button>
               )}
               <span className="text-xs text-gray-400">해쉬태그 필터 중</span>
               <button
