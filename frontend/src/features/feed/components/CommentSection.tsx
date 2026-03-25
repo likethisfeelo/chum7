@@ -1,5 +1,12 @@
 import type { usePlazaComments } from '@/features/feed/hooks/usePlazaComments';
 
+const ANONYMITY_KEY = 'outer-space-anonymous-mode';
+
+function anonNumber(icon: string): number {
+  const sum = [...icon].reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return (sum % 90) + 10; // 10–99
+}
+
 type CommentHook = ReturnType<typeof usePlazaComments>;
 
 interface Props {
@@ -9,6 +16,7 @@ interface Props {
 
 export function CommentSection({ postId, hook }: Props) {
   const state = hook.getState(postId);
+  const isAnonymous = localStorage.getItem(ANONYMITY_KEY) === 'true';
 
   if (state.isLoading) {
     return (
@@ -35,7 +43,9 @@ export function CommentSection({ postId, hook }: Props) {
         ) : (
           state.comments.map((comment) => (
             <div key={comment.commentId} className="text-xs text-gray-700 flex items-start gap-1">
-              <span className="font-medium shrink-0">{comment.animalIcon} 익명</span>
+              <span className="font-medium shrink-0">
+                {isAnonymous ? `${comment.animalIcon} 익명` : `아무개${anonNumber(comment.animalIcon)}`}
+              </span>
               <span className="flex-1 break-all">{comment.content}</span>
               {comment.isMine && (
                 <span className="shrink-0 text-primary-700 font-medium">나</span>
