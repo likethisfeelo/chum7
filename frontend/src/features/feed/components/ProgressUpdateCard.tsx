@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
+import { SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
 import { CommentSection } from './CommentSection';
 import { RecommendationInline } from './RecommendationInline';
 import type { PlazaPost } from '@/features/feed/api/plazaApi';
@@ -67,6 +68,8 @@ interface Props {
   recommendations: Recommendation[];
   onReact: () => void;
   onDismissRecommendation: (item: Recommendation) => void;
+  bookmarkButton?: React.ReactNode;
+  onHashtagClick?: (slug: string) => void;
 }
 
 export function ProgressUpdateCard({
@@ -78,8 +81,13 @@ export function ProgressUpdateCard({
   recommendations,
   onReact,
   onDismissRecommendation,
+  bookmarkButton,
+  onHashtagClick,
 }: Props) {
   const state = commentHook.getState(post.plazaPostId);
+  const hashtagLabel = post.challengeCategory
+    ? SLUG_TO_LABEL[post.challengeCategory] || post.challengeCategory
+    : null;
 
   return (
     <article className="border border-blue-200 rounded-2xl p-4 bg-white">
@@ -95,8 +103,14 @@ export function ProgressUpdateCard({
             )}
           </h3>
         </div>
-        {post.challengeCategory && (
-          <span className="text-[11px] text-gray-500 shrink-0">#{post.challengeCategory}</span>
+        {hashtagLabel && (
+          <button
+            type="button"
+            onClick={() => onHashtagClick?.(post.challengeCategory!)}
+            className="text-[11px] text-indigo-500 hover:text-indigo-700 hover:underline shrink-0 font-medium transition-colors"
+          >
+            #{hashtagLabel}
+          </button>
         )}
       </div>
 
@@ -131,25 +145,29 @@ export function ProgressUpdateCard({
           : <img src={resolveMediaUrl(post.imageUrl)} alt="진행 이미지" className="w-full h-44 object-cover rounded-xl mt-3" />
       )}
 
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
         <button
           type="button"
           onClick={onReact}
           disabled={isReacting}
-          className="px-2.5 py-1 text-xs rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 disabled:opacity-50"
+          className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 disabled:opacity-50 hover:bg-emerald-100 transition-colors"
         >
           {isReacting ? '...' : `❤️ ${likeCount}`}
         </button>
         <button
           type="button"
           onClick={() => { void commentHook.toggle(post.plazaPostId); }}
-          className="px-2.5 py-1 text-xs rounded-lg border border-gray-200 bg-white text-gray-700"
+          className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
         >
-          💬 댓글 {state.count}
+          💬 {state.count}
         </button>
+        {bookmarkButton}
         {post.challengeId && (
-          <Link to={`/challenges/${post.challengeId}`} className="text-xs text-primary-700 underline">
-            챌린지 보기
+          <Link
+            to={`/challenges/${post.challengeId}`}
+            className="ml-auto text-xs text-primary-700 hover:text-primary-900 font-medium"
+          >
+            챌린지 보기 →
           </Link>
         )}
       </div>
