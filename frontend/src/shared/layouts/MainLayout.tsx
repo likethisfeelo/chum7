@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { BottomNav } from '@/shared/components/BottomNav';
+import { SideNav } from '@/shared/layouts/SideNav';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -7,11 +8,17 @@ interface MainLayoutProps {
 
 export const MainLayout = ({ children }: MainLayoutProps) => {
   return (
-    <div className="min-h-screen max-w-md mx-auto relative" style={{ backgroundColor: 'var(--color-bg-app)' }}>
-      <main className="pb-20">
-        {children}
-      </main>
-      <BottomNav />
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--color-bg-app)' }}>
+      <SideNav />
+      {/* lg에서 SideNav 너비(w-60 = 240px)만큼 오프셋 */}
+      <div className="lg:ml-60">
+        <div className="max-w-md md:max-w-2xl lg:max-w-4xl mx-auto relative">
+          <main className="pb-20 lg:pb-10">
+            {children}
+          </main>
+          <BottomNav />
+        </div>
+      </div>
     </div>
   );
 };
