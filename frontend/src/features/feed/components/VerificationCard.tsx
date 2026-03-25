@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
@@ -103,6 +104,7 @@ export function VerificationCard({
   onHashtagClick,
   onUserHashtagClick,
 }: Props) {
+  const navigate = useNavigate();
   const state = commentHook.getState(post.plazaPostId);
   const categoryLabel = post.challengeCategory
     ? SLUG_TO_LABEL[post.challengeCategory] || post.challengeCategory
@@ -148,7 +150,13 @@ export function VerificationCard({
         <div className="mt-2">
           <button
             type="button"
-            onClick={() => onUserHashtagClick?.(post.hashtag!)}
+            onClick={() => {
+              if (onUserHashtagClick) {
+                onUserHashtagClick(post.hashtag!);
+              } else {
+                navigate(`/hashtag/${encodeURIComponent(post.hashtag!)}`);
+              }
+            }}
             className="text-xs font-medium text-indigo-500 hover:text-indigo-700 transition-colors"
           >
             #{post.hashtag}

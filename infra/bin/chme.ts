@@ -17,6 +17,7 @@ import { BadgeStack } from '../stacks/badge-stack';
 import { PersonalFeedStack } from '../stacks/personal-feed-stack';
 import { TodayStack } from '../stacks/today-stack';
 import { CharacterStack } from '../stacks/character-stack';
+import { HashtagStack } from '../stacks/hashtag-stack';
 
 import { devConfig } from '../config/dev';
 import { prodConfig } from '../config/prod';
@@ -88,6 +89,7 @@ new VerificationStack(app, `chme-${stage}-verification`, {
   plazaCommentsTable: coreStack.plazaCommentsTable,
   plazaReactionsTable: coreStack.plazaReactionsTable,
   plazaRecommendationsTable: coreStack.plazaRecommendationsTable,
+  hashtagsTable: coreStack.hashtagsTable,
   snsTopic: coreStack.snsTopic,
   plazaConvertFailureAlertEmail,
 });
@@ -214,6 +216,16 @@ new FrontendStack(app, `chme-${stage}-frontend`, {
   env,
   stage,
   config,
+});
+
+new HashtagStack(app, `chme-${stage}-hashtag`, {
+  env,
+  stage,
+  apiGateway: apiStack.apiGateway,
+  authorizer: apiStack.cognitoAuthorizer,
+  hashtagsTable: coreStack.hashtagsTable,
+  hashtagFollowsTable: coreStack.hashtagFollowsTable,
+  plazaPostsTable: coreStack.plazaPostsTable,
 });
 
 app.synth();

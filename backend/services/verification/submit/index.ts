@@ -664,6 +664,40 @@ export const handler = async (
       }),
     );
 
+    // 해쉬태그 레지스트리 — 최초 등록자 기록
+    if (input.hashtag && process.env.HASHTAGS_TABLE) {
+      const cleanHashtag = input.hashtag.replace(/^#+/, "").trim();
+      if (cleanHashtag) {
+        const ANIMALS = ['🐰', '🐻', '🦊', '🐼', '🦁', '🐯', '🐨', '🦦'];
+        const iconSum = [...userId].reduce((acc, c) => acc + c.charCodeAt(0), 0);
+        const creatorAnimalIcon = ANIMALS[iconSum % ANIMALS.length];
+
+        // 이미 존재하면 ConditionalCheckFailedException — 무시
+        await docClient.send(new PutCommand({
+          TableName: process.env.HASHTAGS_TABLE,
+          Item: {
+            hashtag: cleanHashtag,
+            creatorUserId: userId,
+            creatorAnimalIcon,
+            registeredAt: nowIso,
+            creatorPublic: true,
+            postCount: 0,
+          },
+          ConditionExpression: 'attribute_not_exists(hashtag)',
+        })).catch((err: any) => {
+          if (err?.name !== 'ConditionalCheckFailedException') throw err;
+        });
+
+        // postCount 증분
+        await docClient.send(new UpdateCommand({
+          TableName: process.env.HASHTAGS_TABLE,
+          Key: { hashtag: cleanHashtag },
+          UpdateExpression: 'SET postCount = if_not_exists(postCount, :zero) + :inc',
+          ExpressionAttributeValues: { ':inc': 1, ':zero': 0 },
+        }));
+      }
+    }
+
     if (isExtra) {
       return response(200, {
         success: true,

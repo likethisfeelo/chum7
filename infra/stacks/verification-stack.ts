@@ -30,6 +30,7 @@ interface VerificationStackProps extends StackProps {
   plazaCommentsTable: Table;
   plazaReactionsTable: Table;
   plazaRecommendationsTable: Table;
+  hashtagsTable: Table;
   uploadsBucket: IBucket;
   snsTopic: sns.Topic;
   plazaConvertFailureAlertEmail?: string;
@@ -52,6 +53,7 @@ export class VerificationStack extends Stack {
       plazaCommentsTable,
       plazaReactionsTable,
       plazaRecommendationsTable,
+      hashtagsTable,
       uploadsBucket,
       snsTopic,
       plazaConvertFailureAlertEmail,
@@ -68,6 +70,7 @@ export class VerificationStack extends Stack {
       PLAZA_COMMENTS_TABLE: plazaCommentsTable.tableName,
       PLAZA_REACTIONS_TABLE: plazaReactionsTable.tableName,
       PLAZA_RECOMMENDATIONS_TABLE: plazaRecommendationsTable.tableName,
+      HASHTAGS_TABLE: hashtagsTable.tableName,
       UPLOADS_BUCKET: uploadsBucket.bucketName,
       SNS_TOPIC_ARN: snsTopic.topicArn,
     };
@@ -99,6 +102,7 @@ export class VerificationStack extends Stack {
     challengesTable.grantReadData(submitFn);
     cheersTable.grantReadWriteData(submitFn);
     badgesTable.grantReadWriteData(submitFn);
+    hashtagsTable.grantReadWriteData(submitFn);
     snsTopic.grantPublish(submitFn);
     apiGateway.addRoutes({
       path: "/verifications",
