@@ -334,9 +334,9 @@ export const FeedPage = () => {
                 description={selectedCategory ? '다른 해쉬태그를 탐색해보세요' : '곧 마당 게시물이 여기에 표시됩니다.'}
               />
             ) : (
-              <div className="lg:columns-2 lg:gap-3 space-y-3 lg:space-y-0">
+              <div className="space-y-3">
                 {posts.map((post) => (
-                  <div key={post.plazaPostId} className="break-inside-avoid mb-3">
+                  <div key={post.plazaPostId}>
                     <PlazaPostCard
                       post={post}
                       likeCount={reactions.countMap[post.plazaPostId] ?? Number(post.likeCount ?? 0)}
