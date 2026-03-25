@@ -90,36 +90,24 @@ function RecruitingChallengeBanner({
 
 // ── 해쉬태그 사이드바 섹션 ────────────────────────────────────────────
 function HashtagPanel({
-  selectedCategory,
-  onSelect,
-  subscribedTags,
-  onToggleSubscribe,
   latestTags,
   onUserTagClick,
 }: {
-  selectedCategory: string | null;
-  onSelect: (slug: string) => void;
-  subscribedTags: string[];
-  onToggleSubscribe: (slug: string) => void;
   latestTags: HashtagSummary[];
   onUserTagClick: (tag: string) => void;
 }) {
   const [search, setSearch] = useState('');
 
   const filtered = search
-    ? CHALLENGE_CATEGORIES.filter(
-        (c) =>
-          c.label.toLowerCase().includes(search.toLowerCase()) ||
-          c.slug.toLowerCase().includes(search.toLowerCase()),
-      )
-    : CHALLENGE_CATEGORIES;
+    ? latestTags.filter((t) => t.hashtag.toLowerCase().includes(search.toLowerCase()))
+    : latestTags;
 
   return (
     <section className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
       <h3 className="text-sm font-bold text-gray-900 mb-3"># 해쉬태그</h3>
 
       {/* 검색 */}
-      <div className="relative mb-2">
+      <div className="relative mb-3">
         <input
           type="text"
           value={search}
@@ -130,92 +118,31 @@ function HashtagPanel({
         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
       </div>
 
-      {/* 해쉬태그 목록 */}
-      <div className="space-y-0.5 max-h-44 overflow-y-auto">
-        {filtered.map((cat) => {
-          const isSubscribed = subscribedTags.includes(cat.slug);
-          const isActive = selectedCategory === cat.slug;
-          return (
-            <div key={cat.slug} className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => onSelect(cat.slug)}
-                className={`flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs text-left transition-colors ${
-                  isActive ? 'bg-gray-100 font-semibold text-gray-900' : 'text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                <span className="text-sm">{cat.emoji}</span>
-                <span>#{cat.label}</span>
-                {isActive && <span className="ml-auto text-indigo-500 text-[10px]">✓</span>}
-              </button>
-              <button
-                type="button"
-                onClick={() => onToggleSubscribe(cat.slug)}
-                title={isSubscribed ? '구독 취소' : '구독'}
-                className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-xs transition-colors ${
-                  isSubscribed
-                    ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
-                    : 'text-gray-300 hover:text-gray-500 hover:bg-gray-50'
-                }`}
-              >
-                {isSubscribed ? '✓' : '+'}
-              </button>
-            </div>
-          );
-        })}
-        {filtered.length === 0 && (
-          <p className="text-xs text-gray-400 py-2 text-center">검색 결과가 없어요</p>
-        )}
-      </div>
-
-      {/* 구독 중인 태그 */}
-      {subscribedTags.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-[11px] text-gray-500 font-medium mb-1.5">구독 중</p>
-          <div className="flex flex-wrap gap-1">
-            {subscribedTags.map((slug) => {
-              const cat = CHALLENGE_CATEGORIES.find((c) => c.slug === slug);
-              if (!cat) return null;
-              return (
-                <button
-                  key={slug}
-                  type="button"
-                  onClick={() => onSelect(slug)}
-                  className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-opacity hover:opacity-80 ${
-                    SLUG_TO_COLOR[slug] || 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  #{cat.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* 최신 유저 해쉬태그 */}
-      {latestTags.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
+      {filtered.length > 0 ? (
+        <div className="space-y-0.5">
           <p className="text-[11px] text-gray-500 font-medium mb-1.5">최근 등록된 태그</p>
-          <div className="space-y-0.5">
-            {latestTags.map((item) => (
-              <button
-                key={item.hashtag}
-                type="button"
-                onClick={() => onUserTagClick(item.hashtag)}
-                className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-left text-indigo-600 hover:bg-indigo-50 transition-colors"
-              >
-                {item.creatorAnimalIcon && (
-                  <span className="text-sm leading-none">{item.creatorAnimalIcon}</span>
-                )}
-                <span className="font-medium">#{item.hashtag}</span>
-                {item.postCount > 0 && (
-                  <span className="ml-auto text-[10px] text-gray-400">{item.postCount}개</span>
-                )}
-              </button>
-            ))}
-          </div>
+          {filtered.map((item) => (
+            <button
+              key={item.hashtag}
+              type="button"
+              onClick={() => onUserTagClick(item.hashtag)}
+              className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-left text-indigo-600 hover:bg-indigo-50 transition-colors"
+            >
+              {item.creatorAnimalIcon && (
+                <span className="text-sm leading-none">{item.creatorAnimalIcon}</span>
+              )}
+              <span className="font-medium">#{item.hashtag}</span>
+              {item.postCount > 0 && (
+                <span className="ml-auto text-[10px] text-gray-400">{item.postCount}개</span>
+              )}
+            </button>
+          ))}
         </div>
+      ) : (
+        <p className="text-xs text-gray-400 py-2 text-center">
+          {search ? '검색 결과가 없어요' : '등록된 태그가 없어요'}
+        </p>
       )}
     </section>
   );
@@ -441,10 +368,6 @@ export const FeedPage = () => {
 
           {/* 해쉬태그 검색·구독 */}
           <HashtagPanel
-            selectedCategory={selectedCategory}
-            onSelect={handleCategorySelect}
-            subscribedTags={subscribedTags}
-            onToggleSubscribe={toggleSubscribe}
             latestTags={latestTags}
             onUserTagClick={handleUserHashtagClick}
           />
