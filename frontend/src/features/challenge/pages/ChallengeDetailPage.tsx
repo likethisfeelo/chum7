@@ -133,6 +133,20 @@ export const ChallengeDetailPage = () => {
     },
   });
 
+  const advanceLifecycleMutation = useMutation({
+    mutationFn: (action: 'close_recruiting' | 'confirm_start') =>
+      apiClient.patch(`/challenges/${challengeId}/advance-lifecycle`, { action }),
+    onSuccess: (_, action) => {
+      queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['my-created-challenges'] });
+      if (action === 'close_recruiting') toast.success('모집이 마감됐어요');
+      if (action === 'confirm_start') toast.success('챌린지가 시작됐어요 🎉');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || '처리에 실패했습니다');
+    },
+  });
+
   if (isLoading) return <Loading fullScreen />;
   if (!challenge) return <div className="p-6 text-center text-gray-500">챌린지를 찾을 수 없습니다</div>;
 
@@ -174,6 +188,8 @@ export const ChallengeDetailPage = () => {
       {isCreator && (
         <div className="bg-primary-50 border-b border-primary-100 px-4 py-3 flex items-center gap-2 flex-wrap">
           <span className="text-xs text-primary-700 font-semibold">✏️ 내가 만든 챌린지</span>
+
+          {/* draft → recruiting */}
           {lifecycle === 'draft' && (
             <button
               onClick={() => publishMutation.mutate()}
@@ -183,6 +199,38 @@ export const ChallengeDetailPage = () => {
               {publishMutation.isPending ? '공개 중...' : '모집 시작하기'}
             </button>
           )}
+
+          {/* recruiting → preparing (수동 모집 마감) */}
+          {lifecycle === 'recruiting' && (
+            <button
+              onClick={() => {
+                if (window.confirm('모집을 지금 마감할까요? 이후 신규 참여 신청이 불가합니다.')) {
+                  advanceLifecycleMutation.mutate('close_recruiting');
+                }
+              }}
+              disabled={advanceLifecycleMutation.isPending}
+              className="text-xs bg-rose-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-rose-600 disabled:opacity-50 transition-colors"
+            >
+              {advanceLifecycleMutation.isPending ? '처리 중...' : '모집 마감하기'}
+            </button>
+          )}
+
+          {/* preparing → active (챌린지 시작 확인) */}
+          {lifecycle === 'preparing' && (
+            <button
+              onClick={() => {
+                if (window.confirm('챌린지를 지금 시작할까요? 승인된 참여자들이 즉시 활성화됩니다.')) {
+                  advanceLifecycleMutation.mutate('confirm_start');
+                }
+              }}
+              disabled={advanceLifecycleMutation.isPending}
+              className="text-xs bg-emerald-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+            >
+              {advanceLifecycleMutation.isPending ? '처리 중...' : '챌린지 시작하기'}
+            </button>
+          )}
+
+          {/* 참여자 심사 */}
           {['recruiting', 'preparing'].includes(lifecycle) && (stats?.pendingParticipants ?? 0) > 0 && (
             <button
               onClick={() => navigate(`/challenges/${challengeId}/join-requests`)}
@@ -191,6 +239,17 @@ export const ChallengeDetailPage = () => {
               참여자 심사 ({stats?.pendingParticipants}명)
             </button>
           )}
+
+          {/* 수정 버튼 (draft, recruiting 상태만) */}
+          {['draft', 'recruiting'].includes(lifecycle) && (
+            <button
+              onClick={() => navigate(`/challenges/${challengeId}/edit`)}
+              className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
+            >
+              수정하기
+            </button>
+          )}
+
           <button
             onClick={() => navigate(`/challenge-board/${challengeId}`)}
             className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"

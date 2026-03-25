@@ -14,6 +14,7 @@ import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { ChallengesPage } from '@/features/challenge/pages/ChallengesPage';
 import { ChallengeDetailPage } from '@/features/challenge/pages/ChallengeDetailPage';
 import { ChallengeCreatePage } from '@/features/challenge/pages/ChallengeCreatePage';
+import { ChallengeEditPage } from '@/features/challenge/pages/ChallengeEditPage';
 import { ChallengeFeedPage } from '@/features/challenge-feed/pages/ChallengeFeedPage';
 import { ChallengeBoardPage } from '@/features/challenge-board/pages/ChallengeBoardPage';
 import { MEPage } from '@/features/me/pages/MEPage';
@@ -177,6 +178,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ChallengeDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/challenges/:challengeId/edit"
+          element={
+            <ProtectedRoute>
+              <ChallengeEditPage />
             </ProtectedRoute>
           }
         />

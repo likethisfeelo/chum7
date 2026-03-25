@@ -487,7 +487,7 @@ export function ChallengeCreatePage() {
   const publishMutation = useMutation({
     mutationFn: () => challengeApi.publishChallenge(createdId!),
     onSuccess: () => {
-      navigate(`/challenges/${createdId}`);
+      navigate(`/challenges/${createdId}`, { replace: true });
     },
   });
 
@@ -562,7 +562,7 @@ export function ChallengeCreatePage() {
               {publishMutation.isPending ? '공개 중...' : '지금 모집 시작하기'}
             </button>
             <button
-              onClick={() => navigate('/me')}
+              onClick={() => navigate('/me', { replace: true })}
               className="w-full py-3.5 rounded-2xl bg-gray-100 text-gray-700 font-semibold text-sm hover:bg-gray-200 transition-colors"
             >
               나중에 공개하기

@@ -373,6 +373,39 @@ export class ChallengeStack extends Stack {
       authorizer,
     });
 
+    // 챌린지 수동 라이프사이클 전환 (생성자 전용: close_recruiting, confirm_start)
+    const advanceLifecycleFn = new NodejsFunction(this, 'AdvanceLifecycleFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-advance-lifecycle`,
+      entry: path.join(__dirname, '../../backend/services/challenge/advance-lifecycle/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadWriteData(advanceLifecycleFn);
+    userChallengesTable.grantReadWriteData(advanceLifecycleFn);
+    apiGateway.addRoutes({
+      path: '/challenges/{challengeId}/advance-lifecycle',
+      methods: [HttpMethod.PATCH],
+      integration: new HttpLambdaIntegration('AdvanceLifecycleIntegration', advanceLifecycleFn),
+      authorizer,
+    });
+
+    // 챌린지 수정 (생성자 전용: draft, recruiting 상태)
+    const updateChallengeFn = new NodejsFunction(this, 'UpdateChallengeFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-update`,
+      entry: path.join(__dirname, '../../backend/services/challenge/update/index.ts'),
+      handler: 'handler',
+      environment: commonEnv,
+    });
+    challengesTable.grantReadWriteData(updateChallengeFn);
+    apiGateway.addRoutes({
+      path: '/challenges/{challengeId}',
+      methods: [HttpMethod.PATCH],
+      integration: new HttpLambdaIntegration('UpdateChallengeIntegration', updateChallengeFn),
+      authorizer,
+    });
+
     // Public: GET /category-banners
     const categoryBannersListFn = new NodejsFunction(this, 'CategoryBannersListFn', {
       ...commonProps,
