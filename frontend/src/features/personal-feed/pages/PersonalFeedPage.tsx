@@ -137,14 +137,17 @@ function LayerGate({ layer, minLayer, children }: {
 // ─── Tab 01: 인증 게시물 ───────────────────────────────────────────────
 function VerificationCard({ item }: { item: VerificationFeedItem }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div className="rounded-2xl overflow-hidden bg-white shadow-sm">
+      {/* 4:5 비율 이미지 */}
       {item.imageUrl && (
-        <img
-          src={item.imageUrl}
-          alt="인증 이미지"
-          loading="lazy"
-          className="w-full h-48 object-cover"
-        />
+        <div className="aspect-[4/5] overflow-hidden">
+          <img
+            src={item.imageUrl}
+            alt="인증 이미지"
+            loading="lazy"
+            className="w-full h-full object-cover"
+          />
+        </div>
       )}
       <div className="p-4">
         <div className="flex items-center justify-between mb-2">
@@ -168,7 +171,7 @@ function VerificationCard({ item }: { item: VerificationFeedItem }) {
           </div>
         </div>
         {item.todayNote && (
-          <p className="text-sm text-gray-600 line-clamp-3 mt-1">{item.todayNote}</p>
+          <p className="text-sm text-gray-600 leading-relaxed line-clamp-3 mt-1">{item.todayNote}</p>
         )}
         <p className="text-[11px] text-gray-400 mt-2">{formatDate(item.createdAt)}</p>
       </div>
@@ -623,17 +626,30 @@ function PersonalPostCard({ post, isOwn }: { post: PersonalPost; isOwn: boolean 
         )
       )}
       {post.imageUrls.length > 0 && (
-        <div className="grid grid-cols-2 gap-1.5 mt-3">
-          {post.imageUrls.filter(Boolean).map((url, i) => (
+        post.imageUrls.filter(Boolean).length === 1 ? (
+          /* 단일 이미지 — 4:5 비율, 엣지-투-엣지 (패딩 바깥으로 빠져나가기) */
+          <div className="-mx-4 mt-3 aspect-[4/5] overflow-hidden">
             <img
-              key={i}
-              src={url!}
+              src={post.imageUrls[0]!}
               alt=""
               loading="lazy"
-              className="w-full aspect-square object-cover rounded-xl"
+              className="w-full h-full object-cover"
             />
-          ))}
-        </div>
+          </div>
+        ) : (
+          /* 복수 이미지 — 2열 그리드 */
+          <div className="grid grid-cols-2 gap-1 mt-3 rounded-xl overflow-hidden">
+            {post.imageUrls.filter(Boolean).map((url, i) => (
+              <img
+                key={i}
+                src={url!}
+                alt=""
+                loading="lazy"
+                className="w-full aspect-[4/5] object-cover"
+              />
+            ))}
+          </div>
+        )
       )}
     </div>
   );
