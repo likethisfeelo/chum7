@@ -18,7 +18,6 @@ interface Props {
   onReact: () => void;
   onDismissRecommendation: (item: Recommendation) => void;
   initialSaved?: boolean;
-  onHashtagClick?: (slug: string) => void;
   onUserHashtagClick?: (hashtag: string) => void;
 }
 
@@ -81,7 +80,7 @@ export function BookmarkButton({
   );
 }
 
-export function PlazaPostCard({ post, initialSaved, onHashtagClick, onUserHashtagClick, ...rest }: Props) {
+export function PlazaPostCard({ post, initialSaved, onUserHashtagClick, ...rest }: Props) {
   const commentCount = rest.commentHook.getState(post.plazaPostId).count;
 
   const bookmarkButton = (
@@ -98,7 +97,6 @@ export function PlazaPostCard({ post, initialSaved, onHashtagClick, onUserHashta
     onReact: rest.onReact,
     onDismissRecommendation: rest.onDismissRecommendation,
     bookmarkButton,
-    onHashtagClick,
     onUserHashtagClick,
   };
 

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
-import { SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
 import { CommentSection } from './CommentSection';
 import { RecommendationInline } from './RecommendationInline';
 import type { PlazaPost } from '@/features/feed/api/plazaApi';
@@ -88,7 +87,6 @@ interface Props {
   onReact: () => void;
   onDismissRecommendation: (item: Recommendation) => void;
   bookmarkButton?: React.ReactNode;
-  onHashtagClick?: (slug: string) => void;
   onUserHashtagClick?: (hashtag: string) => void;
 }
 
@@ -101,32 +99,21 @@ export function VerificationCard({
   onReact,
   onDismissRecommendation,
   bookmarkButton,
-  onHashtagClick,
   onUserHashtagClick,
 }: Props) {
   const navigate = useNavigate();
   const state = commentHook.getState(post.plazaPostId);
-  const categoryLabel = post.challengeCategory
-    ? SLUG_TO_LABEL[post.challengeCategory] || post.challengeCategory
-    : null;
   const hasMedia = Boolean(post.imageUrl);
 
   return (
     <article className="border border-gray-200 rounded-2xl p-4 bg-white">
 
-      {/* 상단: 카테고리 해쉬태그 + 저장 버튼 */}
-      <div className="flex items-center justify-end gap-2 mb-3">
-        {categoryLabel && (
-          <button
-            type="button"
-            onClick={() => onHashtagClick?.(post.challengeCategory!)}
-            className="text-[11px] text-indigo-500 hover:text-indigo-700 hover:underline font-medium transition-colors"
-          >
-            #{categoryLabel}
-          </button>
-        )}
-        {bookmarkButton}
-      </div>
+      {/* 상단: 저장 버튼 */}
+      {bookmarkButton && (
+        <div className="flex justify-end mb-3">
+          {bookmarkButton}
+        </div>
+      )}
 
       {/* 미디어 */}
       {hasMedia && (

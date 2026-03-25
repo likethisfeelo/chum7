@@ -4,7 +4,6 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
 import { Loading } from '@/shared/components/Loading';
-import { characterApi } from '@/features/character/api/characterApi';
 import {
   personalFeedApi,
   FeedProfile,
@@ -15,13 +14,13 @@ import {
   SavedPostItem,
 } from '../api/personalFeedApi';
 
-type FeedTab = 'character' | 'badges' | 'feed' | 'challenges';
+type FeedTab = 'verifications' | 'challenges' | 'achievements' | 'posts';
 
 const TAB_CONFIG: { key: FeedTab; label: string }[] = [
-  { key: 'character', label: '캐릭터' },
-  { key: 'badges', label: '뱃지' },
-  { key: 'feed', label: '피드' },
+  { key: 'verifications', label: '인증' },
   { key: 'challenges', label: '챌린지' },
+  { key: 'achievements', label: '업적' },
+  { key: 'posts', label: '자유' },
 ];
 
 const BADGE_META: Record<string, { icon: string; name: string; desc: string }> = {
@@ -131,162 +130,6 @@ function LayerGate({ layer, minLayer, children }: {
       <p className="text-4xl mb-3">🔒</p>
       <p className="text-base font-semibold text-gray-700">비공개 탭이에요</p>
       <p className="text-sm text-gray-400 mt-1">팔로우가 수락되면 볼 수 있어요</p>
-    </div>
-  );
-}
-
-// ─── 신화 세계관 메타 ─────────────────────────────────────────────────
-const MYTHOLOGY_META = {
-  korean: {
-    emoji: '🐻', label: '한국 신화', color: '#5A8A3C',
-    desc: '단군신화의 웅녀부터 이무기, 봉황까지 — 인내와 변화의 신화',
-    characters: ['웅녀', '이무기', '도깨비', '호랑이', '봉황'],
-  },
-  greek: {
-    emoji: '⚡', label: '그리스 신화', color: '#C9A227',
-    desc: '올림포스의 신들, 영웅들의 이야기 — 도전과 지혜의 신화',
-    characters: ['헤라클레스', '아테나', '아폴론', '아르테미스', '포세이돈'],
-  },
-  norse: {
-    emoji: '🌩️', label: '북유럽 신화', color: '#5B8CA6',
-    desc: '오딘과 토르, 발키리의 세계 — 용기와 운명의 신화',
-    characters: ['오딘', '토르', '발키리', '프레이', '로키'],
-  },
-} as const;
-
-const THEMES = [
-  { theme: '', label: '기본', color: '#FF9B71' },
-  { theme: 'korean', label: '한국', color: '#5A8A3C' },
-  { theme: 'greek', label: '그리스', color: '#C9A227' },
-  { theme: 'norse', label: '북유럽', color: '#5B8CA6' },
-] as const;
-
-// ─── Tab: 캐릭터 ─────────────────────────────────────────────────────
-function CharacterTab({ isOwn }: { isOwn: boolean }) {
-  const navigate = useNavigate();
-  const [currentTheme, setCurrentTheme] = useState(
-    () => document.body.getAttribute('data-theme') ?? '',
-  );
-
-  const { data: characterStatus } = useQuery({
-    queryKey: ['character', 'status'],
-    queryFn: () => characterApi.getStatus(),
-    enabled: isOwn,
-    staleTime: 60 * 1000,
-  });
-
-  const applyTheme = (theme: string) => {
-    document.body.setAttribute('data-theme', theme);
-    setCurrentTheme(theme);
-  };
-
-  return (
-    <div className="space-y-4 pb-20">
-      {/* 캐릭터 카드 */}
-      {isOwn && characterStatus && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-500 mb-3">나의 캐릭터</h3>
-          {!characterStatus.onboardingDone ? (
-            <button
-              onClick={() => navigate('/character/onboarding')}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-primary-50 to-primary-100 border border-primary-200 text-left"
-            >
-              <span className="text-2xl">✨</span>
-              <div className="flex-1">
-                <div className="font-semibold text-gray-900 text-sm">나의 첫 캐릭터 선택하기</div>
-                <div className="text-xs text-gray-500 mt-0.5">세계관을 선택하고 캐릭터를 완성해요</div>
-              </div>
-              <span className="text-gray-400 text-lg">→</span>
-            </button>
-          ) : characterStatus.activeCharacter ? (
-            <button
-              onClick={() => navigate('/character/viewer')}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-br from-primary-50 to-indigo-50 border border-primary-200 shadow-sm text-left"
-            >
-              <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center text-2xl flex-shrink-0">
-                {MYTHOLOGY_META[characterStatus.activeCharacter.mythologyLine as keyof typeof MYTHOLOGY_META]?.emoji ?? '🌟'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-bold text-gray-900 text-base truncate">
-                  {characterStatus.activeCharacter.characterType}
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {characterStatus.activeCharacter.filledCount}/{characterStatus.activeCharacter.totalSlots} 조각 완성
-                </div>
-                <div className="flex gap-0.5 mt-2">
-                  {Array.from({ length: characterStatus.activeCharacter.totalSlots }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`h-2 flex-1 rounded-full ${
-                        i < characterStatus.activeCharacter!.filledCount
-                          ? 'bg-primary-400'
-                          : 'bg-gray-200'
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-              <span className="text-gray-400 text-lg flex-shrink-0">→</span>
-            </button>
-          ) : null}
-        </div>
-      )}
-
-      {/* 테마 선택 */}
-      {isOwn && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-500 mb-3">테마</h3>
-          <div className="flex gap-2 flex-wrap">
-            {THEMES.map(({ theme, label, color }) => (
-              <button
-                key={theme || 'default'}
-                onClick={() => applyTheme(theme)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium border transition-all ${
-                  currentTheme === theme
-                    ? 'text-white border-transparent shadow-sm'
-                    : 'text-gray-600 border-gray-200 bg-white hover:bg-gray-50'
-                }`}
-                style={currentTheme === theme ? { backgroundColor: color, borderColor: color } : {}}
-              >
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 캐릭터 세계관 */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-500 mb-3">캐릭터 세계관</h3>
-        <div className="space-y-3">
-          {(Object.entries(MYTHOLOGY_META) as [string, typeof MYTHOLOGY_META[keyof typeof MYTHOLOGY_META]][]).map(([key, meta]) => {
-            const isActive = characterStatus?.activeMythology === key;
-            const isCompleted = characterStatus?.completedMythologies?.includes(key as any);
-            return (
-              <div
-                key={key}
-                className={`rounded-xl p-3 border ${isActive ? 'border-primary-200 bg-primary-50' : 'border-gray-100 bg-gray-50'}`}
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-lg">{meta.emoji}</span>
-                  <span className="text-sm font-semibold text-gray-800">{meta.label}</span>
-                  {isCompleted && <span className="ml-auto text-xs text-green-600 font-semibold">완성 ✓</span>}
-                  {isActive && !isCompleted && <span className="ml-auto text-xs text-primary-600 font-semibold">진행 중</span>}
-                </div>
-                <p className="text-xs text-gray-500 mb-2">{meta.desc}</p>
-                <div className="flex flex-wrap gap-1">
-                  {meta.characters.map((c) => (
-                    <span key={c} className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-gray-200 text-gray-600">
-                      {c}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 }
@@ -551,7 +394,6 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
         </div>
       )}
 
-      {/* 리더 이력 블록 */}
       {achievements.leaderHistory.total > 0 && (
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
@@ -559,7 +401,6 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
             <h3 className="text-sm font-semibold text-gray-700">리더 이력</h3>
           </div>
 
-          {/* 리더 뱃지 */}
           {achievements.leaderBadges.length > 0 && (
             <div className="flex gap-2 flex-wrap mb-3">
               {achievements.leaderBadges.map((badge) => {
@@ -574,7 +415,6 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
             </div>
           )}
 
-          {/* 리더 통계 */}
           <div className="grid grid-cols-3 gap-2 mb-3">
             <div className="bg-amber-50 rounded-xl p-3 text-center">
               <p className="text-xl font-bold text-amber-700">{achievements.leaderHistory.total}</p>
@@ -590,7 +430,6 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
             </div>
           </div>
 
-          {/* 최근 개설 챌린지 */}
           {achievements.leaderHistory.recentChallenges.length > 0 && (
             <div className="space-y-1.5">
               <p className="text-xs text-gray-400 mb-2">최근 운영 챌린지</p>
@@ -943,7 +782,7 @@ export function PersonalFeedPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<FeedTab>('character');
+  const [activeTab, setActiveTab] = useState<FeedTab>('verifications');
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
 
   const resolvedUserId = userIdParam ?? 'me';
@@ -965,7 +804,6 @@ export function PersonalFeedPage() {
   const { data: achievements, isLoading: achievementsLoading } = useQuery({
     queryKey: ['personal-feed-achievements', resolvedUserId],
     queryFn: () => personalFeedApi.getAchievements(resolvedUserId),
-    // 헤더 리더 뱃지 표시를 위해 항상 fetch (enabled 조건 제거)
   });
 
   const topLeaderBadge = achievements?.leaderBadges?.[0];
@@ -1088,10 +926,17 @@ export function PersonalFeedPage() {
 
       {/* 컨텐츠 */}
       <div className="p-4">
-        {activeTab === 'character' && (
-          <CharacterTab isOwn={isOwn} />
+        {activeTab === 'verifications' && (
+          <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 3}>
+            <VerificationsTab userId={resolvedUserId} />
+          </LayerGate>
         )}
-        {activeTab === 'badges' && (
+        {activeTab === 'challenges' && (
+          <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 4}>
+            <ChallengesTab userId={resolvedUserId} />
+          </LayerGate>
+        )}
+        {activeTab === 'achievements' && (
           <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 1}>
             {achievementsLoading || !achievements ? (
               <Loading />
@@ -1100,23 +945,9 @@ export function PersonalFeedPage() {
             )}
           </LayerGate>
         )}
-        {activeTab === 'feed' && (
+        {activeTab === 'posts' && (
           <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 3}>
-            <div className="space-y-6">
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">인증 기록</p>
-                <VerificationsTab userId={resolvedUserId} />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">자유 게시물</p>
-                <PostsTab userId={resolvedUserId} isOwn={isOwn} />
-              </div>
-            </div>
-          </LayerGate>
-        )}
-        {activeTab === 'challenges' && (
-          <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 4}>
-            <ChallengesTab userId={resolvedUserId} />
+            <PostsTab userId={resolvedUserId} isOwn={isOwn} />
           </LayerGate>
         )}
       </div>
