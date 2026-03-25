@@ -398,41 +398,6 @@ export const FeedPage = () => {
         {/* ── Right Sidebar (desktop) ── */}
         <aside className="hidden lg:flex flex-col gap-4 sticky top-20">
 
-          {/* 카테고리 */}
-          <section className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-gray-900">카테고리</h3>
-              {selectedCategory && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedCategory(null)}
-                  className="text-xs text-gray-400 hover:text-gray-700"
-                >
-                  전체 보기
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {CHALLENGE_CATEGORIES.map((cat) => {
-                const isActive = selectedCategory === cat.slug;
-                return (
-                  <button
-                    key={cat.slug}
-                    type="button"
-                    onClick={() => handleCategorySelect(cat.slug)}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors text-left ${
-                      isActive ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <span>{cat.emoji}</span>
-                    <span>{cat.label}</span>
-                    {isActive && <span className="ml-auto text-white/60 text-[10px]">✓</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
           {/* 해쉬태그 검색·구독 */}
           <HashtagPanel
             selectedCategory={selectedCategory}
@@ -441,9 +406,6 @@ export const FeedPage = () => {
             onToggleSubscribe={toggleSubscribe}
           />
 
-          {/* 마당 댓글 익명 활동명 */}
-          <AnonymousModeBanner isActive={isAnonymousMode} onToggle={toggleAnonymousMode} />
-
           {/* 모집 중인 챌린지 배너 */}
           {recruitingChallenges.length > 0 && (
             <RecruitingChallengeBanner
@@ -451,6 +413,9 @@ export const FeedPage = () => {
               onNavigate={(id) => navigate(`/challenges/${id}`)}
             />
           )}
+
+          {/* 마당 댓글 익명 활동명 */}
+          <AnonymousModeBanner isActive={isAnonymousMode} onToggle={toggleAnonymousMode} />
 
         </aside>
       </div>
