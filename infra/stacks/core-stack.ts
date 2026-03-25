@@ -71,6 +71,10 @@ export class CoreStack extends Stack {
   public readonly personalPostsTable: Table;
   public readonly savedPostsTable: Table;
 
+  // Hashtag System
+  public readonly hashtagsTable: Table;
+  public readonly hashtagFollowsTable: Table;
+
   // Character & Mythology System
   public readonly charactersTable: Table;
 
@@ -513,6 +517,12 @@ export class CoreStack extends Stack {
       sortKey: { name: 'createdAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
+    this.plazaPostsTable.addGlobalSecondaryIndex({
+      indexName: 'hashtag-createdAt-index',
+      partitionKey: { name: 'hashtag', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
 
     this.plazaCommentsTable = new Table(this, 'PlazaCommentsTable', {
       tableName: `chme-${stage}-plaza-comments`,
@@ -672,6 +682,36 @@ export class CoreStack extends Stack {
       indexName: 'plazaPostId-index',
       partitionKey: { name: 'plazaPostId', type: AttributeType.STRING },
       sortKey: { name: 'userId', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    // ==================== Hashtag System ====================
+
+    this.hashtagsTable = new Table(this, 'HashtagsTable', {
+      tableName: `chme-${stage}-hashtags`,
+      partitionKey: { name: 'hashtag', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+    });
+
+    this.hashtagFollowsTable = new Table(this, 'HashtagFollowsTable', {
+      tableName: `chme-${stage}-hashtag-follows`,
+      partitionKey: { name: 'followId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+    });
+    this.hashtagFollowsTable.addGlobalSecondaryIndex({
+      indexName: 'userId-hashtag-index',
+      partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'hashtag', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    this.hashtagFollowsTable.addGlobalSecondaryIndex({
+      indexName: 'hashtag-index',
+      partitionKey: { name: 'hashtag', type: AttributeType.STRING },
+      sortKey: { name: 'followedAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
 

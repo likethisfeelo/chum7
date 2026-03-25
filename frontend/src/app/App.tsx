@@ -39,6 +39,7 @@ import { InviteLandingPage } from '@/features/personal-feed/pages/InviteLandingP
 import { NotificationSettingsPage } from '@/features/notifications/pages/NotificationSettingsPage';
 import { MythologyOnboardingPage } from '@/features/character/pages/MythologyOnboardingPage';
 import { CharacterViewerPage } from '@/features/character/pages/CharacterViewerPage';
+import { HashtagPage } from '@/features/hashtag/pages/HashtagPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -407,6 +408,16 @@ export default function App() {
           element={
             <ProtectedRoute>
               <CharacterViewerPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 해쉬태그 전용 페이지 */}
+        <Route
+          path="/hashtag/:tag"
+          element={
+            <ProtectedRoute>
+              <HashtagPage />
             </ProtectedRoute>
           }
         />
