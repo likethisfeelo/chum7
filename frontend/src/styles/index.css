@@ -3,17 +3,17 @@
 @tailwind utilities;
 
 :root {
-  --color-primary-50: #FFF4EF;
-  --color-primary-100: #FFE9DF;
-  --color-primary-200: #FFD3BF;
-  --color-primary-300: #FFBD9F;
-  --color-primary-400: #FFA77F;
-  --color-primary-500: #FF9B71;
-  --color-primary-600: #FF7C4D;
-  --color-primary-700: #FF5D29;
-  --color-primary-800: #E54400;
-  --color-primary-900: #B33600;
-  --color-bg-app: #F9FAFB;
+  --color-primary-50: #FDF4F3;
+  --color-primary-100: #FAE7E5;
+  --color-primary-200: #F2CECC;
+  --color-primary-300: #E5ABA7;
+  --color-primary-400: #D48E89;
+  --color-primary-500: #C07A74;
+  --color-primary-600: #A35E58;
+  --color-primary-700: #854845;
+  --color-primary-800: #63332F;
+  --color-primary-900: #421F1C;
+  --color-bg-app: #F0EDEB;
 }
 
 [data-theme="korean"] {

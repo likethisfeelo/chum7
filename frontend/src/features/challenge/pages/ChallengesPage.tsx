@@ -216,7 +216,7 @@ const ChallengeCard = ({
     onClick={() => onNavigate(challenge.challengeId)}
     onMouseEnter={() => onHover(challenge)}
     onMouseLeave={onLeave}
-    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-gray-200 active:scale-[0.99] transition-all"
+    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-primary-100/40 hover:border-primary-100 active:scale-[0.98]"
   >
     <div className="flex items-start gap-4">
       <div className="w-14 h-14 bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
@@ -483,9 +483,17 @@ export const ChallengesPage = () => {
   }, [interestedIds]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* ── Header ─────────────────────────────────────────────── */}
-      <div className="sticky top-0 bg-white border-b border-gray-200 z-10 px-6 py-4">
+      <div
+        className="sticky top-0 z-10 px-6 py-4"
+        style={{
+          background: 'rgba(255,255,255,0.78)',
+          backdropFilter: 'blur(18px)',
+          WebkitBackdropFilter: 'blur(18px)',
+          borderBottom: '1px solid rgba(0,0,0,0.07)',
+        }}
+      >
         <h1 className="text-2xl font-bold text-gray-900">챌린지 🎯</h1>
         <p className="text-sm text-gray-500 mt-0.5">7일간의 짧고 강렬한 도전</p>
 
@@ -532,9 +540,9 @@ export const ChallengesPage = () => {
       {/*  ├────────────────────────────┬─────────────────────────┤ */}
       {/*  │  Challenge lists (2-col)   │  Preview Panel [PURPLE] │ */}
       {/*  └────────────────────────────┴─────────────────────────┘ */}
-      <div className="px-4 lg:grid lg:grid-cols-[1fr_288px] lg:gap-x-5">
+      <div className="px-4 lg:grid lg:grid-cols-[1fr_1fr_288px] lg:gap-x-5">
 
-        {/* ── Banner — spans both columns on desktop ─────────── */}
+        {/* ── Banner — spans all 3 columns on desktop ─────────── */}
         <AnimatePresence mode="wait">
           <motion.div
             key={currentCategory.slug}
@@ -546,7 +554,7 @@ export const ChallengesPage = () => {
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.1}
             onDragEnd={handleDragEnd}
-            className="select-none mt-4 mb-4 lg:col-span-2"
+            className="select-none mt-4 mb-4 lg:col-span-3"
           >
             <div className="rounded-2xl overflow-hidden shadow-sm relative">
               {activeBanner?.imageUrl ? (
@@ -634,79 +642,89 @@ export const ChallengesPage = () => {
           </motion.div>
         </AnimatePresence>
 
-        {/* ── Challenge Lists — left column ──────────────────── */}
-        <div className="pb-6">
-          {/* Mobile: single tab */}
-          <div className="lg:hidden">
-            <div className="mb-2">
-              <span className="text-sm text-gray-400">
-                {lifecycleTab === 'recruiting' ? '모집 중인 챌린지' : '진행 중인 챌린지'}
-              </span>
-            </div>
-            <div className="space-y-3 md:grid md:grid-cols-2 md:space-y-0 md:gap-3">
-              {mobileLoading ? (
-                <Loading />
-              ) : mobileChallenges.length === 0 ? (
-                <EmptyState
-                  icon="🎯"
-                  title="챌린지가 없어요"
-                  description="다른 카테고리를 탐색해보세요"
-                />
-              ) : (
-                mobileChallenges.map((challenge, index) => (
-                  <ChallengeCard
-                    key={challenge.challengeId}
-                    challenge={challenge}
-                    index={index}
-                    lifecycle={lifecycleTab}
-                    categoryEmoji={currentCategory.emoji}
-                    onNavigate={(id) => navigate(`/challenges/${id}`)}
-                    onHover={handleHover}
-                    onLeave={handleLeave}
-                    onInterest={handleInterest}
-                    isInterested={interestedIds.has(challenge.challengeId)}
-                  />
-                ))
-              )}
-            </div>
+        {/* ── Mobile: single lifecycle tab (col-span-3) ─────── */}
+        <div className="pb-6 lg:hidden lg:col-span-3">
+          <div className="mb-2">
+            <span className="text-sm text-gray-400">
+              {lifecycleTab === 'recruiting' ? '모집 중인 챌린지' : '진행 중인 챌린지'}
+            </span>
           </div>
-
-          {/* Desktop: 모집중 + 진행중 side by side */}
-          <div className="hidden lg:grid lg:grid-cols-2 lg:gap-5">
-            <LifecycleSection
-              label="모집중"
-              lifecycle="recruiting"
-              challenges={recruitingChallenges}
-              isLoading={recruitingLoading}
-              categoryEmoji={currentCategory.emoji}
-              interestedIds={interestedIds}
-              onNavigate={(id) => navigate(`/challenges/${id}`)}
-              onHover={handleHover}
-              onLeave={handleLeave}
-              onInterest={handleInterest}
-            />
-            <LifecycleSection
-              label="진행중"
-              lifecycle="active"
-              challenges={activeChallenges}
-              isLoading={activeLoading}
-              categoryEmoji={currentCategory.emoji}
-              interestedIds={interestedIds}
-              onNavigate={(id) => navigate(`/challenges/${id}`)}
-              onHover={handleHover}
-              onLeave={handleLeave}
-              onInterest={handleInterest}
-            />
+          <div className="space-y-3 md:grid md:grid-cols-2 md:space-y-0 md:gap-3">
+            {mobileLoading ? (
+              <Loading />
+            ) : mobileChallenges.length === 0 ? (
+              <EmptyState
+                icon="🎯"
+                title="챌린지가 없어요"
+                description="다른 카테고리를 탐색해보세요"
+              />
+            ) : (
+              mobileChallenges.map((challenge, index) => (
+                <ChallengeCard
+                  key={challenge.challengeId}
+                  challenge={challenge}
+                  index={index}
+                  lifecycle={lifecycleTab}
+                  categoryEmoji={currentCategory.emoji}
+                  onNavigate={(id) => navigate(`/challenges/${id}`)}
+                  onHover={handleHover}
+                  onLeave={handleLeave}
+                  onInterest={handleInterest}
+                  isInterested={interestedIds.has(challenge.challengeId)}
+                />
+              ))
+            )}
           </div>
         </div>
 
-        {/* ── Preview Panel — right column (purple zone) ─────── */}
+        {/* ── Desktop col 1: 모집중 ───────────────────────────── */}
+        <div className="hidden lg:block pb-6">
+          <LifecycleSection
+            label="모집중"
+            lifecycle="recruiting"
+            challenges={recruitingChallenges}
+            isLoading={recruitingLoading}
+            categoryEmoji={currentCategory.emoji}
+            interestedIds={interestedIds}
+            onNavigate={(id) => navigate(`/challenges/${id}`)}
+            onHover={handleHover}
+            onLeave={handleLeave}
+            onInterest={handleInterest}
+          />
+        </div>
+
+        {/* ── Desktop col 2: 진행중 ───────────────────────────── */}
+        <div className="hidden lg:block pb-6">
+          <LifecycleSection
+            label="진행중"
+            lifecycle="active"
+            challenges={activeChallenges}
+            isLoading={activeLoading}
+            categoryEmoji={currentCategory.emoji}
+            interestedIds={interestedIds}
+            onNavigate={(id) => navigate(`/challenges/${id}`)}
+            onHover={handleHover}
+            onLeave={handleLeave}
+            onInterest={handleInterest}
+          />
+        </div>
+
+        {/* ── Desktop col 3: Preview Panel ────────────────────── */}
         <div
           className="hidden lg:block pb-6"
           onMouseEnter={handlePanelEnter}
           onMouseLeave={handleLeave}
         >
-          <div className="sticky top-24 bg-white rounded-2xl p-5 shadow-sm border border-gray-100 min-h-[360px] overflow-y-auto max-h-[calc(100vh-7rem)]">
+          <div
+            className="sticky top-24 rounded-2xl p-5 min-h-[360px] overflow-y-auto max-h-[calc(100vh-7rem)]"
+            style={{
+              background: 'rgba(255,255,255,0.72)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255,255,255,0.55)',
+              boxShadow: '0 2px 20px rgba(0,0,0,0.06)',
+            }}
+          >
             <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
               챌린지 미리보기
             </div>

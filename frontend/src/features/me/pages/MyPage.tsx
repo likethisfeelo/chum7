@@ -48,7 +48,7 @@ const MYTHOLOGY_META = {
 } as const;
 
 const THEMES = [
-  { theme: '', label: '기본', color: '#FF9B71' },
+  { theme: '', label: '기본', color: '#C07A74' },
   { theme: 'korean', label: '한국', color: '#5A8A3C' },
   { theme: 'greek', label: '그리스', color: '#C9A227' },
   { theme: 'norse', label: '북유럽', color: '#5B8CA6' },
