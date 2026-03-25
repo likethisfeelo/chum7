@@ -598,9 +598,15 @@ export const MEPage = () => {
         ))}
       </div>
 
+      {/* 데스크탑 2컬럼 레이아웃: 왼쪽 프로필, 오른쪽 챌린지 */}
+      <div className="lg:grid lg:grid-cols-[300px_1fr] lg:gap-6 lg:px-6 lg:pt-4 lg:items-start">
+
+      {/* 왼쪽: 캐릭터 카드 + 내가 만든 챌린지 */}
+      <div className="lg:sticky lg:top-6">
+
       {/* 캐릭터 카드 */}
       {characterStatus && (
-        <div className="px-4 pt-2 pb-0">
+        <div className="px-4 pt-2 pb-0 lg:px-0 lg:pt-0">
           {!characterStatus.onboardingDone ? (
             <button
               onClick={() => navigate('/character/onboarding')}
@@ -647,7 +653,17 @@ export const MEPage = () => {
         </div>
       )}
 
-      <div className="p-6 space-y-4">
+      {/* 내가 만든 챌린지 (데스크탑 사이드바) */}
+      <div className="hidden lg:block px-0 pt-4">
+        <MyCreatedChallengesSection />
+      </div>
+
+      </div> {/* /왼쪽 컬럼 */}
+
+      {/* 오른쪽: 챌린지 목록 */}
+      <div>
+
+      <div className="p-6 lg:p-0 lg:pt-0 space-y-4">
         {isLoading ? (
           <Loading />
         ) : isEmpty ? (
@@ -1104,7 +1120,10 @@ export const MEPage = () => {
           </ul>
         </section>
 
-        <MyCreatedChallengesSection />
+        {/* 내가 만든 챌린지 (모바일) */}
+        <div className="lg:hidden">
+          <MyCreatedChallengesSection />
+        </div>
 
         {!isLoading && (
           <button
@@ -1115,6 +1134,10 @@ export const MEPage = () => {
           </button>
         )}
       </div>
+
+      </div> {/* /오른쪽 컬럼 */}
+      </div> {/* /데스크탑 2컬럼 그리드 */}
+
     </div>
   );
 };

@@ -113,6 +113,7 @@ export class ChallengeBoardStack extends Stack {
     });
     challengeCommentsTable.grantReadData(getCommentsFn);
     userChallengesTable.grantReadData(getCommentsFn);
+    challengesTable.grantReadData(getCommentsFn);
     apiGateway.addRoutes({
       path: '/challenge-board/{challengeId}/comments',
       methods: [HttpMethod.GET],
@@ -136,6 +137,21 @@ export class ChallengeBoardStack extends Stack {
       authorizer,
     });
 
+
+    const reactCommentFn = new NodejsFunction(this, 'ReactChallengeBoardCommentFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-board-react-comment`,
+      entry: path.join(__dirname, '../../backend/services/challenge-board/react-comment/index.ts'),
+      handler: 'handler',
+    });
+    challengeCommentsTable.grantReadWriteData(reactCommentFn);
+    userChallengesTable.grantReadData(reactCommentFn);
+    apiGateway.addRoutes({
+      path: '/challenge-board/{challengeId}/comments/{commentId}/react',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('ReactChallengeBoardCommentIntegration', reactCommentFn),
+      authorizer,
+    });
 
     const leaderDmFn = new NodejsFunction(this, 'ChallengeFeedLeaderDmFn', {
       ...commonProps,

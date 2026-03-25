@@ -21,6 +21,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const body = JSON.parse(event.body || '{}');
     const content = typeof body.content === 'string' ? body.content.trim() : '';
+    const parentCommentId = typeof body.parentCommentId === 'string' ? body.parentCommentId : undefined;
     const dailyAnonymousId = createDailyAnonymousId(challengeId, userId);
 
     if (!content) return response(400, { error: 'VALIDATION_ERROR', message: '댓글 내용이 필요합니다.' });
@@ -29,7 +30,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const now = new Date().toISOString();
     const commentId = uuidv4();
 
-    const item = {
+    const item: Record<string, any> = {
       commentId,
       challengeId,
       userId,
@@ -39,6 +40,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       quotedAt: null,
       createdAt: now,
     };
+
+    if (parentCommentId) {
+      item.parentCommentId = parentCommentId;
+    }
 
     await client.send(new PutCommand({
       TableName: process.env.CHALLENGE_COMMENTS_TABLE!,
