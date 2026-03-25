@@ -5,6 +5,7 @@ import { apiClient } from '@/lib/api-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IoNotificationsOutline } from 'react-icons/io5';
 import { HiDotsVertical } from 'react-icons/hi';
+import toast from 'react-hot-toast';
 import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import {
@@ -34,12 +35,6 @@ type Challenge = {
   durationDays?: number;
 };
 
-const slideVariants = {
-  enter: { opacity: 0, scale: 0.97 },
-  center: { opacity: 1, scale: 1 },
-  exit: { opacity: 0, scale: 0.97 },
-};
-
 type LifecycleTab = 'recruiting' | 'active';
 
 const LIFECYCLE_TABS: { value: LifecycleTab; label: string }[] = [
@@ -47,24 +42,38 @@ const LIFECYCLE_TABS: { value: LifecycleTab; label: string }[] = [
   { value: 'active', label: '진행중' },
 ];
 
-// ─── Hover Preview Panel ────────────────────────────────────────
-const HoverPreviewPanel = ({
+// ─── Enhanced Hover Preview Panel ───────────────────────────────
+const EnhancedPreviewPanel = ({
   challenge,
+  boardData,
+  isBoardLoading,
   categoryEmoji,
   onViewDetail,
 }: {
   challenge: Challenge | null;
+  boardData: any;
+  isBoardLoading: boolean;
   categoryEmoji: string;
   onViewDetail: (id: string) => void;
 }) => {
   if (!challenge) {
     return (
-      <div className="hidden lg:flex flex-col items-center justify-center h-64 text-center">
-        <span className="text-4xl mb-3 opacity-30">🔍</span>
-        <p className="text-sm text-gray-400">챌린지 카드에 마우스를<br />올려보세요</p>
+      <div className="flex flex-col items-center justify-center h-64 text-center">
+        <span className="text-5xl mb-3 opacity-20">🔍</span>
+        <p className="text-sm text-gray-400 leading-relaxed">
+          챌린지 카드에<br />마우스를 올려보세요
+        </p>
       </div>
     );
   }
+
+  const textBlocks: any[] = (boardData?.blocks || [])
+    .filter((b: any) => b.type === 'text' && b.content)
+    .slice(0, 4);
+
+  const imageBlocks: any[] = (boardData?.blocks || [])
+    .filter((b: any) => b.type === 'image' && b.url)
+    .slice(0, 1);
 
   return (
     <motion.div
@@ -72,44 +81,82 @@ const HoverPreviewPanel = ({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className="hidden lg:block"
+      className="space-y-4"
     >
-      <div className="flex items-center gap-2 mb-3">
+      {/* Challenge identity */}
+      <div>
         <span
           className={`inline-block text-xs font-medium px-2.5 py-1 rounded-full ${SLUG_TO_COLOR[challenge.category] || 'bg-gray-100 text-gray-600'}`}
         >
           {SLUG_TO_LABEL[challenge.category] || challenge.category}
         </span>
+        <div className="flex items-start gap-3 mt-2">
+          <div className="w-12 h-12 bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
+            {challenge.badgeIcon || categoryEmoji}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-gray-900 text-base leading-snug">
+              {challenge.title}
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+              {challenge.description}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="w-14 h-14 bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl flex items-center justify-center text-3xl mb-3">
-        {challenge.badgeIcon || categoryEmoji}
-      </div>
-
-      <h3 className="font-bold text-gray-900 text-lg leading-snug mb-2">
-        {challenge.title}
-      </h3>
-      <p className="text-sm text-gray-500 leading-relaxed mb-4">
-        {challenge.description}
-      </p>
-
-      <div className="flex flex-wrap gap-2 mb-4">
-        <span className="text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-full border border-gray-200">
+      {/* Stats row */}
+      <div className="flex flex-wrap gap-1.5">
+        <span className="text-xs bg-gray-50 text-gray-600 px-2.5 py-1 rounded-full border border-gray-200">
           👥 {challenge.stats?.totalParticipants || 0}명 참여
         </span>
-        <span className="text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-full border border-gray-200">
+        <span className="text-xs bg-gray-50 text-gray-600 px-2.5 py-1 rounded-full border border-gray-200">
           ✅ 완료율 {challenge.stats?.completionRate || 0}%
         </span>
         {challenge.durationDays && (
-          <span className="text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-full border border-gray-200">
+          <span className="text-xs bg-gray-50 text-gray-600 px-2.5 py-1 rounded-full border border-gray-200">
             📅 {challenge.durationDays}일
           </span>
         )}
       </div>
 
+      {/* Challenge board preview */}
+      <div className="border-t border-gray-100 pt-3">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+          챌린지 보드
+        </p>
+
+        {isBoardLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: `${90 - i * 15}%` }} />
+            ))}
+          </div>
+        ) : imageBlocks.length > 0 ? (
+          <img
+            src={imageBlocks[0].url}
+            alt="board"
+            className="w-full rounded-xl object-cover mb-2"
+            style={{ maxHeight: 120 }}
+          />
+        ) : null}
+
+        {textBlocks.length > 0 ? (
+          <div className="space-y-1.5">
+            {textBlocks.map((block, i) => (
+              <p key={i} className="text-sm text-gray-700 leading-snug line-clamp-2">
+                {block.content}
+              </p>
+            ))}
+          </div>
+        ) : !isBoardLoading ? (
+          <p className="text-sm text-gray-400 italic">아직 보드 안내가 없어요.</p>
+        ) : null}
+      </div>
+
       <button
         onClick={() => onViewDetail(challenge.challengeId)}
-        className="w-full bg-gray-900 text-white text-sm font-semibold py-3 rounded-xl hover:bg-gray-700 transition-colors"
+        className="w-full bg-gray-900 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-gray-700 transition-colors"
       >
         자세히 보기 →
       </button>
@@ -121,17 +168,23 @@ const HoverPreviewPanel = ({
 const ChallengeCard = ({
   challenge,
   index,
+  lifecycle,
   categoryEmoji,
   onNavigate,
   onHover,
   onLeave,
+  onInterest,
+  isInterested,
 }: {
   challenge: Challenge;
   index: number;
+  lifecycle: 'recruiting' | 'active';
   categoryEmoji: string;
   onNavigate: (id: string) => void;
   onHover: (c: Challenge) => void;
   onLeave: () => void;
+  onInterest: (id: string) => void;
+  isInterested: boolean;
 }) => (
   <motion.div
     key={challenge.challengeId}
@@ -162,38 +215,60 @@ const ChallengeCard = ({
       </div>
     </div>
 
-    {/* 참여하기 버튼 — desktop only */}
+    {/* Action button — desktop only */}
     <div className="hidden lg:flex justify-end mt-3 pt-3 border-t border-gray-50">
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onNavigate(challenge.challengeId);
-        }}
-        className="text-sm font-semibold text-primary-600 hover:text-primary-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-primary-50"
-      >
-        참여하기 →
-      </button>
+      {lifecycle === 'recruiting' ? (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onNavigate(challenge.challengeId);
+          }}
+          className="text-sm font-semibold text-primary-600 hover:text-primary-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-primary-50"
+        >
+          참여하기 →
+        </button>
+      ) : (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onInterest(challenge.challengeId);
+          }}
+          className={`text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+            isInterested
+              ? 'text-amber-700 bg-amber-50 hover:bg-amber-100'
+              : 'text-gray-600 hover:text-amber-700 hover:bg-amber-50'
+          }`}
+        >
+          {isInterested ? '🔔 관심중' : '관심있어요 🔔'}
+        </button>
+      )}
     </div>
   </motion.div>
 );
 
-// ─── Column section (recruiting or active) ──────────────────────
+// ─── Lifecycle Section ───────────────────────────────────────────
 const LifecycleSection = ({
   label,
+  lifecycle,
   challenges,
   isLoading,
   categoryEmoji,
+  interestedIds,
   onNavigate,
   onHover,
   onLeave,
+  onInterest,
 }: {
   label: string;
+  lifecycle: 'recruiting' | 'active';
   challenges: Challenge[];
   isLoading: boolean;
   categoryEmoji: string;
+  interestedIds: Set<string>;
   onNavigate: (id: string) => void;
   onHover: (c: Challenge) => void;
   onLeave: () => void;
+  onInterest: (id: string) => void;
 }) => (
   <div className="flex flex-col gap-3">
     <div className="flex items-center gap-2">
@@ -218,10 +293,13 @@ const LifecycleSection = ({
           key={challenge.challengeId}
           challenge={challenge}
           index={index}
+          lifecycle={lifecycle}
           categoryEmoji={categoryEmoji}
           onNavigate={onNavigate}
           onHover={onHover}
           onLeave={onLeave}
+          onInterest={onInterest}
+          isInterested={interestedIds.has(challenge.challengeId)}
         />
       ))
     )}
@@ -235,6 +313,16 @@ export const ChallengesPage = () => {
   const [lifecycleTab, setLifecycleTab] = useState<LifecycleTab>('recruiting');
   const [hoveredChallenge, setHoveredChallenge] = useState<Challenge | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Persist interest state in localStorage
+  const [interestedIds, setInterestedIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('challenge-interests');
+      return new Set(stored ? JSON.parse(stored) : []);
+    } catch {
+      return new Set();
+    }
+  });
 
   const currentCategory = CHALLENGE_CATEGORIES[currentIndex];
 
@@ -279,6 +367,17 @@ export const ChallengesPage = () => {
     },
   });
 
+  // Hover preview: fetch board data for hovered challenge
+  const { data: previewBoardData, isLoading: isBoardLoading } = useQuery({
+    queryKey: ['challenge-preview-board', hoveredChallenge?.challengeId],
+    enabled: Boolean(hoveredChallenge?.challengeId),
+    queryFn: async () => {
+      const response = await apiClient.get(`/challenge-board/${hoveredChallenge!.challengeId}`);
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   const mobileChallenges: Challenge[] = mobileData?.challenges || [];
   const recruitingChallenges: Challenge[] = recruitingData?.challenges || [];
   const activeChallenges: Challenge[] = activeData?.challenges || [];
@@ -316,16 +415,38 @@ export const ChallengesPage = () => {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
   }, []);
 
+  const handleInterest = useCallback(async (challengeId: string) => {
+    const newSet = new Set(interestedIds);
+    const wasInterested = newSet.has(challengeId);
+
+    if (wasInterested) {
+      newSet.delete(challengeId);
+      toast('관심 챌린지에서 제거했어요.', { icon: '🔕' });
+    } else {
+      newSet.add(challengeId);
+      toast.success('관심 챌린지로 등록됐어요! 새 소식을 알려드릴게요 🔔');
+      // API call — gracefully fail if not implemented yet
+      try {
+        await apiClient.post(`/challenge-interest/${challengeId}`);
+      } catch {
+        // Backend endpoint not yet implemented — store locally
+      }
+    }
+
+    setInterestedIds(newSet);
+    try {
+      localStorage.setItem('challenge-interests', JSON.stringify([...newSet]));
+    } catch {
+      // ignore
+    }
+  }, [interestedIds]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="sticky top-0 bg-white border-b border-gray-200 z-10 px-6 py-4">
-        <div className="flex items-baseline gap-3 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">챌린지 🎯</h1>
-            <p className="text-sm text-gray-500 mt-0.5">7일간의 짧고 강렬한 도전</p>
-          </div>
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">챌린지 🎯</h1>
+        <p className="text-sm text-gray-500 mt-0.5">7일간의 짧고 강렬한 도전</p>
 
         {/* Mobile: lifecycle tabs */}
         <div className="flex gap-2 mt-3 lg:hidden">
@@ -363,187 +484,201 @@ export const ChallengesPage = () => {
         </div>
       </div>
 
-      {/* ── Content (desktop: 2-col main + preview sidebar) ────── */}
-      <div className="lg:flex lg:gap-0">
-        {/* ── Main column ──────────────────────────────────────── */}
-        <div className="lg:flex-1 lg:min-w-0">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentCategory.slug}
-              variants={slideVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ type: 'tween', duration: 0.3, ease: 'easeInOut' }}
-              drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.1}
-              onDragEnd={handleDragEnd}
-              className="select-none"
-            >
-              {/* ── Hero Banner ───────────────────────────────── */}
-              <div className="mx-4 mt-4 rounded-2xl overflow-hidden shadow-sm relative">
-                {activeBanner?.imageUrl ? (
-                  <>
-                    <div className="aspect-square md:aspect-[3/1] lg:aspect-[21/9]">
-                      <img
-                        src={activeBanner.imageUrl}
-                        alt={currentCategory.label}
-                        className="w-full h-full object-cover"
-                        draggable={false}
+      {/* ── Main layout: CSS Grid on lg ────────────────────────── */}
+      {/*  Desktop:                                                 */}
+      {/*  ┌──────────────────────────────────────────────────────┐ */}
+      {/*  │  BANNER (col-span-2, full width)        [MAGENTA]   │ */}
+      {/*  ├────────────────────────────┬─────────────────────────┤ */}
+      {/*  │  Challenge lists (2-col)   │  Preview Panel [PURPLE] │ */}
+      {/*  └────────────────────────────┴─────────────────────────┘ */}
+      <div className="px-4 lg:grid lg:grid-cols-[1fr_288px] lg:gap-x-5">
+
+        {/* ── Banner — spans both columns on desktop ─────────── */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentCategory.slug}
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ type: 'tween', duration: 0.3, ease: 'easeInOut' }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.1}
+            onDragEnd={handleDragEnd}
+            className="select-none mt-4 mb-4 lg:col-span-2"
+          >
+            <div className="rounded-2xl overflow-hidden shadow-sm relative">
+              {activeBanner?.imageUrl ? (
+                <>
+                  <div className="aspect-square md:aspect-[3/1] lg:aspect-[21/9]">
+                    <img
+                      src={activeBanner.imageUrl}
+                      alt={currentCategory.label}
+                      className="w-full h-full object-cover"
+                      draggable={false}
+                    />
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
+                </>
+              ) : (
+                <div className="aspect-square md:aspect-[3/1] lg:aspect-[21/9] bg-gradient-to-br from-gray-700 to-gray-500 relative">
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-6xl lg:text-8xl">{currentCategory.emoji}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Mobile navigation overlay */}
+              <div className="absolute top-0 left-0 right-0 px-4 pt-3 pb-2 flex items-center justify-between lg:hidden">
+                <button
+                  onClick={() => goTo(Math.max(0, currentIndex - 1))}
+                  disabled={currentIndex === 0}
+                  className="text-white disabled:opacity-20 hover:text-white/80 transition-colors text-xl font-light w-6 flex-shrink-0"
+                  aria-label="previous category"
+                >
+                  ←
+                </button>
+                <div className="flex flex-col items-center gap-1.5 flex-1">
+                  <span className="text-white font-semibold text-xs uppercase tracking-widest">
+                    {currentCategory.label}
+                  </span>
+                  <div className="flex gap-1.5 justify-center">
+                    {CHALLENGE_CATEGORIES.map((cat, i) => (
+                      <button
+                        key={cat.slug}
+                        onClick={() => goTo(i)}
+                        aria-label={cat.label}
+                        className={`rounded-full transition-all duration-200 ${
+                          i === currentIndex
+                            ? 'w-5 h-1.5 bg-white'
+                            : 'w-1.5 h-1.5 bg-white/40 hover:bg-white/60'
+                        }`}
                       />
-                    </div>
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
-                  </>
-                ) : (
-                  <div className="aspect-square md:aspect-[3/1] lg:aspect-[21/9] bg-gradient-to-br from-gray-700 to-gray-500 relative">
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-6xl lg:text-8xl">{currentCategory.emoji}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Navigation overlay — mobile only */}
-                <div className="absolute top-0 left-0 right-0 px-4 pt-3 pb-2 flex items-center justify-between lg:hidden">
-                  <button
-                    onClick={() => goTo(Math.max(0, currentIndex - 1))}
-                    disabled={currentIndex === 0}
-                    className="text-white disabled:opacity-20 hover:text-white/80 transition-colors text-xl font-light w-6 flex-shrink-0"
-                    aria-label="previous category"
-                  >
-                    ←
-                  </button>
-
-                  <div className="flex flex-col items-center gap-1.5 flex-1">
-                    <span className="text-white font-semibold text-xs uppercase tracking-widest">
-                      {currentCategory.label}
-                    </span>
-                    <div className="flex gap-1.5 justify-center">
-                      {CHALLENGE_CATEGORIES.map((cat, i) => (
-                        <button
-                          key={cat.slug}
-                          onClick={() => goTo(i)}
-                          aria-label={cat.label}
-                          className={`rounded-full transition-all duration-200 ${
-                            i === currentIndex
-                              ? 'w-5 h-1.5 bg-white'
-                              : 'w-1.5 h-1.5 bg-white/40 hover:bg-white/60'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => goTo(Math.min(CHALLENGE_CATEGORIES.length - 1, currentIndex + 1))}
-                    disabled={currentIndex === CHALLENGE_CATEGORIES.length - 1}
-                    className="text-white disabled:opacity-20 hover:text-white/80 transition-colors text-xl font-light w-6 flex-shrink-0"
-                    aria-label="next category"
-                  >
-                    →
-                  </button>
-                </div>
-
-                {/* Content overlay — bottom */}
-                <div className="absolute bottom-0 left-0 right-0 p-5 lg:p-10 flex items-end justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-2xl lg:text-4xl font-bold lg:font-extrabold text-white leading-tight">
-                      {tagline}
-                    </h2>
-                    {description && (
-                      <p className="text-sm lg:text-base text-white/80 mt-1 line-clamp-2 lg:line-clamp-none lg:mt-2">
-                        {description}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-3 items-center flex-shrink-0 pb-0.5">
-                    <button aria-label="알림" className="text-white/90 hover:text-white transition-colors">
-                      <IoNotificationsOutline size={22} />
-                    </button>
-                    <button aria-label="더보기" className="text-white/90 hover:text-white transition-colors">
-                      <HiDotsVertical size={22} />
-                    </button>
+                    ))}
                   </div>
                 </div>
+                <button
+                  onClick={() => goTo(Math.min(CHALLENGE_CATEGORIES.length - 1, currentIndex + 1))}
+                  disabled={currentIndex === CHALLENGE_CATEGORIES.length - 1}
+                  className="text-white disabled:opacity-20 hover:text-white/80 transition-colors text-xl font-light w-6 flex-shrink-0"
+                  aria-label="next category"
+                >
+                  →
+                </button>
               </div>
 
-              {/* ── Challenge List ────────────────────────────── */}
-
-              {/* Mobile: single tab */}
-              <div className="lg:hidden px-4 pb-6">
-                <div className="mt-4 mb-2">
-                  <span className="text-sm text-gray-400">
-                    {lifecycleTab === 'recruiting' ? '모집 중인 챌린지' : '진행 중인 챌린지'}
-                  </span>
-                </div>
-                <div className="space-y-3 md:grid md:grid-cols-2 md:space-y-0 md:gap-3">
-                  {mobileLoading ? (
-                    <Loading />
-                  ) : mobileChallenges.length === 0 ? (
-                    <EmptyState
-                      icon="🎯"
-                      title="챌린지가 없어요"
-                      description="다른 카테고리를 탐색해보세요"
-                    />
-                  ) : (
-                    mobileChallenges.map((challenge, index) => (
-                      <ChallengeCard
-                        key={challenge.challengeId}
-                        challenge={challenge}
-                        index={index}
-                        categoryEmoji={currentCategory.emoji}
-                        onNavigate={(id) => navigate(`/challenges/${id}`)}
-                        onHover={handleHover}
-                        onLeave={handleLeave}
-                      />
-                    ))
+              {/* Content overlay — bottom of banner */}
+              <div className="absolute bottom-0 left-0 right-0 p-5 lg:p-10 flex items-end justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-2xl lg:text-4xl font-bold lg:font-extrabold text-white leading-tight">
+                    {tagline}
+                  </h2>
+                  {description && (
+                    <p className="text-sm lg:text-base text-white/80 mt-1 line-clamp-2 lg:line-clamp-none lg:mt-2">
+                      {description}
+                    </p>
                   )}
                 </div>
+                <div className="flex flex-col gap-3 items-center flex-shrink-0 pb-0.5">
+                  <button aria-label="알림" className="text-white/90 hover:text-white transition-colors">
+                    <IoNotificationsOutline size={22} />
+                  </button>
+                  <button aria-label="더보기" className="text-white/90 hover:text-white transition-colors">
+                    <HiDotsVertical size={22} />
+                  </button>
+                </div>
               </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
 
-              {/* Desktop: dual columns (recruiting + active side by side) */}
-              <div className="hidden lg:grid lg:grid-cols-2 lg:gap-5 px-4 mt-5 pb-6">
-                <LifecycleSection
-                  label="모집중"
-                  challenges={recruitingChallenges}
-                  isLoading={recruitingLoading}
-                  categoryEmoji={currentCategory.emoji}
-                  onNavigate={(id) => navigate(`/challenges/${id}`)}
-                  onHover={handleHover}
-                  onLeave={handleLeave}
+        {/* ── Challenge Lists — left column ──────────────────── */}
+        <div className="pb-6">
+          {/* Mobile: single tab */}
+          <div className="lg:hidden">
+            <div className="mb-2">
+              <span className="text-sm text-gray-400">
+                {lifecycleTab === 'recruiting' ? '모집 중인 챌린지' : '진행 중인 챌린지'}
+              </span>
+            </div>
+            <div className="space-y-3 md:grid md:grid-cols-2 md:space-y-0 md:gap-3">
+              {mobileLoading ? (
+                <Loading />
+              ) : mobileChallenges.length === 0 ? (
+                <EmptyState
+                  icon="🎯"
+                  title="챌린지가 없어요"
+                  description="다른 카테고리를 탐색해보세요"
                 />
-                <LifecycleSection
-                  label="진행중"
-                  challenges={activeChallenges}
-                  isLoading={activeLoading}
-                  categoryEmoji={currentCategory.emoji}
-                  onNavigate={(id) => navigate(`/challenges/${id}`)}
-                  onHover={handleHover}
-                  onLeave={handleLeave}
-                />
-              </div>
-            </motion.div>
-          </AnimatePresence>
+              ) : (
+                mobileChallenges.map((challenge, index) => (
+                  <ChallengeCard
+                    key={challenge.challengeId}
+                    challenge={challenge}
+                    index={index}
+                    lifecycle={lifecycleTab}
+                    categoryEmoji={currentCategory.emoji}
+                    onNavigate={(id) => navigate(`/challenges/${id}`)}
+                    onHover={handleHover}
+                    onLeave={handleLeave}
+                    onInterest={handleInterest}
+                    isInterested={interestedIds.has(challenge.challengeId)}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Desktop: 모집중 + 진행중 side by side */}
+          <div className="hidden lg:grid lg:grid-cols-2 lg:gap-5">
+            <LifecycleSection
+              label="모집중"
+              lifecycle="recruiting"
+              challenges={recruitingChallenges}
+              isLoading={recruitingLoading}
+              categoryEmoji={currentCategory.emoji}
+              interestedIds={interestedIds}
+              onNavigate={(id) => navigate(`/challenges/${id}`)}
+              onHover={handleHover}
+              onLeave={handleLeave}
+              onInterest={handleInterest}
+            />
+            <LifecycleSection
+              label="진행중"
+              lifecycle="active"
+              challenges={activeChallenges}
+              isLoading={activeLoading}
+              categoryEmoji={currentCategory.emoji}
+              interestedIds={interestedIds}
+              onNavigate={(id) => navigate(`/challenges/${id}`)}
+              onHover={handleHover}
+              onLeave={handleLeave}
+              onInterest={handleInterest}
+            />
+          </div>
         </div>
 
-        {/* ── Preview Sidebar (desktop only) ───────────────────── */}
+        {/* ── Preview Panel — right column (purple zone) ─────── */}
         <div
-          className="hidden lg:block w-72 flex-shrink-0 px-4 pt-4"
+          className="hidden lg:block pb-6"
           onMouseEnter={handlePanelEnter}
           onMouseLeave={handleLeave}
         >
-          <div className="sticky top-24 bg-white rounded-2xl p-5 shadow-sm border border-gray-100 min-h-[320px]">
+          <div className="sticky top-24 bg-white rounded-2xl p-5 shadow-sm border border-gray-100 min-h-[360px] overflow-y-auto max-h-[calc(100vh-7rem)]">
             <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
               챌린지 미리보기
             </div>
-            <HoverPreviewPanel
+            <EnhancedPreviewPanel
               challenge={hoveredChallenge}
+              boardData={previewBoardData}
+              isBoardLoading={isBoardLoading}
               categoryEmoji={currentCategory.emoji}
               onViewDetail={(id) => navigate(`/challenges/${id}`)}
             />
           </div>
         </div>
+
       </div>
 
       {/* 챌린지 만들기 FAB */}
