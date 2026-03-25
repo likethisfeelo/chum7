@@ -413,7 +413,6 @@ export const FeedPage = () => {
                   onReact={() => { void reactions.react(post); }}
                   onDismissRecommendation={(item) => { void reactions.dismiss(post.plazaPostId, item); }}
                   initialSaved={savedPostIds.has(post.plazaPostId)}
-                  onHashtagClick={handleCategorySelect}
                   onUserHashtagClick={handleUserHashtagClick}
                 />
               ))
