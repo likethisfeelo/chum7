@@ -432,7 +432,7 @@ export const ChallengeFeedPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <div className="mx-auto min-h-screen w-full max-w-3xl bg-gray-50 pb-20 md:border-x md:border-gray-200">
+      <div className="mx-auto min-h-screen w-full max-w-3xl lg:max-w-6xl bg-gray-50 pb-20 md:border-x md:border-gray-200 lg:border-x-0">
 
         {/* 헤더 */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4 z-10">
@@ -481,32 +481,35 @@ export const ChallengeFeedPage = () => {
           </div>
         )}
 
-        <div className="p-6 space-y-4">
+        <div className="p-4 lg:p-6">
+          <div className="lg:grid lg:grid-cols-[300px_1fr] lg:gap-6 lg:items-start">
+
+          {/* ── Left Sidebar ── */}
+          <div className="space-y-4 lg:sticky lg:top-20">
 
           {/* 1) 챌린지 제목 + 설명 */}
           <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-            <h2 className="text-xl font-bold text-gray-900">{challengeData?.title || "챌린지"}</h2>
-            <p className="text-sm text-gray-600 mt-2">{challengeData?.description || "챌린지 소개를 불러오지 못했습니다."}</p>
-          </section>
-
-          {/* 중도 포기 배너 */}
-          {isGaveUp && (
-            <section className="bg-red-50 rounded-2xl p-5 border border-red-100 shadow-sm">
-              <h3 className="font-bold text-red-800 mb-1">🏳️ 중도 포기한 챌린지</h3>
-              <p className="text-sm text-red-700">인증 게시물 업로드가 제한되지만, 다른 참여자의 인증 피드는 계속 볼 수 있어요.</p>
-            </section>
-          )}
-
-          {/* 2) 챌린지 보드 미리보기 → 클릭하면 전체 보드 */}
-          <section
-            className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm cursor-pointer hover:border-primary-200 transition-colors"
-            onClick={() => navigate(`/challenge-board/${challengeId}`)}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-bold text-gray-900">챌린지 보드</h3>
-              <span className="text-xs font-semibold text-primary-600">전체 보기 →</span>
+            <div className="flex items-start gap-3 mb-2">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">{challengeData?.title || "챌린지"}</h2>
+                {challengeData?.category && (
+                  <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full mt-1 bg-gray-100 text-gray-600">
+                    {challengeData.category}
+                  </span>
+                )}
+              </div>
             </div>
-            <p className="text-sm text-gray-700 line-clamp-3">{boardPreviewText}</p>
+            <p className="text-sm text-gray-600">{challengeData?.description || "챌린지 소개를 불러오지 못했습니다."}</p>
+            <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-2 gap-2 text-center">
+              <div>
+                <p className="text-xs text-gray-400">참여자</p>
+                <p className="text-base font-bold text-gray-800">{challengeData?.stats?.totalParticipants || challengeData?.participantCount || 0}명</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">완료율</p>
+                <p className="text-base font-bold text-gray-800">{challengeData?.stats?.completionRate || 0}%</p>
+              </div>
+            </div>
           </section>
 
           {/* 3) 퀘스트 기간 진행 현황 (1~durationDays 체크) */}
@@ -569,6 +572,63 @@ export const ChallengeFeedPage = () => {
               </div>
             </section>
           )}
+
+          {/* 8) 오늘 인증완료 / 전체 참여자 — left sidebar desktop */}
+          <section className="hidden lg:grid grid-cols-2 gap-2">
+            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+              <p className="text-xs text-gray-500">오늘 인증</p>
+              <p className="mt-1 text-xl font-bold text-gray-900">{todayCompletedCount}명</p>
+            </div>
+            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+              <p className="text-xs text-gray-500">내 인증</p>
+              <p className="mt-1 text-xl font-bold text-gray-900">{myTotalCount}회</p>
+            </div>
+          </section>
+
+          {/* My record — left sidebar desktop */}
+          {userChallenge && (
+            <section className="hidden lg:block bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+              <h3 className="font-bold text-gray-900 mb-3">내 기록</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-500">총 인증</p>
+                  <p className="text-lg font-bold text-gray-900 mt-0.5">{myTotalCount}회</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-500">연속 인증</p>
+                  <p className="text-lg font-bold text-gray-900 mt-0.5">{userChallenge?.consecutiveDays ?? 0}일</p>
+                </div>
+              </div>
+              <div className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium ${canCheerNow ? "bg-primary-50 text-primary-700" : "bg-gray-50 text-gray-500"}`}>
+                {canCheerNow ? "🎟 오늘 인증 완료! 다른 참여자를 응원할 수 있어요." : "오늘 인증 후 응원권 기능이 열립니다."}
+              </div>
+            </section>
+          )}
+
+          </div>{/* ── End Left Sidebar ── */}
+
+          {/* ── Right Main Content ── */}
+          <div className="space-y-4 mt-4 lg:mt-0">
+
+          {/* 중도 포기 배너 */}
+          {isGaveUp && (
+            <section className="bg-red-50 rounded-2xl p-5 border border-red-100 shadow-sm">
+              <h3 className="font-bold text-red-800 mb-1">🏳️ 중도 포기한 챌린지</h3>
+              <p className="text-sm text-red-700">인증 게시물 업로드가 제한되지만, 다른 참여자의 인증 피드는 계속 볼 수 있어요.</p>
+            </section>
+          )}
+
+          {/* 2) 챌린지 보드 미리보기 */}
+          <section
+            className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm cursor-pointer hover:border-primary-200 transition-colors"
+            onClick={() => navigate(`/challenge-board/${challengeId}`)}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-gray-900">챌린지 보드</h3>
+              <span className="text-xs font-semibold text-primary-600">전체 보기 →</span>
+            </div>
+            <p className="text-sm text-gray-700 line-clamp-3">{boardPreviewText}</p>
+          </section>
 
           {/* 개인 퀘스트 제안 섹션 */}
           {challengeData?.personalQuestEnabled && (() => {
@@ -973,8 +1033,8 @@ export const ChallengeFeedPage = () => {
             </section>
           )}
 
-          {/* 8) 오늘 인증완료 / 전체 참여자 */}
-          <section className="grid grid-cols-2 gap-2">
+          {/* 8) 오늘 인증완료 / 전체 참여자 — mobile only */}
+          <section className="lg:hidden grid grid-cols-2 gap-2">
             <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
               <p className="text-xs text-gray-500">오늘 인증 완료</p>
               <p className="mt-1 text-xl font-bold text-gray-900">{todayCompletedCount}명</p>
@@ -1019,9 +1079,9 @@ export const ChallengeFeedPage = () => {
             );
           })()}
 
-          {/* 10) 내 응원권/기록 현황 */}
+          {/* 10) 내 응원권/기록 현황 — mobile only */}
           {userChallenge && (
-            <section className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+            <section className="lg:hidden bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
               <h3 className="font-bold text-gray-900 mb-3">내 응원권 / 기록</h3>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3">
@@ -1052,7 +1112,10 @@ export const ChallengeFeedPage = () => {
           >
             {leaderDmMutation.isPending ? "DM 연결중..." : "리더 DM"}
           </button>
-        </div>
+
+          </div>{/* ── End Right Main ── */}
+          </div>{/* ── End Grid ── */}
+        </div>{/* ── End p-4 wrapper ── */}
       </div>
 
     </div>
