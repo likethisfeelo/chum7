@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { QueryCommand, GetCommand, DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { createHash } from 'crypto';
 
-export type BlockType = 'text' | 'image' | 'link' | 'quote' | 'rich-text';
+export type BlockType = 'text' | 'image' | 'link' | 'quote' | 'rich-text' | 'video';
 
 export function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
@@ -124,7 +124,7 @@ export function validateBlocks(blocks: any[], allowQuote: boolean): { valid: boo
   for (const block of blocks) {
     if (!block || typeof block !== 'object') return { valid: false, message: 'each block must be an object' };
     if (typeof block.id !== 'string' || !block.id.trim()) return { valid: false, message: 'block.id is required' };
-    if (!['text', 'image', 'link', 'quote', 'rich-text'].includes(block.type)) {
+    if (!['text', 'image', 'link', 'quote', 'rich-text', 'video'].includes(block.type)) {
       return { valid: false, message: 'invalid block type' };
     }
     if (!allowQuote && block.type === 'quote') {
@@ -134,6 +134,12 @@ export function validateBlocks(blocks: any[], allowQuote: boolean): { valid: boo
     if (block.type === 'rich-text') {
       if (!block.content || typeof block.content !== 'object') {
         return { valid: false, message: 'rich-text.content must be a TipTap JSON object' };
+      }
+    }
+
+    if (block.type === 'video') {
+      if (typeof block.url !== 'string' || !/^https?:\/\//.test(block.url)) {
+        return { valid: false, message: 'video.url must be a valid URL' };
       }
     }
 
@@ -157,6 +163,11 @@ export function validateBlocks(blocks: any[], allowQuote: boolean): { valid: boo
         return { valid: false, message: 'link.label must be a string' };
       }
     }
+  }
+
+  const videoCount = blocks.filter((b) => b.type === 'video').length;
+  if (videoCount > 10) {
+    return { valid: false, message: '동영상은 최대 10개까지 추가할 수 있습니다' };
   }
 
   return { valid: true };

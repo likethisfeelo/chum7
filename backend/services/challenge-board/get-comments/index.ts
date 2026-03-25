@@ -36,6 +36,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       ExclusiveStartKey: exclusiveStartKey,
     }));
 
+    const setSize = (s: any): number => {
+      if (!s) return 0;
+      if (s instanceof Set) return s.size;
+      if (Array.isArray(s)) return s.length;
+      return 0;
+    };
+    const setHas = (s: any, v: string): boolean => {
+      if (!s) return false;
+      if (s instanceof Set) return s.has(v);
+      if (Array.isArray(s)) return s.includes(v);
+      return false;
+    };
+
     const comments = (result.Items ?? []).map((item: any) => ({
       commentId: item.commentId,
       challengeId: item.challengeId,
@@ -44,6 +57,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       isQuoted: !!item.isQuoted,
       quotedAt: item.quotedAt ?? null,
       createdAt: item.createdAt,
+      parentCommentId: item.parentCommentId ?? null,
+      reactions: {
+        '❤️': setSize(item.reaction_heart),
+        '🔥': setSize(item.reaction_fire),
+        '👏': setSize(item.reaction_clap),
+      },
+      myReactions: [
+        ...(setHas(item.reaction_heart, userId) ? ['❤️'] : []),
+        ...(setHas(item.reaction_fire, userId) ? ['🔥'] : []),
+        ...(setHas(item.reaction_clap, userId) ? ['👏'] : []),
+      ],
     }));
 
     return response(200, {
