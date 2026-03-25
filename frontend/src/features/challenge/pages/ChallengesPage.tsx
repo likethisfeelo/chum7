@@ -33,9 +33,31 @@ type Challenge = {
     completionRate?: number;
   };
   durationDays?: number;
+  challengeStartAt?: string;
+  recruitingEndAt?: string;
 };
 
 type LifecycleTab = 'recruiting' | 'active';
+
+// KST 자정 기준 D-day 계산 (양수 = 앞으로 N일, 0 = D-Day, 음수 = N일 지남)
+function calcDday(isoDate?: string): { label: string; daysLeft: number } | null {
+  if (!isoDate) return null;
+  const start = new Date(isoDate);
+  if (Number.isNaN(start.getTime())) return null;
+  const nowKst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const todayKst = new Date(Date.UTC(nowKst.getUTCFullYear(), nowKst.getUTCMonth(), nowKst.getUTCDate()));
+  const startKst = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  const diffDays = Math.round((startKst.getTime() - todayKst.getTime()) / (1000 * 60 * 60 * 24));
+  const label = diffDays > 0 ? `D-${diffDays}` : diffDays === 0 ? 'D-Day' : `D+${Math.abs(diffDays)}`;
+  return { label, daysLeft: diffDays };
+}
+
+function formatStartDate(isoDate?: string): string | null {
+  if (!isoDate) return null;
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+}
 
 const LIFECYCLE_TABS: { value: LifecycleTab; label: string }[] = [
   { value: 'recruiting', label: '모집중' },
@@ -212,6 +234,25 @@ const ChallengeCard = ({
           <span>👥 {challenge.stats?.totalParticipants || 0}명</span>
           <span>✅ {challenge.stats?.completionRate || 0}%</span>
         </div>
+        {lifecycle === 'recruiting' && (() => {
+          const dday = calcDday(challenge.challengeStartAt);
+          const startLabel = formatStartDate(challenge.challengeStartAt);
+          if (!dday || !startLabel) return null;
+          return (
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs text-gray-400">시작일 {startLabel}</span>
+              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                dday.daysLeft <= 3
+                  ? 'bg-rose-50 text-rose-600'
+                  : dday.daysLeft <= 7
+                  ? 'bg-amber-50 text-amber-600'
+                  : 'bg-gray-100 text-gray-500'
+              }`}>
+                {dday.label}
+              </span>
+            </div>
+          );
+        })()}
       </div>
     </div>
 
