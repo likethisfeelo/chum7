@@ -122,7 +122,7 @@ export const ChallengesPage = () => {
           <div className="mx-4 mt-4 rounded-2xl overflow-hidden shadow-sm relative">
             {activeBanner?.imageUrl ? (
               <>
-                <div className="aspect-square">
+                <div className="aspect-square md:aspect-[3/1]">
                   <img
                     src={activeBanner.imageUrl}
                     alt={currentCategory.label}
@@ -133,7 +133,7 @@ export const ChallengesPage = () => {
                 <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
               </>
             ) : (
-              <div className="aspect-square bg-gradient-to-br from-gray-700 to-gray-500 relative">
+              <div className="aspect-square md:aspect-[3/1] bg-gradient-to-br from-gray-700 to-gray-500 relative">
                 <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span className="text-6xl">{currentCategory.emoji}</span>
@@ -215,7 +215,7 @@ export const ChallengesPage = () => {
           </div>
 
           {/* Challenge List */}
-          <div className="px-4 pb-6 space-y-3">
+          <div className="px-4 pb-6 space-y-3 md:grid md:grid-cols-2 xl:grid-cols-3 md:space-y-0 md:gap-3">
             {isLoading ? (
               <Loading />
             ) : challenges.length === 0 ? (

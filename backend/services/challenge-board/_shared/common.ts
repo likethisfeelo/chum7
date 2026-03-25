@@ -118,6 +118,20 @@ export function createDailyAnonymousId(challengeId: string, userId: string, date
   return `${ANIMAL_DICTIONARY[animalIndex]}-${number}`;
 }
 
+// 챌린지 종료 후 익명 → 안정적 익명 공개용 (날짜 없이 challengeId + userId 기반)
+export function createPersistentAnonymousId(challengeId: string, userId: string): string {
+  const salt = process.env.ANON_ID_SALT;
+  if (!salt) throw new Error('ANON_SALT_NOT_CONFIGURED');
+
+  const source = `${challengeId}:${userId}:persistent:${salt}`;
+  const seed = createHash('sha256').update(source).digest('hex');
+
+  const animalIndex = parseInt(seed.slice(0, 8), 16) % ANIMAL_DICTIONARY.length;
+  const number = (parseInt(seed.slice(8, 16), 16) % 900) + 100;
+
+  return `${ANIMAL_DICTIONARY[animalIndex]}-${number}`;
+}
+
 export function validateBlocks(blocks: any[], allowQuote: boolean): { valid: boolean; message?: string } {
   if (!Array.isArray(blocks)) return { valid: false, message: 'blocks must be an array' };
 

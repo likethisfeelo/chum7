@@ -113,6 +113,7 @@ export class ChallengeBoardStack extends Stack {
     });
     challengeCommentsTable.grantReadData(getCommentsFn);
     userChallengesTable.grantReadData(getCommentsFn);
+    challengesTable.grantReadData(getCommentsFn);
     apiGateway.addRoutes({
       path: '/challenge-board/{challengeId}/comments',
       methods: [HttpMethod.GET],

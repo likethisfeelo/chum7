@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FiArrowLeft, FiEdit2, FiCheck, FiX, FiLink, FiImage, FiAlignLeft, FiAlignCenter, FiAlignRight, FiVideo, FiTrash2, FiCornerDownRight } from 'react-icons/fi';
@@ -200,7 +200,9 @@ const CommentItem = ({ comment, isReply = false, onReact, onReply }: {
 }) => (
   <div className={`rounded-xl border bg-gray-50 p-3 ${isReply ? 'border-primary-100 bg-primary-50/30 ml-4' : 'border-gray-100'}`}>
     <div className="flex items-center justify-between mb-1">
-      <span className="text-xs font-medium text-gray-500">{comment.dailyAnonymousId || '익명-000'}</span>
+      <span className={`text-xs font-medium ${comment.isRevealed ? 'text-primary-600' : 'text-gray-500'}`}>
+        {comment.isRevealed ? '🔓 ' : ''}{comment.dailyAnonymousId || '익명-000'}
+      </span>
       <div className="flex items-center gap-1.5">
         {comment.isQuoted && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">인용됨</span>}
         <span className="text-[10px] text-gray-300">
@@ -239,6 +241,8 @@ export const ChallengeBoardPage = () => {
   const [videoBlocks, setVideoBlocks] = useState<{ id: string; url: string }[]>([]);
   const [showVideoInput, setShowVideoInput] = useState(false);
   const [videoInputUrl, setVideoInputUrl] = useState('');
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editor = useEditor({
     extensions: TIPTAP_EXTENSIONS,
@@ -281,6 +285,35 @@ export const ChallengeBoardPage = () => {
       editor.setEditable(false);
     }
   }, [isEditing, editor, boardData]);
+
+  // ── 자동저장: 편집 중 콘텐츠 변경 시 3초 debounce 후 백그라운드 저장
+  useEffect(() => {
+    if (!isEditing || !editor) return;
+    const triggerAutoSave = () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      setAutoSaveStatus('idle');
+      autoSaveTimerRef.current = setTimeout(async () => {
+        setAutoSaveStatus('saving');
+        try {
+          const json = editor.getJSON();
+          const blocks = [
+            { id: crypto.randomUUID(), type: 'rich-text', content: json },
+            ...videoBlocks.map((v) => ({ id: v.id, type: 'video', url: v.url })),
+          ];
+          await apiClient.post(`/challenge-board/${challengeId}`, { blocks });
+          queryClient.invalidateQueries({ queryKey: ['challenge-board-page', challengeId] });
+          setAutoSaveStatus('saved');
+        } catch {
+          setAutoSaveStatus('idle');
+        }
+      }, 3000);
+    };
+    editor.on('update', triggerAutoSave);
+    return () => {
+      editor.off('update', triggerAutoSave);
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [isEditing, editor, videoBlocks, challengeId, queryClient]);
 
   // ── 영상 추가
   const addVideoBlock = () => {
@@ -406,6 +439,8 @@ export const ChallengeBoardPage = () => {
         )}
         {isEditing && (
           <div className="hidden md:flex items-center gap-2">
+            {autoSaveStatus === 'saving' && <span className="text-xs text-gray-400">저장 중...</span>}
+            {autoSaveStatus === 'saved' && <span className="text-xs text-emerald-600">✓ 자동저장됨</span>}
             <button onClick={() => setIsEditing(false)} className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
               <FiX className="w-4 h-4" />취소
             </button>
@@ -469,7 +504,9 @@ export const ChallengeBoardPage = () => {
                   </div>
                 )}
 
-                <div className="flex gap-2 mt-4">
+                <div className="flex gap-2 mt-4 items-center">
+                  {autoSaveStatus === 'saving' && <span className="text-xs text-gray-400 mr-1">저장 중...</span>}
+                  {autoSaveStatus === 'saved' && <span className="text-xs text-emerald-600 mr-1">✓ 자동저장됨</span>}
                   <button type="button" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}
                     className="flex-1 py-2.5 text-sm font-semibold text-white bg-primary-500 rounded-xl hover:bg-primary-600 disabled:opacity-50">
                     {saveMutation.isPending ? '저장 중...' : '저장하기'}
