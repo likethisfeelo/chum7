@@ -105,6 +105,8 @@ export function PlazaPostCard({ post, initialSaved, onUserHashtagClick, ...rest 
       key={post.plazaPostId}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -5, transition: { duration: 0.18, ease: 'easeOut' } }}
+      className="rounded-2xl transition-shadow duration-300 hover:shadow-xl hover:shadow-black/[0.06]"
     >
       {post.postType === 'recruitment' && <RecruitmentCard {...cardProps} />}
       {post.postType === 'progress_update' && <ProgressUpdateCard {...cardProps} />}

@@ -216,7 +216,7 @@ const ChallengeCard = ({
     onClick={() => onNavigate(challenge.challengeId)}
     onMouseEnter={() => onHover(challenge)}
     onMouseLeave={onLeave}
-    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-gray-200 active:scale-[0.99] transition-all"
+    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-primary-100/40 hover:border-primary-100 active:scale-[0.98]"
   >
     <div className="flex items-start gap-4">
       <div className="w-14 h-14 bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
