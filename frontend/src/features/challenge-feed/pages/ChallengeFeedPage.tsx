@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FiArrowLeft } from "react-icons/fi";
@@ -14,6 +14,351 @@ import {
   getRemedyType,
   getRemainingRemedyCount,
 } from "@/features/challenge/utils/flowPolicy";
+
+// ─── 이모지 반응 상수 ──────────────────────────────────────────────────
+const REACTION_EMOJIS = [
+  { emoji: "🔥", label: "불꽃" },
+  { emoji: "💪", label: "파이팅" },
+  { emoji: "👏", label: "박수" },
+  { emoji: "❤️", label: "좋아요" },
+  { emoji: "🎉", label: "축하" },
+  { emoji: "⭐", label: "최고예요" },
+  { emoji: "😮", label: "대단해" },
+  { emoji: "😂", label: "웃겨요" },
+  { emoji: "🙌", label: "화이팅" },
+  { emoji: "💡", label: "인사이트" },
+] as const;
+
+type EmojiReaction = { emoji: string; count: number; myReacted: boolean };
+type FeedComment = {
+  commentId: string;
+  displayName: string;
+  isLeader: boolean;
+  isOwn: boolean;
+  content: string;
+  createdAt: string;
+};
+
+// ─── 이모지 반응 컴포넌트 ──────────────────────────────────────────────
+function VerificationReactions({
+  verificationId,
+  challengeId,
+  canInteract,
+}: {
+  verificationId: string;
+  challengeId: string;
+  canInteract: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [showPicker, setShowPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  const { data: reactions = [] } = useQuery<EmojiReaction[]>({
+    queryKey: ["verification-reactions", verificationId],
+    queryFn: async () => {
+      const res = await apiClient.get(
+        `/challenge-feed/${challengeId}/verifications/${verificationId}/reactions`,
+      );
+      return res.data.data ?? [];
+    },
+    staleTime: 30_000,
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async (emoji: string) => {
+      const existing = reactions.find((r) => r.emoji === emoji);
+      if (existing?.myReacted) {
+        await apiClient.delete(
+          `/challenge-feed/${challengeId}/verifications/${verificationId}/reactions`,
+          { data: { emoji } },
+        );
+      } else {
+        await apiClient.post(
+          `/challenge-feed/${challengeId}/verifications/${verificationId}/reactions`,
+          { emoji },
+        );
+      }
+    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["verification-reactions", verificationId] }),
+    onError: () => toast.error("반응 처리에 실패했어요"),
+  });
+
+  // picker 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!showPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showPicker]);
+
+  const activeReactions = reactions.filter((r) => r.count > 0);
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {/* 기존 반응 pills */}
+      {activeReactions.map((r) => (
+        <button
+          key={r.emoji}
+          onClick={() => canInteract && toggleMutation.mutate(r.emoji)}
+          disabled={!canInteract || toggleMutation.isPending}
+          title={!canInteract ? "챌린지 기간에만 반응할 수 있어요" : undefined}
+          className={[
+            "flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all select-none",
+            r.myReacted
+              ? "bg-primary-100 border border-primary-300 text-primary-700"
+              : "bg-white/60 border border-gray-200 text-gray-600",
+            canInteract ? "hover:scale-105 active:scale-95" : "cursor-default opacity-70",
+          ].join(" ")}
+        >
+          <span className="text-sm leading-none">{r.emoji}</span>
+          <span>{r.count}</span>
+        </button>
+      ))}
+
+      {/* + 반응 추가 버튼 */}
+      {canInteract && (
+        <div className="relative" ref={pickerRef}>
+          <button
+            onClick={() => setShowPicker((v) => !v)}
+            className="flex items-center gap-1 px-2 py-1 rounded-full text-xs text-gray-500 bg-white/50 border border-dashed border-gray-300 hover:bg-white/80 transition-all"
+          >
+            <span className="text-base leading-none">😊</span>
+            <span>+</span>
+          </button>
+
+          {showPicker && (
+            <div className="absolute bottom-full left-0 mb-2 z-30 glass-panel rounded-2xl p-3 shadow-xl border border-white/60">
+              <p className="text-[10px] text-gray-400 mb-2 font-medium">반응 선택</p>
+              <div className="grid grid-cols-5 gap-1">
+                {REACTION_EMOJIS.map(({ emoji, label }) => {
+                  const existing = reactions.find((r) => r.emoji === emoji);
+                  return (
+                    <button
+                      key={emoji}
+                      onClick={() => {
+                        toggleMutation.mutate(emoji);
+                        setShowPicker(false);
+                      }}
+                      title={label}
+                      className={[
+                        "w-10 h-10 flex flex-col items-center justify-center rounded-xl text-xl transition-all",
+                        "hover:scale-110 active:scale-95",
+                        existing?.myReacted ? "bg-primary-100 ring-1 ring-primary-300" : "hover:bg-gray-100/80",
+                      ].join(" ")}
+                    >
+                      {emoji}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 비활성 상태 안내 */}
+      {!canInteract && activeReactions.length === 0 && (
+        <span className="text-[11px] text-gray-400">반응 없음</span>
+      )}
+    </div>
+  );
+}
+
+// ─── 댓글 컴포넌트 ────────────────────────────────────────────────────
+function VerificationComments({
+  verificationId,
+  challengeId,
+  canComment,
+  challengeEnded,
+}: {
+  verificationId: string;
+  challengeId: string;
+  canComment: boolean;
+  challengeEnded: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const { data: comments = [], isLoading } = useQuery<FeedComment[]>({
+    queryKey: ["verification-comments", verificationId],
+    queryFn: async () => {
+      const res = await apiClient.get(
+        `/challenge-feed/${challengeId}/verifications/${verificationId}/comments`,
+      );
+      return res.data.data ?? [];
+    },
+    enabled: open,
+    staleTime: 15_000,
+  });
+
+  const addMutation = useMutation({
+    mutationFn: async (content: string) =>
+      apiClient.post(
+        `/challenge-feed/${challengeId}/verifications/${verificationId}/comments`,
+        { content },
+      ),
+    onSuccess: () => {
+      setText("");
+      queryClient.invalidateQueries({ queryKey: ["verification-comments", verificationId] });
+    },
+    onError: () => toast.error("댓글 작성에 실패했어요"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (commentId: string) =>
+      apiClient.delete(
+        `/challenge-feed/${challengeId}/verifications/${verificationId}/comments/${commentId}`,
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["verification-comments", verificationId] }),
+  });
+
+  const handleOpen = useCallback(() => {
+    setOpen((v) => {
+      if (!v) setTimeout(() => inputRef.current?.focus(), 150);
+      return !v;
+    });
+  }, []);
+
+  const handleSubmit = useCallback(() => {
+    const trimmed = text.trim();
+    if (!trimmed || addMutation.isPending) return;
+    addMutation.mutate(trimmed);
+  }, [text, addMutation]);
+
+  return (
+    <div>
+      {/* 댓글 토글 버튼 */}
+      <button
+        onClick={handleOpen}
+        className="flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-primary-600 transition-colors"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+        <span>
+          {open && comments.length > 0 ? `댓글 ${comments.length}개` : "댓글"}
+        </span>
+        {open ? (
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M18 15l-6-6-6 6" />
+          </svg>
+        ) : (
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        )}
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-3">
+          {/* 댓글 목록 */}
+          {isLoading ? (
+            <p className="text-xs text-gray-400 py-1">불러오는 중...</p>
+          ) : comments.length === 0 ? (
+            <p className="text-xs text-gray-400 py-1 text-center">아직 댓글이 없어요. 첫 댓글을 남겨보세요!</p>
+          ) : (
+            <div className="space-y-2.5">
+              {comments.map((c) => {
+                /* 진행 중엔 익명, 종료 후엔 실제 활동명 */
+                const displayName = challengeEnded
+                  ? c.displayName
+                  : c.isOwn
+                  ? "나"
+                  : "익명 참여자";
+
+                return (
+                  <div key={c.commentId} className="flex items-start gap-2">
+                    {/* 아바타 */}
+                    <div
+                      className={[
+                        "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0",
+                        c.isLeader
+                          ? "bg-yellow-100 text-yellow-700"
+                          : c.isOwn
+                          ? "bg-primary-100 text-primary-700"
+                          : "bg-gray-100 text-gray-600",
+                      ].join(" ")}
+                    >
+                      {c.isLeader ? "👑" : displayName[0]?.toUpperCase() ?? "?"}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-semibold text-gray-700">
+                          {c.isLeader && <span className="mr-0.5">👑</span>}
+                          {displayName}
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(c.createdAt).toLocaleDateString("ko-KR", {
+                            month: "2-digit",
+                            day: "2-digit",
+                          })}
+                        </span>
+                        {c.isOwn && (
+                          <button
+                            onClick={() => deleteMutation.mutate(c.commentId)}
+                            disabled={deleteMutation.isPending}
+                            className="text-[10px] text-gray-400 hover:text-red-500 transition-colors ml-auto"
+                          >
+                            삭제
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5 leading-relaxed break-words">
+                        {c.content}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 입력창 or 비활성 안내 */}
+          {canComment ? (
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+                placeholder="응원 댓글 입력... (Enter)"
+                maxLength={300}
+                className="flex-1 text-xs px-3 py-2 rounded-xl bg-white/70 border border-gray-200 focus:outline-none focus:border-primary-300 placeholder-gray-400"
+              />
+              <button
+                onClick={handleSubmit}
+                disabled={!text.trim() || addMutation.isPending}
+                className="px-3 py-2 rounded-xl bg-primary-500 text-white text-xs font-semibold disabled:opacity-40 hover:bg-primary-600 transition-colors"
+              >
+                {addMutation.isPending ? "..." : "게시"}
+              </button>
+            </div>
+          ) : (
+            <p className="text-[11px] text-gray-400 text-center py-1 bg-gray-50/50 rounded-lg">
+              {challengeEnded
+                ? "챌린지가 종료되어 댓글을 작성할 수 없어요"
+                : "참여자만 댓글을 작성할 수 있어요"}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const FeedVideo = ({ src }: { src: string }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -1051,6 +1396,25 @@ export const ChallengeFeedPage = () => {
                             {new Date(item.createdAt).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
                           </span>
                         )}
+                      </div>
+
+                      {/* 이모지 반응 */}
+                      <div className="mt-3 pt-3 border-t border-white/40">
+                        <VerificationReactions
+                          verificationId={item.verificationId}
+                          challengeId={challengeId!}
+                          canInteract={isActive && Boolean(userChallenge)}
+                        />
+                      </div>
+
+                      {/* 댓글 */}
+                      <div className="mt-2">
+                        <VerificationComments
+                          verificationId={item.verificationId}
+                          challengeId={challengeId!}
+                          canComment={isActive && Boolean(userChallenge) && !isGaveUp}
+                          challengeEnded={!isActive}
+                        />
                       </div>
                     </div>
                   </article>
