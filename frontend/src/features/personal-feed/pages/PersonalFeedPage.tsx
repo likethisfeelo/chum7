@@ -213,6 +213,7 @@ function VerificationCard({ item }: { item: VerificationFeedItem }) {
 
 function VerificationsTab({ userId }: { userId: string }) {
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const [selectedItem, setSelectedItem] = useState<VerificationFeedItem | null>(null);
 
   const {
     data,
@@ -257,15 +258,64 @@ function VerificationsTab({ userId }: { userId: string }) {
   }
 
   return (
-    <div className="space-y-3 pb-20">
-      {allItems.map((item) => (
-        <VerificationCard key={item.verificationId} item={item} />
-      ))}
-      <div ref={sentinelRef} className="h-4" />
-      {isFetchingNextPage && (
-        <div className="py-4 text-center text-sm text-gray-400">불러오는 중...</div>
+    <>
+      {/* 3열 인스타그램 스타일 그리드 */}
+      <div className="grid grid-cols-3 gap-0.5 pb-20">
+        {allItems.map((item) => {
+          const typeIcon = VERIFICATION_TYPE_ICON[item.verificationType] ?? '📋';
+          return (
+            <button
+              key={item.verificationId}
+              onClick={() => setSelectedItem(item)}
+              className="relative aspect-[4/5] overflow-hidden bg-gray-100 hover:opacity-90 transition-opacity"
+            >
+              {item.imageUrl ? (
+                <img src={item.imageUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 p-2">
+                  <span className="text-xl mb-1.5">{typeIcon}</span>
+                  <p className="text-[10px] text-gray-600 text-center line-clamp-5 leading-relaxed">
+                    {item.todayNote || item.challengeTitle}
+                  </p>
+                </div>
+              )}
+              {/* Day 배지 */}
+              <div className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                D{item.day ?? '-'}
+              </div>
+              {/* 점수 배지 */}
+              {item.score > 0 && (
+                <div className="absolute bottom-1.5 right-1.5 bg-primary-500/90 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                  +{item.score}점
+                </div>
+              )}
+            </button>
+          );
+        })}
+        <div ref={sentinelRef} className="col-span-3 h-4" />
+        {isFetchingNextPage && (
+          <div className="col-span-3 py-4 text-center text-sm text-gray-400">불러오는 중...</div>
+        )}
+      </div>
+
+      {/* 상세 모달 */}
+      {selectedItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setSelectedItem(null)}
+        >
+          <div className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <VerificationCard item={selectedItem} />
+            <button
+              onClick={() => setSelectedItem(null)}
+              className="w-full mt-2 py-2.5 glass-card rounded-xl text-sm font-medium text-gray-600"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -727,6 +777,7 @@ function SavedPostCard({ item }: { item: SavedPostItem }) {
 function PostsTab({ userId, isOwn }: { userId: string; isOwn: boolean }) {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [showEditor, setShowEditor] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<PersonalPost | null>(null);
 
   const {
     data: postsData,
@@ -770,61 +821,110 @@ function PostsTab({ userId, isOwn }: { userId: string; isOwn: boolean }) {
   const savedPosts = savedData?.savedPosts ?? [];
 
   return (
-    <div className="space-y-3 pb-20">
-      {/* 본인 피드: 게시 버튼 */}
-      {isOwn && (
-        <button
-          onClick={() => setShowEditor((v) => !v)}
-          className="w-full glass-panel rounded-2xl px-4 py-3 text-sm text-gray-400 text-left hover:bg-white/60 transition-colors"
-        >
-          ✏️ 자유롭게 기록해보세요...
-        </button>
-      )}
+    <>
+      <div className="space-y-3 pb-20">
+        {/* 본인 피드: 게시 버튼 */}
+        {isOwn && (
+          <button
+            onClick={() => setShowEditor((v) => !v)}
+            className="w-full glass-panel rounded-2xl px-4 py-3 text-sm text-gray-400 text-left hover:bg-white/60 transition-colors"
+          >
+            ✏️ 자유롭게 기록해보세요...
+          </button>
+        )}
 
-      {showEditor && isOwn && (
-        <PersonalPostEditor onCreated={() => setShowEditor(false)} />
-      )}
+        {showEditor && isOwn && (
+          <PersonalPostEditor onCreated={() => setShowEditor(false)} />
+        )}
 
-      {/* 자유 게시물 목록 */}
-      {postsLoading ? (
-        <Loading />
-      ) : allPosts.length === 0 && !isOwn ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-3xl mb-2">📝</p>
-          <p className="text-sm font-semibold text-gray-700">아직 게시물이 없어요</p>
-        </div>
-      ) : (
-        <>
-          {allPosts.map((post) => (
-            <PersonalPostCard key={post.postId} post={post} isOwn={isOwn} />
-          ))}
-          <div ref={sentinelRef} className="h-4" />
-          {isFetchingNextPage && (
-            <div className="py-4 text-center text-sm text-gray-400">불러오는 중...</div>
-          )}
-        </>
-      )}
-
-      {/* 저장된 광장 게시물 (본인만) */}
-      {isOwn && (
-        <>
-          <div className="pt-4 pb-2">
-            <h3 className="text-sm font-semibold text-gray-500">저장한 광장 게시물</h3>
+        {/* 3열 인스타그램 스타일 그리드 */}
+        {postsLoading ? (
+          <Loading />
+        ) : allPosts.length === 0 && !isOwn ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <p className="text-3xl mb-2">📝</p>
+            <p className="text-sm font-semibold text-gray-700">아직 게시물이 없어요</p>
           </div>
-          {savedLoading ? (
-            <Loading />
-          ) : savedPosts.length === 0 ? (
-            <div className="glass-card rounded-2xl p-4 text-center">
-              <p className="text-sm text-gray-400">광장 게시물에서 북마크를 눌러 저장해보세요 🔖</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-0.5">
+            {allPosts.map((post) => {
+              const firstImage = post.imageUrls.find(Boolean);
+              const multiImage = post.imageUrls.filter(Boolean).length > 1;
+              const visIcon = VISIBILITY_META[post.visibility]?.icon ?? '👥';
+              return (
+                <button
+                  key={post.postId}
+                  onClick={() => setSelectedPost(post)}
+                  className="relative aspect-[4/5] overflow-hidden bg-gray-100 hover:opacity-90 transition-opacity"
+                >
+                  {firstImage ? (
+                    <img src={firstImage} alt="" loading="lazy" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex flex-col justify-center bg-gradient-to-br from-gray-50 to-white/80 p-2">
+                      <p className="text-[10px] text-gray-600 text-center line-clamp-6 leading-relaxed whitespace-pre-wrap">
+                        {post.content}
+                      </p>
+                    </div>
+                  )}
+                  {/* 복수 이미지 아이콘 */}
+                  {multiImage && (
+                    <div className="absolute top-1.5 right-1.5 bg-black/60 backdrop-blur-sm rounded-full p-1">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+                        <path d="M2 6h2v14h14v2H2V6zm4-4h16v16H6V2zm2 2v12h12V4H8z" />
+                      </svg>
+                    </div>
+                  )}
+                  {/* 공개범위 */}
+                  <div className="absolute bottom-1 left-1.5 text-[11px]">{visIcon}</div>
+                </button>
+              );
+            })}
+            <div ref={sentinelRef} className="col-span-3 h-4" />
+            {isFetchingNextPage && (
+              <div className="col-span-3 py-4 text-center text-sm text-gray-400">불러오는 중...</div>
+            )}
+          </div>
+        )}
+
+        {/* 저장된 광장 게시물 (본인만) */}
+        {isOwn && (
+          <>
+            <div className="pt-4 pb-2">
+              <h3 className="text-sm font-semibold text-gray-500">저장한 광장 게시물</h3>
             </div>
-          ) : (
-            savedPosts.map((item) => (
-              <SavedPostCard key={item.saveId} item={item} />
-            ))
-          )}
-        </>
+            {savedLoading ? (
+              <Loading />
+            ) : savedPosts.length === 0 ? (
+              <div className="glass-card rounded-2xl p-4 text-center">
+                <p className="text-sm text-gray-400">광장 게시물에서 북마크를 눌러 저장해보세요 🔖</p>
+              </div>
+            ) : (
+              savedPosts.map((item) => (
+                <SavedPostCard key={item.saveId} item={item} />
+              ))
+            )}
+          </>
+        )}
+      </div>
+
+      {/* 자유 게시물 상세 모달 */}
+      {selectedPost && (
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setSelectedPost(null)}
+        >
+          <div className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <PersonalPostCard post={selectedPost} isOwn={isOwn} />
+            <button
+              onClick={() => setSelectedPost(null)}
+              className="w-full mt-2 py-2.5 glass-card rounded-xl text-sm font-medium text-gray-600"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
