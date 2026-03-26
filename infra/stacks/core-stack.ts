@@ -78,6 +78,10 @@ export class CoreStack extends Stack {
   // Character & Mythology System
   public readonly charactersTable: Table;
 
+  // Verification Feed Social (댓글 + 이모지 반응)
+  public readonly verificationCommentsTable: Table;
+  public readonly verificationReactionsTable: Table;
+
   public readonly uploadsBucket: IBucket;
   public readonly snsTopic: Topic;
   public readonly eventBus: EventBus;
@@ -727,6 +731,35 @@ export class CoreStack extends Stack {
     this.charactersTable.addGlobalSecondaryIndex({
       indexName: 'userId-index',
       partitionKey: { name: 'userId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    // ==================== Verification Feed Social ====================
+    this.verificationCommentsTable = new Table(this, 'VerificationCommentsTable', {
+      tableName: `chme-${stage}-verification-comments`,
+      partitionKey: { name: 'commentId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+    });
+    this.verificationCommentsTable.addGlobalSecondaryIndex({
+      indexName: 'verificationId-createdAt-index',
+      partitionKey: { name: 'verificationId', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    this.verificationReactionsTable = new Table(this, 'VerificationReactionsTable', {
+      tableName: `chme-${stage}-verification-reactions`,
+      partitionKey: { name: 'reactionId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: isProd,
+      removalPolicy,
+    });
+    this.verificationReactionsTable.addGlobalSecondaryIndex({
+      indexName: 'verificationId-index',
+      partitionKey: { name: 'verificationId', type: AttributeType.STRING },
       sortKey: { name: 'createdAt', type: AttributeType.STRING },
       projectionType: ProjectionType.ALL,
     });
