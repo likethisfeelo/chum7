@@ -136,46 +136,78 @@ function LayerGate({ layer, minLayer, children }: {
 
 // ─── Tab 01: 인증 게시물 ───────────────────────────────────────────────
 function VerificationCard({ item }: { item: VerificationFeedItem }) {
+  const typeIcon = VERIFICATION_TYPE_ICON[item.verificationType] ?? '📋';
+  const typeLabel = item.verificationType === 'image' ? '사진' : item.verificationType === 'video' ? '영상' : item.verificationType === 'link' ? '링크' : '텍스트';
+
   return (
-    <div className="rounded-2xl overflow-hidden glass-card">
-      {/* 4:5 비율 이미지 */}
+    <article className="rounded-2xl overflow-hidden glass-card">
+      {/* 4:5 비율 이미지 — 오버레이 배지 포함 */}
       {item.imageUrl && (
-        <div className="aspect-[4/5] overflow-hidden">
+        <div className="aspect-[4/5] overflow-hidden relative">
           <img
             src={item.imageUrl}
             alt="인증 이미지"
             loading="lazy"
             className="w-full h-full object-cover"
           />
+          {/* 그라디언트 오버레이 */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+          {/* Day + 타입 배지 — 상단 좌측 */}
+          <div className="absolute top-3 left-3 flex items-center gap-1 bg-black/50 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
+            <span>{typeIcon}</span>
+            <span>Day {item.day ?? '-'}</span>
+          </div>
+          {/* 점수 배지 — 상단 우측 */}
+          {item.score > 0 && (
+            <div className="absolute top-3 right-3 bg-primary-500/90 backdrop-blur-sm text-white text-[11px] font-bold px-2.5 py-1 rounded-full">
+              +{item.score}점
+            </div>
+          )}
         </div>
       )}
+
       <div className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">{VERIFICATION_TYPE_ICON[item.verificationType] ?? '📋'}</span>
-            <div>
-              <p className="text-xs font-semibold text-gray-700 line-clamp-1">
+        {/* 챌린지 정보 헤더 */}
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {!item.imageUrl && (
+              <span className="text-lg flex-shrink-0">{typeIcon}</span>
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-800 line-clamp-1">
                 {item.challengeTitle ?? '챌린지'}
               </p>
-              {item.day != null && (
-                <p className="text-[11px] text-gray-400">Day {item.day}</p>
-              )}
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                {item.day != null && (
+                  <span className="text-[11px] font-semibold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-md border border-primary-100">
+                    Day {item.day}
+                  </span>
+                )}
+                {!item.imageUrl && (
+                  <span className="text-[11px] text-gray-400">{typeLabel}</span>
+                )}
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            {item.score > 0 && (
-              <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full border border-primary-100">
-                +{item.score}점
-              </span>
-            )}
-          </div>
+          {item.score > 0 && !item.imageUrl && (
+            <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full border border-primary-100 flex-shrink-0">
+              +{item.score}점
+            </span>
+          )}
         </div>
+
+        {/* 인증 내용 */}
         {item.todayNote && (
-          <p className="text-sm text-gray-600 leading-relaxed line-clamp-3 mt-1">{item.todayNote}</p>
+          <p className="text-sm text-gray-600 leading-relaxed line-clamp-3">{item.todayNote}</p>
         )}
-        <p className="text-[11px] text-gray-400 mt-2">{formatDate(item.createdAt)}</p>
+
+        {/* 하단: 날짜 + 타입 */}
+        <div className="flex items-center justify-between mt-3 pt-2 border-t border-white/50">
+          <span className="text-[11px] text-gray-400">{typeIcon} {typeLabel}</span>
+          <span className="text-[11px] text-gray-400">{formatDate(item.createdAt)}</span>
+        </div>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -573,29 +605,59 @@ function PersonalPostCard({ post, isOwn }: { post: PersonalPost; isOwn: boolean 
   });
 
   return (
-    <div className="glass-card rounded-2xl p-4">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[11px] text-gray-400">
-          {visibilityMeta.icon} {visibilityMeta.label} · {formatDate(post.createdAt)}
-        </span>
-        {isOwn && !editing && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setEditing(true); setEditContent(post.content ?? ''); }}
-              className="text-xs text-gray-400 hover:text-gray-600"
-            >
-              수정
-            </button>
-            <button
-              onClick={() => deleteMutation.mutate()}
-              disabled={deleteMutation.isPending}
-              className="text-xs text-red-400 hover:text-red-600"
-            >
-              삭제
-            </button>
+    <article className="glass-card rounded-2xl overflow-hidden">
+      {/* 단일 이미지 — 4:5 엣지-투-엣지 (최상단) */}
+      {post.imageUrls.filter(Boolean).length === 1 && (
+        <div className="aspect-[4/5] overflow-hidden">
+          <img
+            src={post.imageUrls[0]!}
+            alt=""
+            loading="lazy"
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+      {/* 복수 이미지 — 2열 그리드 (최상단) */}
+      {post.imageUrls.filter(Boolean).length > 1 && (
+        <div className="grid grid-cols-2 gap-0.5">
+          {post.imageUrls.filter(Boolean).map((url, i) => (
+            <img
+              key={i}
+              src={url!}
+              alt=""
+              loading="lazy"
+              className="w-full aspect-[4/5] object-cover"
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-medium text-gray-500 bg-gray-100/70 px-2 py-0.5 rounded-full">
+              {visibilityMeta.icon} {visibilityMeta.label}
+            </span>
+            <span className="text-[11px] text-gray-400">{formatDate(post.createdAt)}</span>
           </div>
-        )}
-      </div>
+          {isOwn && !editing && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setEditing(true); setEditContent(post.content ?? ''); }}
+                className="text-xs text-gray-400 hover:text-gray-600"
+              >
+                수정
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+                className="text-xs text-red-400 hover:text-red-600"
+              >
+                삭제
+              </button>
+            </div>
+          )}
+        </div>
       {editing ? (
         <div className="space-y-2">
           <textarea
@@ -625,33 +687,8 @@ function PersonalPostCard({ post, isOwn }: { post: PersonalPost; isOwn: boolean 
           <p className="text-sm text-gray-700 whitespace-pre-wrap">{post.content}</p>
         )
       )}
-      {post.imageUrls.length > 0 && (
-        post.imageUrls.filter(Boolean).length === 1 ? (
-          /* 단일 이미지 — 4:5 비율, 엣지-투-엣지 (패딩 바깥으로 빠져나가기) */
-          <div className="-mx-4 mt-3 aspect-[4/5] overflow-hidden">
-            <img
-              src={post.imageUrls[0]!}
-              alt=""
-              loading="lazy"
-              className="w-full h-full object-cover"
-            />
-          </div>
-        ) : (
-          /* 복수 이미지 — 2열 그리드 */
-          <div className="grid grid-cols-2 gap-1 mt-3 rounded-xl overflow-hidden">
-            {post.imageUrls.filter(Boolean).map((url, i) => (
-              <img
-                key={i}
-                src={url!}
-                alt=""
-                loading="lazy"
-                className="w-full aspect-[4/5] object-cover"
-              />
-            ))}
-          </div>
-        )
-      )}
     </div>
+    </article>
   );
 }
 

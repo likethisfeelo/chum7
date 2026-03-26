@@ -940,53 +940,119 @@ export const ChallengeFeedPage = () => {
                 🌱 개인퀘스트 {personalFeedVerifications.length > 0 && <span className="ml-1 text-xs text-gray-400">{personalFeedVerifications.length}</span>}
               </button>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {currentFeedVerifications.length === 0 ? (
-                <p className="text-sm text-gray-500 py-4 text-center">
+                <p className="text-sm text-gray-500 py-8 text-center">
                   {feedTab === "leader" ? "아직 올라온 리더퀘스트 인증이 없습니다." : "아직 올라온 개인퀘스트 인증이 없습니다."}
                 </p>
               ) : (
                 currentFeedVerifications.map((item: any) => (
-                  <article key={item.verificationId} className="glass-card rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs text-gray-500">{item.isAnonymous ? "익명 참여자" : item.userName || "참여자"}</p>
-                      <p className="text-xs text-gray-400">Day {item.day || "-"}</p>
-                    </div>
-                    {item.todayNote && (
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{item.todayNote}</p>
-                    )}
-                    {item.verificationType === "video" && item.mediaValidationStatus === "invalid" && (
-                      <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-2 space-y-2">
-                        <p>영상 검증에서 문제가 발견되었습니다. 다시 업로드 해주세요.</p>
-                        {item.userId === userChallenge?.userId && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOpenVideoPickerSignal((prev) => prev + 1);
-                              toast("영상 다시 인증을 시작합니다.", { icon: "📹" });
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                            className="px-2 py-1 rounded border border-red-300 bg-white text-red-700"
-                          >
-                            영상 다시 인증하기
-                          </button>
+                  <article key={item.verificationId} className="glass-card rounded-2xl overflow-hidden">
+                    {/* 4:5 이미지 — 오버레이 배지 포함 */}
+                    {item.verificationType === "image" && item.imageUrl && (
+                      <div className="aspect-[4/5] overflow-hidden relative">
+                        <img
+                          src={resolveMediaUrl(item.imageUrl)}
+                          alt="verification"
+                          loading="lazy"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                        <div className="absolute top-3 left-3 flex items-center gap-1 bg-black/50 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                          <span>📸</span>
+                          <span>Day {item.day || "-"}</span>
+                        </div>
+                        {item.score > 0 && (
+                          <div className="absolute top-3 right-3 bg-primary-500/90 backdrop-blur-sm text-white text-[11px] font-bold px-2.5 py-1 rounded-full">
+                            +{item.score}pt
+                          </div>
                         )}
                       </div>
                     )}
-                    {item.verificationType === "video" && item.mediaValidationStatus === "pending" && (
-                      <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
-                        영상 메타데이터 검증 진행중입니다.
-                      </p>
-                    )}
-                    {item.verificationType === "image" && item.imageUrl && (
-                      <img src={resolveMediaUrl(item.imageUrl)} alt="verification" className="mt-2 w-full rounded-lg border border-gray-100" />
-                    )}
+
+                    {/* 영상 */}
                     {item.verificationType === "video" && item.videoUrl && (
                       <FeedVideo src={resolveMediaUrl(item.videoUrl)} />
                     )}
-                    {item.verificationType === "link" && item.linkUrl && (
-                      <LinkPreviewCard url={item.linkUrl} />
-                    )}
+
+                    <div className="p-4">
+                      {/* 유저 정보 헤더 */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center text-xs font-bold text-primary-700 flex-shrink-0">
+                            {item.isAnonymous ? "익" : (item.userName?.[0]?.toUpperCase() ?? "?")}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-800 truncate">
+                              {item.isAnonymous ? "익명 참여자" : item.userName || "참여자"}
+                            </p>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span className="text-[11px] font-semibold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-md border border-primary-100">
+                                Day {item.day || "-"}
+                              </span>
+                              {item.questTitle && (
+                                <span className="text-[11px] text-gray-500 truncate max-w-[140px]">{item.questTitle}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {/* 이미지 타입이 아닐 때 점수 */}
+                        {item.verificationType !== "image" && item.score > 0 && (
+                          <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2.5 py-1 rounded-full border border-primary-100 flex-shrink-0">
+                            +{item.score}pt
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 인증 내용 */}
+                      {item.todayNote && (
+                        <p className="text-sm text-gray-700 leading-relaxed line-clamp-4">{item.todayNote}</p>
+                      )}
+
+                      {/* 링크 */}
+                      {item.verificationType === "link" && item.linkUrl && (
+                        <div className="mt-2">
+                          <LinkPreviewCard url={item.linkUrl} />
+                        </div>
+                      )}
+
+                      {/* 영상 검증 오류/대기 */}
+                      {item.verificationType === "video" && item.mediaValidationStatus === "invalid" && (
+                        <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 space-y-2">
+                          <p>영상 검증에서 문제가 발견되었습니다. 다시 업로드 해주세요.</p>
+                          {item.userId === userChallenge?.userId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenVideoPickerSignal((prev) => prev + 1);
+                                toast("영상 다시 인증을 시작합니다.", { icon: "📹" });
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                              }}
+                              className="px-3 py-1 rounded-lg border border-red-300 bg-white text-red-700 font-medium"
+                            >
+                              영상 다시 인증하기
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {item.verificationType === "video" && item.mediaValidationStatus === "pending" && (
+                        <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
+                          영상 메타데이터 검증 진행중입니다.
+                        </p>
+                      )}
+
+                      {/* 하단: 타입 + 날짜 */}
+                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-white/50">
+                        <span className="text-[11px] text-gray-400">
+                          {item.verificationType === "image" ? "📸 사진" : item.verificationType === "video" ? "🎬 영상" : item.verificationType === "link" ? "🔗 링크" : "📝 텍스트"}
+                        </span>
+                        {item.createdAt && (
+                          <span className="text-[11px] text-gray-400">
+                            {new Date(item.createdAt).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </article>
                 ))
               )}
