@@ -170,6 +170,8 @@ new ChallengeBoardStack(app, `chme-${stage}-challenge-board`, {
   challengeCommentsTable: coreStack.challengeCommentsTable,
   challengePreviewsTable: coreStack.challengePreviewsTable,
   notificationsTable: coreStack.notificationsTable,
+  verificationCommentsTable: coreStack.verificationCommentsTable,
+  verificationReactionsTable: coreStack.verificationReactionsTable,
 });
 
 new PersonalFeedStack(app, `chme-${stage}-personal-feed`, {

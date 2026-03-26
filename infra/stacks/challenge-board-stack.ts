@@ -18,6 +18,8 @@ interface ChallengeBoardStackProps extends StackProps {
   challengeCommentsTable: Table;
   challengePreviewsTable: Table;
   notificationsTable: Table;
+  verificationCommentsTable: Table;
+  verificationReactionsTable: Table;
 }
 
 export class ChallengeBoardStack extends Stack {
@@ -34,6 +36,8 @@ export class ChallengeBoardStack extends Stack {
       challengeCommentsTable,
       challengePreviewsTable,
       notificationsTable,
+      verificationCommentsTable,
+      verificationReactionsTable,
     } = props;
 
     const commonEnv = {
@@ -45,6 +49,8 @@ export class ChallengeBoardStack extends Stack {
       CHALLENGE_COMMENTS_TABLE: challengeCommentsTable.tableName,
       CHALLENGE_PREVIEWS_TABLE: challengePreviewsTable.tableName,
       NOTIFICATIONS_TABLE: notificationsTable.tableName,
+      VERIFICATION_COMMENTS_TABLE: verificationCommentsTable.tableName,
+      VERIFICATION_REACTIONS_TABLE: verificationReactionsTable.tableName,
     };
 
     const commonProps = {
@@ -210,6 +216,85 @@ export class ChallengeBoardStack extends Stack {
       path: '/challenge-preview/{challengeId}',
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('LegacyUpsertChallengePreviewIntegration', upsertPreviewFn),
+      authorizer,
+    });
+
+    // ── 인증 피드 이모지 반응 ──────────────────────────────────────────
+    const getVerifReactionsFn = new NodejsFunction(this, 'GetVerifReactionsFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-feed-get-reactions`,
+      entry: path.join(__dirname, '../../backend/services/challenge-feed/get-verification-reactions/index.ts'),
+      handler: 'handler',
+    });
+    verificationReactionsTable.grantReadData(getVerifReactionsFn);
+    userChallengesTable.grantReadData(getVerifReactionsFn);
+    apiGateway.addRoutes({
+      path: '/challenge-feed/{challengeId}/verifications/{verificationId}/reactions',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('GetVerifReactionsIntegration', getVerifReactionsFn),
+      authorizer,
+    });
+
+    const toggleVerifReactionFn = new NodejsFunction(this, 'ToggleVerifReactionFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-feed-toggle-reaction`,
+      entry: path.join(__dirname, '../../backend/services/challenge-feed/toggle-verification-reaction/index.ts'),
+      handler: 'handler',
+    });
+    verificationReactionsTable.grantReadWriteData(toggleVerifReactionFn);
+    userChallengesTable.grantReadData(toggleVerifReactionFn);
+    challengesTable.grantReadData(toggleVerifReactionFn);
+    apiGateway.addRoutes({
+      path: '/challenge-feed/{challengeId}/verifications/{verificationId}/reactions',
+      methods: [HttpMethod.POST, HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration('ToggleVerifReactionIntegration', toggleVerifReactionFn),
+      authorizer,
+    });
+
+    // ── 인증 피드 댓글 ────────────────────────────────────────────────
+    const getVerifCommentsFn = new NodejsFunction(this, 'GetVerifCommentsFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-feed-get-comments`,
+      entry: path.join(__dirname, '../../backend/services/challenge-feed/get-verification-comments/index.ts'),
+      handler: 'handler',
+    });
+    verificationCommentsTable.grantReadData(getVerifCommentsFn);
+    userChallengesTable.grantReadData(getVerifCommentsFn);
+    challengesTable.grantReadData(getVerifCommentsFn);
+    apiGateway.addRoutes({
+      path: '/challenge-feed/{challengeId}/verifications/{verificationId}/comments',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('GetVerifCommentsIntegration', getVerifCommentsFn),
+      authorizer,
+    });
+
+    const submitVerifCommentFn = new NodejsFunction(this, 'SubmitVerifCommentFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-feed-submit-comment`,
+      entry: path.join(__dirname, '../../backend/services/challenge-feed/submit-verification-comment/index.ts'),
+      handler: 'handler',
+    });
+    verificationCommentsTable.grantWriteData(submitVerifCommentFn);
+    userChallengesTable.grantReadData(submitVerifCommentFn);
+    challengesTable.grantReadData(submitVerifCommentFn);
+    apiGateway.addRoutes({
+      path: '/challenge-feed/{challengeId}/verifications/{verificationId}/comments',
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration('SubmitVerifCommentIntegration', submitVerifCommentFn),
+      authorizer,
+    });
+
+    const deleteVerifCommentFn = new NodejsFunction(this, 'DeleteVerifCommentFn', {
+      ...commonProps,
+      functionName: `chme-${stage}-challenge-feed-delete-comment`,
+      entry: path.join(__dirname, '../../backend/services/challenge-feed/delete-verification-comment/index.ts'),
+      handler: 'handler',
+    });
+    verificationCommentsTable.grantReadWriteData(deleteVerifCommentFn);
+    apiGateway.addRoutes({
+      path: '/challenge-feed/{challengeId}/verifications/{verificationId}/comments/{commentId}',
+      methods: [HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration('DeleteVerifCommentIntegration', deleteVerifCommentFn),
       authorizer,
     });
   }

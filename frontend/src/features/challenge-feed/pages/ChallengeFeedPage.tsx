@@ -1292,10 +1292,10 @@ export const ChallengeFeedPage = () => {
                 </p>
               ) : (
                 currentFeedVerifications.map((item: any) => (
-                  <article key={item.verificationId} className="glass-card rounded-2xl overflow-hidden">
-                    {/* 4:5 이미지 — 오버레이 배지 포함 */}
+                  <article key={item.verificationId} className="glass-card rounded-2xl">
+                    {/* 4:5 이미지 — 오버레이 배지 포함 (overflow-hidden을 이미지 div에만 적용) */}
                     {item.verificationType === "image" && item.imageUrl && (
-                      <div className="aspect-[4/5] overflow-hidden relative">
+                      <div className="aspect-[4/5] overflow-hidden relative rounded-t-2xl">
                         <img
                           src={resolveMediaUrl(item.imageUrl)}
                           alt="verification"
