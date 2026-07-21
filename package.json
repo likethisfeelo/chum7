@@ -2,8 +2,16 @@
   "name": "chum7",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "services/workers/*",
+    "infra2"
+  ],
   "scripts": {
     "test": "jest",
+    "typecheck": "tsc -p packages/contracts && tsc -p packages/core && tsc -p packages/api-kit && tsc -p packages/web-kit && tsc -p services/user-api && tsc -p services/workers/notification-worker && tsc -p infra2",
+    "deploy": "node scripts/deploy.mjs",
     "lint:cheer-widgets": "node scripts/validate-cheer-widget-catalog.mjs",
     "backfill:challenge-layer-policy": "node scripts/backfill-challenge-layer-policy.mjs"
   },
