@@ -50,6 +50,23 @@ export interface CreateChallengeParams {
   participateAsCreator: boolean;
 }
 
+export interface InterestStatus {
+  interested: boolean;
+  count: number;
+}
+
+export interface QuestProposal {
+  proposalId: string;
+  challengeId: string;
+  userId: string;
+  title: string;
+  description: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  leaderFeedback: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const challengeApi = {
   createChallenge: async (params: CreateChallengeParams): Promise<CreatedChallenge> => {
     const res = await apiClient.post('/c/challenges', params);
@@ -63,5 +80,32 @@ export const challengeApi = {
 
   publishChallenge: async (challengeId: string): Promise<void> => {
     await apiClient.patch(`/c/challenges/${challengeId}/publish`);
+  },
+
+  // ── 관심 챌린지 (challenge-api PORTING.md §7-c) ─────────────────────
+  toggleInterest: async (challengeId: string): Promise<InterestStatus> => {
+    const res = await apiClient.post(`/c/challenges/${challengeId}/interest`);
+    return res.data.data as InterestStatus;
+  },
+
+  getInterestStatus: async (challengeId: string): Promise<InterestStatus> => {
+    const res = await apiClient.get(`/c/challenges/${challengeId}/interest/status`);
+    return res.data.data as InterestStatus;
+  },
+
+  // ── 개인 퀘스트 제안 (challenge-api PORTING.md §7-e) ─────────────────
+  submitQuestProposal: async (
+    challengeId: string,
+    params: { title: string; description?: string },
+  ): Promise<QuestProposal> => {
+    const res = await apiClient.post(`/c/challenges/${challengeId}/quest-proposals`, params);
+    return res.data.data as QuestProposal;
+  },
+
+  getMyQuestProposals: async (
+    challengeId: string,
+  ): Promise<{ latestProposal: QuestProposal | null; proposals: QuestProposal[] }> => {
+    const res = await apiClient.get(`/c/challenges/${challengeId}/quest-proposals/my`);
+    return res.data.data;
   },
 };

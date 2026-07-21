@@ -60,12 +60,12 @@ export const QuestBoardPage = () => {
   const [activeTab, setActiveTab]   = useState<StatusFilter>('전체');
   const [selectedQuest, setSelectedQuest] = useState<any | null>(null);
 
+  // challengeId 미지정 전체 퀘스트 조회는 신규 API에서 폐기 (challenge-api PORTING.md §C)
+  // — 챌린지 컨텍스트 없이 진입하면 아래 안내 화면을 노출한다.
   const { data, isLoading } = useQuery({
     queryKey: ['quests', challengeId, activeTab],
+    enabled: Boolean(challengeId),
     queryFn: async () => {
-      // NOT_PORTED: challengeId 미지정 전체 퀘스트 조회는 신규 API에서 폐기 (challenge-api PORTING.md §C)
-      // — 챌린지 스코프 없는 진입은 빈 목록으로 동작.
-      if (!challengeId) return { quests: [] };
       const params = new URLSearchParams({ status: 'active' });
       const res = await apiClient.get(`/c/${challengeId}/quests?${params}`);
       return res.data.data;
@@ -90,6 +90,38 @@ export const QuestBoardPage = () => {
     심사중: allQuests.filter(q => q.mySubmission?.status === 'pending').length,
     완료:   allQuests.filter(q => ['approved','auto_approved'].includes(q.mySubmission?.status)).length,
   };
+
+  // 챌린지 컨텍스트 없는 진입 — 안내 화면
+  if (!challengeId) {
+    return (
+      <div className="min-h-screen">
+        <div className="sticky top-0 glass-header z-10">
+          <div className="px-4 py-4 flex items-center gap-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <FiArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl font-bold text-gray-900">퀘스트 보드 📋</h1>
+          </div>
+        </div>
+        <div className="p-4">
+          <EmptyState
+            icon="🧭"
+            title="챌린지에서 퀘스트 보드를 열어주세요"
+            description="퀘스트 보드는 챌린지별로 제공돼요. 참여 중인 챌린지 화면에서 열 수 있어요."
+          />
+          <button
+            onClick={() => navigate('/me')}
+            className="mt-4 w-full py-3 rounded-xl bg-primary-500 text-white text-sm font-semibold"
+          >
+            내 챌린지 보러가기 →
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">

@@ -151,34 +151,28 @@ export const personalFeedApi = {
   },
 
   // ── Achievements ────────────────────────────────────────────────────
-  // NOT_PORTED: GET /personal-feed/{userId}/achievements — 크로스 도메인 read라 신규 user-api에서
-  // 미이식 (user-api PORTING.md §2). 도메인별 API 조합으로 대체 전까지 빈 상태 반환.
-  getAchievements: async (_userId: string): Promise<FeedAchievements> => {
-    return {
-      challenges: { total: 0, completed: 0, active: 0 },
-      verifications: { total: 0, totalScore: 0 },
-      cheers: { sentCount: 0, receivedCount: 0 },
-      badges: [],
-      leaderBadges: [],
-      leaderHistory: { total: 0, completed: 0, active: 0, totalParticipants: 0, recentChallenges: [] },
-    };
+  // gamification-api PORTING.md §7 — 퍼블릭 업적 (레거시 personal-feed/achievements 형태 승계)
+  getAchievements: async (userId: string): Promise<FeedAchievements> => {
+    const res = await apiClient.get(`/public/users/${userId}/achievements`);
+    return res.data.data;
   },
 
   // ── Verifications ───────────────────────────────────────────────────
-  // NOT_PORTED: GET /personal-feed/{userId}/verifications — challenge-api 소관으로 미이식
-  // (user-api PORTING.md §1). 대체 표면 제공 전까지 빈 목록 반환.
+  // challenge-api PORTING.md §7-a — 퍼블릭 인증 목록 (공개 인증만 노출)
   getVerifications: async (
-    _userId: string,
-    _nextToken?: string,
+    userId: string,
+    nextToken?: string,
   ): Promise<{ items: VerificationFeedItem[]; nextToken: string | null }> => {
-    return { items: [], nextToken: null };
+    const params = nextToken ? `?nextToken=${encodeURIComponent(nextToken)}` : '';
+    const res = await apiClient.get(`/public/users/${userId}/verifications${params}`);
+    return res.data.data;
   },
 
   // ── Challenges ──────────────────────────────────────────────────────
-  // NOT_PORTED: GET /personal-feed/{userId}/challenges — challenge-api 소관으로 미이식
-  // (user-api PORTING.md §1). 대체 표면 제공 전까지 빈 목록 반환.
-  getChallengeHistory: async (_userId: string): Promise<{ challenges: ChallengeFeedItem[]; total: number }> => {
-    return { challenges: [], total: 0 };
+  // challenge-api PORTING.md §7-b — 퍼블릭 챌린지 이력 (완주분만 노출)
+  getChallengeHistory: async (userId: string): Promise<{ challenges: ChallengeFeedItem[]; total: number }> => {
+    const res = await apiClient.get(`/public/users/${userId}/challenge-history`);
+    return res.data.data;
   },
 
   // ── Follow ──────────────────────────────────────────────────────────
@@ -256,10 +250,18 @@ export const personalFeedApi = {
   },
 
   // ── Personal Posts ──────────────────────────────────────────────────
-  // NOT_PORTED: POST /personal-feed/me/posts/upload-url — S3 presign 미배선으로 신규 user-api에서
-  // 미이식 (user-api PORTING.md §2). 이미지 첨부는 비활성 — 호출 시 에러로 조용히 스킵됨.
-  getPostUploadUrl: async (_contentType: string): Promise<{ uploadUrl: string; key: string }> => {
-    throw new Error('이미지 업로드는 아직 지원되지 않아요');
+  // user-api PORTING.md §6 — 자유글 이미지 presigned PUT 업로드
+  getPostUploadUrl: async (
+    contentType: string,
+    fileName?: string,
+    fileSize?: number,
+  ): Promise<{ uploadUrl: string; key: string; fileUrl: string }> => {
+    const res = await apiClient.post('/u/feed/me/posts/upload-url', {
+      contentType,
+      ...(fileName ? { fileName } : {}),
+      ...(fileSize != null ? { fileSize } : {}),
+    });
+    return res.data.data;
   },
 
   createPost: async (params: {

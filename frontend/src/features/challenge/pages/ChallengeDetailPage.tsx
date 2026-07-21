@@ -104,13 +104,26 @@ export const ChallengeDetailPage = () => {
     onSuccess: async ({ joinResult, formState }) => {
       const userChallengeId = joinResult?.data?.userChallengeId;
       const hasQuestInput = formState.questTitle.trim() && formState.questDescription.trim();
-
-      // NOT_PORTED: POST /challenges/:id/personal-quest — 개인퀘스트 제안 플로우는 신규 API 미이식
-      // (challenge-api PORTING.md §E). 입력값은 join의 personalGoal로만 전달되고 제안 제출은 생략.
-      void hasQuestInput;
       void userChallengeId;
 
+      // 개인퀘스트 제안 (challenge-api PORTING.md §7-e) — join 성공 후 입력값이 있으면 제출
+      if (hasQuestInput) {
+        try {
+          await challengeApi.submitQuestProposal(challengeId!, {
+            title: formState.questTitle.trim(),
+            description: formState.questDescription.trim(),
+          });
+          toast.success('개인 퀘스트 제안을 접수했어요. 리더 승인을 기다려주세요 ✨');
+        } catch (proposalError: any) {
+          toast.error(
+            proposalError?.response?.data?.message ||
+              '개인 퀘스트 제안 제출에 실패했어요. ME 탭에서 다시 시도해주세요.',
+          );
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
+      queryClient.invalidateQueries({ queryKey: ['quest-proposals', challengeId] });
       toast.success('챌린지 참여 완료! 오늘부터 시작하세요 🎉');
       setIsJoinWizardOpen(false);
       setIsPaymentOpen(false);

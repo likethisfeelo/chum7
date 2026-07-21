@@ -308,6 +308,18 @@ function ChallengesTab() {
 
 // ─── 뱃지 탭 ──────────────────────────────────────────────────────
 function BadgesTab({ achievements }: { achievements: FeedAchievements }) {
+  // 응원 통계 — 퍼블릭 업적의 cheers는 0 고정(gamification-api PORTING.md §7)이라
+  // GET /ch/stats/my 실측치로 덮어쓴다.
+  const { data: cheerStats } = useQuery({
+    queryKey: ['cheer-stats', 'my'],
+    queryFn: async () => {
+      const res = await apiClient.get('/ch/stats/my');
+      return res.data.data?.stats as { sentCount: number; receivedCount: number } | undefined;
+    },
+    staleTime: 60 * 1000,
+  });
+  const receivedCheerCount = cheerStats?.receivedCount ?? achievements.cheers.receivedCount;
+  const sentCheerCount = cheerStats?.sentCount ?? achievements.cheers.sentCount;
   return (
     <div className="space-y-4 pb-24">
       <div className="bg-white rounded-2xl p-5 shadow-sm">
@@ -346,14 +358,14 @@ function BadgesTab({ achievements }: { achievements: FeedAchievements }) {
           <div className="flex items-center gap-3 bg-pink-50 rounded-xl p-3">
             <span className="text-2xl">💌</span>
             <div>
-              <p className="text-lg font-bold text-pink-700">{achievements.cheers.receivedCount}</p>
+              <p className="text-lg font-bold text-pink-700">{receivedCheerCount}</p>
               <p className="text-xs text-pink-400">받은 응원</p>
             </div>
           </div>
           <div className="flex items-center gap-3 bg-purple-50 rounded-xl p-3">
             <span className="text-2xl">📣</span>
             <div>
-              <p className="text-lg font-bold text-purple-700">{achievements.cheers.sentCount}</p>
+              <p className="text-lg font-bold text-purple-700">{sentCheerCount}</p>
               <p className="text-xs text-purple-400">보낸 응원</p>
             </div>
           </div>
@@ -461,9 +473,12 @@ export function MyPage() {
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<MyTab>('character');
 
+  // 퍼블릭 업적 표면은 'me' 별칭이 없어 실제 userId 로 호출 (gamification-api PORTING.md §7)
+  const myUserId = user?.userId ?? '';
   const { data: achievements, isLoading: achievementsLoading } = useQuery({
-    queryKey: ['personal-feed-achievements', 'me'],
-    queryFn: () => personalFeedApi.getAchievements('me'),
+    queryKey: ['personal-feed-achievements', myUserId],
+    enabled: Boolean(myUserId),
+    queryFn: () => personalFeedApi.getAchievements(myUserId),
   });
 
   const topLeaderBadge = achievements?.leaderBadges?.[0];

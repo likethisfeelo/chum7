@@ -12,6 +12,7 @@ import { InlineVerificationForm } from "@/features/verification/components/Inlin
 import { BottomSheet } from "@/shared/components/BottomSheet";
 import { BoardGuideSection } from "@/features/challenge-board/components/BoardGuideSection";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
+import { challengeApi } from "@/features/challenge/api/challengeApi";
 import {
   getRemedyType,
   getRemainingRemedyCount,
@@ -519,11 +520,8 @@ export const ChallengeFeedPage = () => {
   const { data: myProposalData } = useQuery({
     queryKey: ["challenge-my-proposal", challengeId],
     enabled: Boolean(challengeId),
-    queryFn: async () => {
-      // NOT_PORTED: GET /challenges/:id/personal-quest — 개인퀘스트 제안 플로우 미이식
-      // (challenge-api PORTING.md §E). 제안 이력은 빈 상태로 동작.
-      return { latestProposal: null, proposals: [] } as { latestProposal: any; proposals: any[] };
-    },
+    // challenge-api PORTING.md §7-e — 내 개인 퀘스트 제안 이력
+    queryFn: () => challengeApi.getMyQuestProposals(challengeId!),
   });
 
   // 탭 상태
@@ -533,10 +531,10 @@ export const ChallengeFeedPage = () => {
   const [expandedLeaderQuestId, setExpandedLeaderQuestId] = useState<string | null>(null);
   const [todaySubmittedQuestIds, setTodaySubmittedQuestIds] = useState<Set<string>>(new Set());
   const [isProposalFormOpen, setIsProposalFormOpen] = useState(false);
+  // allowedVerificationTypes 제안 필드는 신규 API v1 미이식 (challenge-api PORTING.md §7-e) — 폼에서 제외
   const [proposalForm, setProposalForm] = useState({
     title: "",
     description: "",
-    allowedVerificationTypes: ["image", "text", "link", "video"] as string[],
   });
   const [showGiveUpConfirm, setShowGiveUpConfirm] = useState(false);
   const [openVideoPickerSignal, setOpenVideoPickerSignal] = useState(0);
@@ -586,13 +584,12 @@ export const ChallengeFeedPage = () => {
   }, [leaderQuests, activeQuestTab]);
 
   const submitProposalMutation = useMutation({
-    // NOT_PORTED: POST /challenges/:id/personal-quest — 개인퀘스트 제안 제출은 신규 API 미이식
-    // (challenge-api PORTING.md §E). UI는 유지하되 제출 시 안내만 노출.
-    mutationFn: async () => {
-      throw Object.assign(new Error("NOT_PORTED"), {
-        response: { data: { message: "개인 퀘스트 제안은 개편 중이에요. 곧 다시 열릴 예정입니다." } },
-      });
-    },
+    // challenge-api PORTING.md §7-e — 제안 제출 (기존 pending/rejected 는 서버 upsert 갱신)
+    mutationFn: () =>
+      challengeApi.submitQuestProposal(challengeId!, {
+        title: proposalForm.title.trim(),
+        description: proposalForm.description.trim() || undefined,
+      }),
     onSuccess: () => {
       toast.success("개인 퀘스트 제안이 제출됐어요 🎯");
       setIsProposalFormOpen(false);
@@ -961,7 +958,7 @@ export const ChallengeFeedPage = () => {
                 </div>
               </div>
               <div className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium ${canCheerNow ? "bg-primary-50 text-primary-700" : "bg-gray-50 text-gray-500"}`}>
-                {canCheerNow ? "🎟 오늘 인증 완료! 다른 참여자를 응원할 수 있어요." : "오늘 인증 후 응원권 기능이 열립니다."}
+                {canCheerNow ? "🎟 오늘 인증 완료! 다른 참여자를 응원할 수 있어요." : "오늘 인증 후 응원 기능이 열립니다."}
               </div>
             </section>
           )}
@@ -987,12 +984,11 @@ export const ChallengeFeedPage = () => {
             const proposal = myProposalData?.latestProposal ?? null;
             const lifecycle = (challengeData?.effectiveLifecycle || challengeData?.lifecycle) as string;
             const canSubmit = ["recruiting", "preparing"].includes(lifecycle);
+            // 상태는 v1 3종(pending/approved/rejected) — challenge-api PORTING.md §7-e
             const statusLabel: Record<string, string> = {
               pending: "⏳ 심사 중",
-              revision_pending: "⏳ 재심사 중",
               approved: "✅ 승인됨",
               rejected: "↩️ 반려됨",
-              expired: "⛔ 만료됨",
             };
             return (
               <section className="bg-amber-50 rounded-2xl p-5 border border-amber-100 shadow-sm">
@@ -1004,7 +1000,7 @@ export const ChallengeFeedPage = () => {
                     <div className="flex items-center gap-2">
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
                         proposal.status === "approved" ? "bg-green-100 text-green-700"
-                        : proposal.status === "rejected" || proposal.status === "expired" ? "bg-red-100 text-red-700"
+                        : proposal.status === "rejected" ? "bg-red-100 text-red-700"
                         : "bg-yellow-100 text-yellow-700"
                       }`}>
                         {statusLabel[proposal.status] ?? proposal.status}
@@ -1019,7 +1015,7 @@ export const ChallengeFeedPage = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          setProposalForm({ title: proposal.title, description: proposal.description || "", allowedVerificationTypes: proposal.allowedVerificationTypes ?? ["image", "text", "link", "video"] });
+                          setProposalForm({ title: proposal.title, description: proposal.description || "" });
                           setIsProposalFormOpen(true);
                         }}
                         className="mt-1 text-xs font-semibold text-amber-700 underline"
@@ -1036,7 +1032,7 @@ export const ChallengeFeedPage = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            setProposalForm({ title: "", description: "", allowedVerificationTypes: challengeData?.allowedVerificationTypes ?? ["image", "text", "link", "video"] });
+                            setProposalForm({ title: "", description: "" });
                             setIsProposalFormOpen(true);
                           }}
                           className="px-4 py-2 bg-amber-600 text-white rounded-xl text-sm font-semibold"
@@ -1078,30 +1074,6 @@ export const ChallengeFeedPage = () => {
                   placeholder="어떻게 실천할지 구체적으로 적어주세요"
                   className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-xl text-sm resize-none"
                 />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">허용 인증 방식</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["image", "text", "link", "video"] as const).map((vt) => {
-                    const label = vt === "image" ? "📸 사진" : vt === "text" ? "✍️ 텍스트" : vt === "link" ? "🔗 링크" : "🎥 영상";
-                    const isChecked = proposalForm.allowedVerificationTypes.includes(vt);
-                    return (
-                      <button
-                        key={vt}
-                        type="button"
-                        onClick={() =>
-                          setProposalForm((p) => {
-                            const next = isChecked ? p.allowedVerificationTypes.filter((t) => t !== vt) : [...p.allowedVerificationTypes, vt];
-                            return { ...p, allowedVerificationTypes: next.length > 0 ? next : p.allowedVerificationTypes };
-                          })
-                        }
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm ${isChecked ? "bg-amber-600 text-white" : "bg-gray-100 text-gray-700"}`}
-                      >
-                        {isChecked ? "✓" : "○"} {label}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
               <button
                 type="button"
@@ -1239,7 +1211,7 @@ export const ChallengeFeedPage = () => {
                     );
                   })() : (
                     <p className="text-xs text-amber-600 bg-amber-50 rounded-xl px-3 py-2.5">
-                      {myProposalData?.latestProposal?.status === "pending" || myProposalData?.latestProposal?.status === "revision_pending"
+                      {myProposalData?.latestProposal?.status === "pending"
                         ? "⏳ 개인 퀘스트 승인 대기 중입니다."
                         : "개인 퀘스트가 없습니다. 제안 섹션에서 제출해주세요."}
                     </p>
@@ -1516,10 +1488,10 @@ export const ChallengeFeedPage = () => {
             );
           })()}
 
-          {/* 10) 내 응원권/기록 현황 — mobile only */}
+          {/* 10) 내 응원/기록 현황 — mobile only */}
           {userChallenge && (
             <section className="lg:hidden glass-card rounded-2xl p-5">
-              <h3 className="font-bold text-gray-900 mb-3">내 응원권 / 기록</h3>
+              <h3 className="font-bold text-gray-900 mb-3">내 응원 / 기록</h3>
               <div className="grid grid-cols-2 gap-3">
                 <div className="glass-card rounded-xl p-3">
                   <p className="text-xs text-gray-500">총 인증 횟수</p>
@@ -1535,7 +1507,7 @@ export const ChallengeFeedPage = () => {
               <div className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium ${canCheerNow ? "bg-primary-50 text-primary-700" : "bg-gray-50 text-gray-500"}`}>
                 {canCheerNow
                   ? "🎟 오늘 인증 완료! 피드에서 다른 참여자를 응원할 수 있어요."
-                  : "오늘 인증 후 응원권 기능이 열립니다."}
+                  : "오늘 인증 후 응원 기능이 열립니다."}
               </div>
             </section>
           )}
