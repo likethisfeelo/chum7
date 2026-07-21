@@ -3,12 +3,14 @@ import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 import type { DomainEventType } from '@chum7/contracts';
 import { buildPushPayload, decidePush } from './domain/push-rules';
-import { loadNotificationSettings, sendPushToUser } from './push-sender';
+import { decideBundle, isPushRateLimited } from './domain/bundle-rules';
+import { loadNotificationSettings, loadRecentNotifications, sendPushToUser } from './push-sender';
 
 /**
  * notification-worker — 이벤트 버스의 첫 소비자 (REDESIGN_PLAN §3.2).
  * 도메인 이벤트 → 수신자 인앱 알림 기록 + 수신 설정 확인 후 Web Push 발송 (§4.10).
- * 묶음 발송(집계)은 후속 (§4.10 집계 행).
+ * 묶음 발송(집계): 최근 미읽음 알림을 조회해 같은 그룹이면 집계 문구 + 안정 태그로
+ * 이전 푸시를 교체하고, 윈도우 내 폭주 시 비-cheer 푸시를 억제한다 (§4.10 집계 행).
  */
 
 /** 이벤트 유형 → 알림 수신자·카테고리·문구 라우팅 룰 */
@@ -116,18 +118,46 @@ export const handler = async (
 
   // ── Web Push 발송 — 인앱 기록은 이미 완료, 여기서의 실패는 인앱에 영향 없음 ──
   try {
+    const nowDate = new Date(now);
     const settings = await loadNotificationSettings(routed.recipientId);
-    const decision = decidePush({ category: routed.category, settings, now: new Date() });
+    const decision = decidePush({ category: routed.category, settings, now: nowDate });
     if (!decision.send) {
       console.log(
         JSON.stringify({ level: 'info', message: 'push suppressed', type, reason: decision.reason }),
       );
       return;
     }
-    await sendPushToUser(
+
+    // 묶음 발송·폭주 가드 (§4.10 집계) — 조회 실패 시 단건 발송으로 폴백
+    const recent = await loadRecentNotifications(
       routed.recipientId,
-      buildPushPayload({ message: routed.message, category: routed.category, eventType: type }),
-    );
+      `NOTIF#${notificationId}`,
+    ).catch(() => []);
+    if (isPushRateLimited({ category: routed.category, recent, now: nowDate })) {
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          message: 'push rate-limited',
+          type,
+          recipientId: routed.recipientId,
+        }),
+      );
+      return;
+    }
+    const bundle = decideBundle({
+      category: routed.category,
+      eventType: type,
+      message: routed.message,
+      detail: event.detail,
+      recent,
+      now: nowDate,
+    });
+    await sendPushToUser(routed.recipientId, {
+      ...buildPushPayload({ message: routed.message, category: routed.category, eventType: type }),
+      body: bundle.body,
+      tag: bundle.tag,
+      ...(bundle.renotify !== undefined ? { renotify: bundle.renotify } : {}),
+    });
   } catch (err) {
     console.log(
       JSON.stringify({
