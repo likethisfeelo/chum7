@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from '@chum7/api-kit';
 import { ok, fail } from '@chum7/api-kit';
 import { getChallenge, queryDiscovery } from '../repo/challenges';
+import { effectiveLifecycleOf } from '../domain/challenge-state';
 import { listChallengeParticipations } from '../repo/participations';
 import { stripKeys } from '../repo/shared';
 
@@ -35,7 +36,12 @@ discoveryRoutes.get('/', async (c) => {
   }
 
   const items = await queryDiscovery({ lifecycles, category, sortBy, limit });
-  const challenges = items.map(stripKeys);
+  const now = new Date();
+  // effectiveLifecycle: 워커(10분 주기) 사이의 지연을 표시에서 흡수 (time-policy R4)
+  const challenges = items.map((item) => ({
+    ...stripKeys(item),
+    effectiveLifecycle: effectiveLifecycleOf(item, now),
+  }));
 
   // 레거시 응답 바디 계약 유지 ({ challenges, total, filters })
   return ok(c, {
@@ -56,7 +62,7 @@ discoveryRoutes.get('/:challengeId', async (c) => {
   if (!challenge) {
     return fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다');
   }
-  return ok(c, stripKeys(challenge));
+  return ok(c, { ...stripKeys(challenge), effectiveLifecycle: effectiveLifecycleOf(challenge, new Date()) });
 });
 
 // 챌린지 통계 (레거시 GET /challenges/{challengeId}/stats — 퍼블릭)

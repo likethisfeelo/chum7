@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 import { Loading } from '@/shared/components/Loading';
+import { ChallengeControlCard } from './ChallengeControlCard';
 
 /**
  * 리더 운영 탭 v1 (PRODUCT_SPEC §4.12-A)
@@ -250,6 +251,7 @@ export function LeaderOpsTab({ challengeId }: { challengeId: string }) {
 
   return (
     <div className="space-y-4">
+      <ChallengeControlCard challengeId={challengeId} />
       <BriefingSection challengeId={challengeId} />
       <ParticipantsSection challengeId={challengeId} />
 

@@ -5,7 +5,11 @@
  * - 완료 전환 시 참여자 완주/실패 판정: progress + isCompletedProgressStatus (레거시 finalizeUserChallenges).
  * - 리더 뱃지 판정 입력(LeaderChallengeSummary) 구성: 레거시 leader-badge-grant.getLeaderChallenges 집계 대응.
  */
-import { canTransition, resolveDueLifecycle, type ChallengeLifecycle } from '@chum7/core';
+import {
+  resolveEffectiveLifecycle,
+  transitionSteps,
+  type ChallengeLifecycle,
+} from '@chum7/core';
 import {
   certDateFromIso,
   DEFAULT_TIMEZONE,
@@ -16,7 +20,18 @@ import {
 import { normalizeProgress } from './progress';
 import type { LeaderChallengeSummary } from './leader-badge-grant';
 
-export const MANAGED_LIFECYCLES = ['recruiting', 'preparing', 'active'] as const;
+/** draft 포함 — 예약 모집 오픈(recruitOpenAt)이 자동으로 발화하도록 (증상① 수정) */
+export const MANAGED_LIFECYCLES = ['draft', 'recruiting', 'preparing', 'active'] as const;
+
+/** 스케줄 필드 별칭 해석 — 레거시 데이터의 recruitStartAt/recruitingEndAt 승계 */
+export function resolveRecruitOpenAt(ch: ChallengeLike): string | null {
+  return (ch.recruitOpenAt as string) || (ch.recruitStartAt as string) || null;
+}
+export function resolveRecruitCloseAt(ch: ChallengeLike): string | null {
+  return (
+    (ch.recruitCloseAt as string) || (ch.recruitEndAt as string) || (ch.recruitingEndAt as string) || null
+  );
+}
 
 export interface ChallengeLike {
   challengeId: string;
@@ -40,37 +55,45 @@ export type TransitionDecision =
   | { action: 'transition'; steps: ChallengeLifecycle[] };
 
 /**
- * 시간 경과 기준 전이 판정. resolveDueLifecycle가 목표 상태를 계산하고,
- * canTransition 표에 없는 점프(예: preparing→completed)는 active를 경유하는 2단계로 분해한다.
+ * 시간 경과 기준 전이 판정 — core의 resolveEffectiveLifecycle(스케줄 인지·forward-only)로
+ * 목표 상태를 계산하고 transitionSteps로 다단계 경로를 분해한다.
+ * API 읽기 계층과 동일한 규칙 (docs/time-policy.md).
  */
 export function decideTransition(challenge: ChallengeLike, now: Date): TransitionDecision {
   const from = challenge.lifecycle as ChallengeLifecycle;
   const startAtIso = resolveChallengeActualStartAt(challenge);
-  const due = resolveDueLifecycle({
+  const nowIso = now.toISOString();
+
+  const startConfirmed = Boolean(challenge.startConfirmedAt);
+  const target = resolveEffectiveLifecycle({
     lifecycle: from,
+    recruitOpenAt: resolveRecruitOpenAt(challenge),
+    recruitCloseAt: resolveRecruitCloseAt(challenge),
     startDate: startAtIso ? certDateFromIso(startAtIso, DEFAULT_TIMEZONE) : undefined,
     durationDays: resolveDurationDays(challenge.durationDays, undefined),
-    today: certDateFromIso(now.toISOString(), DEFAULT_TIMEZONE),
+    nowIso,
+    today: certDateFromIso(nowIso, DEFAULT_TIMEZONE),
+    requireStartConfirmation: challenge.requireStartConfirmation === true,
+    startConfirmed,
   });
 
-  if (due === from) return { action: 'none' };
-
-  // 레거시 preparing→active 게이트 승계: 시작 확인 필수 챌린지는 확인 전까지 시작(및 완료)하지 않는다
-  const entersActiveOrLater = due === 'active' || due === 'completed';
-  if (
-    entersActiveOrLater &&
-    from !== 'active' &&
-    challenge.requireStartConfirmation === true &&
-    !challenge.startConfirmedAt
-  ) {
-    return { action: 'hold', reason: 'awaiting_start_confirmation' };
+  if (target === from) {
+    // 게이트로 보류된 경우를 구분해 리포트 (시작 시각은 지났으나 확인 대기)
+    if (
+      challenge.requireStartConfirmation === true &&
+      !startConfirmed &&
+      from !== 'active' &&
+      startAtIso &&
+      certDateFromIso(startAtIso, DEFAULT_TIMEZONE) <= certDateFromIso(nowIso, DEFAULT_TIMEZONE) &&
+      (from === 'preparing' || from === 'recruiting')
+    ) {
+      return { action: 'hold', reason: 'awaiting_start_confirmation' };
+    }
+    return { action: 'none' };
   }
 
-  if (canTransition(from, due)) return { action: 'transition', steps: [due] };
-  if (canTransition(from, 'active') && canTransition('active', due)) {
-    return { action: 'transition', steps: ['active', due] };
-  }
-  return { action: 'none' };
+  const steps = transitionSteps(from, target);
+  return steps.length > 0 ? { action: 'transition', steps } : { action: 'none' };
 }
 
 // ── active 진입 시 참여자 처리 (레거시 activateUserChallenges + handleUnapprovedJoinRequests) ──

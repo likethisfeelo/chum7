@@ -7,48 +7,13 @@ import { apiClient } from '@/lib/api-client';
 import { Loading } from '@/shared/components/Loading';
 import { useAuthStore } from '@/stores/authStore';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import LinkExt from '@tiptap/extension-link';
-import ImageExt from '@tiptap/extension-image';
-import Heading from '@tiptap/extension-heading';
-import Underline from '@tiptap/extension-underline';
-import Placeholder from '@tiptap/extension-placeholder';
-import TextAlign from '@tiptap/extension-text-align';
+import {
+  LegacyBlockViewer,
+  RichTextViewer,
+  TIPTAP_EXTENSIONS,
+  VideoBlock,
+} from '../components/BoardBlocksViewer';
 import '../styles/tiptap.css';
-
-// ─── YouTube 유틸 ──────────────────────────────────────────────────────────────
-
-const getYouTubeId = (url: string) => {
-  const m = url.match(/(?:v=|youtu\.be\/|shorts\/)([^&?\s]{11})/);
-  return m?.[1] ?? null;
-};
-const isYouTubeUrl = (url: string) => /youtu\.?be/.test(url);
-
-// ─── 영상 렌더러 ───────────────────────────────────────────────────────────────
-
-const VideoBlock = ({ url }: { url: string }) => {
-  const ytId = isYouTubeUrl(url) ? getYouTubeId(url) : null;
-  if (ytId) {
-    return (
-      <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black">
-        <iframe
-          src={`https://www.youtube.com/embed/${ytId}`}
-          className="absolute inset-0 w-full h-full"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      </div>
-    );
-  }
-  return (
-    <video
-      src={url}
-      controls
-      className="w-full rounded-xl bg-black"
-      style={{ maxHeight: '360px' }}
-    />
-  );
-};
 
 // ─── 에디터 툴바 ───────────────────────────────────────────────────────────────
 
@@ -121,43 +86,6 @@ const EditorToolbar = ({ editor, onAddVideo }: { editor: Editor; onAddVideo: () 
       )}
     </div>
   );
-};
-
-// ─── 레거시 블록 뷰어 ─────────────────────────────────────────────────────────
-
-const LegacyBlockViewer = ({ blocks }: { blocks: any[] }) => (
-  <div className="space-y-3">
-    {blocks.map((block: any) => {
-      if (block.type === 'image') return <img key={block.id} src={block.url} alt="board" className="w-full rounded-xl border border-gray-100" />;
-      if (block.type === 'video') return <VideoBlock key={block.id} url={block.url} />;
-      if (block.type === 'link') return (
-        <a key={block.id} href={block.url} target="_blank" rel="noreferrer" className="block text-sm text-blue-600 underline break-all hover:text-blue-800">{block.label || block.url}</a>
-      );
-      return (
-        <div key={block.id} className={`rounded-xl p-3 ${block.type === 'quote' ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-100'}`}>
-          {block.type === 'quote' && <p className="text-xs text-amber-700 mb-1">💬 {block.authorName || '익명'}</p>}
-          <p className="text-sm text-gray-800 whitespace-pre-wrap">{block.content}</p>
-        </div>
-      );
-    })}
-  </div>
-);
-
-// ─── TipTap 읽기 전용 뷰어 ────────────────────────────────────────────────────
-
-const TIPTAP_EXTENSIONS = [
-  StarterKit.configure({ heading: false }),
-  Heading.configure({ levels: [1, 2, 3] }),
-  Underline,
-  LinkExt.configure({ openOnClick: true, autolink: true, HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' } }),
-  ImageExt.configure({ HTMLAttributes: { class: 'rounded-xl max-w-full' } }),
-  TextAlign.configure({ types: ['heading', 'paragraph'] }),
-  Placeholder.configure({ placeholder: '챌린지에 필요한 정보, 가이드, 링크 등을 자유롭게 작성하세요...' }),
-];
-
-const RichTextViewer = ({ content }: { content: any }) => {
-  const viewEditor = useEditor({ extensions: TIPTAP_EXTENSIONS, content, editable: false, immediatelyRender: false });
-  return <EditorContent editor={viewEditor} />;
 };
 
 // ─── 댓글 반응 버튼 ───────────────────────────────────────────────────────────

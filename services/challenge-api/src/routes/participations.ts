@@ -11,8 +11,8 @@ import type { AppEnv } from '@chum7/api-kit';
 import { docClient, ok, fail } from '@chum7/api-kit';
 import { joinChallengeSchema, reviewJoinRequestSchema } from '../schemas';
 import { getProposalDeadline, resolveJoinRequirements, toTime24 } from '../domain/join-requirements';
-import { certDateFromIso, DEFAULT_TIMEZONE } from '../domain/day-sync';
-import { adjustChallengeStats, getChallenge } from '../repo/challenges';
+import { certDateFromIso, DEFAULT_TIMEZONE, safeTimezone } from '../domain/day-sync';
+import { adjustChallengeStats, getChallenge, updateChallengeFields } from '../repo/challenges';
 import {
   findMyParticipationByUcId,
   getParticipation,
@@ -336,4 +336,87 @@ participationRoutes.post('/user-challenges/:userChallengeId/give-up', async (c) 
   // "포기는쉽다" 뱃지 부여는 gamification 도메인 소유 — 이벤트 계약 필요 (PORTING.md gap 기록)
 
   return ok(c, { userChallengeId, phase: 'gave_up', status: 'gave_up' }, '챌린지를 중도 포기했습니다.');
+});
+
+// ── 수동 모집 마감 (예약 마감보다 먼저 가능 — docs/time-policy.md R1) ──────────
+participationRoutes.post('/challenges/:challengeId/close-recruiting', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const challengeId = c.req.param('challengeId');
+  const challenge = await getChallenge(challengeId);
+  if (!challenge) return fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다');
+  if (challenge.createdBy !== userId) {
+    return fail(c, 403, 'FORBIDDEN', '본인이 만든 챌린지만 마감할 수 있어요');
+  }
+  if (challenge.lifecycle !== 'recruiting') {
+    return fail(c, 409, 'NOT_RECRUITING', '모집 중인 챌린지만 마감할 수 있어요');
+  }
+  const nowIso = new Date().toISOString();
+  await updateChallengeFields(
+    challengeId,
+    { lifecycle: 'preparing', recruitClosedAt: nowIso, updatedAt: nowIso },
+    { lifecycle: challenge.lifecycle, category: challenge.category, challengeStartAt: challenge.challengeStartAt },
+  );
+  return ok(c, { challengeId, lifecycle: 'preparing', recruitClosedAt: nowIso }, '모집을 마감했어요');
+});
+
+// ── 수동 조기 시작 (예정일 전 가능 — 유효 시작일 재산정, docs/time-policy.md R3) ──
+participationRoutes.post('/challenges/:challengeId/start', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const challengeId = c.req.param('challengeId');
+  const challenge = await getChallenge(challengeId);
+  if (!challenge) return fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다');
+  if (challenge.createdBy !== userId) {
+    return fail(c, 403, 'FORBIDDEN', '본인이 만든 챌린지만 시작할 수 있어요');
+  }
+  if (challenge.lifecycle !== 'recruiting' && challenge.lifecycle !== 'preparing') {
+    return fail(c, 409, 'CANNOT_START', '모집 중이거나 시작 대기 상태에서만 시작할 수 있어요');
+  }
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const timezone = safeTimezone(c.req.header('x-user-timezone') || (challenge.timezone as string));
+  const effectiveStartDate = certDateFromIso(nowIso, timezone);
+  const durationDays = Number(challenge.durationDays) > 0 ? Math.floor(Number(challenge.durationDays)) : 7;
+  const challengeEndAt = new Date(now.getTime() + durationDays * 86_400_000).toISOString();
+
+  // 조기 시작 = 시작 확인으로 간주 (startConfirmedAt 동시 스탬프)
+  // actualStartAt이 예정일(challengeStartAt)을 대체 — Day 계산·완주 판정의 기준이 됨
+  await updateChallengeFields(
+    challengeId,
+    {
+      lifecycle: 'active',
+      actualStartAt: nowIso,
+      startConfirmedAt: nowIso,
+      challengeEndAt,
+      updatedAt: nowIso,
+    },
+    { lifecycle: challenge.lifecycle, category: challenge.category, challengeStartAt: challenge.challengeStartAt },
+  );
+
+  // 참여자 활성화 — lifecycle-manager 워커의 active 진입 규칙과 동일
+  // (승인분 활성화 + startDate 유효 시작일 스탬프, 미승인 신청 자동 거절)
+  const participations = await listChallengeParticipations(challengeId);
+  let activated = 0;
+  let rejected = 0;
+  for (const uc of participations) {
+    const isPendingLike = uc.status === 'pending' || uc.phase === 'preparing';
+    if (!isPendingLike) continue;
+    if (uc.joinStatus === 'requested') {
+      await updateParticipationFields(challengeId, uc.userId, {
+        status: 'rejected', joinStatus: 'auto_rejected', updatedAt: nowIso,
+      });
+      rejected += 1;
+    } else {
+      await updateParticipationFields(challengeId, uc.userId, {
+        status: 'active', phase: 'active', startDate: effectiveStartDate, updatedAt: nowIso,
+      });
+      activated += 1;
+    }
+  }
+
+  return ok(
+    c,
+    { challengeId, lifecycle: 'active', actualStartAt: nowIso, startDate: effectiveStartDate, activated, rejected },
+    '챌린지를 시작했어요! 오늘이 Day 1이에요 🎉',
+  );
 });

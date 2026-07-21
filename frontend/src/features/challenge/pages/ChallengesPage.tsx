@@ -8,6 +8,7 @@ import { HiDotsVertical } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
+import { extractBoardPreviewText } from '@/features/challenge-board/components/BoardBlocksViewer';
 import {
   CHALLENGE_CATEGORIES,
   SLUG_TO_LABEL,
@@ -93,6 +94,9 @@ const EnhancedPreviewPanel = ({
     .filter((b: any) => b.type === 'text' && b.content)
     .slice(0, 4);
 
+  // 레거시 text 블록이 없어도 rich-text(TipTap) 보드에서 텍스트를 추출한다 (미등록 오탐 방지)
+  const richTextFallback = textBlocks.length === 0 ? extractBoardPreviewText(boardData?.blocks || []) : null;
+
   const imageBlocks: any[] = (boardData?.blocks || [])
     .filter((b: any) => b.type === 'image' && b.url)
     .slice(0, 1);
@@ -171,6 +175,8 @@ const EnhancedPreviewPanel = ({
               </p>
             ))}
           </div>
+        ) : richTextFallback ? (
+          <p className="text-sm text-gray-700 leading-snug line-clamp-4">{richTextFallback}</p>
         ) : !isBoardLoading ? (
           <p className="text-sm text-gray-400 italic">아직 보드 안내가 없어요.</p>
         ) : null}
