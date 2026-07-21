@@ -333,7 +333,7 @@ verification-normalization / media-validation / cheer 스케줄링 / badge-grant
 **열린 질문 (구현 착수 전 확인 필요)**
 
 1. `/me` vs `/my`, `/profile` vs `/assets` 중 살릴 방향 — 제품 의도 확인 필요.
-2. 리더 payout/보증금이 실결제인지 포인트인지 — 실결제라면 admin-api에서 정산 로직을 추가 격리하고 감사 로그 강화.
+2. ~~리더 payout/보증금이 실결제인지 포인트인지~~ → **실결제화로 확정, `PAYMENT_SPEC.md`로 상세 기획 완료.** 시스템 델타(commerce-api·워커 2종·commerce 테이블·Secrets Manager·역할 그룹 `creators`)는 PAYMENT_SPEC §11 참조.
 3. SNS/EventBus/Stream을 걷어내는데, 가까운 로드맵에 푸시 알림 등 이벤트 소비 계획이 있다면 WorkersStack에 자리만 예약.
 4. Cognito 그룹 4종(admins/productowners/leaders/managers) 중 실제 사용하는 역할.
 
