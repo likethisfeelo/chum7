@@ -1,14 +1,9 @@
-# Welcome to your CDK TypeScript project
+# infra — 현행(chme-*) CDK 앱
 
-This is a blank project for CDK development with TypeScript.
+> ⚠️ 이 디렉터리는 **재구축 전의 현행 인프라**입니다. 신규 인프라는 `REDESIGN_PLAN.md`에 따라
+> `infra2/`(스택 프리픽스 `chme2-*`)에 구축되며, 전환(Phase 5) 완료 후 이 디렉터리는 삭제됩니다.
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
-
-## Useful commands
-
-* `npm run build`   compile typescript to js
-* `npm run watch`   watch for changes and compile
-* `npm run test`    perform the jest unit tests
-* `npx cdk deploy`  deploy this stack to your default AWS account/region
-* `npx cdk diff`    compare deployed stack with current state
-* `npx cdk synth`   emits the synthesized CloudFormation template
+- 엔트리: `bin/chme.ts` (`cdk.json` 참조), 스테이지: `--context stage=dev|prod`
+- 스테이지 설정: `config/dev.ts`, `config/prod.ts` — CloudFront/버킷 ID 등의 **단일 진실 원천**
+  (스크립트·README에 ID를 복사하지 말 것)
+- 배포: `npm run deploy:dev` / `deploy:prod` (이 디렉터리의 package.json)
