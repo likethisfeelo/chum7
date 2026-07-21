@@ -180,6 +180,26 @@ export class ApiStack extends cdk.Stack {
     stateful.tables.challenges.grantReadData(this.gamificationApi);
     eventBus.grantPutEventsTo(this.gamificationApi);
 
+    // --- admin-api: /adm (운영 콘솔 — admins/operators/creators 그룹 격리) ---
+    const adminApi = this.addDomainApi({
+      name: 'admin-api',
+      protectedPrefix: '/adm',
+      memorySize: 512,
+      environment: {
+        USERS_TABLE: stateful.tables.users.tableName,
+        CHALLENGES_TABLE: stateful.tables.challenges.tableName,
+        CHEER_TABLE: stateful.tables.cheer.tableName,
+        CONTENT_TABLE: stateful.tables.content.tableName,
+        OPS_TABLE: stateful.tables.ops.tableName,
+      },
+    });
+    stateful.tables.users.grantReadData(adminApi);
+    stateful.tables.challenges.grantReadWriteData(adminApi);
+    stateful.tables.cheer.grantReadWriteData(adminApi); // DLQ 재처리
+    stateful.tables.content.grantReadWriteData(adminApi); // 배너 관리
+    stateful.tables.ops.grantReadWriteData(adminApi); // 감사 로그
+    eventBus.grantPutEventsTo(adminApi);
+
     new cdk.CfnOutput(this, 'ApiUrl', { value: this.httpApi.apiEndpoint });
   }
 
