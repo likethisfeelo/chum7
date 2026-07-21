@@ -113,15 +113,19 @@ export class EdgeStack extends cdk.Stack {
 
     if (domain) {
       const zone = route53.HostedZone.fromLookup(this, 'Zone', { domainName: domain.zoneName });
+      // deleteExisting: 구 시스템의 수동 생성 레코드를 대체 — 이 배포가 곧 DNS 전환이다
+      // (docs/cutover-runbook.md 참조)
       new route53.ARecord(this, 'AppAlias', {
         zone,
         recordName: domain.app,
         target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(this.appDistribution)),
+        deleteExisting: true,
       });
       new route53.ARecord(this, 'AdminAlias', {
         zone,
         recordName: domain.admin,
         target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(this.adminDistribution)),
+        deleteExisting: true,
       });
     }
 
