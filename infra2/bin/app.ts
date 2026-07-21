@@ -50,5 +50,5 @@ const api = new ApiStack(app, `${config.prefix}-api`, {
 new ObservabilityStack(app, `${config.prefix}-observability`, {
   env,
   config,
-  monitoredFunctions: [...api.functions, workers.notificationWorker],
+  monitoredFunctions: [...api.functions, ...workers.workerFunctions],
 });

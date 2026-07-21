@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "test": "jest",
-    "typecheck": "tsc -p packages/contracts && tsc -p packages/core && tsc -p packages/api-kit && tsc -p packages/web-kit && tsc -p services/user-api && tsc -p services/challenge-api && tsc -p services/gamification-api && tsc -p services/workers/notification-worker && tsc -p infra2",
+    "typecheck": "tsc -p packages/contracts && tsc -p packages/core && tsc -p packages/api-kit && tsc -p packages/web-kit && tsc -p services/user-api && tsc -p services/challenge-api && tsc -p services/social-api && tsc -p services/cheer-api && tsc -p services/gamification-api && tsc -p services/workers/notification-worker && tsc -p services/workers/cheer-scheduler && tsc -p infra2",
     "deploy": "node scripts/deploy.mjs",
     "lint:cheer-widgets": "node scripts/validate-cheer-widget-catalog.mjs",
     "backfill:challenge-layer-policy": "node scripts/backfill-challenge-layer-policy.mjs"

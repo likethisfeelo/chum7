@@ -118,6 +118,33 @@ export class ApiStack extends cdk.Stack {
     stateful.uploadsBucket.grantRead(this.challengeApi);
     eventBus.grantPutEventsTo(this.challengeApi);
 
+    // --- social-api: /s + /public/plaza·board·hashtags ---
+    const socialApi = this.addDomainApi({
+      name: 'social-api',
+      protectedPrefix: '/s',
+      publicPrefixes: ['/public/plaza', '/public/board', '/public/hashtags'],
+      environment: {
+        SOCIAL_TABLE: stateful.tables.social.tableName,
+        UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
+      },
+    });
+    stateful.tables.social.grantReadWriteData(socialApi);
+    stateful.uploadsBucket.grantRead(socialApi); // 미디어 URL 재서명
+    eventBus.grantPutEventsTo(socialApi);
+
+    // --- cheer-api: /ch (challenges 읽기 전용 — porting-guide §4 예외) ---
+    const cheerApi = this.addDomainApi({
+      name: 'cheer-api',
+      protectedPrefix: '/ch',
+      environment: {
+        CHEER_TABLE: stateful.tables.cheer.tableName,
+        CHALLENGES_TABLE: stateful.tables.challenges.tableName,
+      },
+    });
+    stateful.tables.cheer.grantReadWriteData(cheerApi);
+    stateful.tables.challenges.grantReadData(cheerApi);
+    eventBus.grantPutEventsTo(cheerApi);
+
     // --- gamification-api: /g + /public/today + /public/banners ---
     this.gamificationApi = this.addDomainApi({
       name: 'gamification-api',

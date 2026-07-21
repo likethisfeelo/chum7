@@ -23,6 +23,7 @@ export interface WorkersStackProps extends cdk.StackProps {
 export class WorkersStack extends cdk.Stack {
   readonly eventBus: events.EventBus;
   readonly notificationWorker: NodejsFunction;
+  readonly workerFunctions: NodejsFunction[] = [];
 
   constructor(scope: Construct, id: string, props: WorkersStackProps) {
     super(scope, id, props);
@@ -45,6 +46,7 @@ export class WorkersStack extends cdk.Stack {
       },
     });
     stateful.tables.users.grantReadWriteData(this.notificationWorker);
+    this.workerFunctions.push(this.notificationWorker);
 
     const dlq = new sqs.Queue(this, 'NotificationDlq', {
       queueName: `${config.prefix}-notification-dlq`,
@@ -61,6 +63,33 @@ export class WorkersStack extends cdk.Stack {
           retryAttempts: 2,
         }),
       ],
+    });
+
+    // --- cheer-scheduler: 5분 주기 예약 응원 발송 ---
+    const cheerScheduler = new NodejsFunction(this, 'CheerScheduler', {
+      functionName: `${config.prefix}-cheer-scheduler`,
+      entry: join(__dirname, '../../services/workers/cheer-scheduler/src/index.ts'),
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.minutes(4),
+      memorySize: 256,
+      bundling: { minify: true, sourceMap: !config.isProd, externalModules: ['@aws-sdk/*'] },
+      environment: {
+        STAGE: config.stage,
+        CHEER_TABLE: stateful.tables.cheer.tableName,
+        CHALLENGES_TABLE: stateful.tables.challenges.tableName,
+        EVENT_BUS_NAME: this.eventBus.eventBusName,
+      },
+    });
+    stateful.tables.cheer.grantReadWriteData(cheerScheduler);
+    // thankScore ADD — 레거시 승계 크로스 도메인 쓰기 (services/cheer-api/PORTING.md)
+    stateful.tables.challenges.grantReadWriteData(cheerScheduler);
+    this.eventBus.grantPutEventsTo(cheerScheduler);
+    this.workerFunctions.push(cheerScheduler);
+
+    new events.Rule(this, 'CheerSchedulerRule', {
+      ruleName: `${config.prefix}-cheer-scheduler`,
+      schedule: events.Schedule.rate(cdk.Duration.minutes(5)),
+      targets: [new eventsTargets.LambdaFunction(cheerScheduler)],
     });
 
     new cdk.CfnOutput(this, 'EventBusName', { value: this.eventBus.eventBusName });
