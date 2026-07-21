@@ -8,6 +8,7 @@ import { createApi, ok, requireAuth } from '@chum7/api-kit';
 import { cheerRoutes } from './routes/cheers';
 import { reactionRoutes } from './routes/reactions';
 import { scheduledRoutes } from './routes/scheduled';
+import { statsRoutes } from './routes/stats';
 
 export const app = createApi({ service: 'cheer-api' });
 
@@ -22,5 +23,8 @@ app.route('/ch/cheers', reactionRoutes);
 
 // 예약 응원 목록/취소
 app.route('/ch/scheduled', scheduledRoutes);
+
+// 사용자 응원 통계 (레거시 stats-materializer 대체 — 증분 카운터 조회)
+app.route('/ch/stats', statsRoutes);
 
 export const handler = handle(app);

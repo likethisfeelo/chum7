@@ -15,6 +15,8 @@ export const cheerPk = (cheerId: string) => `CHEER#${cheerId}`;
 export const META_SK = 'META';
 export const SENDER_SK = 'SENDER';
 
+export const statsPk = (userId: string) => `STATS#${userId}`;
+
 export const recvGsi1Pk = (receiverId: string) => `RECV#${receiverId}`;
 export const sentGsi1Pk = (senderId: string) => `SENT#${senderId}`;
 export const schedGsi2Pk = (status: string) => `SCHED#${status}`;

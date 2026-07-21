@@ -8,7 +8,9 @@ import type { AppEnv } from '@chum7/api-kit';
 import { docClient, fail, ok, tableName } from '@chum7/api-kit';
 import { ALLOWED_REACTIONS, REPLY_MAX_MESSAGE_LENGTH, UUID_V4_REGEX, type ReactionType } from '../schemas';
 import { acquireRateLimitSlot, resolvePositiveInt, type AcquireRateLimitResult } from '../domain/rate-limit';
+import { onReactionGiven, onReplyGiven } from '../domain/stats-rules';
 import { getCheer, setReaction, setReply } from '../repo/cheers';
+import { applyStatsIncrements } from '../repo/stats';
 import { TABLE } from '../repo/shared';
 
 export const reactionRoutes = new Hono<AppEnv>();
@@ -89,6 +91,9 @@ reactionRoutes.post('/:cheerId/reaction', async (c) => {
     throw error;
   }
 
+  // 통계 증분: 조건부 갱신 성공 시에만 — 리액션 준 수신자 given, 응원 발신자 received (best-effort)
+  await applyStatsIncrements(onReactionGiven({ senderId: cheer.senderId, receiverId: userId }), now);
+
   // 발신자 리액션 알림: 레거시 SNS push — contracts에 이벤트 타입 부재로 미발행 (PORTING.md §4 gap)
   return ok(c, { cheerId, reactionType, reactedAt: now }, '리액션을 보냈습니다');
 });
@@ -136,6 +141,9 @@ reactionRoutes.post('/:cheerId/reply', async (c) => {
     }
     throw error;
   }
+
+  // 통계 증분: 조건부 갱신 성공 시에만 — 답장한 수신자 replyCount (best-effort)
+  await applyStatsIncrements(onReplyGiven({ receiverId: userId }), now);
 
   // 발신자 답장 알림: 레거시 SNS push — contracts에 이벤트 타입 부재로 미발행 (PORTING.md §4 gap)
   return ok(c, { cheerId, replyMessage: message, repliedAt: now }, '답장을 보냈습니다');
