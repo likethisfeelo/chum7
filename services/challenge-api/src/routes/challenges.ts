@@ -163,17 +163,13 @@ challengeRoutes.patch('/:challengeId/publish', async (c) => {
     return fail(c, 409, 'ALREADY_PUBLISHED', '이미 공개된 챌린지예요');
   }
 
+  // 수동 공개는 예약 오픈 시각(recruitOpenAt) 이전에도 허용한다 —
+  // "시간 되면 자동, 그전에는 수동 가능" (docs/time-policy.md R1). 기존 차단 로직 제거.
   const now = new Date();
-  const recruitingStart = new Date(challenge.recruitingStartAt as string);
-
-  if (recruitingStart > now) {
-    return fail(c, 400, 'RECRUITING_NOT_STARTED',
-      `모집 시작 시각(${challenge.recruitingStartAt})이 아직 되지 않았어요`);
-  }
 
   await updateChallengeFields(
     challengeId,
-    { lifecycle: 'recruiting', updatedAt: now.toISOString() },
+    { lifecycle: 'recruiting', recruitOpenedAt: now.toISOString(), updatedAt: now.toISOString() },
     {
       lifecycle: challenge.lifecycle,
       category: challenge.category,

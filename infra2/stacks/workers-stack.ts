@@ -113,7 +113,9 @@ export class WorkersStack extends cdk.Stack {
     this.workerFunctions.push(lifecycleManager);
     new events.Rule(this, 'LifecycleManagerRule', {
       ruleName: `${config.prefix}-lifecycle-manager`,
-      schedule: events.Schedule.rate(cdk.Duration.hours(1)),
+      // 10분 — 모집 오픈·마감·시작이 예약 시각에서 최대 10분 내 반영되도록
+      // (표시 계층은 effectiveLifecycle로 즉시 보정 — docs/time-policy.md R4)
+      schedule: events.Schedule.rate(cdk.Duration.minutes(10)),
       targets: [new eventsTargets.LambdaFunction(lifecycleManager)],
     });
 

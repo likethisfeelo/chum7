@@ -235,7 +235,8 @@ export function buildTargetDateTimeISO(
 }
 
 /** 클라이언트 시계가 서버보다 최대 60초 앞선 경우 서버 시각으로 대체 (오탐 방지 — 레거시 승계) */
-export const CLOCK_SKEW_TOLERANCE_MS = 60_000;
+// 5분 — 모바일 기기 시계 오차로 인한 FUTURE_PRACTICE_TIME 오탐 방지 (미래 시각은 서버 시각으로 클램프)
+export const CLOCK_SKEW_TOLERANCE_MS = 300_000;
 
 export function resolvePerformedAt(performedAtRaw: string, nowIso: string): string {
   const performedAtMs = new Date(performedAtRaw).getTime();
