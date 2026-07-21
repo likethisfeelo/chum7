@@ -51,6 +51,18 @@ function routeNotification(
         category: 'commerce',
         message: '결제가 확인되었어요! 이제 챌린지에 참여할 수 있어요 🎉',
       };
+    case 'refund.completed':
+      return {
+        recipientId: String(detail.userId),
+        category: 'commerce',
+        message: '완주 축하해요! 보증금 반환이 완료되었어요 💰',
+      };
+    case 'settlement.ready':
+      return {
+        recipientId: String(detail.creatorId),
+        category: 'commerce',
+        message: '챌린지 정산서가 도착했어요. 확인 후 지급이 진행됩니다',
+      };
     case 'order.rejected':
       return {
         recipientId: String(detail.userId),

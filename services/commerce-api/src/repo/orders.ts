@@ -26,7 +26,9 @@ export interface OrderItem {
   resolvedBy?: string | null;
 }
 
-function metaKeys(order: Pick<OrderItem, 'orderId' | 'userId' | 'status' | 'createdAt'>) {
+function metaKeys(
+  order: Pick<OrderItem, 'orderId' | 'userId' | 'status' | 'createdAt' | 'challengeId'>,
+) {
   return {
     pk: `ORDER#${order.orderId}`,
     sk: 'META',
@@ -34,7 +36,23 @@ function metaKeys(order: Pick<OrderItem, 'orderId' | 'userId' | 'status' | 'crea
     gsi1sk: order.createdAt,
     gsi2pk: `ORDERSTATUS#${order.status}`,
     gsi2sk: order.createdAt,
+    // 챌린지별 주문 조회 — settlement-worker의 종료 정산에 사용
+    gsi3pk: `ORDERCHAL#${order.challengeId}`,
+    gsi3sk: order.createdAt,
   };
+}
+
+/** 챌린지의 전체 주문 조회 (정산·반환 대상 산출) */
+export async function listOrdersByChallenge(challengeId: string): Promise<OrderItem[]> {
+  const result = await docClient.send(
+    new QueryCommand({
+      TableName: tableName('COMMERCE_TABLE'),
+      IndexName: 'gsi3',
+      KeyConditionExpression: 'gsi3pk = :pk',
+      ExpressionAttributeValues: { ':pk': `ORDERCHAL#${challengeId}` },
+    }),
+  );
+  return (result.Items ?? []) as OrderItem[];
 }
 
 export async function putOrder(order: OrderItem): Promise<void> {

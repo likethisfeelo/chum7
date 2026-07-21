@@ -26,6 +26,8 @@ export interface StageConfig {
   };
   /** 운영 알람 수신 이메일 (미설정 시 SNS 토픽만 생성) */
   opsAlertEmail?: string;
+  /** 플랫폼 수수료율 (정산 v0 — PAYMENT_SPEC §6.1, 기본 5%) */
+  platformFeeRate: number;
 }
 
 const dev: StageConfig = {
@@ -35,6 +37,7 @@ const dev: StageConfig = {
   // Phase 5 전환 시 활성화: { zoneName: 'chum7.com', app: 'test.chum7.com', api: 'dev-api.chum7.com', admin: 'dev-admin.chum7.com' }
   domain: undefined,
   cors: { allowOrigins: ['*'] },
+  platformFeeRate: 0.05,
 };
 
 const prod: StageConfig = {
@@ -44,6 +47,7 @@ const prod: StageConfig = {
   // Phase 5 전환 시 활성화: { zoneName: 'chum7.com', app: 'www.chum7.com', api: 'api.chum7.com', admin: 'admin.chum7.com' }
   domain: undefined,
   cors: { allowOrigins: ['https://www.chum7.com', 'https://admin.chum7.com'] },
+  platformFeeRate: 0.05,
 };
 
 export function resolveStageConfig(stage: string): StageConfig {
