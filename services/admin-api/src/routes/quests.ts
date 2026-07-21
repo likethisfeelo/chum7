@@ -3,18 +3,22 @@
  * 신규 키에는 전역 status-index가 없어 challengeId 스코프 Query로 재작성 (풀스캔 금지 — PORTING.md §3).
  * 거절 시 ACTIVE 유니크 마커 DELETE → 재제출 허용 (challenge-api PORTING.md §C 계약).
  */
+import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import type { AppEnv } from '@chum7/api-kit';
 import { fail, ok } from '@chum7/api-kit';
-import { questReviewSchema } from '../schemas';
+import { createQuestSchema, questReviewSchema, updateQuestSchema } from '../schemas';
 import { canReviewSubmission, matchesStatusFilter, reviewOutcome, summarizeSubmissions } from '../domain/review-rules';
 import {
   approveSubmissionTransaction,
   findSubmissionById,
   isTransactionConditionFailed,
   listChallengeSubmissions,
+  getQuestItem,
   listQuests,
+  putQuest,
   rejectSubmissionTransaction,
+  updateQuestFields,
 } from '../repo/quests';
 import { getChallenge } from '../repo/challenges';
 import { recordAudit } from '../repo/audit';
@@ -116,4 +120,95 @@ questReviewRoutes.put('/submissions/:submissionId/review', async (c) => {
     { submissionId, status: outcome.status, rewardGranted: outcome.rewardGranted, canResubmit: outcome.canResubmit },
     outcome.message,
   );
+});
+
+// ── 퀘스트 생성 (레거시 POST /admin/quests — admins/operators 또는 챌린지 생성자) ──
+questReviewRoutes.post('/', async (c) => {
+  const { userId, groups } = c.get('authUser')!;
+  const input = createQuestSchema.parse(await c.req.json().catch(() => ({})));
+
+  const challenge = await getChallenge(input.challengeId);
+  if (!challenge) return fail(c, 404, 'CHALLENGE_NOT_FOUND', '연결할 챌린지가 없습니다');
+
+  const canManageByGroup = groups.some((g) => ['admins', 'operators'].includes(g));
+  const isChallengeCreator = challenge.createdBy === userId;
+  if (!canManageByGroup && !isChallengeCreator) {
+    return fail(c, 403, 'FORBIDDEN', '퀘스트 생성 권한이 없습니다');
+  }
+
+  // 챌린지 허용 인증 방식과의 교차 검증 (레거시 승계)
+  const challengeAllowedTypes: string[] = Array.isArray(challenge.allowedVerificationTypes)
+    ? challenge.allowedVerificationTypes
+    : ['image', 'video', 'link', 'text'];
+  const questAllowedTypes = input.allowedVerificationTypes ?? challengeAllowedTypes;
+  if (!questAllowedTypes.every((t) => challengeAllowedTypes.includes(t))) {
+    return fail(c, 400, 'INVALID_VERIFICATION_TYPES',
+      `이 챌린지에서 허용되지 않는 인증 방식입니다. 허용: ${challengeAllowedTypes.join(', ')}`);
+  }
+
+  const questId = randomUUID();
+  const nowDate = new Date();
+  const now = nowDate.toISOString();
+  const quest = {
+    questId,
+    title: input.title,
+    description: input.description,
+    challengeId: input.challengeId,
+    allowedVerificationTypes: questAllowedTypes,
+    verificationType: questAllowedTypes[0],
+    verificationGuide: input.verificationGuide?.trim() || input.description,
+    verificationConfig: input.verificationConfig,
+    rewardPoints: input.rewardPoints,
+    rewardBadgeId: input.rewardBadgeId ?? null,
+    startAt: input.startAt ?? now,
+    endAt: input.endAt ?? null,
+    approvalRequired: input.approvalRequired,
+    displayOrder: input.displayOrder,
+    questLayer: input.questLayer,
+    questScope: input.questScope,
+    requireOnJoinInput: input.requireOnJoinInput,
+    startDay: input.startDay,
+    endDay: input.endDay,
+    revealAt: input.revealAt,
+    status: 'active',
+    submissionCount: 0,
+    approvedCount: 0,
+    createdAt: now,
+    updatedAt: now,
+    createdBy: userId,
+  };
+  await putQuest(quest);
+  await recordAudit({
+    actorUserId: userId, action: 'quest.create', targetType: 'quest', targetId: questId,
+    payload: { challengeId: input.challengeId, title: input.title }, now: nowDate,
+  });
+  return ok(c, quest, '퀘스트가 생성되었습니다', 201);
+});
+
+// ── 퀘스트 수정 (레거시 PUT /admin/quests/{id} — 그룹 또는 퀘스트 생성자) ──
+questReviewRoutes.put('/:questId', async (c) => {
+  const { userId, groups } = c.get('authUser')!;
+  const questId = c.req.param('questId');
+  const input = updateQuestSchema.parse(await c.req.json().catch(() => ({})));
+  const { challengeId, ...patch } = input;
+
+  const quest = await getQuestItem(challengeId, questId);
+  if (!quest) return fail(c, 404, 'QUEST_NOT_FOUND', '퀘스트를 찾을 수 없습니다');
+
+  const canManageByGroup = groups.some((g) => ['admins', 'operators'].includes(g));
+  const isQuestCreator = quest.createdBy === userId;
+  if (!canManageByGroup && !isQuestCreator) {
+    return fail(c, 403, 'FORBIDDEN', '퀘스트 수정 권한이 없습니다');
+  }
+  if (Object.keys(patch).length === 0) {
+    return fail(c, 400, 'NO_UPDATE_FIELDS', '수정할 필드가 없습니다');
+  }
+
+  const nowDate = new Date();
+  await updateQuestFields(challengeId, questId, { ...patch, updatedAt: nowDate.toISOString() });
+  await recordAudit({
+    actorUserId: userId, action: 'quest.update', targetType: 'quest', targetId: questId,
+    payload: { challengeId, fields: Object.keys(patch) }, now: nowDate,
+  });
+  return ok(c, { questId, updated: Object.keys(patch) }, '퀘스트가 수정되었습니다');
 });

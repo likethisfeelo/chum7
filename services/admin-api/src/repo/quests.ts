@@ -5,7 +5,7 @@
  *  ACTIVE 마커:   sk=`QSUB#<questId>#<userId>#ACTIVE` (recordType='active', user+quest당 1건)
  * 거절 시 ACTIVE 마커를 DELETE → 재제출 허용 (challenge-api PORTING.md §C 계약).
  */
-import { QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 import { TABLE, challengePk } from './challenges';
 
@@ -166,4 +166,52 @@ export async function rejectSubmissionTransaction(input: ReviewTransactionInput)
       ],
     }),
   );
+}
+
+/** 퀘스트 생성 — 레거시 quest/create 아이템 형태 + 신규 키 (중복 questId 방지 조건부) */
+export async function putQuest(quest: Record<string, unknown> & { challengeId: string; questId: string }): Promise<void> {
+  await docClient.send(
+    new PutCommand({
+      TableName: tableName(TABLE),
+      Item: { pk: challengePk(quest.challengeId), sk: questSk(quest.questId), ...quest },
+      ConditionExpression: 'attribute_not_exists(pk)',
+    }),
+  );
+}
+
+/** 퀘스트 필드 수정 — 존재 조건부 부분 업데이트 */
+export async function updateQuestFields(
+  challengeId: string,
+  questId: string,
+  patch: Record<string, unknown>,
+): Promise<boolean> {
+  const keys = Object.keys(patch);
+  if (keys.length === 0) return true;
+  try {
+    await docClient.send(
+      new UpdateCommand({
+        TableName: tableName(TABLE),
+        Key: { pk: challengePk(challengeId), sk: questSk(questId) },
+        UpdateExpression: 'SET ' + keys.map((_, i) => `#k${i} = :v${i}`).join(', '),
+        ConditionExpression: 'attribute_exists(pk)',
+        ExpressionAttributeNames: Object.fromEntries(keys.map((k, i) => [`#k${i}`, k])),
+        ExpressionAttributeValues: Object.fromEntries(keys.map((k, i) => [`:v${i}`, patch[k] ?? null])),
+      }),
+    );
+    return true;
+  } catch (error) {
+    if ((error as { name?: string }).name === 'ConditionalCheckFailedException') return false;
+    throw error;
+  }
+}
+
+/** 단일 퀘스트 조회 */
+export async function getQuestItem(
+  challengeId: string,
+  questId: string,
+): Promise<Record<string, any> | undefined> {
+  const result = await docClient.send(
+    new GetCommand({ TableName: tableName(TABLE), Key: { pk: challengePk(challengeId), sk: questSk(questId) } }),
+  );
+  return result.Item as Record<string, any> | undefined;
 }

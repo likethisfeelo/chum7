@@ -92,3 +92,44 @@ export const requeueByQuerySchema = z.object({
   limit: z.number().optional(),
   dryRun: z.boolean().optional(),
 });
+
+/** 레거시 quest/create 스키마 이식 (backend/services/quest/create) */
+const verificationConfigSchema = z
+  .object({
+    maxFileSizeMB: z.number().int().min(1).max(100).optional(),
+    maxDurationSeconds: z.number().int().min(1).max(60).optional(),
+    linkPattern: z.string().max(200).optional(),
+    requireInAppBrowser: z.boolean().optional(),
+    maxChars: z.number().int().min(1).max(2000).optional(),
+  })
+  .default({});
+
+export const createQuestSchema = z.object({
+  title: z.string().min(1).max(100),
+  description: z.string().min(1).max(1000),
+  challengeId: z.string().min(1),
+  allowedVerificationTypes: z.array(z.enum(['image', 'video', 'link', 'text'])).min(1).optional(),
+  verificationGuide: z.string().min(1).max(500).optional(),
+  verificationConfig: verificationConfigSchema,
+  rewardPoints: z.number().int().min(0).max(1000).default(1),
+  rewardBadgeId: z.string().max(50).optional().nullable(),
+  startAt: z.string().datetime().optional(),
+  endAt: z.string().datetime().optional().nullable(),
+  approvalRequired: z.boolean().default(false),
+  displayOrder: z.number().int().min(0).default(0),
+  questLayer: z.enum(['A', 'B', 'D']).optional().default('A'),
+  questScope: z.enum(['leader', 'personal', 'mixed']).optional().default('leader'),
+  requireOnJoinInput: z.boolean().optional().default(false),
+  startDay: z.number().int().min(1).max(7).nullable().optional().default(null),
+  endDay: z.number().int().min(1).max(7).nullable().optional().default(null),
+  revealAt: z.string().datetime().nullable().optional().default(null),
+});
+
+/** 레거시 quest/update — 부분 수정 (challengeId는 스코프 키) */
+export const updateQuestSchema = createQuestSchema
+  .omit({ challengeId: true })
+  .partial()
+  .extend({
+    challengeId: z.string().min(1),
+    status: z.enum(['active', 'inactive']).optional(),
+  });
