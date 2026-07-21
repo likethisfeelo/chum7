@@ -141,13 +141,21 @@ export const ChallengeDetailPage = () => {
   });
 
   const advanceLifecycleMutation = useMutation({
-    // NOT_PORTED: PATCH /challenges/:id/advance-lifecycle — 수동 전환은 lifecycle-manager 워커/
-    // admin-api 소관으로 재설계 예정 (challenge-api PORTING.md §E). 버튼은 비활성 상태로 유지.
+    // 수동 전환 — 예약 시각보다 먼저 가능, 지나간 예약은 무시 (docs/time-policy.md R1·R3)
     mutationFn: async (action: 'close_recruiting' | 'confirm_start') => {
-      void action;
-      throw Object.assign(new Error('NOT_PORTED'), {
-        response: { data: { message: '수동 전환은 개편 중이에요. 예정된 일정에 따라 자동 전환됩니다.' } },
-      });
+      const response =
+        action === 'close_recruiting'
+          ? await apiClient.post(`/c/challenges/${challengeId}/close-recruiting`)
+          : await apiClient.post(`/c/challenges/${challengeId}/start`);
+      return response.data;
+    },
+    onSuccess: (res: any) => {
+      toast.success(res?.message || '처리가 완료됐어요');
+      queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['challenge-stats', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['challenge-feed', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
+      queryClient.invalidateQueries({ queryKey: ['my-created-challenges'] });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || '처리에 실패했습니다');
@@ -157,7 +165,8 @@ export const ChallengeDetailPage = () => {
   if (isLoading) return <Loading fullScreen />;
   if (!challenge) return <div className="p-6 text-center text-gray-500">챌린지를 찾을 수 없습니다</div>;
 
-  const lifecycle = String(challenge.lifecycle || 'draft');
+  // 표시용 상태는 effectiveLifecycle 우선 — 워커(10분 주기) 전이 지연 흡수 (docs/time-policy.md R4)
+  const lifecycle = String(challenge.effectiveLifecycle || challenge.lifecycle || 'draft');
   const isCreator = challenge.createdBy === user?.userId;
   const requiresPayment = isPaidChallenge(challenge);
 
@@ -223,7 +232,7 @@ export const ChallengeDetailPage = () => {
           {lifecycle === 'recruiting' && (
             <button
               onClick={() => {
-                if (window.confirm('모집을 지금 마감할까요? 이후 신규 참여 신청이 불가합니다.')) {
+                if (window.confirm('모집을 지금 마감할까요? 이후 신규 참여 신청이 불가하며, 예약된 마감 시각이 남아 있어도 무시됩니다.')) {
                   advanceLifecycleMutation.mutate('close_recruiting');
                 }
               }}
@@ -238,7 +247,7 @@ export const ChallengeDetailPage = () => {
           {lifecycle === 'preparing' && (
             <button
               onClick={() => {
-                if (window.confirm('챌린지를 지금 시작할까요? 승인된 참여자들이 즉시 활성화됩니다.')) {
+                if (window.confirm('챌린지를 지금 시작할까요? 오늘이 Day 1이 되고 예약된 시작 시각은 무시됩니다. 승인된 참여자는 즉시 활성화되고, 승인 대기 중인 신청은 자동 거절됩니다.')) {
                   advanceLifecycleMutation.mutate('confirm_start');
                 }
               }}

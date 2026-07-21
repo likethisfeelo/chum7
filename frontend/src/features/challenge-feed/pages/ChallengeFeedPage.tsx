@@ -10,6 +10,7 @@ import { Loading } from "@/shared/components/Loading";
 import { resolveMediaUrl } from "@/shared/utils/mediaUrl";
 import { InlineVerificationForm } from "@/features/verification/components/InlineVerificationForm";
 import { BottomSheet } from "@/shared/components/BottomSheet";
+import { BoardGuideSection } from "@/features/challenge-board/components/BoardGuideSection";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import {
   getRemedyType,
@@ -484,15 +485,6 @@ export const ChallengeFeedPage = () => {
     [myChallengesData, challengeId],
   );
 
-  const { data: boardData, isLoading: isBoardLoading } = useQuery({
-    queryKey: ["challenge-board", challengeId],
-    enabled: Boolean(challengeId),
-    queryFn: async () => {
-      const response = await apiClient.get(`/s/board/${challengeId}`);
-      return response.data;
-    },
-  });
-
   const { data: verificationData, isLoading: isVerificationsLoading } = useQuery({
     queryKey: ["challenge-feed-verifications", challengeId],
     enabled: Boolean(challengeId),
@@ -656,13 +648,6 @@ export const ChallengeFeedPage = () => {
     },
   });
 
-  // 보드 첫 번째 텍스트 블록 미리보기
-  const boardPreviewText = useMemo(() => {
-    const blocks = boardData?.blocks || [];
-    const textBlock = blocks.find((b: any) => b.type === "text" && b.content);
-    return textBlock?.content || "아직 챌린지 보드 안내가 등록되지 않았습니다.";
-  }, [boardData]);
-
   const challengeVerifications = useMemo(() => verificationData || [], [verificationData]);
   const myChallengeVerifications = useMemo(() => myVerificationData || [], [myVerificationData]);
 
@@ -747,14 +732,15 @@ export const ChallengeFeedPage = () => {
     return <div className="p-6 text-sm text-gray-500">challengeId가 필요합니다.</div>;
   }
 
-  if (isChallengeLoading || isBoardLoading || isVerificationsLoading || isMyVerificationsLoading) {
+  if (isChallengeLoading || isVerificationsLoading || isMyVerificationsLoading) {
     return <Loading fullScreen />;
   }
 
   const challengeType = challengeData?.challengeType || "leader_personal";
   const isMixedChallengeType = challengeType === "leader_personal" || challengeType === "mixed";
   const isActive = (() => {
-    const lc = challengeData?.lifecycle;
+    // 표시용 상태는 effectiveLifecycle 우선 (워커 전이 지연 흡수 — docs/time-policy.md R4)
+    const lc = challengeData?.effectiveLifecycle || challengeData?.lifecycle;
     if (lc === "active") return true;
     if (lc === "preparing" && !challengeData?.requireStartConfirmation && challengeData?.challengeStartAt) {
       return challengeData.challengeStartAt <= new Date().toISOString();
@@ -993,22 +979,13 @@ export const ChallengeFeedPage = () => {
             </section>
           )}
 
-          {/* 2) 챌린지 보드 미리보기 */}
-          <section
-            className="glass-card rounded-2xl p-5 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => navigate(`/challenge-board/${challengeId}`)}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-bold text-gray-900">챌린지 보드</h3>
-              <span className="text-xs font-semibold text-primary-600">전체 보기 →</span>
-            </div>
-            <p className="text-sm text-gray-700 line-clamp-3">{boardPreviewText}</p>
-          </section>
+          {/* 2) 챌린지 보드 안내 — 인라인 아코디언 확장 + 📌 고정 (전체보기 페이지는 확장 영역 내 링크로 유지) */}
+          <BoardGuideSection challengeId={challengeId} />
 
           {/* 개인 퀘스트 제안 섹션 */}
           {challengeData?.personalQuestEnabled && (() => {
             const proposal = myProposalData?.latestProposal ?? null;
-            const lifecycle = challengeData?.lifecycle as string;
+            const lifecycle = (challengeData?.effectiveLifecycle || challengeData?.lifecycle) as string;
             const canSubmit = ["recruiting", "preparing"].includes(lifecycle);
             const statusLabel: Record<string, string> = {
               pending: "⏳ 심사 중",
