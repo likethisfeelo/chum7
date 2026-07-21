@@ -95,7 +95,8 @@ export const AdminQuestSubmissionsPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const initialChallengeId = searchParams.get('challengeId') ?? 'all';
+  // 신규 API는 챌린지 스코프 조회만 지원 (GET /adm/quests/submissions?challengeId= 필수)
+  const initialChallengeId = searchParams.get('challengeId') ?? '';
 
   const [statusFilter, setStatusFilter] = useState<FilterTab>('all');
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
@@ -108,7 +109,7 @@ export const AdminQuestSubmissionsPage = () => {
     queryKey: ['admin-quest-submissions-challenges'],
     queryFn: async () => {
       try {
-        const mine = await apiClient.get('/admin/challenges/mine');
+        const mine = await apiClient.get('/adm/challenges/mine');
         const myChallenges = mine.data?.data?.challenges ?? [];
         if (Array.isArray(myChallenges) && myChallenges.length > 0) return myChallenges;
       } catch {
@@ -131,11 +132,11 @@ export const AdminQuestSubmissionsPage = () => {
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['admin-quest-submissions', statusFilter, challengeFilter, scopeFilter],
+    enabled: Boolean(challengeFilter),
     queryFn: async () => {
-      const params = new URLSearchParams({ status: statusFilter });
-      if (challengeFilter !== 'all') params.set('challengeId', challengeFilter);
+      const params = new URLSearchParams({ status: statusFilter, challengeId: challengeFilter });
       if (scopeFilter !== 'all') params.set('questScope', scopeFilter);
-      const res = await apiClient.get(`/admin/quests/submissions?${params}`);
+      const res = await apiClient.get(`/adm/quests/submissions?${params}`);
       return res.data.data;
     },
     retry: false,
@@ -146,7 +147,7 @@ export const AdminQuestSubmissionsPage = () => {
     queryFn: async () => {
       const res = await apiClient.get('/verifications?limit=40');
       let items = res.data?.data?.verifications ?? [];
-      if (challengeFilter !== 'all') {
+      if (challengeFilter) {
         items = items.filter((item: any) => item.challengeId === challengeFilter);
       }
       return items;
@@ -165,11 +166,10 @@ export const AdminQuestSubmissionsPage = () => {
 
   const loadMoreMutation = useMutation({
     mutationFn: async () => {
-      if (!nextToken) return null;
-      const params = new URLSearchParams({ status: statusFilter, nextToken });
-      if (challengeFilter !== 'all') params.set('challengeId', challengeFilter);
+      if (!nextToken || !challengeFilter) return null;
+      const params = new URLSearchParams({ status: statusFilter, nextToken, challengeId: challengeFilter });
       if (scopeFilter !== 'all') params.set('questScope', scopeFilter);
-      const res = await apiClient.get(`/admin/quests/submissions?${params}`);
+      const res = await apiClient.get(`/adm/quests/submissions?${params}`);
       return res.data.data;
     },
     onSuccess: (pageData) => {
@@ -184,7 +184,9 @@ export const AdminQuestSubmissionsPage = () => {
 
   const reviewMutation = useMutation({
     mutationFn: async ({ submissionId, action, note }: { submissionId: string; action: 'approve' | 'reject'; note: string }) => {
-      const res = await apiClient.put(`/admin/quests/submissions/${submissionId}/review`, {
+      // 신규 API는 바디에 challengeId 필수 (신규 키에서 submissionId 단독 조회 불가)
+      const res = await apiClient.put(`/adm/quests/submissions/${submissionId}/review`, {
+        challengeId: challengeFilter,
         action,
         reviewNote: note.trim() || undefined,
       });
@@ -251,7 +253,7 @@ export const AdminQuestSubmissionsPage = () => {
               onChange={(e) => setChallengeFilter(e.target.value)}
               className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm"
             >
-              <option value="all">전체 챌린지</option>
+              <option value="">챌린지를 선택하세요 (필수)</option>
               {challengeOptions.map((challenge) => (
                 <option key={challenge.challengeId} value={challenge.challengeId}>
                   {challenge.title}
@@ -275,7 +277,12 @@ export const AdminQuestSubmissionsPage = () => {
         </div>
       </div>
 
-      {isLoading ? (
+      {!challengeFilter ? (
+        <div className="text-center py-12 text-gray-400">
+          <p className="text-4xl mb-3">🔍</p>
+          <p>챌린지를 먼저 선택해주세요. (신규 API는 챌린지 단위 조회만 지원합니다)</p>
+        </div>
+      ) : isLoading ? (
         <div className="text-center py-12 text-gray-500">로딩 중...</div>
       ) : submissions.length === 0 ? (
         (verificationMonitor?.length ? (

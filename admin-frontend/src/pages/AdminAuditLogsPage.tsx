@@ -4,40 +4,50 @@ import { apiClient } from '@/lib/api-client';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
+// 신규 감사 저장소 (admin-api PORTING.md §1-E): GET /adm/audit?month=YYYY-MM / GET /adm/audit/target/:targetId
 type AuditLog = {
-  auditType: string;
-  actorId: string;
+  auditId: string;
+  actorUserId: string;
   action: string;
-  targetId: string;
-  questId?: string;
-  note?: string | null;
+  target?: { type?: string; id?: string } | null;
+  payloadSummary?: string | null;
   createdAt: string;
 };
 
-const ACTION_TABS = [
-  { key: 'all',           label: '전체' },
-  { key: 'approved',      label: '승인' },
-  { key: 'rejected',      label: '거절' },
-  { key: 'auto_approved', label: '자동승인' },
-] as const;
-
-type ActionTab = typeof ACTION_TABS[number]['key'];
-
 const ACTION_LABEL: Record<string, string> = {
-  approved:      '승인',
-  rejected:      '거절',
-  auto_approved: '자동승인',
+  'challenge.create': '챌린지 생성',
+  'challenge.update': '챌린지 수정',
+  'challenge.delete': '챌린지 삭제',
+  'challenge.toggle': '챌린지 활성 전환',
+  'challenge.lifecycle': '라이프사이클 변경',
+  'challenge.confirm-start': '시작 확정',
+  'quest.review': '퀘스트 심사',
+  'banner.create': '배너 생성',
+  'banner.activate': '배너 활성화',
+  'banner.delete': '배너 삭제',
+  'cheer.dlq.requeue': '응원 DLQ 재발송',
+  'cheer.dlq.requeue-batch': '응원 DLQ 일괄 재발송',
+  'cheer.dlq.requeue-by-query': '응원 DLQ 조건 재발송',
+  'coupon.issue': '쿠폰 발급',
+  'coupon.revoke': '쿠폰 회수',
+  'order.confirm': '입금 확인',
+  'order.reject': '입금 거절',
 };
 
-const formatDate = (iso: string) => format(new Date(iso), 'M월 d일 HH:mm:ss', { locale: ko });
+const actionBadgeClass = (action: string) => {
+  if (action.startsWith('challenge.')) return 'bg-indigo-100 text-indigo-700';
+  if (action.startsWith('quest.')) return 'bg-green-100 text-green-700';
+  if (action.startsWith('banner.')) return 'bg-amber-100 text-amber-700';
+  if (action.startsWith('cheer.')) return 'bg-purple-100 text-purple-700';
+  if (action.startsWith('coupon.') || action.startsWith('order.')) return 'bg-rose-100 text-rose-700';
+  return 'bg-gray-100 text-gray-700';
+};
+
+const formatDate = (iso: string) => {
+  try { return format(new Date(iso), 'M월 d일 HH:mm:ss', { locale: ko }); } catch { return iso; }
+};
 
 const shortId = (id?: string) => (id ? id.slice(0, 8) : '-');
-
-const statusBadgeClass: Record<string, string> = {
-  approved:      'bg-green-100 text-green-700',
-  rejected:      'bg-red-100 text-red-700',
-  auto_approved: 'bg-blue-100 text-blue-700',
-};
 
 const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false);
@@ -59,21 +69,27 @@ const CopyButton = ({ text }: { text: string }) => {
   );
 };
 
+const currentMonth = () => new Date().toISOString().slice(0, 7);
+
 export const AdminAuditLogsPage = () => {
-  const [actionFilter, setActionFilter] = useState<ActionTab>('all');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [month, setMonth] = useState(currentMonth());
+  const [targetInput, setTargetInput] = useState('');
+  const [targetId, setTargetId] = useState(''); // 확정된 대상 검색어 (비어있으면 월 조회)
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [nextToken, setNextToken] = useState<string | null>(null);
 
+  const buildUrl = (token?: string | null) => {
+    const params = new URLSearchParams({ limit: '30' });
+    if (token) params.set('nextToken', token);
+    if (targetId) return `/adm/audit/target/${encodeURIComponent(targetId)}?${params}`;
+    params.set('month', month);
+    return `/adm/audit?${params}`;
+  };
+
   const { data, isLoading, isFetching, refetch } = useQuery({
-    queryKey: ['admin-audit-logs', actionFilter, dateFrom, dateTo],
+    queryKey: ['admin-audit-logs', month, targetId],
     queryFn: async () => {
-      const params = new URLSearchParams({ limit: '30' });
-      if (actionFilter !== 'all') params.set('action', actionFilter);
-      if (dateFrom) params.set('from', new Date(dateFrom).toISOString());
-      if (dateTo)   params.set('to',   new Date(dateTo).toISOString());
-      const res = await apiClient.get(`/admin/audit/logs?${params}`);
+      const res = await apiClient.get(buildUrl());
       return res.data.data;
     },
     retry: false,
@@ -87,11 +103,7 @@ export const AdminAuditLogsPage = () => {
   const loadMoreMutation = useMutation({
     mutationFn: async () => {
       if (!nextToken) return null;
-      const params = new URLSearchParams({ limit: '30', nextToken });
-      if (actionFilter !== 'all') params.set('action', actionFilter);
-      if (dateFrom) params.set('from', new Date(dateFrom).toISOString());
-      if (dateTo)   params.set('to',   new Date(dateTo).toISOString());
-      const res = await apiClient.get(`/admin/audit/logs?${params}`);
+      const res = await apiClient.get(buildUrl(nextToken));
       return res.data.data;
     },
     onSuccess: (pageData) => {
@@ -109,7 +121,7 @@ export const AdminAuditLogsPage = () => {
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">감사 로그</h1>
-          <p className="text-sm text-gray-500 mt-1">퀘스트 심사 승인/거절 이력을 시간순으로 확인합니다.</p>
+          <p className="text-sm text-gray-500 mt-1">어드민 변이 액션 이력을 월 단위 또는 대상 ID로 조회합니다.</p>
         </div>
         <button
           type="button"
@@ -121,51 +133,47 @@ export const AdminAuditLogsPage = () => {
         </button>
       </div>
 
-      {/* 액션 필터 */}
-      <div className="flex flex-wrap gap-2">
-        {ACTION_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActionFilter(tab.key)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-              actionFilter === tab.key
-                ? 'bg-primary-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* 날짜 범위 필터 */}
+      {/* 조회 조건 */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap gap-3 items-end">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">시작 날짜</label>
+          <label className="block text-xs text-gray-500 mb-1">조회 월</label>
           <input
-            type="datetime-local"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value || currentMonth())}
+            disabled={Boolean(targetId)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100"
           />
         </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">종료 날짜</label>
+        <div className="flex-1 min-w-[220px]">
+          <label className="block text-xs text-gray-500 mb-1">대상 ID 검색 (챌린지·제출물·쿠폰 등)</label>
           <input
-            type="datetime-local"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            value={targetInput}
+            onChange={(e) => setTargetInput(e.target.value)}
+            placeholder="targetId를 입력하면 월 조회 대신 대상별 이력을 조회합니다"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
           />
         </div>
         <button
           type="button"
-          onClick={() => { setDateFrom(''); setDateTo(''); }}
+          onClick={() => setTargetId(targetInput.trim())}
+          disabled={!targetInput.trim()}
+          className="px-3 py-2 text-sm rounded-lg bg-primary-600 text-white disabled:opacity-50"
+        >
+          대상 조회
+        </button>
+        <button
+          type="button"
+          onClick={() => { setTargetInput(''); setTargetId(''); }}
           className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
         >
           초기화
         </button>
+        {targetId && (
+          <span className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-3 py-1">
+            대상별 조회 중: {targetId}
+          </span>
+        )}
       </div>
 
       {isLoading ? (
@@ -180,38 +188,32 @@ export const AdminAuditLogsPage = () => {
                 <tr>
                   <th className="text-left px-4 py-3 font-semibold">시각</th>
                   <th className="text-left px-4 py-3 font-semibold">액션</th>
-                  <th className="text-left px-4 py-3 font-semibold">검토자</th>
-                  <th className="text-left px-4 py-3 font-semibold">제출ID</th>
-                  <th className="text-left px-4 py-3 font-semibold">퀘스트ID</th>
-                  <th className="text-left px-4 py-3 font-semibold">메모</th>
+                  <th className="text-left px-4 py-3 font-semibold">행위자</th>
+                  <th className="text-left px-4 py-3 font-semibold">대상</th>
+                  <th className="text-left px-4 py-3 font-semibold">요약</th>
                 </tr>
               </thead>
               <tbody>
                 {logs.map((log) => (
-                  <tr key={`${log.targetId}-${log.createdAt}`} className="border-b border-gray-100 last:border-0 align-top">
+                  <tr key={log.auditId || `${log.createdAt}-${log.action}`} className="border-b border-gray-100 last:border-0 align-top">
                     <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{formatDate(log.createdAt)}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusBadgeClass[log.action] || 'bg-gray-100 text-gray-700'}`}>
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${actionBadgeClass(log.action)}`}>
                         {ACTION_LABEL[log.action] ?? log.action}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-700 font-mono text-xs whitespace-nowrap">
-                      {shortId(log.actorId)}
-                      <CopyButton text={log.actorId} />
+                      {shortId(log.actorUserId)}
+                      <CopyButton text={log.actorUserId} />
                     </td>
                     <td className="px-4 py-3 text-gray-700 font-mono text-xs whitespace-nowrap">
-                      {shortId(log.targetId)}
-                      <CopyButton text={log.targetId} />
+                      {log.target?.type ? <span className="text-gray-400">{log.target.type} · </span> : null}
+                      {shortId(log.target?.id)}
+                      {log.target?.id && <CopyButton text={log.target.id} />}
                     </td>
-                    <td className="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">
-                      {log.questId ? (
-                        <>
-                          {shortId(log.questId)}
-                          <CopyButton text={log.questId} />
-                        </>
-                      ) : '-'}
+                    <td className="px-4 py-3 text-gray-500 text-xs max-w-md">
+                      <span className="break-all whitespace-pre-wrap">{log.payloadSummary || '-'}</span>
                     </td>
-                    <td className="px-4 py-3 text-gray-500 whitespace-pre-wrap">{log.note || '-'}</td>
                   </tr>
                 ))}
               </tbody>

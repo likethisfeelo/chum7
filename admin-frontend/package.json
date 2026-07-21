@@ -15,8 +15,6 @@
     "react-router-dom": "^6.22.0",
     "@tanstack/react-query": "^5.17.19",
     "axios": "^1.6.5",
-    "zustand": "^4.5.0",
-    "@aws-sdk/client-cognito-identity-provider": "^3.504.0",
     "react-icons": "^5.0.1",
     "date-fns": "^3.3.1",
     "clsx": "^2.1.0"

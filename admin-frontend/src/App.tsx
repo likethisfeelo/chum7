@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AdminQuestCreatePage } from '@/pages/AdminQuestCreatePage';
 import { AdminQuestSubmissionsPage } from '@/pages/AdminQuestSubmissionsPage';
 import { AdminChallengeCreatePage } from '@/pages/AdminChallengeCreatePage';
 import { AdminLoginPage } from '@/pages/AdminLoginPage';
@@ -8,10 +7,11 @@ import { AdminMyChallengesPage } from '@/pages/AdminMyChallengesPage';
 import { AdminAllChallengesPage } from '@/pages/AdminAllChallengesPage';
 import { AdminOpsDashboardPage } from '@/pages/AdminOpsDashboardPage';
 import { AdminAuditLogsPage } from '@/pages/AdminAuditLogsPage';
-import { AdminPersonalQuestProposalsPage } from '@/pages/AdminPersonalQuestProposalsPage';
 import { AdminNotificationsPage } from '@/pages/AdminNotificationsPage';
 import { AdminCategoryBannersPage } from '@/pages/AdminCategoryBannersPage';
 import { AdminCheerMonitorPage } from '@/pages/AdminCheerMonitorPage';
+import { AdminCommerceCouponsPage } from '@/pages/AdminCommerceCouponsPage';
+import { AdminCommerceOrdersPage } from '@/pages/AdminCommerceOrdersPage';
 import '@/styles/index.css';
 
 const queryClient = new QueryClient({
@@ -24,7 +24,9 @@ type JwtPayload = {
   ['cognito:groups']?: string | string[];
 };
 
-type Role = 'admins' | 'productowners' | 'leaders' | 'managers';
+// 신규 3그룹 모델 (admin-api PORTING.md §2): admins / operators / creators
+// 레거시 매핑: admins→admins, productowners/managers→operators, leaders→creators
+type Role = 'admins' | 'operators' | 'creators';
 
 function parseJwtPayload(token: string): JwtPayload | null {
   try {
@@ -64,7 +66,7 @@ function getAuthContext() {
   }
 
   const groups = parseGroups(payload);
-  const allowed = new Set<Role>(['admins', 'productowners', 'leaders', 'managers']);
+  const allowed = new Set<Role>(['admins', 'operators', 'creators']);
   const authenticated = groups.some(g => allowed.has(g as Role));
 
   return { authenticated, groups, payload };
@@ -72,6 +74,11 @@ function getAuthContext() {
 
 function hasAnyRole(groups: string[], roles: Role[]) {
   return roles.some(role => groups.includes(role));
+}
+
+/** 로그인 후 기본 이동 경로 — creators는 운영 대시보드 접근 불가 → 내 챌린지로 */
+function defaultPath(groups: string[]) {
+  return hasAnyRole(groups, ['admins', 'operators']) ? '/admin/ops/dashboard' : '/admin/challenges/mine';
 }
 
 const RoleRoute = ({ children, roles }: { children: React.ReactNode; roles: Role[] }) => {
@@ -82,8 +89,8 @@ const RoleRoute = ({ children, roles }: { children: React.ReactNode; roles: Role
 };
 
 const PublicOnlyRoute = ({ children }: { children: React.ReactNode }) => {
-  const { authenticated } = getAuthContext();
-  if (authenticated) return <Navigate to="/admin/ops/dashboard" replace />;
+  const { authenticated, groups } = getAuthContext();
+  if (authenticated) return <Navigate to={defaultPath(groups)} replace />;
   return <>{children}</>;
 };
 
@@ -92,38 +99,42 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const { groups } = getAuthContext();
 
-  const nav: Array<{ path: string; label: string }> = [];
+  const nav: Array<{ path: string; label: string; section?: string }> = [];
 
-  if (hasAnyRole(groups, ['admins', 'productowners', 'leaders'])) {
+  // creators(챌린지 생성자)는 내 챌린지 관련 메뉴만 노출 (admin-api PORTING.md §2)
+  if (hasAnyRole(groups, ['admins', 'creators'])) {
     nav.push({ path: '/admin/challenges/create', label: '🏆 챌린지 생성' });
   }
 
-  if (hasAnyRole(groups, ['admins'])) {
+  if (hasAnyRole(groups, ['admins', 'operators'])) {
     nav.push({ path: '/admin/challenges/all', label: '🚨 응급운영 전체조회(관리자)' });
   }
 
-  if (hasAnyRole(groups, ['admins', 'productowners', 'leaders'])) {
+  if (hasAnyRole(groups, ['admins', 'operators', 'creators'])) {
     nav.push({ path: '/admin/challenges/mine', label: '📚 내 챌린지/퀘스트' });
+    nav.push({ path: '/admin/quests/submissions', label: '📋 제출물 심사' });
   }
 
-  if (hasAnyRole(groups, ['admins', 'productowners'])) {
+  if (hasAnyRole(groups, ['admins', 'operators'])) {
     nav.push({ path: '/admin/category-banners', label: '🖼️ 카테고리 배너' });
-  }
-
-  if (hasAnyRole(groups, ['admins', 'productowners', 'leaders', 'managers'])) {
     nav.push({ path: '/admin/ops/dashboard', label: '📊 운영 대시보드' });
     nav.push({ path: '/admin/audit/logs', label: '🧾 감사 로그' });
-    nav.push({ path: '/admin/quests/create', label: '➕ 퀘스트 생성' });
-    nav.push({ path: '/admin/quests/submissions', label: '📋 제출물 심사' });
-    nav.push({ path: '/admin/personal-quest-proposals', label: '📝 개인퀘스트 심사' });
     nav.push({ path: '/admin/notifications', label: '🔔 알림함' });
     nav.push({ path: '/admin/cheer/monitor', label: '📣 응원 모니터' });
+  }
+
+  // 커머스 콘솔 — 슈퍼어드민(admins) 전용 (/pay/admin/*)
+  if (hasAnyRole(groups, ['admins'])) {
+    nav.push({ path: '/admin/commerce/coupons', label: '🎟️ 쿠폰 관리', section: '커머스' });
+    nav.push({ path: '/admin/commerce/orders', label: '💰 주문/입금 관리', section: '커머스' });
   }
 
   const handleLogout = () => {
     localStorage.clear();
     navigate('/login', { replace: true });
   };
+
+  let renderedSection: string | undefined;
 
   return (
     <aside className="w-56 min-h-screen bg-gray-900 text-white flex flex-col flex-shrink-0">
@@ -132,19 +143,29 @@ const Sidebar = () => {
         <p className="text-xs text-gray-400 mt-0.5">관리자 대시보드</p>
       </div>
       <nav className="p-3 flex-1">
-        {nav.map((item) => (
-          <button
-            key={item.path}
-            onClick={() => navigate(item.path)}
-            className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium mb-1 transition-colors ${
-              location.pathname.startsWith(item.path)
-                ? 'bg-primary-600 text-white'
-                : 'text-gray-300 hover:bg-gray-800'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
+        {nav.map((item) => {
+          const showHeader = item.section && item.section !== renderedSection;
+          if (item.section) renderedSection = item.section;
+          return (
+            <div key={item.path}>
+              {showHeader && (
+                <p className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  {item.section}
+                </p>
+              )}
+              <button
+                onClick={() => navigate(item.path)}
+                className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium mb-1 transition-colors ${
+                  location.pathname.startsWith(item.path)
+                    ? 'bg-primary-600 text-white'
+                    : 'text-gray-300 hover:bg-gray-800'
+                }`}
+              >
+                {item.label}
+              </button>
+            </div>
+          );
+        })}
       </nav>
       <div className="p-3 border-t border-gray-700">
         <button
@@ -175,6 +196,7 @@ const ForbiddenPage = () => (
 );
 
 export default function App() {
+  const rootAuth = getAuthContext();
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -192,14 +214,13 @@ export default function App() {
 
           <Route
             path="/"
-            element={<Navigate to={getAuthContext().authenticated ? '/admin/ops/dashboard' : '/login'} replace />}
+            element={<Navigate to={rootAuth.authenticated ? defaultPath(rootAuth.groups) : '/login'} replace />}
           />
-
 
           <Route
             path="/admin/ops/dashboard"
             element={
-              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
+              <RoleRoute roles={['admins', 'operators']}>
                 <Layout>
                   <AdminOpsDashboardPage />
                 </Layout>
@@ -210,7 +231,7 @@ export default function App() {
           <Route
             path="/admin/audit/logs"
             element={
-              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
+              <RoleRoute roles={['admins', 'operators']}>
                 <Layout>
                   <AdminAuditLogsPage />
                 </Layout>
@@ -221,7 +242,7 @@ export default function App() {
           <Route
             path="/admin/quests/submissions"
             element={
-              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
+              <RoleRoute roles={['admins', 'operators', 'creators']}>
                 <Layout>
                   <AdminQuestSubmissionsPage />
                 </Layout>
@@ -230,20 +251,9 @@ export default function App() {
           />
 
           <Route
-            path="/admin/quests/create"
-            element={
-              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
-                <Layout>
-                  <AdminQuestCreatePage />
-                </Layout>
-              </RoleRoute>
-            }
-          />
-
-          <Route
             path="/admin/challenges/create"
             element={
-              <RoleRoute roles={['admins', 'productowners', 'leaders']}>
+              <RoleRoute roles={['admins', 'creators']}>
                 <Layout>
                   <AdminChallengeCreatePage />
                 </Layout>
@@ -254,7 +264,7 @@ export default function App() {
           <Route
             path="/admin/challenges/all"
             element={
-              <RoleRoute roles={['admins']}>
+              <RoleRoute roles={['admins', 'operators']}>
                 <Layout>
                   <AdminAllChallengesPage />
                 </Layout>
@@ -265,21 +275,9 @@ export default function App() {
           <Route
             path="/admin/challenges/mine"
             element={
-              <RoleRoute roles={['admins', 'productowners', 'leaders']}>
+              <RoleRoute roles={['admins', 'operators', 'creators']}>
                 <Layout>
                   <AdminMyChallengesPage />
-                </Layout>
-              </RoleRoute>
-            }
-          />
-
-
-          <Route
-            path="/admin/personal-quest-proposals"
-            element={
-              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
-                <Layout>
-                  <AdminPersonalQuestProposalsPage />
                 </Layout>
               </RoleRoute>
             }
@@ -288,7 +286,7 @@ export default function App() {
           <Route
             path="/admin/notifications"
             element={
-              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
+              <RoleRoute roles={['admins', 'operators']}>
                 <Layout>
                   <AdminNotificationsPage />
                 </Layout>
@@ -299,7 +297,7 @@ export default function App() {
           <Route
             path="/admin/category-banners"
             element={
-              <RoleRoute roles={['admins', 'productowners']}>
+              <RoleRoute roles={['admins', 'operators']}>
                 <Layout>
                   <AdminCategoryBannersPage />
                 </Layout>
@@ -310,9 +308,31 @@ export default function App() {
           <Route
             path="/admin/cheer/monitor"
             element={
-              <RoleRoute roles={['admins', 'productowners', 'leaders', 'managers']}>
+              <RoleRoute roles={['admins', 'operators']}>
                 <Layout>
                   <AdminCheerMonitorPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/admin/commerce/coupons"
+            element={
+              <RoleRoute roles={['admins']}>
+                <Layout>
+                  <AdminCommerceCouponsPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/admin/commerce/orders"
+            element={
+              <RoleRoute roles={['admins']}>
+                <Layout>
+                  <AdminCommerceOrdersPage />
                 </Layout>
               </RoleRoute>
             }

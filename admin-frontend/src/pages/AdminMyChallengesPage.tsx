@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 import { lifecycleLabel, transitionLabel } from '@/utils/lifecycle';
 
@@ -27,14 +26,9 @@ const ALLOWED_TRANSITIONS: Record<Lifecycle, Lifecycle[]> = {
 };
 
 export const AdminMyChallengesPage = () => {
-  const navigate = useNavigate();
   const [selectedChallengeId, setSelectedChallengeId] = useState<string>('');
   const [transitionReason, setTransitionReason] = useState('운영 정책에 따른 상태 전환');
   const [transitionLoading, setTransitionLoading] = useState<Lifecycle | null>(null);
-
-  const [editingQuestId, setEditingQuestId] = useState<string>('');
-  const [questEditForm, setQuestEditForm] = useState({ title: '', description: '', rewardPoints: 0, displayOrder: 0 });
-  const [questSaving, setQuestSaving] = useState(false);
 
   const [previewDraft, setPreviewDraft] = useState('');
   const [boardDraft, setBoardDraft] = useState('');
@@ -46,7 +40,7 @@ export const AdminMyChallengesPage = () => {
   const { data: challengesData, isLoading, error, refetch: refetchChallenges } = useQuery({
     queryKey: ['admin-my-challenges'],
     queryFn: async () => {
-      const res = await apiClient.get('/admin/challenges/mine');
+      const res = await apiClient.get('/adm/challenges/mine');
       return res.data?.data?.challenges ?? [];
     },
   });
@@ -56,7 +50,7 @@ export const AdminMyChallengesPage = () => {
   const currentLifecycle = (selectedChallenge?.lifecycle ?? null) as Lifecycle | null;
   const isBoardEditingLocked = currentLifecycle === 'active' || currentLifecycle === 'completed' || currentLifecycle === 'archived';
 
-  const { data: questsData, isLoading: questsLoading, refetch: refetchQuests } = useQuery({
+  const { data: questsData, isLoading: questsLoading } = useQuery({
     queryKey: ['admin-challenge-quests', selectedChallengeId],
     enabled: Boolean(selectedChallengeId),
     queryFn: async () => {
@@ -159,7 +153,7 @@ export const AdminMyChallengesPage = () => {
     if (!selectedChallengeId || !transitionReason.trim()) return;
     setTransitionLoading(target);
     try {
-      await apiClient.put(`/admin/challenges/${selectedChallengeId}/lifecycle`, {
+      await apiClient.put(`/adm/challenges/${selectedChallengeId}/lifecycle`, {
         lifecycle: target,
         reason: transitionReason.trim(),
       });
@@ -169,36 +163,6 @@ export const AdminMyChallengesPage = () => {
       alert(e?.response?.data?.message || '챌린지 상태 변경에 실패했습니다.');
     } finally {
       setTransitionLoading(null);
-    }
-  };
-
-  const startEditQuest = (quest: Quest) => {
-    setEditingQuestId(quest.questId);
-    setQuestEditForm({
-      title: quest.title ?? '',
-      description: quest.description ?? '',
-      rewardPoints: Number(quest.rewardPoints ?? 0),
-      displayOrder: Number(quest.displayOrder ?? 0),
-    });
-  };
-
-  const saveQuest = async () => {
-    if (!editingQuestId) return;
-    setQuestSaving(true);
-    try {
-      await apiClient.put(`/admin/quests/${editingQuestId}`, {
-        title: questEditForm.title.trim(),
-        description: questEditForm.description.trim(),
-        rewardPoints: Number(questEditForm.rewardPoints),
-        displayOrder: Number(questEditForm.displayOrder),
-      });
-      await refetchQuests();
-      setEditingQuestId('');
-      alert('퀘스트 정보를 수정했습니다.');
-    } catch (e: any) {
-      alert(e?.response?.data?.message || '퀘스트 수정에 실패했습니다.');
-    } finally {
-      setQuestSaving(false);
     }
   };
 
@@ -216,10 +180,7 @@ export const AdminMyChallengesPage = () => {
         <label className="block text-sm font-medium text-gray-700 mb-2">챌린지 선택</label>
         <select
           value={selectedChallengeId}
-          onChange={(e) => {
-            setSelectedChallengeId(e.target.value);
-            setEditingQuestId('');
-          }}
+          onChange={(e) => setSelectedChallengeId(e.target.value)}
           className="w-full px-3 py-2.5 border border-gray-300 rounded-xl"
         >
           <option value="">챌린지를 선택하세요</option>
@@ -332,12 +293,11 @@ export const AdminMyChallengesPage = () => {
             <h3 className="text-lg font-bold text-gray-900">챌린지별 퀘스트</h3>
             <button
               type="button"
-              onClick={() => navigate(`/admin/quests/create?challengeId=${selectedChallengeId}`)}
-              disabled={selectedChallenge?.challengeType === 'personal_only'}
-              title={selectedChallenge?.challengeType === 'personal_only' ? '개인 퀘스트형 챌린지는 리더 퀘스트를 추가할 수 없습니다' : undefined}
-              className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled
+              title="퀘스트 생성/수정 API는 백엔드 재구축 후 지원 예정입니다"
+              className="px-3 py-1.5 rounded-lg bg-gray-300 text-gray-500 text-sm font-semibold cursor-not-allowed"
             >
-              + 퀘스트 추가
+              + 퀘스트 추가 (재구축 후 지원 예정)
             </button>
           </div>
           {questsLoading ? (
@@ -362,61 +322,7 @@ export const AdminMyChallengesPage = () => {
                     {(q as any).startDay || (q as any).endDay ? ` · Day ${(q as any).startDay ?? '?'}~${(q as any).endDay ?? '?'}` : ''}
                   </p>
 
-                  {editingQuestId === q.questId ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-gray-50 rounded-lg p-2">
-                      <input
-                        value={questEditForm.title}
-                        onChange={(e) => setQuestEditForm((prev) => ({ ...prev, title: e.target.value }))}
-                        className="px-2 py-1.5 border rounded"
-                        placeholder="퀘스트 제목"
-                      />
-                      <input
-                        type="number"
-                        value={questEditForm.rewardPoints}
-                        onChange={(e) => setQuestEditForm((prev) => ({ ...prev, rewardPoints: Number(e.target.value) }))}
-                        className="px-2 py-1.5 border rounded"
-                        placeholder="포인트"
-                      />
-                      <input
-                        type="number"
-                        value={questEditForm.displayOrder}
-                        onChange={(e) => setQuestEditForm((prev) => ({ ...prev, displayOrder: Number(e.target.value) }))}
-                        className="px-2 py-1.5 border rounded"
-                        placeholder="순서"
-                      />
-                      <input
-                        value={questEditForm.description}
-                        onChange={(e) => setQuestEditForm((prev) => ({ ...prev, description: e.target.value }))}
-                        className="px-2 py-1.5 border rounded"
-                        placeholder="설명"
-                      />
-                      <div className="flex gap-2 md:col-span-2">
-                        <button
-                          type="button"
-                          onClick={saveQuest}
-                          disabled={questSaving || !questEditForm.title.trim() || !questEditForm.description.trim()}
-                          className="px-3 py-1.5 rounded bg-blue-600 text-white text-sm disabled:opacity-50"
-                        >
-                          {questSaving ? '저장 중...' : '저장'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingQuestId('')}
-                          className="px-3 py-1.5 rounded bg-gray-300 text-gray-800 text-sm"
-                        >
-                          취소
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => startEditQuest(q)}
-                      className="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-sm"
-                    >
-                      퀘스트 수정
-                    </button>
-                  )}
+                  <p className="text-xs text-gray-400">퀘스트 수정은 재구축 후 지원 예정입니다.</p>
                 </div>
               ))}
             </div>

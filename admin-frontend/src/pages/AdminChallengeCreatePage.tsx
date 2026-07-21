@@ -185,7 +185,7 @@ export const AdminChallengeCreatePage = () => {
         payload.maxParticipants = Number(form.maxParticipants);
       }
 
-      const res = await apiClient.post('/admin/challenges', payload);
+      const res = await apiClient.post('/adm/challenges', payload);
       const data = res.data?.data;
       setCreatedId(data.challengeId || '');
       setCurrentLifecycle((data.lifecycle as Lifecycle) || 'draft');
@@ -204,7 +204,7 @@ export const AdminChallengeCreatePage = () => {
     setLifecycleLoading(target);
     setLifecycleError('');
     try {
-      await apiClient.put(`/admin/challenges/${createdId}/lifecycle`, {
+      await apiClient.put(`/adm/challenges/${createdId}/lifecycle`, {
         lifecycle: target,
         reason: `admin_manual_${target}`,
       });

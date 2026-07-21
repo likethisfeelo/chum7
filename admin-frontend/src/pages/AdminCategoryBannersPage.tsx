@@ -38,7 +38,7 @@ export const AdminCategoryBannersPage = () => {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-category-banners', selectedSlug],
     queryFn: async () => {
-      const res = await apiClient.get(`/admin/category-banners/${selectedSlug}`);
+      const res = await apiClient.get(`/adm/category-banners/${selectedSlug}`);
       return res.data.data.banners as Banner[];
     },
   });
@@ -49,7 +49,7 @@ export const AdminCategoryBannersPage = () => {
       if (body.imageUrl)    payload.imageUrl    = body.imageUrl;
       if (body.tagline)     payload.tagline     = body.tagline;
       if (body.description) payload.description = body.description;
-      const res = await apiClient.post(`/admin/category-banners/${selectedSlug}`, payload);
+      const res = await apiClient.post(`/adm/category-banners/${selectedSlug}`, payload);
       return res.data.data as Banner;
     },
     onSuccess: () => {
@@ -64,7 +64,7 @@ export const AdminCategoryBannersPage = () => {
 
   const activateMutation = useMutation({
     mutationFn: async (bannerId: string) => {
-      await apiClient.put(`/admin/category-banners/${selectedSlug}/${bannerId}/activate`);
+      await apiClient.put(`/adm/category-banners/${selectedSlug}/${bannerId}/activate`);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-category-banners', selectedSlug] });
