@@ -37,7 +37,7 @@ export class ApiStack extends cdk.Stack {
   readonly httpApi: apigwv2.HttpApi;
   readonly userApi: NodejsFunction;
   readonly challengeApi?: NodejsFunction;
-  readonly gamificationApi?: NodejsFunction;
+  gamificationApi!: NodejsFunction;
   readonly functions: NodejsFunction[] = [];
 
   private readonly authorizer: HttpJwtAuthorizer;
@@ -102,6 +102,23 @@ export class ApiStack extends cdk.Stack {
       methods: [apigwv2.HttpMethod.GET],
       integration: new HttpLambdaIntegration('HealthIntegration', this.userApi),
     });
+
+    // --- gamification-api: /g + /public/today + /public/banners ---
+    this.gamificationApi = this.addDomainApi({
+      name: 'gamification-api',
+      protectedPrefix: '/g',
+      publicPrefixes: ['/public/today', '/public/banners'],
+      environment: {
+        GAMIFICATION_TABLE: stateful.tables.gamification.tableName,
+        CONTENT_TABLE: stateful.tables.content.tableName,
+        CHALLENGES_TABLE: stateful.tables.challenges.tableName,
+      },
+    });
+    stateful.tables.gamification.grantReadWriteData(this.gamificationApi);
+    stateful.tables.content.grantReadData(this.gamificationApi);
+    // 문서화된 크로스 도메인 예외: world-summary 당일 공개 인증 집계 (porting-guide §4)
+    stateful.tables.challenges.grantReadData(this.gamificationApi);
+    eventBus.grantPutEventsTo(this.gamificationApi);
 
     new cdk.CfnOutput(this, 'ApiUrl', { value: this.httpApi.apiEndpoint });
   }
