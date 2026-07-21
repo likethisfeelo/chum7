@@ -18,7 +18,7 @@ export const MyRecordsPage = () => {
   const { data: myExtraFeedPage, isFetching: isFetchingExtra } = useQuery({
     queryKey: ['verifications', 'mine-extra'],
     queryFn: async () => {
-      const response = await apiClient.get('/verifications?mine=true&isExtra=true&limit=10');
+      const response = await apiClient.get('/c/verifications?mine=true&isExtra=true&limit=10');
       return {
         verifications: response.data.data.verifications || [],
         nextToken: response.data.data.nextToken || null,
@@ -62,7 +62,7 @@ export const MyRecordsPage = () => {
   const loadMoreMutation = useMutation({
     mutationFn: async () => {
       if (!extraNextToken) return null;
-      const response = await apiClient.get(`/verifications?mine=true&isExtra=true&limit=10&nextToken=${encodeURIComponent(extraNextToken)}`);
+      const response = await apiClient.get(`/c/verifications?mine=true&isExtra=true&limit=10&nextToken=${encodeURIComponent(extraNextToken)}`);
       return {
         verifications: response.data.data.verifications || [],
         nextToken: response.data.data.nextToken || null,
@@ -81,7 +81,7 @@ export const MyRecordsPage = () => {
   const visibilityMutation = useMutation({
     mutationFn: async (verificationId: string) => {
       setPendingVisibilityId(verificationId);
-      await apiClient.patch(`/verifications/${verificationId}/visibility`, { isPersonalOnly: false });
+      await apiClient.patch(`/c/verifications/${verificationId}/visibility`, { isPersonalOnly: false });
       return verificationId;
     },
     onSuccess: () => {
@@ -100,7 +100,7 @@ export const MyRecordsPage = () => {
   const publishBatch = async (targetIds: string[]) => {
     setIsBulkPublishing(true);
     const results = await Promise.allSettled(
-      targetIds.map((verificationId) => apiClient.patch(`/verifications/${verificationId}/visibility`, { isPersonalOnly: false })),
+      targetIds.map((verificationId) => apiClient.patch(`/c/verifications/${verificationId}/visibility`, { isPersonalOnly: false })),
     );
 
     const successIds = results

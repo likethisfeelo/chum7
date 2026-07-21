@@ -14,11 +14,11 @@ export interface NotificationSettings {
 
 export const notificationSettingsApi = {
   getSettings: async (): Promise<NotificationSettings> => {
-    const res = await apiClient.get('/notifications/settings');
+    const res = await apiClient.get('/u/notifications/settings');
     return res.data.data.settings;
   },
 
   updateSettings: async (updates: Partial<NotificationSettings>): Promise<void> => {
-    await apiClient.put('/notifications/settings', updates);
+    await apiClient.put('/u/notifications/settings', updates);
   },
 };

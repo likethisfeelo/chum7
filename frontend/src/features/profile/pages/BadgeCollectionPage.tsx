@@ -41,7 +41,7 @@ export const BadgeCollectionPage = () => {
   const { data: badges, isLoading } = useQuery<UserBadge[]>({
     queryKey: ['my-badges'],
     queryFn: async () => {
-      const response = await apiClient.get('/users/me/badges');
+      const response = await apiClient.get('/g/badges');
       return response.data?.data?.badges ?? [];
     },
   });

@@ -254,19 +254,19 @@ export const ChallengeBoardPage = () => {
   const { data: boardData, isLoading: isBoardLoading } = useQuery({
     queryKey: ['challenge-board-page', challengeId],
     enabled: Boolean(challengeId),
-    queryFn: async () => { const r = await apiClient.get(`/challenge-board/${challengeId}`); return r.data; },
+    queryFn: async () => { const r = await apiClient.get(`/s/board/${challengeId}`); return r.data; },
   });
 
   const { data: challengeData } = useQuery({
     queryKey: ['challenge', challengeId],
     enabled: Boolean(challengeId),
-    queryFn: async () => { const r = await apiClient.get(`/challenges/${challengeId}`); return r.data.data; },
+    queryFn: async () => { const r = await apiClient.get(`/public/challenges/${challengeId}`); return r.data.data; },
   });
 
   const { data: commentsData, isLoading: isCommentsLoading } = useQuery({
     queryKey: ['challenge-board-page-comments', challengeId],
     enabled: Boolean(challengeId),
-    queryFn: async () => { const r = await apiClient.get(`/challenge-board/${challengeId}/comments?limit=100`); return r.data; },
+    queryFn: async () => { const r = await apiClient.get(`/s/board/${challengeId}/comments?limit=100`); return r.data; },
   });
 
   // ── 편집 모드 시작: 현재 보드 내용 로드
@@ -300,7 +300,7 @@ export const ChallengeBoardPage = () => {
             { id: crypto.randomUUID(), type: 'rich-text', content: json },
             ...videoBlocks.map((v) => ({ id: v.id, type: 'video', url: v.url })),
           ];
-          await apiClient.post(`/challenge-board/${challengeId}`, { blocks });
+          await apiClient.post(`/s/board/${challengeId}`, { blocks });
           queryClient.invalidateQueries({ queryKey: ['challenge-board-page', challengeId] });
           setAutoSaveStatus('saved');
         } catch {
@@ -333,7 +333,7 @@ export const ChallengeBoardPage = () => {
         { id: crypto.randomUUID(), type: 'rich-text', content: json },
         ...videoBlocks.map((v) => ({ id: v.id, type: 'video', url: v.url })),
       ];
-      await apiClient.post(`/challenge-board/${challengeId}`, { blocks });
+      await apiClient.post(`/s/board/${challengeId}`, { blocks });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['challenge-board-page', challengeId] });
@@ -346,7 +346,7 @@ export const ChallengeBoardPage = () => {
   // ── 댓글 등록
   const submitCommentMutation = useMutation({
     mutationFn: async (content: string) => {
-      await apiClient.post(`/challenge-board/${challengeId}/comments`, {
+      await apiClient.post(`/s/board/${challengeId}/comments`, {
         content,
         ...(replyTo ? { parentCommentId: replyTo.commentId } : {}),
       });
@@ -363,7 +363,7 @@ export const ChallengeBoardPage = () => {
   // ── 반응 토글 (낙관적 업데이트)
   const reactMutation = useMutation({
     mutationFn: async ({ commentId, emoji, action }: { commentId: string; emoji: string; action: 'add' | 'remove' }) => {
-      await apiClient.post(`/challenge-board/${challengeId}/comments/${commentId}/react`, { emoji, action });
+      await apiClient.post(`/s/board/${challengeId}/comments/${commentId}/react`, { emoji, action });
     },
     onMutate: async ({ commentId, emoji, action }) => {
       await queryClient.cancelQueries({ queryKey: ['challenge-board-page-comments', challengeId] });

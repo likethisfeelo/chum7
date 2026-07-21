@@ -19,7 +19,7 @@ export const TodayPage = () => {
   const { data: cheers, isLoading: cheersLoading } = useQuery({
     queryKey: ['my-cheers', 'received'],
     queryFn: async () => {
-      const res = await apiClient.get('/cheer/my-cheers?type=received&limit=20');
+      const res = await apiClient.get('/ch/cheers/my?type=received&limit=20');
       return res.data.data.cheers;
     },
   });
@@ -27,7 +27,7 @@ export const TodayPage = () => {
   const { data: sentCheers, isLoading: sentCheersLoading } = useQuery({
     queryKey: ['my-cheers', 'sent'],
     queryFn: async () => {
-      const res = await apiClient.get('/cheer/my-cheers?type=sent&limit=20');
+      const res = await apiClient.get('/ch/cheers/my?type=sent&limit=20');
       return res.data.data.cheers;
     },
   });
@@ -35,14 +35,14 @@ export const TodayPage = () => {
   const { data: myChallengesData } = useQuery({
     queryKey: ['my-challenges-today'],
     queryFn: async () => {
-      const res = await apiClient.get('/challenges/my?status=active');
+      const res = await apiClient.get('/c/challenges/my?status=active');
       return res.data.data;
     },
   });
 
   const reactionMutation = useMutation({
     mutationFn: async ({ cheerId, reactionType }: { cheerId: string; reactionType: string }) => {
-      const res = await apiClient.post(`/cheers/${cheerId}/reaction`, { reactionType });
+      const res = await apiClient.post(`/ch/cheers/${cheerId}/reaction`, { reactionType });
       return res.data;
     },
     onSuccess: () => {
@@ -54,7 +54,7 @@ export const TodayPage = () => {
 
   const replyMutation = useMutation({
     mutationFn: async ({ cheerId, message }: { cheerId: string; message: string }) => {
-      const res = await apiClient.post(`/cheers/${cheerId}/reply`, { message });
+      const res = await apiClient.post(`/ch/cheers/${cheerId}/reply`, { message });
       return res.data;
     },
     onSuccess: (_, variables) => {

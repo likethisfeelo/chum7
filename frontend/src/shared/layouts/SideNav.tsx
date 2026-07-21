@@ -7,7 +7,7 @@ const NAV_ITEMS: (
   | { path: string; isME: true; label: string }
 )[] = [
   { path: '/challenges', iconKey: 'challenges', label: '챌린지' },
-  { path: '/outer-space', iconKey: 'outer-space', label: '마당' },
+  { path: '/plaza', iconKey: 'outer-space', label: '마당' },
   { path: '/me', isME: true, label: 'ME' },
   { path: '/today', iconKey: 'today', label: '오늘' },
   { path: '/my', iconKey: 'my', label: '마이' },

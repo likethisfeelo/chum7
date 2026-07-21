@@ -69,7 +69,7 @@ export async function fetchPlazaFeed(params: {
   if (params.category) query.set('category', params.category);
   if (params.hashtag) query.set('hashtag', params.hashtag);
 
-  const response = await apiClient.get(`/plaza/feed?${query.toString()}`);
+  const response = await apiClient.get(`/public/plaza/feed?${query.toString()}`);
   return response.data?.data || { posts: [], hasMore: false, nextCursor: null };
 }
 
@@ -79,18 +79,14 @@ export async function reactPlazaPost(params: {
   challengeId?: string;
 }): Promise<PlazaReactionResponse | null> {
   try {
-    const response = await apiClient.post(`/plaza/${encodeURIComponent(params.plazaPostId)}/react`, {
+    const response = await apiClient.post(`/s/plaza/${encodeURIComponent(params.plazaPostId)}/react`, {
       reactionType: 'like',
     });
     return response.data?.data ?? null;
   } catch {
-    if (!params.verificationId) return null;
-    const fallbackResponse = await apiClient.post('/plaza/reactions', {
-      verificationId: params.verificationId,
-      challengeId: params.challengeId,
-      reactionType: 'like',
-    });
-    return fallbackResponse.data?.data ?? null;
+    // NOT_PORTED: 구형 호환 경로 POST /plaza/reactions(verificationId 폴백)는 신규 API에서 폐기 —
+    // 마당 게시물이 없으면 반응 없이 조용히 무시 (social-api PORTING.md §1-A)
+    return null;
   }
 }
 
@@ -99,7 +95,7 @@ export async function fetchPlazaRecommendations(params: { verificationId?: strin
   if (params.verificationId) query.set('verificationId', params.verificationId);
   if (params.plazaPostId) query.set('plazaPostId', params.plazaPostId);
   query.set('limit', '3');
-  const response = await apiClient.get(`/plaza/recommendations?${query.toString()}`);
+  const response = await apiClient.get(`/s/plaza/recommendations?${query.toString()}`);
   return response.data?.data?.recommendations || [];
 }
 
@@ -110,7 +106,7 @@ export interface DismissRecommendationResult {
 export async function dismissRecommendation(recommendationId?: string): Promise<DismissRecommendationResult | null> {
   if (!recommendationId) return null;
   try {
-    const response = await apiClient.post(`/recommendations/${encodeURIComponent(recommendationId)}/dismiss`);
+    const response = await apiClient.post(`/s/plaza/recommendations/${encodeURIComponent(recommendationId)}/dismiss`);
     return response.data?.data || null;
   } catch {
     // backward compatibility: ignore if endpoint is not ready yet
@@ -138,7 +134,7 @@ export async function fetchPlazaCommentsPage(params: { plazaPostId: string; curs
   query.set('limit', String(params.limit ?? 30));
   if (params.cursor) query.set('cursor', params.cursor);
 
-  const response = await apiClient.get(`/plaza/${encodeURIComponent(params.plazaPostId)}/comments?${query.toString()}`);
+  const response = await apiClient.get(`/public/plaza/${encodeURIComponent(params.plazaPostId)}/comments?${query.toString()}`);
   return response.data?.data || { comments: [], hasMore: false, nextCursor: null };
 }
 
@@ -148,6 +144,6 @@ export async function fetchPlazaComments(plazaPostId: string): Promise<PlazaComm
 }
 
 export async function createPlazaComment(plazaPostId: string, content: string): Promise<PlazaComment | null> {
-  const response = await apiClient.post(`/plaza/${encodeURIComponent(plazaPostId)}/comments`, { content });
+  const response = await apiClient.post(`/s/plaza/${encodeURIComponent(plazaPostId)}/comments`, { content });
   return response.data?.data ?? null;
 }

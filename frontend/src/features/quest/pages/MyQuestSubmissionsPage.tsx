@@ -40,16 +40,20 @@ export const MyQuestSubmissionsPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const questId = searchParams.get('questId');
+  const challengeId = searchParams.get('challengeId');
 
   const [includeHistory, setIncludeHistory] = useState(false);
   const [resubmitQuest, setResubmitQuest]   = useState<any | null>(null);
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['my-quest-submissions', includeHistory, questId],
+    queryKey: ['my-quest-submissions', includeHistory, questId, challengeId],
     queryFn: async () => {
+      // NOT_PORTED: 챌린지 스코프 없는 전체 제출 이력 조회는 신규 API에 없음 (challenge-api PORTING.md §C:
+      // GET /c/:challengeId/quests/my-submissions) — challengeId 없이 진입하면 빈 목록으로 동작.
+      if (!challengeId) return { submissions: [] };
       const params = new URLSearchParams({ includeHistory: String(includeHistory) });
       if (questId) params.set('questId', questId);
-      const res = await apiClient.get(`/quests/my-submissions?${params}`);
+      const res = await apiClient.get(`/c/${challengeId}/quests/my-submissions?${params}`);
       return res.data.data;
     },
   });

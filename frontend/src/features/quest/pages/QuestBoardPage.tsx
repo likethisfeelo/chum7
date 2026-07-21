@@ -63,9 +63,11 @@ export const QuestBoardPage = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['quests', challengeId, activeTab],
     queryFn: async () => {
+      // NOT_PORTED: challengeId 미지정 전체 퀘스트 조회는 신규 API에서 폐기 (challenge-api PORTING.md §C)
+      // — 챌린지 스코프 없는 진입은 빈 목록으로 동작.
+      if (!challengeId) return { quests: [] };
       const params = new URLSearchParams({ status: 'active' });
-      if (challengeId) params.set('challengeId', challengeId);
-      const res = await apiClient.get(`/quests?${params}`);
+      const res = await apiClient.get(`/c/${challengeId}/quests?${params}`);
       return res.data.data;
     },
   });
@@ -105,7 +107,7 @@ export const QuestBoardPage = () => {
             <p className="text-xs text-gray-500">완료하고 포인트를 모아보세요</p>
           </div>
           <button
-            onClick={() => navigate('/quests/my-submissions')}
+            onClick={() => navigate(`/quests/my-submissions${challengeId ? `?challengeId=${challengeId}` : ''}`)}
             className="ml-auto text-sm text-primary-600 font-medium"
           >
             제출 내역

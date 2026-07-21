@@ -25,7 +25,7 @@ export interface WorldSummary {
 
 export const worldApi = {
   getSummary: async (): Promise<WorldSummary> => {
-    const res = await apiClient.get('/today/world-summary');
+    const res = await apiClient.get('/public/today/world-summary');
     return res.data.data as WorldSummary;
   },
 };

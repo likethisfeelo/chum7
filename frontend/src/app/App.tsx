@@ -21,7 +21,6 @@ import { MEPage } from '@/features/me/pages/MEPage';
 import { MyPage } from '@/features/me/pages/MyPage';
 import { MyRecordsPage } from '@/features/me/pages/MyRecordsPage';
 import { TodayPage } from '@/features/today/pages/TodayPage';
-import { TodayPageDebug } from '@/features/today/pages/TodayPageDebug';
 import { FeedPage } from '@/features/feed/pages/FeedPage';
 import { ProfilePage } from '@/features/profile/pages/ProfilePage';
 import { BadgeCollectionPage } from '@/features/profile/pages/BadgeCollectionPage';
@@ -29,10 +28,6 @@ import { RemedyPage } from '@/features/verification/pages/RemedyPage';
 import { UseTicketPage } from '@/features/cheer/pages/UseTicketPage';
 import { QuestBoardPage } from '@/features/quest/pages/QuestBoardPage';
 import { MyQuestSubmissionsPage } from '@/features/quest/pages/MyQuestSubmissionsPage';
-import { ParticipantFlowPlanPage } from '@/features/planning/pages/ParticipantFlowPlanPage';
-import { GentleChallengeMockupPage } from '@/features/mockup/pages/GentleChallengeMockupPage';
-import { AdminDocsPage } from '@/features/admin/pages/AdminDocsPage';
-import { AdminAccessDeniedPage } from '@/features/admin/pages/AdminAccessDeniedPage';
 import { PersonalFeedPage } from '@/features/personal-feed/pages/PersonalFeedPage';
 import { FeedSettingsPage } from '@/features/personal-feed/pages/FeedSettingsPage';
 import { NotificationsPage } from '@/features/personal-feed/pages/NotificationsPage';
@@ -51,43 +46,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const PublicOnlyRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   if (isAuthenticated) return <Navigate to="/me" replace />;
-  return <>{children}</>;
-};
-
-const ADMIN_EMAIL_ALLOWLIST = (import.meta.env.VITE_ADMIN_EMAILS || '')
-  .split(',')
-  .map((v: string) => v.trim().toLowerCase())
-  .filter(Boolean);
-
-const hasAdminAccess = (user: { email?: string; role?: string; roles?: string[] } | null): boolean => {
-  if (!user) {
-    return false;
-  }
-
-  const normalizedRole = user.role?.trim().toLowerCase();
-  if (normalizedRole === 'admin' || normalizedRole === 'ops') {
-    return true;
-  }
-
-  const normalizedRoles = (user.roles || []).map((role) => role.trim().toLowerCase());
-  if (normalizedRoles.includes('admin') || normalizedRoles.includes('ops')) {
-    return true;
-  }
-
-  const normalizedEmail = user.email?.trim().toLowerCase();
-  if (normalizedEmail && ADMIN_EMAIL_ALLOWLIST.includes(normalizedEmail)) {
-    return true;
-  }
-
-  return false;
-};
-
-const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const user = useAuthStore((s) => s.user);
-
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (!hasAdminAccess(user)) return <Navigate to="/admin/forbidden" replace />;
   return <>{children}</>;
 };
 
@@ -246,29 +204,11 @@ export default function App() {
           }
         />
         <Route
-          path="/today/debug"
-          element={
-            <ProtectedRoute>
-              <TodayPageDebug />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/outer-space"
+          path="/plaza"
           element={
             <ProtectedRoute>
               <MainLayout>
                 <FeedPage />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/assets"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <ProfilePage />
               </MainLayout>
             </ProtectedRoute>
           }
@@ -325,41 +265,6 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-
-        <Route
-          path="/admin/docs"
-          element={
-            <AdminRoute>
-              <MainLayout>
-                <AdminDocsPage />
-              </MainLayout>
-            </AdminRoute>
-          }
-        />
-
-        <Route
-          path="/admin/forbidden"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <AdminAccessDeniedPage />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/ux-plan"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <ParticipantFlowPlanPage />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route path="/design-mockup/gentle-challenge" element={<GentleChallengeMockupPage />} />
 
         {/* 알림 설정 */}
         <Route
@@ -432,8 +337,6 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-
-        <Route path="/earth" element={<Navigate to="/outer-space" replace />} />
 
         {/* 매칭되지 않는 라우트는 홈으로 */}
         <Route path="*" element={<Navigate to="/" replace />} />

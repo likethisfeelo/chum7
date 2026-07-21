@@ -52,16 +52,16 @@ export interface CreateChallengeParams {
 
 export const challengeApi = {
   createChallenge: async (params: CreateChallengeParams): Promise<CreatedChallenge> => {
-    const res = await apiClient.post('/challenges/me/create', params);
+    const res = await apiClient.post('/c/challenges', params);
     return res.data.data as CreatedChallenge;
   },
 
   getMyCreated: async (): Promise<CreatedChallenge[]> => {
-    const res = await apiClient.get('/challenges/me/created');
+    const res = await apiClient.get('/c/challenges/my-created');
     return (res.data.data?.challenges ?? []) as CreatedChallenge[];
   },
 
   publishChallenge: async (challengeId: string): Promise<void> => {
-    await apiClient.patch(`/challenges/${challengeId}/publish`);
+    await apiClient.patch(`/c/challenges/${challengeId}/publish`);
   },
 };

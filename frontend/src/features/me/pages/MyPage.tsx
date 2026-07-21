@@ -8,13 +8,16 @@ import { characterApi } from '@/features/character/api/characterApi';
 import { personalFeedApi, FeedAchievements } from '@/features/personal-feed/api/personalFeedApi';
 import { apiClient } from '@/lib/api-client';
 import { resolveChallengeBucket, getChallengeDisplayMeta } from '@/features/challenge/utils/challengeLifecycle';
+import { OrderHistorySection } from '@/features/commerce/components/OrderHistorySection';
+import { CouponWalletSection } from '@/features/commerce/components/CouponWalletSection';
 
-type MyTab = 'character' | 'challenges' | 'badges';
+type MyTab = 'character' | 'challenges' | 'badges' | 'orders';
 
 const TAB_CONFIG: { key: MyTab; label: string }[] = [
   { key: 'character', label: '캐릭터' },
   { key: 'challenges', label: '챌린지' },
   { key: 'badges', label: '뱃지' },
+  { key: 'orders', label: '주문' },
 ];
 
 const BADGE_META: Record<string, { icon: string; name: string; desc: string }> = {
@@ -198,7 +201,7 @@ function ChallengesTab() {
   const { data, isLoading } = useQuery({
     queryKey: ['my-challenges', 'all'],
     queryFn: async () => {
-      const res = await apiClient.get('/challenges/my?status=all');
+      const res = await apiClient.get('/c/challenges/my?status=all');
       return res.data.data;
     },
   });
@@ -442,6 +445,16 @@ function BadgesTab({ achievements }: { achievements: FeedAchievements }) {
   );
 }
 
+// ─── 주문/쿠폰 탭 (커머스 v0) ──────────────────────────────────────
+function OrdersTab() {
+  return (
+    <div className="space-y-4 pb-24">
+      <OrderHistorySection />
+      <CouponWalletSection />
+    </div>
+  );
+}
+
 // ─── 메인 ──────────────────────────────────────────────────────────
 export function MyPage() {
   const navigate = useNavigate();
@@ -527,6 +540,7 @@ export function MyPage() {
       <div className="p-4">
         {activeTab === 'character' && <CharacterTab />}
         {activeTab === 'challenges' && <ChallengesTab />}
+        {activeTab === 'orders' && <OrdersTab />}
         {activeTab === 'badges' && (
           achievementsLoading || !achievements ? (
             <Loading />

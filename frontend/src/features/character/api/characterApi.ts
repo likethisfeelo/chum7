@@ -54,26 +54,26 @@ export interface CharacterCollection {
 
 export const characterApi = {
   getStatus: async (): Promise<CharacterStatus> => {
-    const res = await apiClient.get('/characters/me/status');
+    const res = await apiClient.get('/g/characters/me/status');
     return res.data.data as CharacterStatus;
   },
 
   start: async (mythologyLine: MythologyLine): Promise<ActiveCharacter & { totalSlots: number }> => {
-    const res = await apiClient.post('/characters/me/start', { mythologyLine });
+    const res = await apiClient.post('/g/characters/me/start', { mythologyLine });
     return res.data.data;
   },
 
   next: async (params?: { mythologyLine?: MythologyLine; characterType?: string }): Promise<ActiveCharacter & { totalSlots: number }> => {
-    const res = await apiClient.post('/characters/me/next', params ?? {});
+    const res = await apiClient.post('/g/characters/me/next', params ?? {});
     return res.data.data;
   },
 
   getCollection: async (): Promise<CharacterCollection> => {
-    const res = await apiClient.get('/characters/me/collection');
+    const res = await apiClient.get('/g/characters/me/collection');
     return res.data.data as CharacterCollection;
   },
 
   setTheme: async (mythology: MythologyLine | null): Promise<void> => {
-    await apiClient.put('/characters/me/theme', { mythology });
+    await apiClient.put('/g/characters/me/theme', { mythology });
   },
 };

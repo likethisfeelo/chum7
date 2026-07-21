@@ -28,7 +28,7 @@ export const ChallengeEditPage = () => {
   const { data: challenge, isLoading } = useQuery({
     queryKey: ['challenge', challengeId],
     queryFn: async () => {
-      const response = await apiClient.get(`/challenges/${challengeId}`);
+      const response = await apiClient.get(`/public/challenges/${challengeId}`);
       return response.data.data;
     },
   });
@@ -73,7 +73,7 @@ export const ChallengeEditPage = () => {
       if (form.recruitingEndAt) payload.recruitingEndAt = localToISO(form.recruitingEndAt);
       if (form.challengeStartAt) payload.challengeStartAt = localToISO(form.challengeStartAt);
       payload.maxParticipants = form.maxParticipants ? parseInt(form.maxParticipants, 10) : null;
-      return apiClient.patch(`/challenges/${challengeId}`, payload);
+      return apiClient.patch(`/c/challenges/${challengeId}`, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
