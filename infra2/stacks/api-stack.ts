@@ -36,7 +36,7 @@ interface DomainApiSpec {
 export class ApiStack extends cdk.Stack {
   readonly httpApi: apigwv2.HttpApi;
   readonly userApi: NodejsFunction;
-  readonly challengeApi?: NodejsFunction;
+  challengeApi!: NodejsFunction;
   gamificationApi!: NodejsFunction;
   readonly functions: NodejsFunction[] = [];
 
@@ -102,6 +102,21 @@ export class ApiStack extends cdk.Stack {
       methods: [apigwv2.HttpMethod.GET],
       integration: new HttpLambdaIntegration('HealthIntegration', this.userApi),
     });
+
+    // --- challenge-api: /c + /public/challenges ---
+    this.challengeApi = this.addDomainApi({
+      name: 'challenge-api',
+      protectedPrefix: '/c',
+      publicPrefixes: ['/public/challenges'],
+      environment: {
+        CHALLENGES_TABLE: stateful.tables.challenges.tableName,
+        UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
+      },
+    });
+    stateful.tables.challenges.grantReadWriteData(this.challengeApi);
+    stateful.uploadsBucket.grantPut(this.challengeApi); // presigned PUT 서명용
+    stateful.uploadsBucket.grantRead(this.challengeApi);
+    eventBus.grantPutEventsTo(this.challengeApi);
 
     // --- gamification-api: /g + /public/today + /public/banners ---
     this.gamificationApi = this.addDomainApi({
