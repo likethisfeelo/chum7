@@ -49,7 +49,13 @@ function routeNotification(
       return {
         recipientId: String(detail.userId),
         category: 'commerce',
-        message: '결제가 완료되어 챌린지 참여가 확정되었어요',
+        message: '결제가 확인되었어요! 이제 챌린지에 참여할 수 있어요 🎉',
+      };
+    case 'order.rejected':
+      return {
+        recipientId: String(detail.userId),
+        category: 'commerce',
+        message: '입금 확인에 실패했어요. 주문 내역을 확인해주세요',
       };
     case 'shipment.updated':
       return {

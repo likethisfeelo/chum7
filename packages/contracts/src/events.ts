@@ -53,6 +53,11 @@ export const domainEventSchemas = {
     challengeId: z.string(),
     amount: z.number().int(),
   }),
+  'order.rejected': z.object({
+    orderId: z.string(),
+    userId: z.string(),
+    challengeId: z.string(),
+  }),
   'settlement.paid': z.object({
     settlementId: z.string(),
     creatorId: z.string(),

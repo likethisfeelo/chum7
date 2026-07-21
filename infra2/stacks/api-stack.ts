@@ -111,12 +111,30 @@ export class ApiStack extends cdk.Stack {
       environment: {
         CHALLENGES_TABLE: stateful.tables.challenges.tableName,
         UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
+        COMMERCE_TABLE: stateful.tables.commerce.tableName,
       },
     });
     stateful.tables.challenges.grantReadWriteData(this.challengeApi);
     stateful.uploadsBucket.grantPut(this.challengeApi); // presigned PUT 서명용
     stateful.uploadsBucket.grantRead(this.challengeApi);
+    // 유료 참여 시 paid 주문 검증 — 읽기 전용 (COMMERCE_V0.md)
+    stateful.tables.commerce.grantReadData(this.challengeApi);
     eventBus.grantPutEventsTo(this.challengeApi);
+
+    // --- commerce-api: /pay (쿠폰·수동 입금 — 커머스 v0) ---
+    const commerceApi = this.addDomainApi({
+      name: 'commerce-api',
+      protectedPrefix: '/pay',
+      environment: {
+        COMMERCE_TABLE: stateful.tables.commerce.tableName,
+        CHALLENGES_TABLE: stateful.tables.challenges.tableName,
+        OPS_TABLE: stateful.tables.ops.tableName,
+      },
+    });
+    stateful.tables.commerce.grantReadWriteData(commerceApi);
+    stateful.tables.challenges.grantReadData(commerceApi); // 가격·모집 상태 확인
+    stateful.tables.ops.grantWriteData(commerceApi); // 금전 감사 로그
+    eventBus.grantPutEventsTo(commerceApi);
 
     // --- social-api: /s + /public/plaza·board·hashtags ---
     const socialApi = this.addDomainApi({

@@ -6,8 +6,9 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
+import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import type { AppEnv } from '@chum7/api-kit';
-import { ok, fail } from '@chum7/api-kit';
+import { docClient, ok, fail } from '@chum7/api-kit';
 import { joinChallengeSchema, reviewJoinRequestSchema } from '../schemas';
 import { getProposalDeadline, resolveJoinRequirements, toTime24 } from '../domain/join-requirements';
 import { certDateFromIso, DEFAULT_TIMEZONE } from '../domain/day-sync';
@@ -23,6 +24,23 @@ import {
 import { stripKeys } from '../repo/shared';
 
 export const participationRoutes = new Hono<AppEnv>();
+
+/** 결제 주문 조회 — commerce 테이블 읽기 전용 (COMMERCE_TABLE env, 문서화된 예외) */
+async function getPaidOrderReadonly(
+  orderId: string,
+): Promise<{ status?: string; userId?: string; challengeId?: string } | undefined> {
+  const table = process.env.COMMERCE_TABLE;
+  if (!table) return undefined;
+  const result = await docClient.send(
+    new GetCommand({
+      TableName: table,
+      Key: { pk: `ORDER#${orderId}`, sk: 'META' },
+      ProjectionExpression: '#s, userId, challengeId',
+      ExpressionAttributeNames: { '#s': 'status' },
+    }),
+  );
+  return result.Item as { status?: string; userId?: string; challengeId?: string } | undefined;
+}
 
 // 챌린지 참여 (레거시 POST /challenges/{challengeId}/join)
 participationRoutes.post('/challenges/:challengeId/join', async (c) => {
@@ -56,6 +74,25 @@ participationRoutes.post('/challenges/:challengeId/join', async (c) => {
   // 생성자는 위자드를 통한 중복 참여 불가
   if (challenge.createdBy === userId) {
     return fail(c, 409, 'CREATOR_CANNOT_JOIN', '챌린지 생성자는 생성 시 참여 여부를 선택했습니다');
+  }
+
+  // 유료 챌린지: 결제 완료(paid) 주문 필요 — commerce 테이블 읽기 전용 검증
+  // (커머스 v0: 쿠폰 또는 어드민 수동 입금 확인으로 paid 상태가 됨. COMMERCE_V0.md 참조)
+  const isPaidPricing =
+    challenge.pricingType === 'paid_fee' || challenge.pricingType === 'paid_deposit' || isPaidChallenge;
+  if (isPaidPricing) {
+    if (!input.orderId) {
+      return fail(c, 402, 'ORDER_REQUIRED', '유료 챌린지는 결제(또는 쿠폰 적용) 후 참여할 수 있습니다');
+    }
+    const paidOrder = await getPaidOrderReadonly(input.orderId);
+    if (
+      !paidOrder ||
+      paidOrder.status !== 'paid' ||
+      paidOrder.userId !== userId ||
+      paidOrder.challengeId !== challengeId
+    ) {
+      return fail(c, 402, 'ORDER_NOT_PAID', '결제가 확인되지 않았습니다. 주문 상태를 확인해주세요');
+    }
   }
 
   // maxParticipants 체크

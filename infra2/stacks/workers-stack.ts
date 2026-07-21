@@ -92,6 +92,55 @@ export class WorkersStack extends cdk.Stack {
       targets: [new eventsTargets.LambdaFunction(cheerScheduler)],
     });
 
+    // --- lifecycle-manager: 매시 라이프사이클 전환·완주 판정·뱃지/캐릭터 부여 ---
+    const lifecycleManager = new NodejsFunction(this, 'LifecycleManager', {
+      functionName: `${config.prefix}-lifecycle-manager`,
+      entry: join(__dirname, '../../services/workers/lifecycle-manager/src/index.ts'),
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      bundling: { minify: true, sourceMap: !config.isProd, externalModules: ['@aws-sdk/*'] },
+      environment: {
+        STAGE: config.stage,
+        CHALLENGES_TABLE: stateful.tables.challenges.tableName,
+        GAMIFICATION_TABLE: stateful.tables.gamification.tableName,
+        EVENT_BUS_NAME: this.eventBus.eventBusName,
+      },
+    });
+    stateful.tables.challenges.grantReadWriteData(lifecycleManager);
+    stateful.tables.gamification.grantReadWriteData(lifecycleManager);
+    this.eventBus.grantPutEventsTo(lifecycleManager);
+    this.workerFunctions.push(lifecycleManager);
+    new events.Rule(this, 'LifecycleManagerRule', {
+      ruleName: `${config.prefix}-lifecycle-manager`,
+      schedule: events.Schedule.rate(cdk.Duration.hours(1)),
+      targets: [new eventsTargets.LambdaFunction(lifecycleManager)],
+    });
+
+    // --- plaza-converter: 매시 공개 인증 → 마당 게시물 변환 ---
+    const plazaConverter = new NodejsFunction(this, 'PlazaConverter', {
+      functionName: `${config.prefix}-plaza-converter`,
+      entry: join(__dirname, '../../services/workers/plaza-converter/src/index.ts'),
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 256,
+      bundling: { minify: true, sourceMap: !config.isProd, externalModules: ['@aws-sdk/*'] },
+      environment: {
+        STAGE: config.stage,
+        CHALLENGES_TABLE: stateful.tables.challenges.tableName,
+        SOCIAL_TABLE: stateful.tables.social.tableName,
+      },
+    });
+    // 변환 마커(plazaConvertedAt) 기록 위해 challenges RW
+    stateful.tables.challenges.grantReadWriteData(plazaConverter);
+    stateful.tables.social.grantReadWriteData(plazaConverter);
+    this.workerFunctions.push(plazaConverter);
+    new events.Rule(this, 'PlazaConverterRule', {
+      ruleName: `${config.prefix}-plaza-converter`,
+      schedule: events.Schedule.rate(cdk.Duration.hours(1)),
+      targets: [new eventsTargets.LambdaFunction(plazaConverter)],
+    });
+
     new cdk.CfnOutput(this, 'EventBusName', { value: this.eventBus.eventBusName });
   }
 }

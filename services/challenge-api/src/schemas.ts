@@ -61,6 +61,8 @@ export const personalTargetSchema = z.object({
 export const joinChallengeSchema = z.object({
   personalGoal: z.string().max(200).optional(),
   personalTarget: personalTargetSchema.optional(),
+  /** 유료 챌린지: paid 상태 주문 ID 필수 (커머스 v0 — COMMERCE_V0.md) */
+  orderId: z.string().min(1).optional(),
 });
 
 export const reviewJoinRequestSchema = z.object({
