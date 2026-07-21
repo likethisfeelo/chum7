@@ -13,7 +13,7 @@ import { appendLedger, getOrder, listLedger, listOrdersByStatus, transitionOrder
  */
 export const commerceAdminRoutes = new Hono<AppEnv>();
 
-async function audit(actorUserId: string, action: string, targetId: string, detail?: unknown) {
+export async function audit(actorUserId: string, action: string, targetId: string, detail?: unknown) {
   const at = new Date().toISOString();
   await docClient.send(
     new PutCommand({

@@ -74,13 +74,15 @@ export class ApiStack extends cdk.Stack {
     this.userApi = this.addDomainApi({
       name: 'user-api',
       protectedPrefix: '/u',
-      publicPrefixes: ['/auth', '/public/users'],
+      publicPrefixes: ['/auth', '/public/users', '/public/push'],
       environment: {
         USERS_TABLE: stateful.tables.users.tableName,
         GRAPH_TABLE: stateful.tables.graph.tableName,
         USER_POOL_CLIENT_ID: stateful.userPoolClient.userPoolClientId,
+        VAPID_SECRET_NAME: stateful.vapidSecret.secretName,
       },
     });
+    stateful.vapidSecret.grantRead(this.userApi); // GET /public/push/key
     stateful.tables.users.grantReadWriteData(this.userApi);
     stateful.tables.graph.grantReadWriteData(this.userApi);
     eventBus.grantPutEventsTo(this.userApi);

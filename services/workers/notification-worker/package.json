@@ -4,11 +4,14 @@
   "private": true,
   "main": "src/index.ts",
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.1091.0",
     "@aws-sdk/lib-dynamodb": "^3.600.0",
     "@chum7/api-kit": "0.1.0",
-    "@chum7/contracts": "0.1.0"
+    "@chum7/contracts": "0.1.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@types/aws-lambda": "^8.10.145"
+    "@types/aws-lambda": "^8.10.145",
+    "@types/web-push": "^3.6.4"
   }
 }

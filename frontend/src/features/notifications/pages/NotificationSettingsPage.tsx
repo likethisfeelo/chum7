@@ -1,6 +1,11 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { notificationSettingsApi, NotificationSettings } from '../api/notificationSettingsApi';
+import toast from 'react-hot-toast';
+import { notificationSettingsApi, NotificationSettings, QuietHours } from '../api/notificationSettingsApi';
+import { getPushSupport, isPushSubscribed, subscribeToPush, unsubscribeFromPush } from '../push';
+
+const DEFAULT_QUIET_HOURS: QuietHours = { start: '22:00', end: '08:00', enabled: true };
 
 const CATEGORIES = [
   { key: 'category_challenge', label: '챌린지', description: '챌린지 완료, 실패, 참가 요청 관련' },
@@ -101,6 +106,40 @@ export function NotificationSettingsPage() {
     mutation.mutate({ [key]: value });
   };
 
+  // ── 푸시 구독 상태 (브라우저 구독 기준) ──
+  const pushSupport = getPushSupport();
+  const [pushOn, setPushOn] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+
+  useEffect(() => {
+    isPushSubscribed().then(setPushOn);
+  }, []);
+
+  const togglePush = async (next: boolean) => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    if (next) {
+      const result = await subscribeToPush();
+      if (result.ok) {
+        setPushOn(true);
+        toast.success('푸시 알림을 켰어요 🔔');
+      } else if (result.reason === 'permission-denied') {
+        toast.error('브라우저 알림 권한이 차단되어 있어요. 브라우저 설정에서 허용해주세요');
+      } else {
+        toast.error('푸시 알림 설정에 실패했어요');
+      }
+    } else {
+      const done = await unsubscribeFromPush();
+      if (done) {
+        setPushOn(false);
+        toast('푸시 알림을 껐어요', { icon: '🔕' });
+      } else {
+        toast.error('푸시 알림 해제에 실패했어요');
+      }
+    }
+    setPushBusy(false);
+  };
+
   if (isLoading || !settings) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -120,6 +159,88 @@ export function NotificationSettingsPage() {
       </div>
 
       <div className="mx-auto max-w-lg px-4 py-6 space-y-6">
+        {/* 푸시 알림 (PRODUCT_SPEC §4.10) */}
+        <section className="rounded-xl bg-white shadow-sm">
+          <div className="border-b px-4 py-3">
+            <h2 className="font-semibold text-gray-800">푸시 알림</h2>
+            <p className="text-xs text-gray-500 mt-0.5">응원이 실천 시각에 맞춰 도착해요</p>
+          </div>
+          <div className="divide-y">
+            {pushSupport === 'needs-install' ? (
+              <div className="px-4 py-3">
+                <p className="text-sm text-gray-700">📲 홈 화면에 추가하면 알림을 받을 수 있어요</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  공유 버튼 → &lsquo;홈 화면에 추가&rsquo;로 설치한 뒤 다시 설정해주세요
+                </p>
+              </div>
+            ) : pushSupport === 'unsupported' ? (
+              <div className="px-4 py-3">
+                <p className="text-sm text-gray-500">이 브라우저는 푸시 알림을 지원하지 않아요</p>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">푸시 알림 받기</p>
+                  <p className="text-xs text-gray-500">이 기기로 알림을 보내드려요</p>
+                </div>
+                <Toggle checked={pushOn} onChange={togglePush} />
+              </div>
+            )}
+
+            {/* 방해금지 시간 */}
+            {(() => {
+              const quiet = settings.quietHours ?? DEFAULT_QUIET_HOURS;
+              return (
+                <>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">방해금지 시간</p>
+                      <p className="text-xs text-gray-500">설정한 시간에는 푸시를 보내지 않아요</p>
+                    </div>
+                    <Toggle
+                      checked={quiet.enabled !== false}
+                      onChange={(v) => mutation.mutate({ quietHours: { ...quiet, enabled: v } })}
+                    />
+                  </div>
+                  {quiet.enabled !== false && (
+                    <div className="flex items-center gap-2 px-4 py-3">
+                      <input
+                        type="time"
+                        value={quiet.start}
+                        onChange={(e) =>
+                          mutation.mutate({ quietHours: { ...quiet, start: e.target.value } })
+                        }
+                        className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                      />
+                      <span className="text-sm text-gray-500">부터</span>
+                      <input
+                        type="time"
+                        value={quiet.end}
+                        onChange={(e) =>
+                          mutation.mutate({ quietHours: { ...quiet, end: e.target.value } })
+                        }
+                        className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                      />
+                      <span className="text-sm text-gray-500">까지</span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+
+            <div className="flex items-center justify-between px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-gray-800">응원은 방해금지에도 받기</p>
+                <p className="text-xs text-gray-500">응원은 내 실천 시각에 도착하는 게 핵심이에요</p>
+              </div>
+              <Toggle
+                checked={settings.cheerBypassQuietHours !== false}
+                onChange={(v) => mutation.mutate({ cheerBypassQuietHours: v })}
+              />
+            </div>
+          </div>
+        </section>
+
         {/* 카테고리 단위 */}
         <section className="rounded-xl bg-white shadow-sm">
           <div className="border-b px-4 py-3">

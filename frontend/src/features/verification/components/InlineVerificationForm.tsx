@@ -4,6 +4,7 @@ import { apiClient } from "@/lib/api-client";
 import { motion, AnimatePresence } from "framer-motion";
 import { FiCamera, FiFileText, FiLink, FiVideo, FiX } from "react-icons/fi";
 import toast from "react-hot-toast";
+import { maybeOpenPushPrompt } from "@/features/notifications/pushPromptStore";
 
 interface InlineVerificationFormProps {
   userChallenge: any;
@@ -505,6 +506,8 @@ export const InlineVerificationForm = ({
       if (payload?.cheerOpportunity?.cheerTicketGranted) {
         const cnt = payload.cheerOpportunity.incompleteCount ?? 1;
         toast(`${cnt}명에게 응원을 보냈어요 🎟`, { icon: "🎉" });
+        // 첫 응원 예약 완료 직후 — 푸시 권한 요청 시트 (PRODUCT_SPEC §4.10)
+        maybeOpenPushPrompt();
       }
 
       if (selectedType === "video") {

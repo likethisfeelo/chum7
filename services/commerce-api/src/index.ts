@@ -2,6 +2,7 @@ import { handle } from 'hono/aws-lambda';
 import { createApi, ok, requireAuth, requireGroup } from '@chum7/api-kit';
 import { orderRoutes } from './routes/orders';
 import { commerceAdminRoutes } from './routes/admin';
+import { commerceAdminSettlementRoutes } from './routes/admin-settlement';
 
 /**
  * commerce-api v0 — PG 계약 전 수동 운영 (PAYMENT_SPEC 참조, COMMERCE_V0.md에 v0 범위 기록).
@@ -18,6 +19,7 @@ app.use('/pay/*', requireAuth());
 app.use('/pay/admin/*', requireGroup('admins'));
 
 app.route('/pay/admin', commerceAdminRoutes);
+app.route('/pay/admin', commerceAdminSettlementRoutes);
 app.route('/pay/orders', orderRoutes);
 
 export const handler = handle(app);

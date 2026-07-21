@@ -10,6 +10,13 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "robots.txt", "icons/*.png"],
+      // Web Push (PRODUCT_SPEC §4.10): generateSW를 유지하고 importScripts로
+      // public/push-sw.js(push·notificationclick 핸들러)만 덧붙인다.
+      // injectManifest 전환 대비 이 방식이 기존 프리캐시·autoUpdate 동작을
+      // 그대로 보존해 회귀 위험이 없고 워커 코드도 정적 파일 하나로 끝난다.
+      workbox: {
+        importScripts: ["push-sw.js"],
+      },
       manifestFilename: "manifest.json",
       manifest: {
         name: "CHME - Challenge Earth with ME",
