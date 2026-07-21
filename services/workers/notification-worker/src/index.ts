@@ -33,6 +33,18 @@ function routeNotification(
         category: 'social',
         message: '새 팔로우 요청이 있어요',
       };
+    case 'follow.accepted':
+      return {
+        recipientId: String(detail.followerId),
+        category: 'social',
+        message: '팔로우 요청이 수락되었어요',
+      };
+    case 'feed.invite_link_used':
+      return {
+        recipientId: String(detail.ownerId),
+        category: 'social',
+        message: '초대 링크로 새 이웃이 들어왔어요',
+      };
     case 'order.paid':
       return {
         recipientId: String(detail.userId),

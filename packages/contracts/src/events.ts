@@ -30,6 +30,23 @@ export const domainEventSchemas = {
     followerId: z.string(),
     followeeId: z.string(),
   }),
+  'follow.accepted': z.object({
+    followerId: z.string(),
+    followeeId: z.string(),
+  }),
+  'feed.invite_link_used': z.object({
+    ownerId: z.string(),
+    usedByUserId: z.string(),
+    token: z.string(),
+  }),
+  'verification.submitted': z.object({
+    verificationId: z.string(),
+    userId: z.string(),
+    challengeId: z.string(),
+    day: z.number().int(),
+    isDayComplete: z.boolean(),
+    isPublic: z.boolean(),
+  }),
   'order.paid': z.object({
     orderId: z.string(),
     userId: z.string(),
