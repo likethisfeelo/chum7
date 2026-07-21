@@ -43,9 +43,11 @@ export class WorkersStack extends cdk.Stack {
       environment: {
         STAGE: config.stage,
         USERS_TABLE: stateful.tables.users.tableName,
+        VAPID_SECRET_NAME: stateful.vapidSecret.secretName,
       },
     });
     stateful.tables.users.grantReadWriteData(this.notificationWorker);
+    stateful.vapidSecret.grantRead(this.notificationWorker); // Web Push 발송 키
     this.workerFunctions.push(this.notificationWorker);
 
     const dlq = new sqs.Queue(this, 'NotificationDlq', {

@@ -36,6 +36,7 @@ import { NotificationSettingsPage } from '@/features/notifications/pages/Notific
 import { MythologyOnboardingPage } from '@/features/character/pages/MythologyOnboardingPage';
 import { CharacterViewerPage } from '@/features/character/pages/CharacterViewerPage';
 import { HashtagPage } from '@/features/hashtag/pages/HashtagPage';
+import { PushPermissionSheet } from '@/features/notifications/components/PushPermissionSheet';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -341,6 +342,8 @@ export default function App() {
         {/* 매칭되지 않는 라우트는 홈으로 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      {/* 푸시 권한 요청 시트 — 첫 응원 예약 완료 직후 전역 노출 (§4.10) */}
+      <PushPermissionSheet />
     </BrowserRouter>
   );
 }

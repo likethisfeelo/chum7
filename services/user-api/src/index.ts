@@ -6,7 +6,7 @@ import { profileRoutes } from './routes/profile';
 import { notificationsRoutes } from './routes/notifications';
 import { personalFeedRoutes, publicUsersRoutes } from './routes/personal-feed';
 import { personalFeedContentRoutes } from './routes/personal-feed-content';
-import { pushRoutes } from './routes/push';
+import { getPublicPushKey, pushRoutes } from './routes/push';
 
 const app = createApi({ service: 'user-api' });
 
@@ -14,6 +14,7 @@ const app = createApi({ service: 'user-api' });
 app.get('/health', (c) => ok(c, { service: 'user-api', at: new Date().toISOString() }));
 app.route('/auth', authRoutes);
 app.route('/public/users', publicUsersRoutes);
+app.get('/public/push/key', getPublicPushKey); // VAPID 공개키 (Web Push 구독용)
 
 // 보호 영역: /u/* (API Gateway JWT authorizer 프록시 라우트)
 app.use('/u/*', requireAuth());

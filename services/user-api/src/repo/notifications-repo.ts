@@ -1,5 +1,6 @@
 import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
+import type { NotificationSettingValue } from '../domain/notification-settings';
 
 /**
  * users 테이블 — 인앱 알림·알림 설정 (이전 가이드 §3 users).
@@ -64,19 +65,21 @@ export async function markNotificationRead(userId: string, notificationId: strin
 
 export async function getNotificationSettings(
   userId: string,
-): Promise<Record<string, boolean> | undefined> {
+): Promise<Record<string, NotificationSettingValue> | undefined> {
   const res = await docClient.send(
     new GetCommand({
       TableName: tableName(TABLE),
       Key: { pk: `USER#${userId}`, sk: SK_SETTINGS },
     }),
   );
-  return res.Item?.settings as Record<string, boolean> | undefined;
+  return res.Item?.settings as
+    | Record<string, NotificationSettingValue>
+    | undefined;
 }
 
 export async function putNotificationSettings(
   userId: string,
-  settings: Record<string, boolean>,
+  settings: Record<string, NotificationSettingValue>,
   nowIso: string,
 ): Promise<void> {
   await docClient.send(
