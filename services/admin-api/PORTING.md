@@ -36,6 +36,15 @@
 | GET /admin/quests/submissions | **GET /adm/quests/submissions?challengeId=** | 전역 status-createdAt-index/questId-index → **challengeId 스코프 필수** (pk 파티션 `QSUB#` Query — 신규 키에 전역 상태 인덱스 없음, 풀스캔 금지). status(all/approved=auto_approved 포함)/questId/questScope 필터·quest enrichment·summary 집계 유지. **S3 presign 재서명 미이식** (UPLOADS_BUCKET env 없음 — 저장된 URL 그대로 반환, 필요 시 프론트/미디어 표면에서 재서명). 페이지네이션은 파티션 전량 조회 후 limit 슬라이스(nextToken 항상 null) |
 | PUT /admin/quests/submissions/{id}/review | **PUT /adm/quests/submissions/:submissionId/review** | **바디에 `challengeId` 필수 추가** (신규 키에서 submissionId 단독 Get 불가 — 파티션 내 탐색). 승인: 이력 approved+rewardGranted, ACTIVE 마커 approved 유지(재제출 차단), quest.approvedCount+1 — 3건 TransactWrite. **거절: ACTIVE 유니크 마커 DELETE → 재제출 허용** (challenge-api PORTING.md §C 계약 이행). pending 조건부 갱신으로 중복 심사 409. 응답 바디 `{submissionId,status,rewardGranted,canResubmit}`·메시지 동일 |
 
+### B-2. 개인 퀘스트 제안 심사 (`routes/quest-proposals.ts` — 복원, 2026-07)
+
+| 레거시 | 신규 | 비고 |
+|---|---|---|
+| GET /admin/challenges/{id}/personal-quest (admin/personal-quest/list) | **GET /adm/quest-proposals?challengeId=&status=** | challenges 테이블 pk 파티션 `QPROP#` Query (challenge-api PORTING.md §7-e 키 공유 — challengeId-status-index 대체, 풀스캔 금지). status 기본 `pending`(`all` 허용), updatedAt 최신순. 응답 `data { proposals, total }` (레거시는 배열 직반환 — 신규 표면이라 명명 필드로 정리) |
+| PUT /admin/personal-quest/{proposalId}/review (admin/personal-quest/review) | **PUT /adm/quest-proposals/:proposalId/review** | 바디 `{ challengeId(필수 — 신규 키 탐색용), decision: approve\|reject, reason?(≤500자, 선택) }`. pending 조건부 갱신 → 중복 심사 409 `ALREADY_REVIEWED` (규칙 `domain/review-rules.ts` `canReviewProposal`/`proposalReviewOutcome` + 테스트). reason 은 유저 화면 계약 필드명 `leaderFeedback` 으로 저장. 응답 `data { proposalId, status }` + 한국어 메시지. **v1 단순화**: 레거시의 반려 피드백 필수(10자 이상)·revisionCount/expired 상한·**승인 시 QUESTS_TABLE 개인 퀘스트 자동 생성은 미이식** — 참여자의 개인 퀘스트 반영은 프론트 안내로 충분 (제품 결정). approve/reject **양쪽 모두 감사 기록** (`quest-proposal.review`) |
+
+권한(두 라우트 공통): 베이스 게이트 + **admins/operators 또는 챌린지 생성자** (퀘스트 생성 라우트 패턴 미러 — creators 그룹은 자기 챌린지만). 알림(sendNotification 승인/반려 통지)은 contracts 이벤트 타입 부재로 미발행 (§3 gap 패턴과 동일).
+
 ### C. 카테고리 배너 (`routes/banners.ts`)
 
 | 레거시 | 신규 | 비고 |
@@ -66,7 +75,8 @@
 | GET /admin/audit/logs | **GET /adm/audit** (월 파티션) / **GET /adm/audit/target/:targetId** | 레거시는 QUEST_SUBMISSIONS Scan에서 심사 이력을 파생 — 폐기하고 **실제 감사 저장소**로 대체: 모든 변이 어드민 라우트가 ops 테이블에 `AUDIT#<YYYY-MM>`/`<ISO ts>#<id>`(+gsi1 `AUDITTARGET#<targetId>`) 아이템 기록 (레거시 payout-audit 패턴 일반화, `domain/audit.ts` + 테스트). 항목: actorUserId·action·target{type,id}·payloadSummary(1000자 절단) |
 
 감사 기록 대상 액션: `challenge.create/update/delete/toggle/lifecycle/confirm-start`,
-`quest.review`, `banner.create/activate/delete`, `cheer.dlq.requeue/requeue-batch/requeue-by-query`.
+`quest.review`, `quest-proposal.review`(approve/reject 모두 — §1 B-2), `banner.create/activate/delete`,
+`cheer.dlq.requeue/requeue-batch/requeue-by-query`.
 감사 기록 실패는 로깅만 (본 업무 흐름 비차단).
 
 ## 2. 권한 게이트 (Cognito 그룹 매핑)
@@ -88,7 +98,7 @@
 |---|---|
 | admin/plaza/convert-run-now | **plaza-converter 워커 소관** (이전 가이드 §4). 즉시 실행 트리거는 워커/오케스트레이터 표면에서 재설계 |
 | challenge/review-payout·finalize-payout·정산/환불 어드민 표면 전체 | **commerce Phase 3가 대체** — 이식 금지 항목. payout-audit 기록 패턴만 §1-E 감사 로그로 일반화 승계 |
-| admin/personal-quest/{list,review} | **개인퀘스트 제안 플로우가 v1 미이식** (challenge-api PORTING.md §E — PERSONAL_QUEST_PROPOSALS_TABLE 폐기, challenges 테이블 재설계 필요). 제안 데이터가 신규 테이블에 존재하지 않아 심사 표면도 함께 후속 티켓 |
+| admin/personal-quest/{list,review} | **복원 완료 (§1 B-2)** — challenge-api 가 challenges 테이블 `QPROP#` 키로 제안 플로우를 복원(challenge-api PORTING.md §7-e)함에 따라 심사 표면 이식. v1 단순화 범위(자동 퀘스트 생성 없음·revision 상한 없음)는 §1 B-2 참고 |
 | confirm-start·quest review의 sendNotification | contracts `domainEventSchemas`에 대응 이벤트 타입(challenge_started 등) 부재 — **packages 수정 금지** 제약으로 이벤트 계약 추가는 오케스트레이터 몫. 타입 추가 후 `publishEvent` 연결 (gap) |
 | admin-list의 S3 presigned 재서명 | UPLOADS_BUCKET env 미주입 (admin-api env 계약 밖). 필요 시 env 추가 후 소형 유틸 복원 |
 | 레거시 audit/list의 심사 이력 Scan 파생 | 신규 감사 저장소(ops 테이블)로 대체 — §1-E |

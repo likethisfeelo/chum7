@@ -4,6 +4,7 @@ import { charactersRoutes } from './routes/characters';
 import { badgesRoutes } from './routes/badges';
 import { todayRoutes } from './routes/today';
 import { bannersRoutes } from './routes/banners';
+import { publicUsersRoutes } from './routes/public-users';
 
 const app = createApi({ service: 'gamification-api' });
 
@@ -11,6 +12,7 @@ const app = createApi({ service: 'gamification-api' });
 app.get('/health', (c) => ok(c, { service: 'gamification-api', at: new Date().toISOString() }));
 app.route('/public/today', todayRoutes);
 app.route('/public/banners', bannersRoutes);
+app.route('/public/users', publicUsersRoutes);
 
 // 보호 영역: /g/* (API Gateway JWT authorizer 프록시 라우트)
 app.use('/g/*', requireAuth());

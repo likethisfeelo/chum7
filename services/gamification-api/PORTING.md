@@ -16,6 +16,7 @@
 | `backend/services/badge/grant` | (내부 호출) | **이식 안 함** — 뱃지 부여는 lifecycle-manager 워커 책임 (§3) |
 | `backend/services/today/world-summary` | GET `/today/world-summary` | GET `/public/today/world-summary` | `data.layers[]`/`data.totals` 형태 동일, 집계 방식 변경 (§4) |
 | `backend/services/category-banners/list` | GET `/category-banners` | GET `/public/banners` | 배너 항목 필드 동일. 선택 `?slug=` 필터 추가 (레거시는 파라미터 없음 — 미지정 시 레거시처럼 8개 전체) |
+| `backend/services/personal-feed/achievements` | GET `/personal-feed/{userId}/achievements` | GET `/public/users/:userId/achievements` | **복원분(§7)** — data 형태 동일 (`challenges`·`verifications`·`cheers`·`badges`·`leaderBadges`·`leaderHistory`). cheers 는 0 고정 (§7) |
 
 응답 envelope는 api-kit `ok`/`fail`을 사용한다. 레거시 category-banners는 `{ data }`만
 반환했으나 신규는 표준 envelope에 따라 `{ success: true, data }` — `data` 필드는 동일하므로
@@ -79,3 +80,34 @@ challenges 테이블 gsi2(`VFPUB#<KST YYYY-MM-DD>` — 당일 공개 인증, 읽
 - `npx tsc -p services/gamification-api` 통과
 - `npx jest --silent --testPathPattern "services/gamification-api"` 통과
   (`src/domain/views.test.ts` — 뱃지 목록 매핑/정렬, 세계관 진행, 컬렉션 집계, 다음 캐릭터 선택)
+
+## 7. 퍼블릭 업적 (personal-feed/achievements 복원 — 2026-07)
+
+**GET /public/users/:userId/achievements** (`routes/public-users.ts`) — 레거시
+`backend/services/personal-feed/achievements` 응답 data 형태 그대로:
+
+```
+challenges { total, completed, active } · verifications { total, totalScore }
+cheers { sentCount, receivedCount } · badges[] { badgeId, grantedAt, challengeId }
+leaderBadges[] { badgeId, grantedAt }
+leaderHistory { total, completed, active, totalParticipants, recentChallenges[5] }
+```
+
+데이터 소스 (집계는 `domain/achievements.ts` 순수 함수 + `achievements.test.ts`):
+
+| 항목 | 소스 | 비고 |
+|---|---|---|
+| badges/leaderBadges | **gamification 테이블** `USER#<id>`/`BADGE#` (repo/badges) | 리더 뱃지 분류 `LEADER_BADGE_IDS` 4종 레거시 그대로. grantedAt 최신순 |
+| challenges 집계 | challenges 테이블 gsi1 `UCUSER#<userId>` (status/phase 투영) | 완주/진행 판정 = 레거시 resolveBucketState 승계 (status `completed` / `active`) |
+| verifications 집계 | challenges 테이블 gsi1 `VFUSER#<userId>` (score 투영) | total = 건수, totalScore = score 합 |
+| leaderHistory | challenges 테이블 gsi2 `CREATOR#<userId>` | 레거시 createdBy-index 대응. participantCount 는 `stats.currentParticipants` → `stats.totalParticipants` 폴백 (신규 stats 필드명) |
+| cheers | **0 고정** | cheer 테이블은 크로스 도메인 예외 미문서화 — 형태만 보존. 실제 수치는 cheer-api 표면/이벤트 집계 후속 |
+
+크로스 도메인 노트: challenges 테이블 접근은 기존 문서화된 **read-only 예외**
+(이전 가이드 §4 "gamification-api → challenges read-only")의 확장 사용이며, 액세스는 전부
+`repo/verifications-readonly.ts` 한 파일로 한정한다 (쓰기 없음, Query 만 — 풀스캔 없음).
+
+레거시와의 의도적 차이:
+- **퍼블릭 전환** — 레거시는 JWT 필수 + `me` 별칭 지원. 신규는 비로그인 조회 표면(`/public`)이라
+  `me` 별칭 없음 (프론트가 실제 userId 로 호출).
+- cheers 0 고정 (위 표).

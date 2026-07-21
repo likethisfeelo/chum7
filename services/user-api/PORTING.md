@@ -30,9 +30,9 @@
 |---|---|---|
 | GET /personal-feed/{userId} (profile) | **GET /u/feed/:userId** (`me`/`@handle` 지원) | 레이어 판정 `src/domain/feed-visibility.ts`(순수+테스트). 핸들 조회 gsi1pk=`HANDLE#<handle>` |
 | (신규 퍼블릭 표면) | **GET /public/users/:handle** | 비로그인 조회 — 동일 응답 형태, requester 없음 → isPublic=true면 L1, 아니면 L0 |
-| GET /personal-feed/{userId}/achievements | **미이식** | 사유: user-challenges·verifications·cheers·badges·challenges 테이블 크로스 도메인 read. 가이드 §4 예외 없음 — challenge/gamification/cheer API 응답 조합(프론트) 또는 별도 예외 문서화 후 이관 필요 |
-| GET /personal-feed/{userId}/verifications | **미이식** | 사유: challenges 테이블(가이드 §3 gsi1pk=`VFUSER#<userId>`) — challenge-api 소관 |
-| GET /personal-feed/{userId}/challenges | **미이식** | 사유: 동일 (user-challenge = challenges 테이블 `UC#`/gsi1 `UCUSER#`) — challenge-api 소관 |
+| GET /personal-feed/{userId}/achievements | **타 서비스에서 복원** | → **gamification-api GET /public/users/:userId/achievements** (gamification PORTING.md §7 — 뱃지는 gamification 테이블, 참여/인증/리더 이력은 challenges read-only 예외. cheers 는 0 고정) |
+| GET /personal-feed/{userId}/verifications | **타 서비스에서 복원** | → **challenge-api GET /public/users/:userId/verifications** (challenge-api PORTING.md §7-a — 공개 인증만) |
+| GET /personal-feed/{userId}/challenges | **타 서비스에서 복원** | → **challenge-api GET /public/users/:userId/challenge-history** (challenge-api PORTING.md §7-b — 완주분만) |
 | POST /personal-feed/{userId}/follow-request | **POST /u/feed/:userId/follow-request** | graph: pk=`USER#<followee>` sk=`FOLLOWREQ#<follower>`. 알림 직기록 → `publishEvent('follow.requested')` 로 대체 (notification-worker 소비) |
 | PUT /personal-feed/follow-requests/{followId}/accept | **PUT /u/feed/follow-requests/:followId/accept** | 수락 시 FOLLOWREQ 삭제 + `FOLLOWER#` 아이템 생성. followId 계약(`follower#followee`) 유지 |
 | PUT /personal-feed/follow-requests/{followId}/reject | **PUT /u/feed/follow-requests/:followId/reject** | 거절 시 FOLLOWREQ 삭제. **의도적 변경**: 레거시는 status='rejected' 아이템이 남아 재요청이 409였으나, 신규는 거절 후 재요청 가능 |
@@ -47,9 +47,9 @@
 | GET /personal-feed/me/invite-links | **GET /u/feed/me/invite-links** | gsi2 Query 최신순. 응답 동일 |
 | DELETE /personal-feed/me/invite-links/{linkId} | **DELETE /u/feed/me/invite-links/:linkId** | 소유자 gsi2에서 탐색 — 레거시 403(타인 링크) 케이스는 404로 수렴 |
 | GET /personal-feed/invite/{token} | **GET /u/feed/invite/:token** | 만료/소진 410, usedCount 증가 동일. 소유자 알림은 이벤트 계약 공백(§3) |
-| POST /personal-feed/me/posts/upload-url | **미이식** | 사유: S3 presigned URL 발급 — 신규 워크스페이스에 `@aws-sdk/client-s3`·`s3-request-presigner` 미설치 + UPLOADS_BUCKET 배선 없음. 오케스트레이터가 의존성/grant 배선 후 추가 예정 |
+| POST /personal-feed/me/posts/upload-url | **POST /u/feed/me/posts/upload-url** | **복원(§6)** — presigned PUT 300초 (`repo/media.ts`, challenge-api upload-url 구현 미러). 바디 `{ contentType?, fileName?, fileSize? }` — 이미지 MIME 화이트리스트 검증(비이미지 400 VALIDATION_ERROR)·10MB 상한. 키 패턴 신규 `uploads/<userId>/feed/<uuid>.<ext>` (레거시 `personal-posts/...`). 응답 `{ uploadUrl, key, fileUrl, expiresIn }` — 레거시 `{ uploadUrl, key }` 의 상위 집합 |
 | POST /personal-feed/me/posts | **POST /u/feed/me/posts** | pk=`USER#<userId>` sk=`PP#<createdAt>#<postId>`. EMPTY_POST·visibility 기본값 동일 |
-| GET /personal-feed/{userId}/posts | **GET /u/feed/:userId/posts** | 레이어·visibility 필터(순수 함수) 동일, nextToken 동일 형식. **GAP**: 이미지 presign 미이식 — `imageUrls`에 imageKeys 원본 반환 (upload-url과 동일 사유) |
+| GET /personal-feed/{userId}/posts | **GET /u/feed/:userId/posts** | 레이어·visibility 필터(순수 함수) 동일, nextToken 동일 형식. **이미지 presign 복원(§6)** — `imageUrls` = imageKeys → 1시간 presigned GET (레거시 signMediaUrl 정책) |
 | PUT /personal-feed/me/posts/{postId} | **PUT /u/feed/me/posts/:postId** | postId(uuid)로 본인 파티션 내 검색. 레거시 403(타인 게시물) → 404 수렴 |
 | DELETE /personal-feed/me/posts/{postId} | **DELETE /u/feed/me/posts/:postId** | 동일 |
 | POST /plaza/{plazaPostId}/save | **POST /u/feed/plaza/:plazaPostId/save** | pk=`USER#<userId>` sk=`SAVE#<postId>`. **GAP**: 광장 게시물 존재 확인·postSnapshot 기록은 social 도메인(PLAZA_POSTS) 크로스 read라 미이관 — 목록의 postSnapshot은 null, 스냅샷은 프론트 조합 또는 social 이벤트로 해결 |
@@ -66,8 +66,8 @@
 | **DELETE /u/push-subscriptions** | body(또는 쿼리) `endpoint` 필수 → 해당 PUSH# 아이템 삭제 |
 
 ## 2. 미이식 항목 요약
-- **personal-feed/achievements·challenges·verifications**: challenge·cheer·gamification 도메인 테이블 크로스 read. 가이드 §1-4(도메인 테이블만 접근)·§4(문서화된 예외 없음) 위배라 이관 보류. 해당 데이터는 각 도메인 API에서 제공(challenges gsi1 `UCUSER#`/`VFUSER#` 설계 존재) 후 프론트 응답 조합으로 전환.
-- **personal-feed/posts upload-url + 이미지 presign**: S3 SDK 미배선 (위 표 참고).
+- **personal-feed/achievements·challenges·verifications**: ~~이관 보류~~ → **각 도메인 API에서 복원 완료** (achievements = gamification-api `/public/users/:userId/achievements`, verifications/challenges = challenge-api `/public/users/:userId/{verifications,challenge-history}`). user-api 는 계속 미보유 — 프론트가 도메인별 엔드포인트를 직접 호출.
+- **personal-feed/posts upload-url + 이미지 presign**: **복원 완료 (§6)**.
 - **profile의 공통 챌린지 10회 완주(L2 경로 B) 판정**: user-challenges 크로스 read — 항상 미충족 처리. L2 진입은 초대 링크 경로로만 동작. 필요 시 challenge 도메인 이벤트/API로 대체 설계 필요.
 - **레거시 rejected 팔로우 상태 보존**: 거절 이력을 남기지 않는 방향으로 단순화 (재요청 허용). 제품 정책 확인 필요 시 FOLLOWREQ 아이템에 status=rejected 유지로 되돌릴 수 있음.
 
@@ -95,3 +95,19 @@ src/
 ## 5. 검증
 - `npx tsc -p services/user-api` 통과
 - `npx jest --silent --testPathPattern "services/user-api"` — 4 suites / 26 tests 통과
+
+## 6. 자유글 이미지 업로드 복원 (NOT_PORTED gap 해소 — 2026-07)
+
+- **POST /u/feed/me/posts/upload-url** (`routes/personal-feed-content.ts` + `repo/media.ts`):
+  presigned PUT 300초. 키 `uploads/<userId>/feed/<uuid>.<ext>`. challenge-api
+  verifications upload-url 구현 미러 — 콘텐츠 타입 화이트리스트(zod
+  `image/(jpeg|jpg|png|webp|gif|heic|heif|heic-sequence|heif-sequence)`), fileSize 10MB 상한,
+  `UPLOADS_BUCKET` 미설정 시 500 `UPLOADS_BUCKET_NOT_CONFIGURED`, `fileUrl` 은 `STAGE` 기반
+  CloudFront 도메인.
+- **GET /u/feed/:userId/posts 의 imageUrls presign** 복원 — imageKeys(키 또는 URL) →
+  1시간 presigned GET (`repo/media.ts` `signFeedImageUrl`, 레거시 signMediaUrl 정책.
+  `/uploads/` 경로가 아닌 외부 URL 은 그대로 통과).
+- **의존성 추가**: `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner` (package.json).
+- **env 신규 필요**: `UPLOADS_BUCKET` (+선택 `STAGE`) — **user-api Lambda 에 처음 도입되는 env 로,
+  버킷 grant(s3:PutObject/GetObject on `uploads/*`) 배선은 오케스트레이터(infra2) 몫**.
+  미배선 상태에서는 upload-url 이 500, 목록 presign 은 키 원본 반환으로 폴백.

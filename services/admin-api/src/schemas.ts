@@ -72,6 +72,16 @@ export const questReviewSchema = z.object({
   reviewNote: z.string().max(500).optional(),
 });
 
+/**
+ * 개인 퀘스트 제안 심사 바디 (레거시 admin/personal-quest/review — v1 단순화:
+ * action→decision, leaderFeedback→reason 선택 입력. 신규 키 탐색용 challengeId 필수)
+ */
+export const proposalReviewSchema = z.object({
+  challengeId: z.string().min(1),
+  decision: z.enum(['approve', 'reject']),
+  reason: z.string().max(500).optional(),
+});
+
 /** 레거시 admin/category-banners/upsert 스키마 그대로 */
 export const bannerUpsertSchema = z.object({
   imageUrl: z.string().url().optional(),

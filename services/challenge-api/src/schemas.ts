@@ -153,6 +153,14 @@ export const performedAtSchema = z.object({
   performedAt: z.string().datetime(),
 });
 
+// ── 개인 퀘스트 제안 (레거시 challenge/personal-quest/submit — v1 단순화) ────
+
+export const questProposalSchema = z.object({
+  title: z.string().min(1).max(100),
+  description: z.string().max(1000).optional(),
+});
+export type QuestProposalInput = z.infer<typeof questProposalSchema>;
+
 // ── 퀘스트 제출 (레거시 quest/submit) ───────────────────────────────────────
 
 export const submitQuestSchema = z.object({

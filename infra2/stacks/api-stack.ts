@@ -80,9 +80,12 @@ export class ApiStack extends cdk.Stack {
         GRAPH_TABLE: stateful.tables.graph.tableName,
         USER_POOL_CLIENT_ID: stateful.userPoolClient.userPoolClientId,
         VAPID_SECRET_NAME: stateful.vapidSecret.secretName,
+        UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
       },
     });
     stateful.vapidSecret.grantRead(this.userApi); // GET /public/push/key
+    stateful.uploadsBucket.grantPut(this.userApi); // 자유글 이미지 presigned PUT
+    stateful.uploadsBucket.grantRead(this.userApi); // 이미지 presigned GET
     stateful.tables.users.grantReadWriteData(this.userApi);
     stateful.tables.graph.grantReadWriteData(this.userApi);
     eventBus.grantPutEventsTo(this.userApi);
