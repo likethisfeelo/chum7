@@ -306,7 +306,7 @@ export const MEPage = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['my-challenges'],
     queryFn: async () => {
-      const response = await apiClient.get('/challenges/my?status=active');
+      const response = await apiClient.get('/c/challenges/my?status=active');
       return response.data.data;
     },
     refetchInterval: 60 * 1000,
@@ -319,7 +319,7 @@ export const MEPage = () => {
   const { data: completedChallengesData } = useQuery({
     queryKey: ['my-challenges-completed', 'all'],
     queryFn: async () => {
-      const response = await apiClient.get('/challenges/my?status=all');
+      const response = await apiClient.get('/c/challenges/my?status=all');
       return response.data.data;
     },
     refetchInterval: 60 * 1000,
@@ -330,7 +330,7 @@ export const MEPage = () => {
   const { data: extraCountData } = useQuery({
     queryKey: ['verifications', 'mine-extra-count'],
     queryFn: async () => {
-      const response = await apiClient.get('/verifications?mine=true&isExtra=true&limit=5');
+      const response = await apiClient.get('/c/verifications?mine=true&isExtra=true&limit=5');
       return response.data.data;
     },
     refetchInterval: 60 * 1000,
@@ -339,7 +339,7 @@ export const MEPage = () => {
   const { data: myVerificationsData } = useQuery({
     queryKey: ['verifications', 'mine-all'],
     queryFn: async () => {
-      const response = await apiClient.get('/verifications?mine=true&isExtra=false&limit=50');
+      const response = await apiClient.get('/c/verifications?mine=true&isExtra=false&limit=50');
       return response.data.data;
     },
     refetchInterval: 60 * 1000,
@@ -400,11 +400,10 @@ export const MEPage = () => {
     queryKey: ['my-personal-quest-proposals', personalQuestTargetChallenges.map((c: any) => c.challengeId).join(',')],
     enabled: personalQuestTargetChallenges.length > 0,
     queryFn: async () => {
-      const entries = await Promise.all(
-        personalQuestTargetChallenges.map(async (challenge: any) => {
-          const response = await apiClient.get(`/challenges/${challenge.challengeId}/personal-quest`);
-          return [challenge.challengeId, response.data?.data?.latestProposal || null] as const;
-        }),
+      // NOT_PORTED: GET /challenges/:id/personal-quest — 개인퀘스트 제안 플로우는 신규 API 미이식
+      // (challenge-api PORTING.md §E). 제안 상태 뱃지는 비표시로 동작.
+      const entries = personalQuestTargetChallenges.map(
+        (challenge: any) => [challenge.challengeId, null] as const,
       );
       return Object.fromEntries(entries) as Record<string, any>;
     },
@@ -415,9 +414,10 @@ export const MEPage = () => {
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
   const leaderDmMutation = useMutation({
-    mutationFn: async (challengeId: string) => {
+    mutationFn: async ({ challengeId, leaderId }: { challengeId: string; leaderId?: string }) => {
       setLeaderDmTargetId(challengeId);
-      const response = await apiClient.post(`/challenge-feed/${challengeId}/leader-dm`);
+      // 신규 API: leaderId는 클라이언트 제공 필수 (social-api PORTING.md gap ④)
+      const response = await apiClient.post(`/s/board/${challengeId}/leader-dm`, { leaderId });
       return response.data;
     },
     onSuccess: async (res: any) => {
@@ -459,7 +459,8 @@ export const MEPage = () => {
       toast.error('챌린지 정보를 찾지 못했습니다');
       return;
     }
-    leaderDmMutation.mutate(challengeId);
+    const leaderId = challenge?.challenge?.createdBy || challenge?.createdBy || undefined;
+    leaderDmMutation.mutate({ challengeId, leaderId });
   };
 
   const pendingChallenges = useMemo(

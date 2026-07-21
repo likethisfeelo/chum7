@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
 import { FiLink } from 'react-icons/fi';
 
 interface LinkPreviewCardProps {
@@ -18,15 +17,12 @@ function getHostLabel(inputUrl: string): string {
 export const LinkPreviewCard = ({ url, className }: LinkPreviewCardProps) => {
   const host = getHostLabel(url);
 
-  const isHttps = url.startsWith('https://');
-
   const { data } = useQuery({
     queryKey: ['link-preview', url],
-    queryFn: async () => {
-      const res = await apiClient.get('/verifications/link-preview', { params: { url } });
-      return res.data?.data || null;
-    },
-    enabled: Boolean(url) && isHttps,
+    // NOT_PORTED: GET /verifications/link-preview — 외부 URL 프리뷰 프록시는 신규 백엔드 미이식
+    // (challenge-api PORTING.md §B). 호스트명 기반 기본 카드로 폴백 (쿼리 비활성).
+    queryFn: async () => null as any,
+    enabled: false,
     staleTime: 1000 * 60 * 30,
     retry: 1,
   });

@@ -170,7 +170,7 @@ export const FeedPage = () => {
   const { data: recruitingChallenges = [] } = useQuery({
     queryKey: ['feed-recruiting-challenges'],
     queryFn: async () => {
-      const response = await apiClient.get('/challenges?lifecycle=recruiting&limit=8');
+      const response = await apiClient.get('/public/challenges?lifecycle=recruiting&limit=8');
       return response.data.data?.challenges || [];
     },
     staleTime: 3 * 60 * 1000,

@@ -23,7 +23,7 @@ export const ProfilePage = () => {
   const { data: profileData } = useQuery({
     queryKey: ['auth-profile'],
     queryFn: async () => {
-      const response = await apiClient.get('/auth/profile');
+      const response = await apiClient.get('/u/me');
       return response.data?.data?.user;
     },
     retry: false,
@@ -37,7 +37,7 @@ export const ProfilePage = () => {
   const { data: myChallenges } = useQuery({
     queryKey: ['my-challenges', 'all'],
     queryFn: async () => {
-      const response = await apiClient.get('/challenges/my?status=all');
+      const response = await apiClient.get('/c/challenges/my?status=all');
       return response.data.data;
     },
   });

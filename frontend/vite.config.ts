@@ -4,7 +4,7 @@ import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     VitePWA({
@@ -55,6 +55,7 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    sourcemap: true,
+    // 프로덕션 빌드에서는 소스맵 제외 (비프로덕션 빌드만 생성)
+    sourcemap: mode !== "production",
   },
-});
+}));

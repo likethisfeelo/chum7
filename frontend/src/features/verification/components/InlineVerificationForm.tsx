@@ -193,7 +193,7 @@ export const InlineVerificationForm = ({
   const { data: questsForType } = useQuery({
     queryKey: ["challenge-quests", challengeId],
     queryFn: async () => {
-      const res = await apiClient.get(`/quests?challengeId=${challengeId}&status=active`);
+      const res = await apiClient.get(`/c/${challengeId}/quests?status=active`);
       return (res.data?.data?.quests ?? []) as any[];
     },
     enabled: Boolean(challengeId) && isMixedType && !forcedQuestType,
@@ -388,7 +388,7 @@ export const InlineVerificationForm = ({
         const challengeId =
           userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
         const { data: uploadData } = await apiClient.post(
-          "/verifications/upload-url",
+          "/c/verifications/upload-url",
           {
             fileName: mediaFile.name,
             fileType: mediaFile.type,
@@ -421,7 +421,7 @@ export const InlineVerificationForm = ({
       lastUploadedUrlRef.current = uploadedUrl;
       lastUploadedObjectKeyRef.current = uploadedObjectKey;
 
-      const response = await apiClient.post("/verifications", {
+      const response = await apiClient.post("/c/verifications", {
         userChallengeId: userChallenge.userChallengeId,
         day: getChallengeDay(userChallenge),
         verificationType: selectedType,
@@ -471,7 +471,7 @@ export const InlineVerificationForm = ({
         }
         if (selectedType === 'link' && linkUrl.trim()) content.linkUrl = linkUrl.trim();
         if (formData.todayNote.trim()) content.note = formData.todayNote.trim();
-        apiClient.post(`/quests/${quest.questId}/submit`, {
+        apiClient.post(`/c/${userChallenge.challengeId ?? userChallenge.challenge?.challengeId}/quests/${quest.questId}/submit`, {
           userChallengeId: userChallenge.userChallengeId,
           verificationType: selectedType,
           content,
@@ -587,7 +587,7 @@ export const InlineVerificationForm = ({
     }
     try {
       await apiClient.patch(
-        `/verifications/${extraVisibilityPrompt.verificationId}/visibility`,
+        `/c/verifications/${extraVisibilityPrompt.verificationId}/visibility`,
         { isPersonalOnly: false },
       );
       toast.success("추가 기록을 공개 피드로 전환했어요 🌍");

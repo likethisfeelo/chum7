@@ -1,0 +1,332 @@
+/**
+ * 인증 조회/미디어/수정 라우트 — GET /c/verifications, GET /c/verifications/:id,
+ * POST /c/verifications/upload-url, PATCH /c/verifications/:id/{visibility,performed-at}
+ * 레거시: backend/services/verification/{list,get,upload-url,visibility,performed-at}/index.ts
+ */
+import { randomUUID } from 'node:crypto';
+import { Hono } from 'hono';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { AppEnv } from '@chum7/api-kit';
+import { ok, fail } from '@chum7/api-kit';
+import { performedAtSchema, uploadUrlSchema, visibilitySchema } from '../schemas';
+import { certDateFromIso, DEFAULT_TIMEZONE, calculateEffectiveCurrentDay, isChallengePeriodEnded, resolveDurationDays } from '../domain/day-sync';
+import { isValidTrimRange, resolveVerificationType } from '../domain/verification-rules';
+import { extractImageS3Key, isLikelySignedAssetUrl } from '../domain/media-key';
+import { findMyParticipationByUcId, getParticipation } from '../repo/participations';
+import {
+  findMyVerificationById,
+  listMyVerifications,
+  listPublicVerificationsByDate,
+  updateVerificationFields,
+} from '../repo/verifications';
+import { parseNextToken, stripKeys, toNextToken } from '../repo/shared';
+
+export const verificationReadRoutes = new Hono<AppEnv>();
+
+const s3Client = new S3Client({});
+
+type VerificationItem = Record<string, any>;
+
+async function toRenderableMediaUrl(url?: string | null): Promise<string | null> {
+  if (!url) return null;
+  const raw = String(url).trim();
+  if (!raw) return null;
+
+  if (isLikelySignedAssetUrl(raw)) return raw;
+
+  const key = extractImageS3Key(raw);
+  if (!key || !process.env.UPLOADS_BUCKET) return raw;
+
+  const s3Key = key.startsWith('uploads/') ? key : `uploads/${key}`;
+  try {
+    return await getSignedUrl(
+      s3Client,
+      new GetObjectCommand({ Bucket: process.env.UPLOADS_BUCKET, Key: s3Key }),
+      { expiresIn: 3600 },
+    );
+  } catch (error) {
+    console.error('Failed to sign verification media url:', error);
+    return raw;
+  }
+}
+
+function isPublicVerification(v: VerificationItem): boolean {
+  const isPublic = v.isPublic === 'true' || v.isPublic === true;
+  const isPersonalOnly = v.isPersonalOnly === true;
+  return isPublic && !isPersonalOnly;
+}
+
+async function normalizeVerification(v: VerificationItem) {
+  const imageUrl = await toRenderableMediaUrl(v.imageUrl || null);
+  const videoUrl = await toRenderableMediaUrl(v.videoUrl || null);
+
+  const linkUrlRaw = typeof v.linkUrl === 'string' ? v.linkUrl.trim() : '';
+  const videoUrlRaw = typeof v.videoUrl === 'string' ? v.videoUrl.trim() : '';
+  const imageUrlRaw = typeof v.imageUrl === 'string' ? v.imageUrl.trim() : '';
+
+  const verificationType = resolveVerificationType({
+    verificationType: v.verificationType,
+    imageUrl: imageUrlRaw,
+    videoUrl: videoUrlRaw,
+    linkUrl: linkUrlRaw,
+  });
+  const mediaUrl = verificationType === 'video' ? videoUrl || imageUrl : imageUrl;
+
+  return {
+    verificationId: v.verificationId,
+    userId: v.userId,
+    challengeId: v.challengeId || null,
+    userChallengeId: v.userChallengeId || null,
+    userName: v.userName || null,
+    day: v.day,
+    verificationType,
+    questType: v.questType || null,
+    todayNote: v.todayNote,
+    imageUrl: verificationType === 'image' ? mediaUrl : null,
+    videoUrl: verificationType === 'video' ? mediaUrl : null,
+    mediaUrl,
+    linkUrl: linkUrlRaw || null,
+    isAnonymous: Boolean(v.isAnonymous),
+    isExtra: Boolean(v.isExtra),
+    isPersonalOnly: Boolean(v.isPersonalOnly),
+    cheerCount: v.cheerCount || 0,
+    createdAt: v.createdAt,
+    performedAt: v.performedAt || v.practiceAt || null,
+    certDate: v.certDate || v.verificationDate || null,
+    scoreEarned: v.scoreEarned ?? v.score ?? 0,
+    mediaValidationStatus: v.mediaValidationStatus || null,
+    mediaValidationReason: v.mediaValidationReason || null,
+    mediaValidatedAt: v.mediaValidatedAt || null,
+  };
+}
+
+function matchesExtraFilter(v: VerificationItem, isExtra?: string) {
+  if (isExtra === 'true' && !v.isExtra) return false;
+  if (isExtra === 'false' && v.isExtra) return false;
+  return true;
+}
+
+// 인증 목록 (레거시 GET /verifications — mine / public 모드. Scan 모드는 풀스캔 금지로 mine 대체)
+verificationReadRoutes.get('/', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const query = c.req.query();
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+  const isPublic = query.isPublic === 'true';
+  const isExtra = query.isExtra;
+  const challengeIdFilter = query.challengeId || null;
+
+  let startKey: Record<string, any> | undefined;
+  try {
+    startKey = parseNextToken(query.nextToken);
+  } catch {
+    return fail(c, 400, 'INVALID_NEXT_TOKEN', 'nextToken 형식이 올바르지 않습니다');
+  }
+
+  let items: VerificationItem[] = [];
+  let nextToken: string | null = null;
+
+  if (isPublic) {
+    // 공개 피드 — gsi2 VFPUB#<KST 오늘> Query (레거시 isPublic-createdAt-index 대응)
+    const date = query.date || certDateFromIso(new Date().toISOString(), DEFAULT_TIMEZONE);
+    let cursor: Record<string, any> | undefined = startKey;
+    const merged: VerificationItem[] = [];
+    for (let i = 0; i < 5 && merged.length < limit; i += 1) {
+      const result = await listPublicVerificationsByDate(date, Math.max(limit * 4, 80), cursor);
+      const filtered = result.items.filter((v) => {
+        if (!isPublicVerification(v)) return false;
+        if (!matchesExtraFilter(v, isExtra)) return false;
+        if (challengeIdFilter && v.challengeId !== challengeIdFilter) return false;
+        return true;
+      });
+      merged.push(...filtered);
+      cursor = result.lastKey;
+      if (!cursor) break;
+    }
+    items = merged.slice(0, limit);
+    nextToken = toNextToken(cursor);
+  } else {
+    // 내 인증 — gsi1 VFUSER# Query (레거시 mine=true / Scan 모드 통합)
+    const result = await listMyVerifications(userId, Math.max(limit * 4, 80), startKey);
+    items = result.items.filter((v) => {
+      if (!matchesExtraFilter(v, isExtra)) return false;
+      if (challengeIdFilter && v.challengeId !== challengeIdFilter) return false;
+      return true;
+    });
+    items = items.slice(0, limit);
+    nextToken = toNextToken(result.lastKey);
+  }
+
+  return ok(c, {
+    verifications: await Promise.all(items.map(normalizeVerification)),
+    count: items.length,
+    nextToken,
+  });
+});
+
+// 업로드 URL 발급 (레거시 POST /verifications/upload-url — S3 presigned PUT)
+verificationReadRoutes.post('/upload-url', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const input = uploadUrlSchema.parse(await c.req.json().catch(() => ({})));
+
+  const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+  const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024;
+  const isVideo = input.fileType.startsWith('video/');
+  const maxSizeBytes = isVideo ? MAX_VIDEO_SIZE_BYTES : MAX_IMAGE_SIZE_BYTES;
+
+  if ((input.mediaKind === 'video' || isVideo) && !isValidTrimRange(input.trimStartSec, input.trimEndSec)) {
+    return fail(c, 400, 'INVALID_TRIM_RANGE', 'trimStartSec/trimEndSec 범위가 올바르지 않습니다');
+  }
+  if (input.fileSize > maxSizeBytes) {
+    return c.json({
+      error: 'FILE_SIZE_EXCEEDED',
+      message: isVideo ? '영상은 500MB 이내만 업로드할 수 있습니다' : '이미지는 10MB 이내만 업로드할 수 있습니다',
+      maxSizeBytes,
+    }, 400);
+  }
+  if (!process.env.UPLOADS_BUCKET) {
+    return fail(c, 500, 'UPLOADS_BUCKET_NOT_CONFIGURED', '업로드 설정이 올바르지 않습니다');
+  }
+
+  // challengeId 해석 (메타데이터 기록용 — 키 경로에는 사용하지 않음)
+  let resolvedChallengeId: string | null = input.challengeId?.trim() || null;
+  if (!resolvedChallengeId && input.userChallengeId) {
+    const uc = await findMyParticipationByUcId(userId, input.userChallengeId);
+    resolvedChallengeId = typeof uc?.challengeId === 'string' && uc.challengeId.trim() ? uc.challengeId.trim() : null;
+  }
+
+  const fileExtension =
+    input.fileType === 'video/quicktime'
+      ? 'mov'
+      : input.fileType === 'image/jpeg' || input.fileType === 'image/jpg'
+        ? 'jpg'
+        : input.fileType === 'image/heic-sequence'
+          ? 'heic'
+          : input.fileType === 'image/heif-sequence'
+            ? 'heif'
+            : input.fileType.split('/')[1];
+
+  // 신규 키 패턴: uploads/<userId>/<uuid>.<ext> ("uploads/" prefix는 CloudFront /uploads/* 매핑용)
+  const key = `uploads/${userId}/${randomUUID()}.${fileExtension}`;
+
+  const command = new PutObjectCommand({
+    Bucket: process.env.UPLOADS_BUCKET,
+    Key: key,
+    ContentType: input.fileType,
+    Metadata: {
+      uploadedBy: userId,
+      challengeId: resolvedChallengeId || input.challengeId || 'unknown-challenge',
+      uploadedAt: new Date().toISOString(),
+      mediaKind: input.mediaKind || (isVideo ? 'video' : 'image'),
+      trimStartSec: input.trimStartSec !== undefined ? String(input.trimStartSec) : '',
+      trimEndSec: input.trimEndSec !== undefined ? String(input.trimEndSec) : '',
+      videoDurationSec: input.videoDurationSec !== undefined ? String(input.videoDurationSec) : '',
+    },
+  });
+
+  const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+
+  const stage = process.env.STAGE || 'dev';
+  const cloudfrontDomain = stage === 'prod' ? 'https://www.chum7.com' : 'https://test.chum7.com';
+  const fileUrl = `${cloudfrontDomain}/${key}`;
+
+  return ok(c, { uploadUrl, fileUrl, key, expiresIn: 300 });
+});
+
+// 인증 단건 조회 (레거시 GET /verifications/{id} — 본인 인증 조회)
+verificationReadRoutes.get('/:verificationId', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const verificationId = c.req.param('verificationId');
+
+  const verification = await findMyVerificationById(userId, verificationId);
+  if (!verification) {
+    return fail(c, 404, 'VERIFICATION_NOT_FOUND', '인증을 찾을 수 없습니다');
+  }
+  return ok(c, stripKeys(verification));
+});
+
+// 추가 인증 공개 전환 (레거시 PATCH /verifications/{id}/visibility)
+verificationReadRoutes.patch('/:verificationId/visibility', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const verificationId = c.req.param('verificationId');
+  visibilitySchema.parse(await c.req.json().catch(() => ({})));
+
+  const verification = await findMyVerificationById(userId, verificationId);
+  if (!verification) {
+    return fail(c, 404, 'VERIFICATION_NOT_FOUND', '인증을 찾을 수 없습니다');
+  }
+  if (!verification.isExtra) {
+    return fail(c, 400, 'EXTRA_ONLY_ALLOWED', '추가 인증만 공개 전환할 수 있습니다');
+  }
+  if (!verification.userChallengeId) {
+    return fail(c, 400, 'MISSING_USER_CHALLENGE', 'userChallengeId가 없어 공개 전환할 수 없습니다');
+  }
+
+  const userChallenge = await getParticipation(verification.challengeId, userId);
+  if (!userChallenge) {
+    return fail(c, 404, 'USER_CHALLENGE_NOT_FOUND', '챌린지 참여정보를 찾을 수 없습니다');
+  }
+
+  const durationDays = resolveDurationDays(undefined, userChallenge.progress);
+  const effectiveCurrentDay = calculateEffectiveCurrentDay(userChallenge, new Date().toISOString(), durationDays);
+  if (isChallengePeriodEnded(effectiveCurrentDay, durationDays, userChallenge.status)) {
+    return fail(c, 400, 'CHALLENGE_PERIOD_ENDED', '챌린지 기간 내에만 공개 전환할 수 있습니다');
+  }
+
+  const now = new Date().toISOString();
+  await updateVerificationFields(
+    { pk: verification.pk, sk: verification.sk },
+    {
+      isPersonalOnly: false,
+      isPublic: 'true',
+      updatedAt: now,
+      // 공개 전환 시 VFPUB 파티션 키 기록 (plaza-converter·world-summary 소비 계약)
+      gsi2pk: `VFPUB#${certDateFromIso(verification.createdAt || now, DEFAULT_TIMEZONE)}`,
+      gsi2sk: verification.createdAt || now,
+    },
+  );
+
+  return c.json({ success: true }, 200);
+});
+
+// 수행 시간 수정 (레거시 PATCH /verifications/{id}/performed-at)
+verificationReadRoutes.patch('/:verificationId/performed-at', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const verificationId = c.req.param('verificationId');
+  const { performedAt } = performedAtSchema.parse(await c.req.json().catch(() => ({})));
+
+  if (new Date(performedAt).getTime() > Date.now()) {
+    return fail(c, 400, 'FUTURE_PERFORMED_AT', '수행 시간은 미래로 설정할 수 없습니다');
+  }
+
+  const verification = await findMyVerificationById(userId, verificationId);
+  if (!verification) {
+    return fail(c, 404, 'VERIFICATION_NOT_FOUND', '인증을 찾을 수 없습니다');
+  }
+  if (!verification.userChallengeId) {
+    return fail(c, 400, 'MISSING_USER_CHALLENGE', 'userChallengeId가 없습니다');
+  }
+
+  const userChallenge = await getParticipation(verification.challengeId, userId);
+  if (!userChallenge) {
+    return fail(c, 404, 'USER_CHALLENGE_NOT_FOUND', '챌린지 참여정보를 찾을 수 없습니다');
+  }
+
+  const durationDays = resolveDurationDays(undefined, userChallenge.progress);
+  const effectiveCurrentDay = calculateEffectiveCurrentDay(userChallenge, new Date().toISOString(), durationDays);
+  if (isChallengePeriodEnded(effectiveCurrentDay, durationDays, userChallenge.status)) {
+    return fail(c, 400, 'CHALLENGE_PERIOD_ENDED', '챌린지 기간 내에만 수행 시간을 수정할 수 있습니다');
+  }
+
+  await updateVerificationFields(
+    { pk: verification.pk, sk: verification.sk },
+    {
+      performedAt,
+      practiceAt: performedAt,
+      completedAt: performedAt,
+      updatedAt: new Date().toISOString(),
+    },
+  );
+
+  return c.json({ success: true, performedAt }, 200);
+});

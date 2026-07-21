@@ -11,6 +11,8 @@ import { JoinWizardBottomSheet } from '@/features/challenge/components/JoinWizar
 import { WizardFormState } from '@/features/challenge/components/join-wizard/types';
 import { useAuthStore } from '@/stores/authStore';
 import { challengeApi } from '@/features/challenge/api/challengeApi';
+import { PaymentSheet } from '@/features/commerce/components/PaymentSheet';
+import { isPaidChallenge } from '@/features/commerce/api/commerceApi';
 
 const parseTargetTimeToFormState = (targetTime?: string): WizardFormState => {
   const fallback: WizardFormState = {
@@ -40,13 +42,16 @@ export const ChallengeDetailPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isJoinWizardOpen, setIsJoinWizardOpen] = useState(false);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [pendingFormState, setPendingFormState] = useState<WizardFormState | null>(null);
+  const [paidOrderId, setPaidOrderId] = useState<string | null>(null);
   const useNewJoinWizard = String(import.meta.env.VITE_USE_NEW_JOIN_WIZARD ?? 'true') === 'true';
   const user = useAuthStore((s) => s.user);
 
   const { data: challenge, isLoading } = useQuery({
     queryKey: ['challenge', challengeId],
     queryFn: async () => {
-      const response = await apiClient.get(`/challenges/${challengeId}`);
+      const response = await apiClient.get(`/public/challenges/${challengeId}`);
       return response.data.data;
     },
   });
@@ -54,7 +59,7 @@ export const ChallengeDetailPage = () => {
   const { data: stats } = useQuery({
     queryKey: ['challenge-stats', challengeId],
     queryFn: async () => {
-      const response = await apiClient.get(`/challenges/${challengeId}/stats`);
+      const response = await apiClient.get(`/public/challenges/${challengeId}/stats`);
       return response.data.data.stats;
     },
   });
@@ -63,7 +68,7 @@ export const ChallengeDetailPage = () => {
   const { data: previewBoard } = useQuery({
     queryKey: ['preview-board', challengeId],
     queryFn: async () => {
-      const response = await apiClient.get(`/preview-board/${challengeId}`);
+      const response = await apiClient.get(`/public/board/${challengeId}/preview`);
       return response.data;
     },
   });
@@ -71,15 +76,15 @@ export const ChallengeDetailPage = () => {
   const { data: myChallengesData } = useQuery({
     queryKey: ['my-challenges', 'active-on-detail'],
     queryFn: async () => {
-      const response = await apiClient.get('/challenges/my?status=active');
+      const response = await apiClient.get('/c/challenges/my?status=active');
       return response.data.data;
     },
   });
 
   const joinMutation = useMutation({
-    mutationFn: async (formState: WizardFormState) => {
+    mutationFn: async ({ formState, orderId }: { formState: WizardFormState; orderId?: string | null }) => {
       const questTitle = formState.questTitle.trim();
-      const response = await apiClient.post(`/challenges/${challengeId}/join`, {
+      const response = await apiClient.post(`/c/challenges/${challengeId}/join`, {
         personalGoal: questTitle || undefined,
         personalTarget: {
           hour12: formState.hour12,
@@ -87,6 +92,8 @@ export const ChallengeDetailPage = () => {
           meridiem: formState.meridiem,
           timezone: 'Asia/Seoul',
         },
+        // 유료 챌린지는 paid 주문 필수 (커머스 v0 — 402 ORDER_REQUIRED/ORDER_NOT_PAID)
+        ...(orderId ? { orderId } : {}),
       });
 
       return {
@@ -98,25 +105,25 @@ export const ChallengeDetailPage = () => {
       const userChallengeId = joinResult?.data?.userChallengeId;
       const hasQuestInput = formState.questTitle.trim() && formState.questDescription.trim();
 
-      if (challenge?.personalQuestEnabled && hasQuestInput && userChallengeId) {
-        try {
-          await apiClient.post(`/challenges/${challengeId}/personal-quest`, {
-            userChallengeId,
-            title: formState.questTitle.trim(),
-            description: formState.questDescription.trim(),
-            allowedVerificationTypes: formState.questAllowedVerificationTypes,
-          });
-        } catch (e: any) {
-          toast.error(e?.response?.data?.message || '개인 퀘스트 제안 제출에 실패했습니다');
-        }
-      }
+      // NOT_PORTED: POST /challenges/:id/personal-quest — 개인퀘스트 제안 플로우는 신규 API 미이식
+      // (challenge-api PORTING.md §E). 입력값은 join의 personalGoal로만 전달되고 제안 제출은 생략.
+      void hasQuestInput;
+      void userChallengeId;
 
       queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
       toast.success('챌린지 참여 완료! 오늘부터 시작하세요 🎉');
       setIsJoinWizardOpen(false);
+      setIsPaymentOpen(false);
+      setPendingFormState(null);
       navigate('/me');
     },
     onError: (error: any) => {
+      // 유료 챌린지: 주문 없이/미결제 주문으로 join 시 결제 단계로 안내
+      if (error?.response?.status === 402) {
+        toast.error(error.response?.data?.message || '결제 후 참여할 수 있어요');
+        setIsPaymentOpen(true);
+        return;
+      }
       toast.error(error.response?.data?.message || '참여에 실패했습니다');
     },
   });
@@ -134,13 +141,13 @@ export const ChallengeDetailPage = () => {
   });
 
   const advanceLifecycleMutation = useMutation({
-    mutationFn: (action: 'close_recruiting' | 'confirm_start') =>
-      apiClient.patch(`/challenges/${challengeId}/advance-lifecycle`, { action }),
-    onSuccess: (_, action) => {
-      queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
-      queryClient.invalidateQueries({ queryKey: ['my-created-challenges'] });
-      if (action === 'close_recruiting') toast.success('모집이 마감됐어요');
-      if (action === 'confirm_start') toast.success('챌린지가 시작됐어요 🎉');
+    // NOT_PORTED: PATCH /challenges/:id/advance-lifecycle — 수동 전환은 lifecycle-manager 워커/
+    // admin-api 소관으로 재설계 예정 (challenge-api PORTING.md §E). 버튼은 비활성 상태로 유지.
+    mutationFn: async (action: 'close_recruiting' | 'confirm_start') => {
+      void action;
+      throw Object.assign(new Error('NOT_PORTED'), {
+        response: { data: { message: '수동 전환은 개편 중이에요. 예정된 일정에 따라 자동 전환됩니다.' } },
+      });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || '처리에 실패했습니다');
@@ -152,6 +159,18 @@ export const ChallengeDetailPage = () => {
 
   const lifecycle = String(challenge.lifecycle || 'draft');
   const isCreator = challenge.createdBy === user?.userId;
+  const requiresPayment = isPaidChallenge(challenge);
+
+  // 유료 챌린지: join 전에 결제(주문 paid) 단계를 거친다 (커머스 v0)
+  const startJoin = (formState: WizardFormState) => {
+    if (requiresPayment && !paidOrderId) {
+      setPendingFormState(formState);
+      setIsJoinWizardOpen(false);
+      setIsPaymentOpen(true);
+      return;
+    }
+    joinMutation.mutate({ formState, orderId: paidOrderId });
+  };
   const alreadyJoined = (myChallengesData?.challenges ?? []).some((item: any) => (item.challengeId ?? item.challenge?.challengeId) === challengeId);
   const canJoin = lifecycle === 'recruiting' && !alreadyJoined && !isCreator;
 
@@ -405,7 +424,7 @@ export const ChallengeDetailPage = () => {
               setIsJoinWizardOpen(true);
               return;
             }
-            joinMutation.mutate(parseTargetTimeToFormState(challenge?.targetTime));
+            startJoin(parseTargetTimeToFormState(challenge?.targetTime));
           }}
           loading={joinMutation.isPending}
           disabled={!canJoin || alreadyJoined}
@@ -422,9 +441,29 @@ export const ChallengeDetailPage = () => {
           onClose={() => setIsJoinWizardOpen(false)}
           challenge={challenge}
           loading={joinMutation.isPending}
-          onSubmit={(formState) => joinMutation.mutate(formState)}
+          onSubmit={(formState) => startJoin(formState)}
         />
       )}
+
+      <PaymentSheet
+        isOpen={isPaymentOpen}
+        onClose={() => setIsPaymentOpen(false)}
+        challenge={{
+          challengeId,
+          title: challenge.title,
+          badgeIcon: challenge.badgeIcon,
+          price: challenge.price,
+          pricingType: challenge.pricingType,
+        }}
+        joining={joinMutation.isPending}
+        onPaid={(orderId) => {
+          setPaidOrderId(orderId);
+          joinMutation.mutate({
+            formState: pendingFormState ?? parseTargetTimeToFormState(challenge?.targetTime),
+            orderId,
+          });
+        }}
+      />
     </div>
   );
 };

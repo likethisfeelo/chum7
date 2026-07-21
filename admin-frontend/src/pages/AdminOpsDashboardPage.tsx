@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 
@@ -7,7 +7,7 @@ export const AdminOpsDashboardPage = () => {
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['admin-stats-overview'],
     queryFn: async () => {
-      const res = await apiClient.get('/admin/stats/overview');
+      const res = await apiClient.get('/adm/stats/overview');
       return res.data.data;
     },
   });
@@ -22,16 +22,6 @@ export const AdminOpsDashboardPage = () => {
     refetchInterval: 30000,
   });
   const unreadCount = Array.isArray(notifications) ? notifications.filter((n: any) => !n.isRead).length : 0;
-
-
-  const plazaRenewalMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiClient.post('/admin/plaza/convert/run-now');
-      return res.data;
-    },
-  });
-
-  const plazaRenewalResult = plazaRenewalMutation.data?.data?.data || plazaRenewalMutation.data?.data || null;
 
   if (isLoading) {
     return <div className="p-6 text-gray-500">운영 지표를 불러오는 중...</div>;
@@ -54,17 +44,19 @@ export const AdminOpsDashboardPage = () => {
     );
   }
 
-  const pendingCount = data.operations?.pendingReviewCount ?? 0;
+  // 신규 stats는 Query 산출 가능 지표만 제공 — 미집계 지표는 null (PORTING.md §1-E)
+  const dash = (v: unknown) => (v === null || v === undefined ? '—' : Number(v));
+  const pendingCount = data.operations?.pendingReviewCount ?? null;
 
   const cards = [
-    { label: '총 사용자', value: data.totalUsers, alert: false },
-    { label: '총 챌린지', value: data.totalChallenges, alert: false },
-    { label: '총 참여', value: data.totalParticipations, alert: false },
-    { label: '심사 대기', value: pendingCount, alert: pendingCount > 0 },
-    { label: '거절률(%)', value: data.operations?.reviewRejectRate ?? 0, alert: false },
-    { label: '최근 7일 인증', value: data.verifications?.recent7DaysCount ?? 0, alert: false },
-    { label: 'Remedy 인증', value: data.verifications?.remedyCount ?? 0, alert: false },
-    { label: '추가 인증', value: data.verifications?.extraCount ?? 0, alert: false },
+    { label: '총 사용자', value: dash(data.totalUsers), alert: false },
+    { label: '총 챌린지', value: dash(data.totalChallenges), alert: false },
+    { label: '총 참여', value: dash(data.totalParticipations), alert: false },
+    { label: '심사 대기', value: dash(pendingCount), alert: Number(pendingCount ?? 0) > 0 },
+    { label: '거절률(%)', value: dash(data.operations?.reviewRejectRate), alert: false },
+    { label: '최근 7일 인증', value: dash(data.verifications?.recent7DaysCount), alert: false },
+    { label: 'Remedy 인증', value: dash(data.verifications?.remedyCount), alert: false },
+    { label: '추가 인증', value: dash(data.verifications?.extraCount), alert: false },
   ];
 
   const daily: Array<{ date: string; count: number }> = data.verifications?.verificationDaily || [];
@@ -94,14 +86,6 @@ export const AdminOpsDashboardPage = () => {
           </button>
           <button
             type="button"
-            onClick={() => plazaRenewalMutation.mutate()}
-            disabled={plazaRenewalMutation.isPending}
-            className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-50"
-          >
-            {plazaRenewalMutation.isPending ? '광장 리뉴얼 실행 중...' : '광장 리뉴얼 실행'}
-          </button>
-          <button
-            type="button"
             onClick={() => refetch()}
             disabled={isFetching}
             className="px-4 py-2 rounded-lg bg-gray-900 text-white disabled:opacity-50"
@@ -123,22 +107,11 @@ export const AdminOpsDashboardPage = () => {
           </div>
         ))}
       </section>
-      <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
-        <h2 className="font-bold text-gray-900">광장 리뉴얼(즉시 변환)</h2>
-        <p className="text-sm text-gray-600">공개 인증을 광장 피드 포스트로 즉시 변환합니다. 필요 시 수동 실행하세요.</p>
-        {plazaRenewalMutation.isError && (
-          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-1">
-            <p>실행 실패: {String((plazaRenewalMutation.error as any)?.response?.data?.message || (plazaRenewalMutation.error as any)?.message || '알 수 없는 오류')}</p>
-            {(plazaRenewalMutation.error as any)?.response?.data?.detail && (
-              <p className="text-xs text-red-600 font-mono break-all">{String((plazaRenewalMutation.error as any).response.data.detail)}</p>
-            )}
-          </div>
-        )}
-        {plazaRenewalMutation.isSuccess && (
-          <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-            실행 완료 · 변환 건수: {Number(plazaRenewalResult?.converted || 0)}건
-          </div>
-        )}
+      <section className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-4 space-y-1">
+        <h2 className="font-bold text-gray-500">광장 리뉴얼(즉시 변환) — 재구축 후 지원 예정</h2>
+        <p className="text-sm text-gray-500">
+          즉시 변환 트리거는 plaza-converter 워커로 이관되어 백엔드 재구축 후 지원 예정입니다.
+        </p>
       </section>
 
 

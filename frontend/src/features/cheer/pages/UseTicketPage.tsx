@@ -32,7 +32,7 @@ export const UseTicketPage = () => {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['cheer-targets'],
     queryFn: async () => {
-      const response = await apiClient.get('/cheer/targets');
+      const response = await apiClient.get('/ch/cheers/targets');
       return response.data.data;
     },
     retry: false,
@@ -83,11 +83,12 @@ export const UseTicketPage = () => {
 
   const useTicketMutation = useMutation({
     mutationFn: async ({ ticketId }: { ticketId: string }) => {
-      const response = await apiClient.post('/cheer/use-ticket', {
-        ticketId,
-        message: selectedMessage,
+      // NOT_PORTED: POST /cheer/use-ticket — 응원권(티켓) 발급·소비는 PRODUCT_SPEC v2에서 폐지 확정
+      // (cheer-api PORTING.md 미이식). UI는 유지하되 사용 시 안내만 노출.
+      void ticketId;
+      throw Object.assign(new Error('NOT_PORTED'), {
+        response: { data: { message: '응원권 기능은 개편 중이에요. 응원 보내기로 마음을 전해보세요!' } },
       });
-      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cheer-targets'] });

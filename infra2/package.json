@@ -1,0 +1,20 @@
+{
+  "name": "@chum7/infra2",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "synth:dev": "cdk synth --context stage=dev",
+    "synth:prod": "cdk synth --context stage=prod",
+    "diff:dev": "cdk diff --context stage=dev",
+    "diff:prod": "cdk diff --context stage=prod",
+    "deploy:dev": "cdk deploy --all --context stage=dev --require-approval never",
+    "deploy:prod": "cdk deploy --all --context stage=prod"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.170.0"
+  }
+}

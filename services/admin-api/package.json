@@ -1,0 +1,17 @@
+{
+  "name": "@chum7/admin-api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "dependencies": {
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@chum7/api-kit": "0.1.0",
+    "@chum7/contracts": "0.1.0",
+    "@chum7/core": "0.1.0",
+    "hono": "^4.6.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145"
+  }
+}

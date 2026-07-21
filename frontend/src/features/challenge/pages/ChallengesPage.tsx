@@ -370,7 +370,7 @@ export const ChallengesPage = () => {
   const { data: bannersData } = useQuery({
     queryKey: ['category-banners'],
     queryFn: async () => {
-      const response = await apiClient.get('/category-banners');
+      const response = await apiClient.get('/public/banners');
       return response.data.data as CategoryBanner[];
     },
     staleTime: 5 * 60 * 1000,
@@ -381,7 +381,7 @@ export const ChallengesPage = () => {
     queryKey: ['challenges-mobile', currentCategory.slug, lifecycleTab],
     queryFn: async () => {
       const response = await apiClient.get(
-        `/challenges?category=${currentCategory.slug}&lifecycle=${lifecycleTab}`,
+        `/public/challenges?category=${currentCategory.slug}&lifecycle=${lifecycleTab}`,
       );
       return response.data.data;
     },
@@ -392,7 +392,7 @@ export const ChallengesPage = () => {
     queryKey: ['challenges-recruiting', currentCategory.slug],
     queryFn: async () => {
       const response = await apiClient.get(
-        `/challenges?category=${currentCategory.slug}&lifecycle=recruiting`,
+        `/public/challenges?category=${currentCategory.slug}&lifecycle=recruiting`,
       );
       return response.data.data;
     },
@@ -402,7 +402,7 @@ export const ChallengesPage = () => {
     queryKey: ['challenges-active', currentCategory.slug],
     queryFn: async () => {
       const response = await apiClient.get(
-        `/challenges?category=${currentCategory.slug}&lifecycle=active`,
+        `/public/challenges?category=${currentCategory.slug}&lifecycle=active`,
       );
       return response.data.data;
     },
@@ -413,7 +413,7 @@ export const ChallengesPage = () => {
     queryKey: ['challenge-preview-board', hoveredChallenge?.challengeId],
     enabled: Boolean(hoveredChallenge?.challengeId),
     queryFn: async () => {
-      const response = await apiClient.get(`/challenge-board/${hoveredChallenge!.challengeId}`);
+      const response = await apiClient.get(`/s/board/${hoveredChallenge!.challengeId}`);
       return response.data;
     },
     staleTime: 5 * 60 * 1000,
@@ -466,12 +466,8 @@ export const ChallengesPage = () => {
     } else {
       newSet.add(challengeId);
       toast.success('관심 챌린지로 등록됐어요! 새 소식을 알려드릴게요 🔔');
-      // API call — gracefully fail if not implemented yet
-      try {
-        await apiClient.post(`/challenge-interest/${challengeId}`);
-      } catch {
-        // Backend endpoint not yet implemented — store locally
-      }
+      // NOT_PORTED: POST /challenge-interest/:challengeId — 신규 백엔드에 대응 라우트 없음
+      // (PORTING.md 매핑표 미기재). 관심 챌린지는 로컬 저장으로만 동작.
     }
 
     setInterestedIds(newSet);

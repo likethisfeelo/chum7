@@ -133,7 +133,7 @@ export const VerificationSheet = ({
 
       if (mediaFile) {
         const challengeId = userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
-        const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
+        const { data: uploadData } = await apiClient.post('/c/verifications/upload-url', {
           fileName: mediaFile.name,
           fileType: mediaFile.type,
           fileSize: mediaFile.size,
@@ -155,7 +155,7 @@ export const VerificationSheet = ({
       }
 
       const cleanHashtag = formData.hashtag.trim().replace(/^#+/, '');
-      const response = await apiClient.post('/verifications', {
+      const response = await apiClient.post('/c/verifications', {
         userChallengeId: userChallenge.userChallengeId,
         day: Math.max(1, Number(userChallenge.currentDay || 1)),
         ...(imageUrl ? { imageUrl } : {}),
@@ -237,7 +237,7 @@ export const VerificationSheet = ({
     }
 
     try {
-      await apiClient.patch(`/verifications/${extraVisibilityPrompt.verificationId}/visibility`, { isPersonalOnly: false });
+      await apiClient.patch(`/c/verifications/${extraVisibilityPrompt.verificationId}/visibility`, { isPersonalOnly: false });
       toast.success('추가 기록을 공개 피드로 전환했어요 🌍');
       queryClient.invalidateQueries({ queryKey: ['verifications', 'mine-extra'] });
       queryClient.invalidateQueries({ queryKey: ['verifications', 'public'] });

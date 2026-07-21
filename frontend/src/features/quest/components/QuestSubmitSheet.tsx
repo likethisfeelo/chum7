@@ -159,7 +159,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
         const challengeId = quest.challengeId ?? quest.challenge?.challengeId;
         if (!challengeId) throw new Error('챌린지 정보가 없어 업로드할 수 없습니다');
 
-        const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
+        const { data: uploadData } = await apiClient.post('/c/verifications/upload-url', {
           fileName: imageFile.name,
           fileType: imageFile.type,
           fileSize: imageFile.size,
@@ -180,7 +180,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
         const challengeId = quest.challengeId ?? quest.challenge?.challengeId;
         if (!challengeId) throw new Error('챌린지 정보가 없어 업로드할 수 없습니다');
 
-        const { data: uploadData } = await apiClient.post('/verifications/upload-url', {
+        const { data: uploadData } = await apiClient.post('/c/verifications/upload-url', {
           fileName: videoFile.name,
           fileType: videoFile.type,
           fileSize: videoFile.size,
@@ -209,7 +209,7 @@ export const QuestSubmitSheet = ({ isOpen, onClose, quest, onSuccess }: QuestSub
 
       if (note.trim()) content.note = note.trim();
 
-      const res = await apiClient.post(`/quests/${quest.questId}/submit`, { verificationType: selectedType, content });
+      const res = await apiClient.post(`/c/${quest.challengeId ?? quest.challenge?.challengeId}/quests/${quest.questId}/submit`, { verificationType: selectedType, content });
       return res.data;
     },
     onSuccess: () => {

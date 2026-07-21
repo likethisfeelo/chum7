@@ -28,7 +28,7 @@ export const RemedyPage = () => {
   const { data: myChallengesData, isLoading: isLoadingChallenges } = useQuery({
     queryKey: ['my-challenges', 'remedy-page'],
     queryFn: async () => {
-      const response = await apiClient.get('/challenges/my?status=active');
+      const response = await apiClient.get('/c/challenges/my?status=active');
       return response.data.data;
     },
   });
@@ -49,7 +49,7 @@ export const RemedyPage = () => {
 
   const remedyMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiClient.post('/verifications/remedy', data);
+      const response = await apiClient.post('/c/verifications/remedy', data);
       return response.data;
     },
     onSuccess: (data) => {

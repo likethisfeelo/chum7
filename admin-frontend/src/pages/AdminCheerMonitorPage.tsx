@@ -29,7 +29,7 @@ export const AdminCheerMonitorPage = () => {
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['admin-cheer-monitor', challengeId, statusFilter.join(',')],
     queryFn: async () => {
-      const res = await apiClient.get(`/admin/cheer/monitor?${queryParams.toString()}`);
+      const res = await apiClient.get(`/adm/cheer/monitor?${queryParams.toString()}`);
       return res.data.data;
     },
     refetchInterval: 30_000,

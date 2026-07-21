@@ -43,3 +43,6 @@ Thumbs.db
 *.log
 
 aws-profile.ps1
+
+# infra2 (신규 CDK)
+infra2/cdk.out/

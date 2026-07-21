@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FiArrowLeft } from "react-icons/fi";
 import { useAuthStore } from "@/stores/authStore";
+import { LeaderOpsTab } from "../components/LeaderOpsTab";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api-client";
 import { Loading } from "@/shared/components/Loading";
@@ -57,7 +58,7 @@ function VerificationReactions({
     queryKey: ["verification-reactions", verificationId],
     queryFn: async () => {
       const res = await apiClient.get(
-        `/challenge-feed/${challengeId}/verifications/${verificationId}/reactions`,
+        `/s/challenge-feed/${challengeId}/verifications/${verificationId}/reactions`,
       );
       return res.data.data ?? [];
     },
@@ -69,12 +70,12 @@ function VerificationReactions({
       const existing = reactions.find((r) => r.emoji === emoji);
       if (existing?.myReacted) {
         await apiClient.delete(
-          `/challenge-feed/${challengeId}/verifications/${verificationId}/reactions`,
+          `/s/challenge-feed/${challengeId}/verifications/${verificationId}/reactions`,
           { data: { emoji } },
         );
       } else {
         await apiClient.post(
-          `/challenge-feed/${challengeId}/verifications/${verificationId}/reactions`,
+          `/s/challenge-feed/${challengeId}/verifications/${verificationId}/reactions`,
           { emoji },
         );
       }
@@ -190,7 +191,7 @@ function VerificationComments({
     queryKey: ["verification-comments", verificationId],
     queryFn: async () => {
       const res = await apiClient.get(
-        `/challenge-feed/${challengeId}/verifications/${verificationId}/comments`,
+        `/s/challenge-feed/${challengeId}/verifications/${verificationId}/comments`,
       );
       return res.data.data ?? [];
     },
@@ -201,7 +202,7 @@ function VerificationComments({
   const addMutation = useMutation({
     mutationFn: async (content: string) =>
       apiClient.post(
-        `/challenge-feed/${challengeId}/verifications/${verificationId}/comments`,
+        `/s/challenge-feed/${challengeId}/verifications/${verificationId}/comments`,
         { content },
       ),
     onSuccess: () => {
@@ -214,7 +215,7 @@ function VerificationComments({
   const deleteMutation = useMutation({
     mutationFn: async (commentId: string) =>
       apiClient.delete(
-        `/challenge-feed/${challengeId}/verifications/${verificationId}/comments/${commentId}`,
+        `/s/challenge-feed/${challengeId}/verifications/${verificationId}/comments/${commentId}`,
       ),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["verification-comments", verificationId] }),
@@ -459,7 +460,7 @@ export const ChallengeFeedPage = () => {
     queryKey: ["challenge-feed", challengeId],
     enabled: Boolean(challengeId),
     queryFn: async () => {
-      const response = await apiClient.get(`/challenges/${challengeId}`);
+      const response = await apiClient.get(`/public/challenges/${challengeId}`);
       return response.data?.data;
     },
   });
@@ -468,7 +469,7 @@ export const ChallengeFeedPage = () => {
     queryKey: ["challenge-feed-my-challenges", challengeId],
     enabled: Boolean(challengeId),
     queryFn: async () => {
-      const response = await apiClient.get("/challenges/my?status=all");
+      const response = await apiClient.get("/c/challenges/my?status=all");
       return response.data?.data?.challenges || [];
     },
   });
@@ -487,7 +488,7 @@ export const ChallengeFeedPage = () => {
     queryKey: ["challenge-board", challengeId],
     enabled: Boolean(challengeId),
     queryFn: async () => {
-      const response = await apiClient.get(`/challenge-board/${challengeId}`);
+      const response = await apiClient.get(`/s/board/${challengeId}`);
       return response.data;
     },
   });
@@ -497,7 +498,7 @@ export const ChallengeFeedPage = () => {
     enabled: Boolean(challengeId),
     queryFn: async () => {
       const response = await apiClient.get(
-        `/verifications?isPublic=true&limit=50&challengeId=${challengeId}`,
+        `/c/verifications?isPublic=true&limit=50&challengeId=${challengeId}`,
       );
       return response.data?.data?.verifications || [];
     },
@@ -508,7 +509,7 @@ export const ChallengeFeedPage = () => {
     enabled: Boolean(challengeId),
     queryFn: async () => {
       const response = await apiClient.get(
-        `/verifications?mine=true&limit=50&challengeId=${challengeId}`,
+        `/c/verifications?mine=true&limit=50&challengeId=${challengeId}`,
       );
       return response.data?.data?.verifications || [];
     },
@@ -518,7 +519,7 @@ export const ChallengeFeedPage = () => {
     queryKey: ["challenge-quests", challengeId],
     enabled: Boolean(challengeId),
     queryFn: async () => {
-      const res = await apiClient.get(`/quests?challengeId=${challengeId}&status=active`);
+      const res = await apiClient.get(`/c/${challengeId}/quests?status=active`);
       return res.data?.data?.quests ?? [];
     },
   });
@@ -527,12 +528,14 @@ export const ChallengeFeedPage = () => {
     queryKey: ["challenge-my-proposal", challengeId],
     enabled: Boolean(challengeId),
     queryFn: async () => {
-      const res = await apiClient.get(`/challenges/${challengeId}/personal-quest`);
-      return res.data?.data ?? { latestProposal: null, proposals: [] };
+      // NOT_PORTED: GET /challenges/:id/personal-quest — 개인퀘스트 제안 플로우 미이식
+      // (challenge-api PORTING.md §E). 제안 이력은 빈 상태로 동작.
+      return { latestProposal: null, proposals: [] } as { latestProposal: any; proposals: any[] };
     },
   });
 
   // 탭 상태
+  const [mainTab, setMainTab] = useState<"feed" | "ops">("feed");
   const [activeQuestTab, setActiveQuestTab] = useState<"leader" | "personal">("leader");
   const [feedTab, setFeedTab] = useState<"leader" | "personal">("leader");
   const [expandedLeaderQuestId, setExpandedLeaderQuestId] = useState<string | null>(null);
@@ -591,15 +594,11 @@ export const ChallengeFeedPage = () => {
   }, [leaderQuests, activeQuestTab]);
 
   const submitProposalMutation = useMutation({
+    // NOT_PORTED: POST /challenges/:id/personal-quest — 개인퀘스트 제안 제출은 신규 API 미이식
+    // (challenge-api PORTING.md §E). UI는 유지하되 제출 시 안내만 노출.
     mutationFn: async () => {
-      const uc = userChallenge;
-      const userChallengeId = uc?.userChallengeId ?? uc?.id;
-      if (!userChallengeId) throw new Error("참여 정보를 찾을 수 없습니다");
-      await apiClient.post(`/challenges/${challengeId}/personal-quest`, {
-        userChallengeId,
-        title: proposalForm.title.trim(),
-        description: proposalForm.description.trim(),
-        allowedVerificationTypes: proposalForm.allowedVerificationTypes,
+      throw Object.assign(new Error("NOT_PORTED"), {
+        response: { data: { message: "개인 퀘스트 제안은 개편 중이에요. 곧 다시 열릴 예정입니다." } },
       });
     },
     onSuccess: () => {
@@ -615,7 +614,9 @@ export const ChallengeFeedPage = () => {
 
   const leaderDmMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiClient.post(`/challenge-feed/${challengeId}/leader-dm`);
+      // 신규 API: leaderId는 클라이언트 제공 필수 (social-api PORTING.md gap ④)
+      const leaderId = challengeData?.createdBy || challengeData?.leaderId || undefined;
+      const response = await apiClient.post(`/s/board/${challengeId}/leader-dm`, { leaderId });
       return response.data;
     },
     onSuccess: async (res: any) => {
@@ -641,7 +642,7 @@ export const ChallengeFeedPage = () => {
       const uc = userChallenge;
       const userChallengeId = uc?.userChallengeId ?? uc?.id;
       if (!userChallengeId) throw new Error("참여 정보를 찾을 수 없습니다");
-      await apiClient.post(`/user-challenges/${userChallengeId}/give-up`);
+      await apiClient.post(`/c/user-challenges/${userChallengeId}/give-up`);
     },
     onSuccess: () => {
       toast.success("중도 포기했습니다. 포기는쉽다 뱃지가 지급되었어요.");
@@ -761,6 +762,8 @@ export const ChallengeFeedPage = () => {
     return false;
   })();
   const isLeader = challengeData?.leaderId === user?.userId;
+  // 리더 운영 탭 노출 조건 — 챌린지 생성자 본인 (PRODUCT_SPEC §4.12-A)
+  const isCreator = Boolean(challengeData?.createdBy) && challengeData?.createdBy === user?.userId;
   const isGaveUp = userChallenge?.phase === "gave_up" || userChallenge?.status === "gave_up";
   const canGiveUp = Boolean(userChallenge) && !isLeader && !isGaveUp && isActive;
 
@@ -796,6 +799,28 @@ export const ChallengeFeedPage = () => {
           )}
         </div>
 
+        {/* 리더 전용: 피드 / 운영 탭 (PRODUCT_SPEC 4.12-A) */}
+        {isCreator && (
+          <div className="px-4 lg:px-6 pt-4">
+            <div className="flex gap-1 p-1 glass-card rounded-xl max-w-xs">
+              <button
+                type="button"
+                onClick={() => setMainTab("feed")}
+                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${mainTab === "feed" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+              >
+                피드
+              </button>
+              <button
+                type="button"
+                onClick={() => setMainTab("ops")}
+                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${mainTab === "ops" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+              >
+                👑 운영
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 중도 포기 확인 모달 */}
         {showGiveUpConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
@@ -826,6 +851,11 @@ export const ChallengeFeedPage = () => {
           </div>
         )}
 
+        {isCreator && mainTab === "ops" ? (
+          <div className="p-4 lg:p-6 mx-auto w-full max-w-2xl">
+            <LeaderOpsTab challengeId={challengeId} />
+          </div>
+        ) : (
         <div className="p-4 lg:p-6">
           <div className="lg:grid lg:grid-cols-[300px_1fr] lg:gap-6 lg:items-start">
 
@@ -1545,7 +1575,8 @@ export const ChallengeFeedPage = () => {
 
           </div>{/* ── End Right Main ── */}
           </div>{/* ── End Grid ── */}
-        </div>{/* ── End p-4 wrapper ── */}
+        </div>
+        )}
       </div>
 
     </div>
