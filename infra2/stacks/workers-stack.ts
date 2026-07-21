@@ -143,6 +143,43 @@ export class WorkersStack extends cdk.Stack {
       targets: [new eventsTargets.LambdaFunction(plazaConverter)],
     });
 
+    // --- settlement-worker: challenge.completed → 반환 대기 큐 + 정산서 v0 ---
+    const settlementWorker = new NodejsFunction(this, 'SettlementWorker', {
+      functionName: `${config.prefix}-settlement-worker`,
+      entry: join(__dirname, '../../services/workers/settlement-worker/src/index.ts'),
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 256,
+      bundling: { minify: true, sourceMap: !config.isProd, externalModules: ['@aws-sdk/*'] },
+      environment: {
+        STAGE: config.stage,
+        CHALLENGES_TABLE: stateful.tables.challenges.tableName,
+        COMMERCE_TABLE: stateful.tables.commerce.tableName,
+        EVENT_BUS_NAME: this.eventBus.eventBusName,
+        PLATFORM_FEE_RATE: String(config.platformFeeRate),
+      },
+    });
+    stateful.tables.challenges.grantReadData(settlementWorker);
+    stateful.tables.commerce.grantReadWriteData(settlementWorker);
+    this.eventBus.grantPutEventsTo(settlementWorker);
+    this.workerFunctions.push(settlementWorker);
+
+    const settlementDlq = new sqs.Queue(this, 'SettlementDlq', {
+      queueName: `${config.prefix}-settlement-dlq`,
+      retentionPeriod: cdk.Duration.days(14),
+    });
+    new events.Rule(this, 'ChallengeCompletedToSettlement', {
+      eventBus: this.eventBus,
+      ruleName: `${config.prefix}-settlement`,
+      eventPattern: { detailType: ['challenge.completed'] },
+      targets: [
+        new eventsTargets.LambdaFunction(settlementWorker, {
+          deadLetterQueue: settlementDlq,
+          retryAttempts: 2,
+        }),
+      ],
+    });
+
     new cdk.CfnOutput(this, 'EventBusName', { value: this.eventBus.eventBusName });
   }
 }

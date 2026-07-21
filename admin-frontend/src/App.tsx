@@ -12,6 +12,7 @@ import { AdminCategoryBannersPage } from '@/pages/AdminCategoryBannersPage';
 import { AdminCheerMonitorPage } from '@/pages/AdminCheerMonitorPage';
 import { AdminCommerceCouponsPage } from '@/pages/AdminCommerceCouponsPage';
 import { AdminCommerceOrdersPage } from '@/pages/AdminCommerceOrdersPage';
+import { AdminCommerceSettlementsPage } from '@/pages/AdminCommerceSettlementsPage';
 import '@/styles/index.css';
 
 const queryClient = new QueryClient({
@@ -127,6 +128,7 @@ const Sidebar = () => {
   if (hasAnyRole(groups, ['admins'])) {
     nav.push({ path: '/admin/commerce/coupons', label: '🎟️ 쿠폰 관리', section: '커머스' });
     nav.push({ path: '/admin/commerce/orders', label: '💰 주문/입금 관리', section: '커머스' });
+    nav.push({ path: '/admin/commerce/settlements', label: '💸 반환/정산 관리', section: '커머스' });
   }
 
   const handleLogout = () => {
@@ -333,6 +335,17 @@ export default function App() {
               <RoleRoute roles={['admins']}>
                 <Layout>
                   <AdminCommerceOrdersPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/admin/commerce/settlements"
+            element={
+              <RoleRoute roles={['admins']}>
+                <Layout>
+                  <AdminCommerceSettlementsPage />
                 </Layout>
               </RoleRoute>
             }
