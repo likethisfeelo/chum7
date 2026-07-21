@@ -80,9 +80,12 @@ export class ApiStack extends cdk.Stack {
         GRAPH_TABLE: stateful.tables.graph.tableName,
         USER_POOL_CLIENT_ID: stateful.userPoolClient.userPoolClientId,
         VAPID_SECRET_NAME: stateful.vapidSecret.secretName,
+        UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
       },
     });
     stateful.vapidSecret.grantRead(this.userApi); // GET /public/push/key
+    stateful.uploadsBucket.grantPut(this.userApi); // 자유글 이미지 presigned PUT
+    stateful.uploadsBucket.grantRead(this.userApi); // 이미지 presigned GET
     stateful.tables.users.grantReadWriteData(this.userApi);
     stateful.tables.graph.grantReadWriteData(this.userApi);
     eventBus.grantPutEventsTo(this.userApi);
@@ -201,6 +204,39 @@ export class ApiStack extends cdk.Stack {
     stateful.tables.content.grantReadWriteData(adminApi); // 배너 관리
     stateful.tables.ops.grantReadWriteData(adminApi); // 감사 로그
     eventBus.grantPutEventsTo(adminApi);
+
+    // --- API 커스텀 도메인 (config.domain 설정 시 — Phase 5 전환) ---
+    if (config.domain) {
+      const zone = cdk.aws_route53.HostedZone.fromLookup(this, 'ApiZone', {
+        domainName: config.domain.zoneName,
+      });
+      // API Gateway 리전 도메인용 인증서는 같은 리전(ACM) — CloudFront용(us-east-1)과 별개
+      const apiCert = new cdk.aws_certificatemanager.Certificate(this, 'ApiCertificate', {
+        domainName: config.domain.api,
+        validation: cdk.aws_certificatemanager.CertificateValidation.fromDns(zone),
+      });
+      const apiDomain = new apigwv2.DomainName(this, 'ApiDomain', {
+        domainName: config.domain.api,
+        certificate: apiCert,
+      });
+      new apigwv2.ApiMapping(this, 'ApiMapping', {
+        api: this.httpApi,
+        domainName: apiDomain,
+        stage: this.httpApi.defaultStage!,
+      });
+      new cdk.aws_route53.ARecord(this, 'ApiAlias', {
+        zone,
+        recordName: config.domain.api,
+        target: cdk.aws_route53.RecordTarget.fromAlias(
+          new cdk.aws_route53_targets.ApiGatewayv2DomainProperties(
+            apiDomain.regionalDomainName,
+            apiDomain.regionalHostedZoneId,
+          ),
+        ),
+        deleteExisting: true, // 구 시스템 수동 레코드 대체 (DNS 전환)
+      });
+      new cdk.CfnOutput(this, 'ApiCustomDomain', { value: `https://${config.domain.api}` });
+    }
 
     new cdk.CfnOutput(this, 'ApiUrl', { value: this.httpApi.apiEndpoint });
   }

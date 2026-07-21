@@ -1,4 +1,11 @@
-import { canReviewSubmission, matchesStatusFilter, reviewOutcome, summarizeSubmissions } from './review-rules';
+import {
+  canReviewProposal,
+  canReviewSubmission,
+  matchesStatusFilter,
+  proposalReviewOutcome,
+  reviewOutcome,
+  summarizeSubmissions,
+} from './review-rules';
 
 describe('domain/review-rules', () => {
   it('canReviewSubmission — pending만 허용', () => {
@@ -32,6 +39,24 @@ describe('domain/review-rules', () => {
     expect(matchesStatusFilter('pending', 'approved')).toBe(false);
     expect(matchesStatusFilter('rejected', 'all')).toBe(true);
     expect(matchesStatusFilter('pending', 'pending')).toBe(true);
+  });
+
+  it('canReviewProposal — pending만 허용 (개인 퀘스트 제안 상태 규칙)', () => {
+    expect(canReviewProposal('pending')).toBe(true);
+    expect(canReviewProposal('approved')).toBe(false);
+    expect(canReviewProposal('rejected')).toBe(false);
+    expect(canReviewProposal(undefined)).toBe(false);
+  });
+
+  it('proposalReviewOutcome — approve/reject 상태 전이 (v1: 상태 갱신만)', () => {
+    expect(proposalReviewOutcome('approve')).toEqual({
+      status: 'approved',
+      message: '개인 퀘스트 제안이 승인되었습니다',
+    });
+    expect(proposalReviewOutcome('reject')).toEqual({
+      status: 'rejected',
+      message: '개인 퀘스트 제안이 반려되었습니다. 사용자가 재제출할 수 있습니다.',
+    });
   });
 
   it('summarizeSubmissions — status/scope별 집계', () => {

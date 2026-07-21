@@ -184,7 +184,7 @@ function isTodayVerified(challenge: any): boolean {
 const getProposalStatusMeta = (status?: string) => {
   const key = String(status || 'pending');
   if (key === 'approved') return { label: '승인됨', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', nextAction: '승인 완료. 활성 단계에서 인증을 진행하세요.' };
-  if (key === 'rejected') return { label: '수정 필요', color: 'text-rose-700 bg-rose-50 border-rose-200', nextAction: '리더 피드백 반영 후 /quests 페이지에서 수정 재제출이 필요합니다.' };
+  if (key === 'rejected') return { label: '수정 필요', color: 'text-rose-700 bg-rose-50 border-rose-200', nextAction: '리더 피드백 반영 후 챌린지 피드에서 수정 재제출이 필요합니다.' };
   if (key === 'revision_pending') return { label: '재심사 대기', color: 'text-indigo-700 bg-indigo-50 border-indigo-200', nextAction: '리더가 수정본을 검토 중입니다. 결과를 기다려주세요.' };
   if (key === 'expired') return { label: '기간 만료', color: 'text-gray-700 bg-gray-100 border-gray-200', nextAction: '제안 마감이 지나 개인 퀘스트 없이 진행됩니다.' };
   if (key === 'disqualified') return { label: '자격 제한', color: 'text-gray-700 bg-gray-200 border-gray-300', nextAction: '개인 퀘스트 제안 자격이 제한되었습니다.' };
@@ -400,10 +400,16 @@ export const MEPage = () => {
     queryKey: ['my-personal-quest-proposals', personalQuestTargetChallenges.map((c: any) => c.challengeId).join(',')],
     enabled: personalQuestTargetChallenges.length > 0,
     queryFn: async () => {
-      // NOT_PORTED: GET /challenges/:id/personal-quest — 개인퀘스트 제안 플로우는 신규 API 미이식
-      // (challenge-api PORTING.md §E). 제안 상태 뱃지는 비표시로 동작.
-      const entries = personalQuestTargetChallenges.map(
-        (challenge: any) => [challenge.challengeId, null] as const,
+      // challenge-api PORTING.md §7-e — 챌린지별 내 개인퀘스트 제안(latestProposal) 병렬 조회
+      const entries = await Promise.all(
+        personalQuestTargetChallenges.map(async (challenge: any) => {
+          try {
+            const data = await challengeApi.getMyQuestProposals(challenge.challengeId);
+            return [challenge.challengeId, data.latestProposal] as const;
+          } catch {
+            return [challenge.challengeId, null] as const;
+          }
+        }),
       );
       return Object.fromEntries(entries) as Record<string, any>;
     },
@@ -921,10 +927,10 @@ export const MEPage = () => {
                           {proposal?.status === 'rejected' && (
                             <button
                               type="button"
-                              onClick={() => navigate(`/quests?challengeId=${challenge.challengeId}`)}
+                              onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
                               className="mt-1 px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white"
                             >
-                              퀘스트 보드에서 수정하기
+                              챌린지 피드에서 수정하기
                             </button>
                           )}
                         </div>

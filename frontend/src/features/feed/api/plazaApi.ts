@@ -73,18 +73,13 @@ export async function fetchPlazaFeed(params: {
   return response.data?.data || { posts: [], hasMore: false, nextCursor: null };
 }
 
-export async function reactPlazaPost(params: {
-  plazaPostId: string;
-  verificationId?: string;
-  challengeId?: string;
-}): Promise<PlazaReactionResponse | null> {
+export async function reactPlazaPost(params: { plazaPostId: string }): Promise<PlazaReactionResponse | null> {
   try {
     const response = await apiClient.post(`/s/plaza/${encodeURIComponent(params.plazaPostId)}/react`, {
       reactionType: 'like',
     });
     return response.data?.data ?? null;
   } catch {
-    // NOT_PORTED: 구형 호환 경로 POST /plaza/reactions(verificationId 폴백)는 신규 API에서 폐기 —
     // 마당 게시물이 없으면 반응 없이 조용히 무시 (social-api PORTING.md §1-A)
     return null;
   }

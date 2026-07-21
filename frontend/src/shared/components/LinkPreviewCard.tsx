@@ -1,5 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { FiLink } from 'react-icons/fi';
+import { apiClient } from '@/lib/api-client';
+
+interface LinkPreviewData {
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  siteName: string | null;
+  url: string;
+}
 
 interface LinkPreviewCardProps {
   url: string;
@@ -17,18 +26,19 @@ function getHostLabel(inputUrl: string): string {
 export const LinkPreviewCard = ({ url, className }: LinkPreviewCardProps) => {
   const host = getHostLabel(url);
 
-  const { data } = useQuery({
+  // challenge-api PORTING.md §7-d — OG 프리뷰 프록시. 에러 시 호스트명 기반 기본 카드로 폴백.
+  const { data } = useQuery<LinkPreviewData | null>({
     queryKey: ['link-preview', url],
-    // NOT_PORTED: GET /verifications/link-preview — 외부 URL 프리뷰 프록시는 신규 백엔드 미이식
-    // (challenge-api PORTING.md §B). 호스트명 기반 기본 카드로 폴백 (쿼리 비활성).
-    queryFn: async () => null as any,
-    enabled: false,
+    queryFn: async () => {
+      const res = await apiClient.get(`/public/link-preview?url=${encodeURIComponent(url)}`);
+      return res.data.data as LinkPreviewData;
+    },
     staleTime: 1000 * 60 * 30,
     retry: 1,
   });
 
   const title = data?.title || host;
-  const image = data?.image as string | undefined;
+  const image = data?.image ?? undefined;
 
   return (
     <a

@@ -22,6 +22,13 @@ import {
   updatePersonalPost,
 } from '../repo/posts-repo';
 import { decodeNextToken, encodeNextToken, normalizeLimit } from '../repo/paging';
+import {
+  UPLOAD_URL_EXPIRES_SEC,
+  buildFeedImageKey,
+  presignFeedImagePut,
+  signFeedImageUrl,
+} from '../repo/media';
+import { postUploadUrlSchema } from '../schemas';
 
 /**
  * /u/feed — 자유글(개인 포스트)·저장 게시물·초대 링크.
@@ -124,6 +131,25 @@ personalFeedContentRoutes.delete('/me/invite-links/:linkId', async (c) => {
 
 // ── 자유글 (레거시 personal-feed/posts) ──────────────────────────────────
 
+// POST /u/feed/me/posts/upload-url — 이미지 업로드 presigned PUT
+// (레거시 personal-feed/posts upload-url 복원 — 키 패턴 신규: uploads/<userId>/feed/<uuid>.<ext>)
+personalFeedContentRoutes.post('/me/posts/upload-url', async (c) => {
+  const { userId: me } = c.get('authUser')!;
+  const input = postUploadUrlSchema.parse(await c.req.json().catch(() => ({})));
+
+  if (!process.env.UPLOADS_BUCKET) {
+    return c.json({ error: 'UPLOADS_BUCKET_NOT_CONFIGURED', message: '업로드 설정이 올바르지 않습니다' }, 500);
+  }
+
+  const key = buildFeedImageKey(me, input.contentType);
+  const uploadUrl = await presignFeedImagePut(me, key, input.contentType);
+
+  const stage = process.env.STAGE || 'dev';
+  const cloudfrontDomain = stage === 'prod' ? 'https://www.chum7.com' : 'https://test.chum7.com';
+
+  return ok(c, { uploadUrl, key, fileUrl: `${cloudfrontDomain}/${key}`, expiresIn: UPLOAD_URL_EXPIRES_SEC });
+});
+
 // POST /u/feed/me/posts — 게시물 작성
 personalFeedContentRoutes.post('/me/posts', async (c) => {
   const { userId: me } = c.get('authUser')!;
@@ -168,18 +194,22 @@ personalFeedContentRoutes.get('/:userId/posts', async (c) => {
   const startKey = decodeNextToken(c.req.query('nextToken'));
   const { items, lastKey } = await listPersonalPosts(targetUserId, limit, startKey);
 
-  const posts = items
-    .filter((post) => isOwn || visibilityAccessible(post.visibility, layer))
-    .map((post) => ({
-      postId: post.postId,
-      userId: post.userId,
-      // GAP: S3 presign 미이식 — imageKeys 원본 반환 (PORTING.md 참고)
-      imageUrls: post.imageKeys ?? [],
-      content: post.content,
-      visibility: post.visibility,
-      createdAt: post.createdAt,
-      updatedAt: post.updatedAt,
-    }));
+  const posts = await Promise.all(
+    items
+      .filter((post) => isOwn || visibilityAccessible(post.visibility, layer))
+      .map(async (post) => ({
+        postId: post.postId,
+        userId: post.userId,
+        // 레거시 signMediaUrl 정책 복원 — imageKeys → 1시간 presigned GET URL
+        imageUrls: await Promise.all(
+          ((post.imageKeys ?? []) as string[]).map((k) => signFeedImageUrl(k)),
+        ),
+        content: post.content,
+        visibility: post.visibility,
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+      })),
+  );
 
   return ok(c, { posts, nextToken: encodeNextToken(lastKey) });
 });

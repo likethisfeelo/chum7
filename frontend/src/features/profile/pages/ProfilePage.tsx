@@ -123,11 +123,8 @@ export const ProfilePage = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center">
-              <p className="text-white/70 text-xs mb-1">응원권</p>
-              <p className="text-white font-bold text-2xl">{user?.cheerTickets || 0}</p>
-            </div>
+          {/* 응원권은 PRODUCT_SPEC v2에서 폐지 — 받은응원만 표시 */}
+          <div className="grid grid-cols-1 gap-3">
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center">
               <p className="text-white/70 text-xs mb-1">받은응원</p>
               <p className="text-white font-bold text-2xl">{summary.receivedCheer}</p>
@@ -215,16 +212,6 @@ export const ProfilePage = () => {
             <FiChevronRight className="text-gray-400" />
           </button>
 
-          <button
-            onClick={() => navigate('/cheer/use-ticket')}
-            className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🎟</span>
-              <span className="font-medium text-gray-900">응원권 사용</span>
-            </div>
-            <FiChevronRight className="text-gray-400" />
-          </button>
         </div>
 
         <button

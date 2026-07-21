@@ -14,12 +14,18 @@ import { verificationRemedyRoutes } from './routes/verifications-remedy';
 import { verificationReadRoutes } from './routes/verifications-read';
 import { questRoutes } from './routes/quests';
 import { leaderRoutes } from './routes/leader';
+import { publicUserRoutes } from './routes/public-users';
+import { linkPreviewRoutes } from './routes/link-preview';
+import { interestRoutes } from './routes/interest';
+import { questProposalRoutes } from './routes/quest-proposals';
 
 const app = createApi({ service: 'challenge-api' });
 
-// 퍼블릭: 헬스체크 + 탐색/상세/통계
+// 퍼블릭: 헬스체크 + 탐색/상세/통계 + 사용자 공개 이력 + 링크 프리뷰
 app.get('/health', (c) => ok(c, { service: 'challenge-api', at: new Date().toISOString() }));
 app.route('/public/challenges', discoveryRoutes);
+app.route('/public/users', publicUserRoutes);
+app.route('/public/link-preview', linkPreviewRoutes);
 
 // 보호 영역: /c/*
 app.use('/c/*', requireAuth());
@@ -29,8 +35,10 @@ app.route('/c/verifications', verificationRoutes);
 app.route('/c/verifications', verificationRemedyRoutes);
 app.route('/c/verifications', verificationReadRoutes);
 
-// 챌린지 생성/수정/공개 + 참여 + 내 챌린지
+// 챌린지 생성/수정/공개 + 참여 + 내 챌린지 + 관심 토글 + 개인 퀘스트 제안
 app.route('/c/challenges', challengeRoutes);
+app.route('/c/challenges', interestRoutes);
+app.route('/c/challenges', questProposalRoutes);
 app.route('/c', myChallengeRoutes);
 app.route('/c', participationRoutes);
 

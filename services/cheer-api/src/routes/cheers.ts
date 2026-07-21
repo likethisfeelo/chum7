@@ -11,11 +11,13 @@ import { sendCheerSchema, THANK_MAX_CHEER_IDS, THANK_MAX_MESSAGE_LENGTH } from '
 import { buildCheerItems, computeCheerSchedule, randomAlias } from '../domain/cheer-create';
 import { isDaySuccess, selectCheerTargets } from '../domain/targets';
 import { computeCheerStats, toCheerView } from '../domain/cheer-views';
+import { onCheerCreated, onThankSent } from '../domain/stats-rules';
 import {
   batchGetCheers, listReceivedCheers, listSentPointers, markCheerRead,
   putCheerWithProjection, setThankMessage,
 } from '../repo/cheers';
 import { getChallengeMeta, getParticipation, listChallengeParticipations } from '../repo/challenges-readonly';
+import { applyStatsIncrements } from '../repo/stats';
 
 export const cheerRoutes = new Hono<AppEnv>();
 
@@ -144,6 +146,9 @@ cheerRoutes.post('/thank', async (c) => {
     return fail(c, 404, 'NO_VALID_CHEERS', '업데이트할 수 있는 응원이 없습니다');
   }
 
+  // 통계 증분: 조건부 갱신 성공 건수만 반영 (best-effort — 실패해도 응답 유지)
+  await applyStatsIncrements(onThankSent({ senderId: userId, updatedCount }), nowISO);
+
   return ok(c, { updatedCount }, '감사 메시지를 전달했어요!');
 });
 
@@ -206,6 +211,12 @@ cheerRoutes.post('/', async (c) => {
   });
 
   await putCheerWithProjection(meta, sentProjection);
+
+  // 통계 증분: 발신자 sentCount(+즉시 발송이면 수신자 receivedCount) — best-effort
+  await applyStatsIncrements(
+    onCheerCreated({ senderId: userId, receiverId: input.receiverId, isImmediate: schedule.isImmediate }),
+    nowIso,
+  );
 
   // 즉시 발송분은 레거시 SNS push 대신 이벤트 발행 (notification-worker가 소비)
   if (schedule.isImmediate) {

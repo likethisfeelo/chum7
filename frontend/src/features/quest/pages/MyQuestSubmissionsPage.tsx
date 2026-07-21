@@ -45,12 +45,12 @@ export const MyQuestSubmissionsPage = () => {
   const [includeHistory, setIncludeHistory] = useState(false);
   const [resubmitQuest, setResubmitQuest]   = useState<any | null>(null);
 
+  // 챌린지 스코프 없는 전체 제출 이력 조회는 신규 API에 없음 (challenge-api PORTING.md §C:
+  // GET /c/:challengeId/quests/my-submissions) — challengeId 없이 진입하면 안내 화면을 노출한다.
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['my-quest-submissions', includeHistory, questId, challengeId],
+    enabled: Boolean(challengeId),
     queryFn: async () => {
-      // NOT_PORTED: 챌린지 스코프 없는 전체 제출 이력 조회는 신규 API에 없음 (challenge-api PORTING.md §C:
-      // GET /c/:challengeId/quests/my-submissions) — challengeId 없이 진입하면 빈 목록으로 동작.
-      if (!challengeId) return { submissions: [] };
       const params = new URLSearchParams({ includeHistory: String(includeHistory) });
       if (questId) params.set('questId', questId);
       const res = await apiClient.get(`/c/${challengeId}/quests/my-submissions?${params}`);
@@ -59,6 +59,38 @@ export const MyQuestSubmissionsPage = () => {
   });
 
   const submissions: any[] = data?.submissions ?? [];
+
+  // 챌린지 컨텍스트 없는 진입 — 안내 화면
+  if (!challengeId) {
+    return (
+      <div className="min-h-screen">
+        <div className="sticky top-0 glass-header z-10">
+          <div className="px-4 py-4 flex items-center gap-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <FiArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl font-bold text-gray-900">내 퀘스트 제출 내역</h1>
+          </div>
+        </div>
+        <div className="p-4">
+          <EmptyState
+            icon="🧭"
+            title="챌린지에서 퀘스트 보드를 열어주세요"
+            description="제출 내역은 챌린지별로 확인할 수 있어요. 참여 중인 챌린지의 퀘스트 보드에서 열어주세요."
+          />
+          <button
+            onClick={() => navigate('/me')}
+            className="mt-4 w-full py-3 rounded-xl bg-primary-500 text-white text-sm font-semibold"
+          >
+            내 챌린지 보러가기 →
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">

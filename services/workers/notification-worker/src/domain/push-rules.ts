@@ -131,6 +131,10 @@ export interface PushPayload {
   body: string;
   category: string;
   deepLink: string;
+  /** 묶음 그룹 태그 (§4.10 집계) — 있으면 SW 가 category 대신 이 값으로 교체 */
+  tag?: string;
+  /** 묶음 갱신은 재알림 없이 조용히 교체 (renotify: false) */
+  renotify?: boolean;
 }
 
 export function buildPushPayload(input: {

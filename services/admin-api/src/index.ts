@@ -9,6 +9,7 @@ import { handle } from 'hono/aws-lambda';
 import { createApi, ok, requireAuth, requireGroup } from '@chum7/api-kit';
 import { challengeAdminRoutes } from './routes/challenges';
 import { questReviewRoutes } from './routes/quests';
+import { questProposalReviewRoutes } from './routes/quest-proposals';
 import { bannerRoutes } from './routes/banners';
 import { cheerOpsRoutes } from './routes/cheer-ops';
 import { userAdminRoutes } from './routes/users';
@@ -25,6 +26,7 @@ app.use('/adm/*', requireGroup('admins', 'operators', 'creators'));
 
 app.route('/adm/challenges', challengeAdminRoutes);
 app.route('/adm/quests', questReviewRoutes);
+app.route('/adm/quest-proposals', questProposalReviewRoutes);
 app.route('/adm/category-banners', bannerRoutes);
 app.route('/adm/cheer', cheerOpsRoutes);
 app.route('/adm/users', userAdminRoutes);

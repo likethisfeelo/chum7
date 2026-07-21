@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { challengeApi } from '../api/challengeApi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IoNotificationsOutline } from 'react-icons/io5';
 import { HiDotsVertical } from 'react-icons/hi';
@@ -361,7 +362,7 @@ export const ChallengesPage = () => {
   const [hoveredChallenge, setHoveredChallenge] = useState<Challenge | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Persist interest state in localStorage
+  // 관심 챌린지 — 서버 토글(challenge-api §7-c)이 원본, localStorage 는 목록 표시용 캐시
   const [interestedIds, setInterestedIds] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem('challenge-interests');
@@ -462,25 +463,39 @@ export const ChallengesPage = () => {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
   }, []);
 
-  const handleInterest = useCallback(async (challengeId: string) => {
-    const newSet = new Set(interestedIds);
-    const wasInterested = newSet.has(challengeId);
-
-    if (wasInterested) {
-      newSet.delete(challengeId);
-      toast('관심 챌린지에서 제거했어요.', { icon: '🔕' });
-    } else {
-      newSet.add(challengeId);
-      toast.success('관심 챌린지로 등록됐어요! 새 소식을 알려드릴게요 🔔');
-      // NOT_PORTED: POST /challenge-interest/:challengeId — 신규 백엔드에 대응 라우트 없음
-      // (PORTING.md 매핑표 미기재). 관심 챌린지는 로컬 저장으로만 동작.
-    }
-
-    setInterestedIds(newSet);
+  const persistInterestSet = (set: Set<string>) => {
+    setInterestedIds(set);
     try {
-      localStorage.setItem('challenge-interests', JSON.stringify([...newSet]));
+      localStorage.setItem('challenge-interests', JSON.stringify([...set]));
     } catch {
       // ignore
+    }
+  };
+
+  const handleInterest = useCallback(async (challengeId: string) => {
+    // 낙관적 토글 → 서버 응답(interested)으로 확정, 실패 시 롤백
+    const prevSet = new Set(interestedIds);
+    const optimisticSet = new Set(interestedIds);
+    const wasInterested = optimisticSet.has(challengeId);
+    if (wasInterested) optimisticSet.delete(challengeId);
+    else optimisticSet.add(challengeId);
+    persistInterestSet(optimisticSet);
+
+    try {
+      const { interested } = await challengeApi.toggleInterest(challengeId);
+      const confirmedSet = new Set(optimisticSet);
+      if (interested) confirmedSet.add(challengeId);
+      else confirmedSet.delete(challengeId);
+      persistInterestSet(confirmedSet);
+
+      if (interested) {
+        toast.success('관심 챌린지로 등록됐어요! 새 소식을 알려드릴게요 🔔');
+      } else {
+        toast('관심 챌린지에서 제거했어요.', { icon: '🔕' });
+      }
+    } catch {
+      persistInterestSet(prevSet);
+      toast.error('관심 등록에 실패했어요. 잠시 후 다시 시도해주세요.');
     }
   }, [interestedIds]);
 

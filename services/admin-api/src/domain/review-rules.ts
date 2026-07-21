@@ -36,6 +36,31 @@ export function reviewOutcome(action: ReviewAction): ReviewOutcome {
   };
 }
 
+// ── 개인 퀘스트 제안 심사 (레거시 admin/personal-quest/review — v1 단순화) ──
+
+export type ProposalDecision = 'approve' | 'reject';
+
+export interface ProposalReviewOutcome {
+  status: 'approved' | 'rejected';
+  message: string;
+}
+
+/** pending 상태만 심사 가능 (challenge-api domain/proposal-rules 와 동일 규칙) */
+export function canReviewProposal(status: unknown): boolean {
+  return status === 'pending';
+}
+
+/**
+ * 심사 결과 — v1 은 상태 갱신만 수행 (승인 시 퀘스트 아이템 자동 생성 없음:
+ * 참여자의 개인 퀘스트 반영은 프론트 안내로 충분 — PORTING.md).
+ */
+export function proposalReviewOutcome(decision: ProposalDecision): ProposalReviewOutcome {
+  if (decision === 'approve') {
+    return { status: 'approved', message: '개인 퀘스트 제안이 승인되었습니다' };
+  }
+  return { status: 'rejected', message: '개인 퀘스트 제안이 반려되었습니다. 사용자가 재제출할 수 있습니다.' };
+}
+
 /** 제출물 status 필터 매칭 — 'approved' 필터는 auto_approved 포함 (레거시 admin-list 승계) */
 export function matchesStatusFilter(itemStatus: unknown, filter: string): boolean {
   if (filter === 'all') return true;

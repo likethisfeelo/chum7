@@ -25,7 +25,6 @@ import { FeedPage } from '@/features/feed/pages/FeedPage';
 import { ProfilePage } from '@/features/profile/pages/ProfilePage';
 import { BadgeCollectionPage } from '@/features/profile/pages/BadgeCollectionPage';
 import { RemedyPage } from '@/features/verification/pages/RemedyPage';
-import { UseTicketPage } from '@/features/cheer/pages/UseTicketPage';
 import { QuestBoardPage } from '@/features/quest/pages/QuestBoardPage';
 import { MyQuestSubmissionsPage } from '@/features/quest/pages/MyQuestSubmissionsPage';
 import { PersonalFeedPage } from '@/features/personal-feed/pages/PersonalFeedPage';
@@ -240,15 +239,6 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/cheer/use-ticket"
-          element={
-            <ProtectedRoute>
-              <UseTicketPage />
-            </ProtectedRoute>
-          }
-        />
-
         {/* 퀘스트 보드 */}
         <Route
           path="/quests"

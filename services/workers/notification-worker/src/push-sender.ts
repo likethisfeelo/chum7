@@ -3,6 +3,7 @@ import { DeleteCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { docClient, tableName } from '@chum7/api-kit';
 import type { NotificationSettings, PushPayload } from './domain/push-rules';
+import type { RecentNotificationItem } from './domain/bundle-rules';
 
 /**
  * Web Push 실발송 (PRODUCT_SPEC §4.10).
@@ -97,6 +98,27 @@ export async function loadNotificationSettings(
     }),
   );
   return res.Item?.settings as NotificationSettings | undefined;
+}
+
+/**
+ * 최근 인앱 알림 조회 (묶음 발송·폭주 가드용 — §4.10 집계).
+ * sk 내림차순(최신순) 최대 15건 — 별도 GSI 없이 단일 Query.
+ * 방금 기록한 알림(excludeSk)은 제외하고, 미읽음·카테고리·윈도우 필터는 코드에서 수행한다.
+ */
+export async function loadRecentNotifications(
+  userId: string,
+  excludeSk: string,
+): Promise<RecentNotificationItem[]> {
+  const res = await docClient.send(
+    new QueryCommand({
+      TableName: tableName(TABLE),
+      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :sk)',
+      ExpressionAttributeValues: { ':pk': `USER#${userId}`, ':sk': 'NOTIF#' },
+      ScanIndexForward: false,
+      Limit: 15,
+    }),
+  );
+  return (res.Items ?? []).filter((item) => item.sk !== excludeSk) as RecentNotificationItem[];
 }
 
 async function deleteStaleSubscription(userId: string, sk: string): Promise<void> {

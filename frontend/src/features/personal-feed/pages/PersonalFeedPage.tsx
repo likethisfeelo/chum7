@@ -3,6 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
+import { apiClient } from '@/lib/api-client';
 import { Loading } from '@/shared/components/Loading';
 import {
   personalFeedApi,
@@ -223,6 +224,7 @@ function VerificationsTab({ userId }: { userId: string }) {
     isLoading,
   } = useInfiniteQuery({
     queryKey: ['personal-feed-verifications', userId],
+    enabled: Boolean(userId),
     queryFn: ({ pageParam }) =>
       personalFeedApi.getVerifications(userId, pageParam as string | undefined),
     initialPageParam: undefined as string | undefined,
@@ -373,6 +375,7 @@ function ChallengeHistoryCard({ item }: { item: ChallengeFeedItem }) {
 function ChallengesTab({ userId }: { userId: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ['personal-feed-challenges', userId],
+    enabled: Boolean(userId),
     queryFn: () => personalFeedApi.getChallengeHistory(userId),
   });
 
@@ -400,7 +403,20 @@ function ChallengesTab({ userId }: { userId: string }) {
 }
 
 // ─── Tab 03: 업적 ─────────────────────────────────────────────────────
-function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
+function AchievementsTab({ achievements, isOwn }: { achievements: FeedAchievements; isOwn: boolean }) {
+  // 응원 통계 — 퍼블릭 업적의 cheers는 0 고정(gamification-api PORTING.md §7)이라
+  // 본인 조회 시 GET /ch/stats/my 로 실측치를 덮어쓴다.
+  const { data: cheerStats } = useQuery({
+    queryKey: ['cheer-stats', 'my'],
+    enabled: isOwn,
+    queryFn: async () => {
+      const res = await apiClient.get('/ch/stats/my');
+      return res.data.data?.stats as { sentCount: number; receivedCount: number } | undefined;
+    },
+    staleTime: 60 * 1000,
+  });
+  const receivedCheerCount = cheerStats?.receivedCount ?? achievements.cheers.receivedCount;
+  const sentCheerCount = cheerStats?.sentCount ?? achievements.cheers.sentCount;
   return (
     <div className="space-y-4 pb-20">
       <div className="glass-card rounded-2xl p-5">
@@ -439,14 +455,14 @@ function AchievementsTab({ achievements }: { achievements: FeedAchievements }) {
           <div className="flex items-center gap-3 bg-pink-50 rounded-xl p-3">
             <span className="text-2xl">💌</span>
             <div>
-              <p className="text-lg font-bold text-pink-700">{achievements.cheers.receivedCount}</p>
+              <p className="text-lg font-bold text-pink-700">{receivedCheerCount}</p>
               <p className="text-xs text-pink-400">받은 응원</p>
             </div>
           </div>
           <div className="flex items-center gap-3 bg-purple-50 rounded-xl p-3">
             <span className="text-2xl">📣</span>
             <div>
-              <p className="text-lg font-bold text-purple-700">{achievements.cheers.sentCount}</p>
+              <p className="text-lg font-bold text-purple-700">{sentCheerCount}</p>
               <p className="text-xs text-purple-400">보낸 응원</p>
             </div>
           </div>
@@ -566,7 +582,7 @@ function PersonalPostEditor({ onCreated }: { onCreated: () => void }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { uploadUrl, key } = await personalFeedApi.getPostUploadUrl(file.type);
+      const { uploadUrl, key } = await personalFeedApi.getPostUploadUrl(file.type, file.name, file.size);
       await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
       setImageKeys((prev) => [...prev, key]);
     } catch {
@@ -939,6 +955,9 @@ export function PersonalFeedPage() {
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
 
   const resolvedUserId = userIdParam ?? 'me';
+  // 퍼블릭 표면(/public/users/...)은 'me' 별칭이 없어 실제 userId 로 호출해야 한다
+  // (gamification-api PORTING.md §7 · challenge-api PORTING.md §7-a/b).
+  const publicUserId = resolvedUserId !== 'me' ? resolvedUserId : (user?.userId ?? '');
   const fromInvite = (location.state as { fromInvite?: boolean } | null)?.fromInvite === true;
 
   const blockMutation = useMutation({
@@ -955,8 +974,9 @@ export function PersonalFeedPage() {
   });
 
   const { data: achievements, isLoading: achievementsLoading } = useQuery({
-    queryKey: ['personal-feed-achievements', resolvedUserId],
-    queryFn: () => personalFeedApi.getAchievements(resolvedUserId),
+    queryKey: ['personal-feed-achievements', publicUserId],
+    enabled: Boolean(publicUserId),
+    queryFn: () => personalFeedApi.getAchievements(publicUserId),
   });
 
   const topLeaderBadge = achievements?.leaderBadges?.[0];
@@ -1081,12 +1101,12 @@ export function PersonalFeedPage() {
       <div className="p-4">
         {activeTab === 'verifications' && (
           <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 3}>
-            <VerificationsTab userId={resolvedUserId} />
+            <VerificationsTab userId={publicUserId} />
           </LayerGate>
         )}
         {activeTab === 'challenges' && (
           <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 4}>
-            <ChallengesTab userId={resolvedUserId} />
+            <ChallengesTab userId={publicUserId} />
           </LayerGate>
         )}
         {activeTab === 'achievements' && (
@@ -1094,7 +1114,7 @@ export function PersonalFeedPage() {
             {achievementsLoading || !achievements ? (
               <Loading />
             ) : (
-              <AchievementsTab achievements={achievements} />
+              <AchievementsTab achievements={achievements} isOwn={isOwn} />
             )}
           </LayerGate>
         )}

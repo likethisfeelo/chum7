@@ -20,6 +20,8 @@ import {
   parseBackoffMinutes,
   planFailure,
 } from './domain/send-decision';
+import { onReceiverCompleted, onScheduledCheerSent } from './domain/stats-rules';
+import { applyStatsIncrements } from './repo/stats';
 
 const CHEER_TABLE = 'CHEER_TABLE';
 const CHALLENGES_TABLE = 'CHALLENGES_TABLE';
@@ -219,10 +221,14 @@ export const handler = async (event: EventBridgeEvent<string, unknown>) => {
 
       if (receiverDone) {
         await grantThankScoreToSender(cheer, processNow);
+        // 통계 증분: pending→receiver_completed 조건부 전이 성공 후에만 (실패 시 위에서 throw → race-skip)
+        await applyStatsIncrements(onReceiverCompleted(String(cheer.senderId ?? '')), processNow.toISOString());
         summary.senderScoreGranted += 1;
         console.log(JSON.stringify({ level: 'info', message: 'receiver already done, granted thank score to sender', cheerId: cheer.cheerId, senderId: cheer.senderId }));
       } else {
         await markSentAndPublish(cheer, processNow);
+        // 통계 증분: pending→sent 조건부 전이 성공 후에만 — 수신자 receivedCount
+        await applyStatsIncrements(onScheduledCheerSent(String(cheer.receiverId ?? '')), processNow.toISOString());
         summary.sent += 1;
       }
     } catch (error: any) {

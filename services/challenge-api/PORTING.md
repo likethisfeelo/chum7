@@ -34,7 +34,7 @@
 | verification/remedy | POST /verifications/remedy | **POST /c/verifications/remedy** | 정책(anytime/last_day/disabled)·`effectiveCurrentDay = max(stored, calendar)` 판정·`remedyScore`(×0.7, 최소 1)·progress `status:'success', remedied:true` 마킹 그대로. 스펙 20260321-remedy-policy: last_day = 마지막 날 전용, 대상 Day 1..durationDays-1 (7일 챌린지 기준 "Day 6에 Day 1–5 보완") |
 | verification/visibility | PATCH /verifications/{id}/visibility | **PATCH /c/verifications/:verificationId/visibility** | extra 전용 공개 전환. 전환 시 gsi2 `VFPUB#` 키 추가 기록(공개 피드 노출) |
 | verification/performed-at | PATCH /verifications/{id}/performed-at | **PATCH /c/verifications/:verificationId/performed-at** | 미래 금지 + 챌린지 기간 내 검사 동일 |
-| verification/link-preview | GET /verifications/link-preview | — | **미이식**: 외부 URL 프리뷰 프록시(도메인 데이터 무관). 필요 시 별도 유틸 Lambda/프론트 처리로 재설계 — v1 범위 밖 |
+| verification/link-preview | GET /verifications/link-preview | **GET /public/link-preview?url=** | **복원(§7-d)**: OG 파싱·SSRF 가드(https 전용·DNS 사설망 차단·`LINK_PREVIEW_ALLOWLIST`)·응답 `{title,description,image,siteName,url}`·에러코드 승계. 신규 정책: 타임아웃 4초→3초, 512KB 캡, text/html 만(비 HTML 은 nulls 성공 응답). 퍼블릭 전환(레거시는 JWT 필수 — 도메인 데이터 무관 프록시라 비로그인 허용) |
 | verification/media-validation | (S3 ObjectCreated 워커) | — | **미이식**: API가 아닌 S3 이벤트 워커 — 워커 단계(오케스트레이터 배선)에서 이식 |
 
 ### C. 퀘스트 (유저 사이드)
@@ -61,7 +61,7 @@
 | challenge/request-refund, review-refund, review-payout, finalize-payout | **commerce Phase 3가 대체** (보증금/정산/환불). 이식 금지 항목 |
 | challenge/lifecycle-manager (EventBridge 스케줄) | 워커(lifecycle-manager) 소관 — `@chum7/core` `resolveDueLifecycle` 사용 예정. API 이식 범위 밖 |
 | challenge/advance-lifecycle (수동 전환) | lifecycle-manager 워커·admin-api 표면과 함께 재설계 예정. 상태 전이 규칙은 `@chum7/core` `canTransition`으로 이미 고정 |
-| challenge/personal-quest (submit/my/revise) | 개인퀘스트 제안 플로우는 별도 티켓(PERSONAL_QUEST_PROPOSALS_TABLE 폐기, challenges 테이블 재설계 필요). v1 범위 밖 |
+| challenge/personal-quest (submit/my) | **복원(§7-e)** — v1 단순화 이식: POST /c/challenges/:challengeId/quest-proposals + GET .../quest-proposals/my (challenges 테이블 `QPROP#` 키 재설계). revise(revision_pending/expired 수정 횟수 상한 플로우)·자동 승인(personalQuestAutoApprove 시 QUESTS_TABLE 퀘스트 자동 생성)·allowedVerificationTypes 필드는 미이식 (아래 §7-e) |
 | notification/list, mark-read (challenge-stack에 배선돼 있었음) | user-api 도메인(인앱 알림 `USER#<id>`/`NOTIF#...`) 소관 |
 | category-banners/list (challenge-stack 배선) | content 테이블 — gamification-api가 이미 담당 (`BANNERACTIVE#` sparse GSI) |
 | plaza/* (verification-stack 배선) | social 도메인 소관 |
@@ -77,6 +77,8 @@
 | 퀘스트 | `CHAL#<id>` | `QUEST#<questId>` | — |
 | 퀘스트 제출(이력) | `CHAL#<id>` | `QSUB#<questId>#<userId>#<ts>` | gsi1: `QSUBUSER#<userId>` / `<createdAt>` |
 | 퀘스트 제출(ACTIVE 마커) | `CHAL#<id>` | `QSUB#<questId>#<userId>#ACTIVE` | — (조건부 put 유니크 보장, `recordType='active'`) |
+| 관심(interest) | `CHAL#<id>` | `INTEREST#<userId>` | — (조회는 자연 키 Get, 카운트는 META `stats.interestCount`) |
+| 개인 퀘스트 제안 | `CHAL#<id>` | `QPROP#<userId>#<proposalId>` | — (내 제안 = sk prefix Query, 어드민 목록 = `QPROP#` 파티션 Query) |
 
 - `userChallengeId`/`verificationId`는 속성으로 유지(응답 계약) — 신규 조회는 파티션 Query 경유.
 - `participantCount`: 탐색 인기 정렬(v1 인메모리)용 top-level 속성 — join/승인 시 `stats.totalParticipants`와 함께 증분.
@@ -106,6 +108,59 @@
 ## 5. 기타 결정 사항
 
 - KST 계산: 사용자 타임존 헤더 `x-user-timezone` 승계 (`safeTimezone`), 단 `VFPUB#` 파티션 날짜는 마당 변환 계약상 KST(Asia/Seoul) 고정.
-- env: `CHALLENGES_TABLE`(필수), `UPLOADS_BUCKET`(presign), `STAGE`(fileUrl 도메인). 타 도메인 테이블 접근 없음.
+- env: `CHALLENGES_TABLE`(필수), `UPLOADS_BUCKET`(presign), `STAGE`(fileUrl 도메인),
+  `LINK_PREVIEW_ALLOWLIST`(선택 — 링크 프리뷰 도메인 서픽스 allowlist, 미설정 시 전체 허용). 타 도메인 테이블 접근 없음.
 - 탐색 다중 파티션(라이프사이클×카테고리) Query 병합 v1: 파티션별 첫 페이지만 병합 — 레거시도 limit 슬라이스만 지원했으므로 계약 동일. 페이지네이션 고도화는 후속.
 - uuid 패키지 대신 `node:crypto` `randomUUID` 사용 (동일 UUIDv4).
+
+## 7. 복원분 (NOT_PORTED gap 해소 — 2026-07)
+
+프론트 NOT_PORTED 주석으로 남아 있던 미이식 기능의 challenge-api 측 복원. 모두 challenges 단일
+테이블만 접근 (크로스 도메인 예외 신규 없음).
+
+### a. GET /public/users/:userId/verifications (`routes/public-users.ts`)
+
+- 레거시 GET /personal-feed/{userId}/verifications (user-api PORTING.md 미이식 항목) 계약 승계:
+  `data.items[]` = `{ verificationId, challengeId, challengeTitle, challengeCategory, day, score,
+  verificationType, imageUrl(서명), todayNote, createdAt }`, `data.nextToken`(base64).
+- gsi1 `VFUSER#<userId>` Query 최신순. **퍼블릭 전환에 따라 isPublic(=`'true'`, isPersonalOnly 아님)
+  인증만 노출** — 레거시(JWT, 본인/타인 무관 전체 반환)와 다른 의도적 강화. `?limit=`(기본 20, 최대 50).
+- imageUrl 서명은 media-key + `UPLOADS_BUCKET` presigned GET (레거시 signMediaUrl 승계).
+
+### b. GET /public/users/:userId/challenge-history (`routes/public-users.ts`)
+
+- 레거시 GET /personal-feed/{userId}/challenges 계약 승계: `data.challenges[]` =
+  `{ userChallengeId, challengeId, title, category, badgeIcon, badgeName, durationDays, completedDays,
+  score, bucketState, startDate, challengeStartAt, actualStartAt }`, `data.total`.
+- gsi1 `UCUSER#<userId>` Query + META BatchGet. bucketState/completedDays 판정은
+  `domain/public-history.ts` (레거시 resolveBucketState/countCompletedDays 그대로 — 신규 UC 아이템은
+  bucketState 속성이 없어 status/phase 로 판정).
+- **퍼블릭 표면이라 완주(bucketState='completed')분만 노출** — 진행 중/포기 이력은 비공개 (의도적 강화).
+
+### c. 관심 챌린지 (`routes/interest.ts` — 레거시 핸들러 없음, 신규 최소 설계)
+
+- POST /c/challenges/:challengeId/interest — 토글. 응답 `data { interested, count }`.
+- GET /c/challenges/:challengeId/interest/status — `data { interested, count }`.
+- 아이템 `CHAL#<id>`/`INTEREST#<userId>` 조건부 put/delete (동시 토글 흡수), 카운트는 META
+  `stats.interestCount` 증감 (adjustChallengeStats 패턴 — 0 미만 방지 조건). 규칙은
+  `domain/interest-rules.ts` + 테스트.
+
+### d. 링크 프리뷰 (`routes/link-preview.ts` + `domain/link-preview.ts`)
+
+- §B 표 참고. OG 파싱·SSRF 가드는 순수 함수로 분리해 유닛 테스트 (`domain/link-preview.test.ts` —
+  샘플 HTML·엔티티 디코드·상대경로 이미지·사설 IP 차단·allowlist).
+- 인메모리 캐시(10분 TTL, 500건)는 레거시 승계 — Lambda 웜 컨테이너 한정.
+
+### e. 개인 퀘스트 제안 유저 사이드 (`routes/quest-proposals.ts`)
+
+- POST /c/challenges/:challengeId/quest-proposals — 바디 `{ title, description? }`. 가드: 챌린지 존재,
+  `personalQuestEnabled`, 참여자(UC 존재), lifecycle recruiting/preparing (레거시 승계). 아이템
+  `{ proposalId, challengeId, userId, title, description, status:'pending', leaderFeedback:null,
+  createdAt, updatedAt }` — 201. 기존 pending/rejected 제안이 있으면 **기존 아이템을 최신 내용 +
+  pending 으로 갱신**(레거시 upsert 의미) — 200. approved 존재 시 409 `ALREADY_APPROVED`.
+- GET /c/challenges/:challengeId/quest-proposals/my — `data { latestProposal, proposals }`
+  (updatedAt 최신순 — 레거시 my 계약).
+- 상태는 v1 3종(pending/approved/rejected)으로 단순화 — `domain/proposal-rules.ts` + 테스트.
+  **미이식**: revise(수정 횟수 상한 revision_pending/expired), personalQuestAutoApprove 자동 승인 +
+  퀘스트 아이템 자동 생성, allowedVerificationTypes 제안 필드, 리더 알림(sendNotification — contracts
+  이벤트 타입 부재, §3 gap 패턴과 동일). 심사는 admin-api /adm/quest-proposals (같은 `QPROP#` 키 공유).
