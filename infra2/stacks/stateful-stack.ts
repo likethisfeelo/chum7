@@ -106,7 +106,8 @@ export class StatefulStack extends cdk.Stack {
 
     // --- S3 (사용자 콘텐츠만 — 정적 사이트 버킷은 빌드 산출물이므로 EdgeStack 소유) ---
     this.uploadsBucket = new s3.Bucket(this, 'UploadsBucket', {
-      bucketName: `${config.prefix}-uploads`,
+      // 계정 ID 접미사 — S3 버킷명은 전역 유니크라 계정 바뀌어도 충돌 안 나게
+      bucketName: `${config.prefix}-uploads-${this.account}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
