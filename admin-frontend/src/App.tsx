@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminQuestSubmissionsPage } from '@/pages/AdminQuestSubmissionsPage';
 import { AdminChallengeCreatePage } from '@/pages/AdminChallengeCreatePage';
 import { AdminLoginPage } from '@/pages/AdminLoginPage';
+import { AdminForgotPasswordPage } from '@/pages/AdminForgotPasswordPage';
 import { AdminMyChallengesPage } from '@/pages/AdminMyChallengesPage';
 import { AdminAllChallengesPage } from '@/pages/AdminAllChallengesPage';
 import { AdminOpsDashboardPage } from '@/pages/AdminOpsDashboardPage';
@@ -208,6 +209,15 @@ export default function App() {
             element={
               <PublicOnlyRoute>
                 <AdminLoginPage />
+              </PublicOnlyRoute>
+            }
+          />
+
+          <Route
+            path="/forgot-password"
+            element={
+              <PublicOnlyRoute>
+                <AdminForgotPasswordPage />
               </PublicOnlyRoute>
             }
           />
