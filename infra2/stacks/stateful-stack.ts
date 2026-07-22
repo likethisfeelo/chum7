@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { StageConfig } from '../config/stages';
@@ -120,6 +121,21 @@ export class StatefulStack extends cdk.Stack {
         },
       ],
     });
+    // CloudFront OAC 읽기 허용 — uploads 버킷의 정책은 이 스택이 단독 소유한다.
+    // EdgeStack의 CloudFront 배포(계정 내)를 SourceArn 와일드카드로 허용해 배포 ID를
+    // 알 필요 없이 순환 참조를 피한다 (imported-bucket OAC 정책 충돌 방지).
+    this.uploadsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:GetObject'],
+        resources: [this.uploadsBucket.arnForObjects('*')],
+        principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+        conditions: {
+          StringLike: {
+            'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/*`,
+          },
+        },
+      }),
+    );
 
     // --- Secrets (셸만 생성 — 값은 `npm run ops:set-secrets`로 1회 주입, 코드에 없음) ---
     const secretDefaults = { removalPolicy };
