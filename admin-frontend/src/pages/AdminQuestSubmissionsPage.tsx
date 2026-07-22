@@ -116,7 +116,7 @@ export const AdminQuestSubmissionsPage = () => {
         // fallback below
       }
 
-      const res = await apiClient.get('/challenges?sortBy=latest&limit=200');
+      const res = await apiClient.get('/public/challenges?sortBy=latest&limit=200');
       return res.data?.data?.challenges ?? [];
     },
     retry: false,

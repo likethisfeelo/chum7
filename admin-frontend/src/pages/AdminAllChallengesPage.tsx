@@ -66,7 +66,7 @@ export const AdminAllChallengesPage = () => {
     queryKey: ['admin-all-challenge-quests', selectedChallengeId],
     enabled: Boolean(selectedChallengeId),
     queryFn: async () => {
-      const res = await apiClient.get(`/quests?challengeId=${selectedChallengeId}&status=active`);
+      const res = await apiClient.get(`/c/${selectedChallengeId}/quests?status=active`);
       return res.data?.data?.quests ?? [];
     },
   });

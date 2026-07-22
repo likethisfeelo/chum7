@@ -16,6 +16,31 @@ type Quest = {
   endAt?: string | null;
 };
 
+type VerificationType = 'image' | 'video' | 'link' | 'text';
+type QuestLayer = 'A' | 'B' | 'D';
+type QuestScope = 'leader' | 'personal' | 'mixed';
+type QuestFormState = {
+  title: string;
+  description: string;
+  allowedVerificationTypes: VerificationType[];
+  verificationGuide: string;
+  rewardPoints: number;
+  displayOrder: number;
+  questLayer: QuestLayer;
+  questScope: QuestScope;
+};
+const EMPTY_QUEST_FORM: QuestFormState = {
+  title: '',
+  description: '',
+  allowedVerificationTypes: ['image'],
+  verificationGuide: '',
+  rewardPoints: 1,
+  displayOrder: 0,
+  questLayer: 'A',
+  questScope: 'leader',
+};
+const VERIFICATION_TYPES: VerificationType[] = ['image', 'video', 'link', 'text'];
+
 const ALLOWED_TRANSITIONS: Record<Lifecycle, Lifecycle[]> = {
   draft: ['recruiting', 'archived'],
   recruiting: ['preparing', 'archived'],
@@ -37,6 +62,12 @@ export const AdminMyChallengesPage = () => {
   const [previewHasNonText, setPreviewHasNonText] = useState(false);
   const [boardHasNonText, setBoardHasNonText] = useState(false);
 
+  // 퀘스트 생성/수정 폼 상태
+  const [questFormOpen, setQuestFormOpen] = useState(false);
+  const [editingQuestId, setEditingQuestId] = useState<string | null>(null);
+  const [questForm, setQuestForm] = useState<QuestFormState>(EMPTY_QUEST_FORM);
+  const [questSaving, setQuestSaving] = useState(false);
+
   const { data: challengesData, isLoading, error, refetch: refetchChallenges } = useQuery({
     queryKey: ['admin-my-challenges'],
     queryFn: async () => {
@@ -50,11 +81,11 @@ export const AdminMyChallengesPage = () => {
   const currentLifecycle = (selectedChallenge?.lifecycle ?? null) as Lifecycle | null;
   const isBoardEditingLocked = currentLifecycle === 'active' || currentLifecycle === 'completed' || currentLifecycle === 'archived';
 
-  const { data: questsData, isLoading: questsLoading } = useQuery({
+  const { data: questsData, isLoading: questsLoading, refetch: refetchQuests } = useQuery({
     queryKey: ['admin-challenge-quests', selectedChallengeId],
     enabled: Boolean(selectedChallengeId),
     queryFn: async () => {
-      const res = await apiClient.get(`/quests?challengeId=${selectedChallengeId}&status=active`);
+      const res = await apiClient.get(`/c/${selectedChallengeId}/quests?status=active`);
       return res.data?.data?.quests ?? [];
     },
   });
@@ -64,7 +95,7 @@ export const AdminMyChallengesPage = () => {
     queryKey: ['admin-preview-board', selectedChallengeId],
     enabled: Boolean(selectedChallengeId),
     queryFn: async () => {
-      const res = await apiClient.get(`/preview-board/${selectedChallengeId}`);
+      const res = await apiClient.get(`/public/board/${selectedChallengeId}/preview`);
       return res.data;
     },
   });
@@ -73,7 +104,7 @@ export const AdminMyChallengesPage = () => {
     queryKey: ['admin-challenge-board', selectedChallengeId],
     enabled: Boolean(selectedChallengeId),
     queryFn: async () => {
-      const res = await apiClient.get(`/challenge-board/${selectedChallengeId}`);
+      const res = await apiClient.get(`/s/board/${selectedChallengeId}`);
       return res.data;
     },
   });
@@ -119,7 +150,7 @@ export const AdminMyChallengesPage = () => {
 
     setPreviewSaving(true);
     try {
-      await apiClient.post(`/preview-board/${selectedChallengeId}`, { blocks: toTextBlocks(previewDraft) });
+      await apiClient.post(`/s/board/${selectedChallengeId}/preview`, { blocks: toTextBlocks(previewDraft) });
       await refetchPreview();
       alert('프리뷰 보드를 저장했습니다.');
     } catch (e: any) {
@@ -138,7 +169,7 @@ export const AdminMyChallengesPage = () => {
 
     setBoardSaving(true);
     try {
-      await apiClient.post(`/challenge-board/${selectedChallengeId}`, { blocks: toTextBlocks(boardDraft) });
+      await apiClient.post(`/s/board/${selectedChallengeId}`, { blocks: toTextBlocks(boardDraft) });
       await refetchChallengeBoard();
       alert('챌린지 보드를 저장했습니다.');
     } catch (e: any) {
@@ -148,6 +179,78 @@ export const AdminMyChallengesPage = () => {
     }
   };
 
+
+  const openQuestCreate = () => {
+    setEditingQuestId(null);
+    setQuestForm(EMPTY_QUEST_FORM);
+    setQuestFormOpen(true);
+  };
+
+  const openQuestEdit = (q: any) => {
+    setEditingQuestId(q.questId);
+    setQuestForm({
+      title: q.title ?? '',
+      description: q.description ?? '',
+      allowedVerificationTypes:
+        (q.allowedVerificationTypes as VerificationType[] | undefined) ??
+        (q.verificationType ? [q.verificationType as VerificationType] : ['image']),
+      verificationGuide: q.verificationGuide ?? '',
+      rewardPoints: typeof q.rewardPoints === 'number' ? q.rewardPoints : 1,
+      displayOrder: typeof q.displayOrder === 'number' ? q.displayOrder : 0,
+      questLayer: (q.questLayer as QuestLayer) ?? 'A',
+      questScope: (q.questScope as QuestScope) ?? 'leader',
+    });
+    setQuestFormOpen(true);
+  };
+
+  const toggleVerificationType = (t: VerificationType) => {
+    setQuestForm((prev) => {
+      const has = prev.allowedVerificationTypes.includes(t);
+      const next = has
+        ? prev.allowedVerificationTypes.filter((x) => x !== t)
+        : [...prev.allowedVerificationTypes, t];
+      return { ...prev, allowedVerificationTypes: next.length ? next : prev.allowedVerificationTypes };
+    });
+  };
+
+  const submitQuest = async () => {
+    if (!selectedChallengeId) return;
+    if (!questForm.title.trim() || !questForm.description.trim()) {
+      alert('제목과 설명을 입력하세요.');
+      return;
+    }
+    if (questForm.allowedVerificationTypes.length === 0) {
+      alert('인증 유형을 하나 이상 선택하세요.');
+      return;
+    }
+    setQuestSaving(true);
+    try {
+      const payload = {
+        title: questForm.title.trim(),
+        description: questForm.description.trim(),
+        allowedVerificationTypes: questForm.allowedVerificationTypes,
+        verificationGuide: questForm.verificationGuide.trim() || undefined,
+        rewardPoints: questForm.rewardPoints,
+        displayOrder: questForm.displayOrder,
+        questLayer: questForm.questLayer,
+        questScope: questForm.questScope,
+      };
+      if (editingQuestId) {
+        await apiClient.put(`/adm/quests/${editingQuestId}`, payload);
+        alert('퀘스트를 수정했습니다.');
+      } else {
+        await apiClient.post('/adm/quests', { ...payload, challengeId: selectedChallengeId });
+        alert('퀘스트를 생성했습니다.');
+      }
+      setQuestFormOpen(false);
+      setEditingQuestId(null);
+      await refetchQuests();
+    } catch (e: any) {
+      alert(e?.response?.data?.message || '퀘스트 저장에 실패했습니다.');
+    } finally {
+      setQuestSaving(false);
+    }
+  };
 
   const handleLifecycleTransition = async (target: Lifecycle) => {
     if (!selectedChallengeId || !transitionReason.trim()) return;
@@ -293,13 +396,117 @@ export const AdminMyChallengesPage = () => {
             <h3 className="text-lg font-bold text-gray-900">챌린지별 퀘스트</h3>
             <button
               type="button"
-              disabled
-              title="퀘스트 생성/수정 API는 백엔드 재구축 후 지원 예정입니다"
-              className="px-3 py-1.5 rounded-lg bg-gray-300 text-gray-500 text-sm font-semibold cursor-not-allowed"
+              onClick={openQuestCreate}
+              className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700"
             >
-              + 퀘스트 추가 (재구축 후 지원 예정)
+              + 퀘스트 추가
             </button>
           </div>
+
+          {questFormOpen && (
+            <div className="mb-4 border border-primary-200 bg-primary-50/40 rounded-xl p-4 space-y-3">
+              <p className="font-semibold text-gray-900">{editingQuestId ? '퀘스트 수정' : '퀘스트 생성'}</p>
+              <input
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                placeholder="퀘스트 제목"
+                value={questForm.title}
+                onChange={(e) => setQuestForm((p) => ({ ...p, title: e.target.value }))}
+              />
+              <textarea
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                placeholder="퀘스트 설명"
+                rows={3}
+                value={questForm.description}
+                onChange={(e) => setQuestForm((p) => ({ ...p, description: e.target.value }))}
+              />
+              <div className="flex flex-wrap gap-2">
+                {VERIFICATION_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => toggleVerificationType(t)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
+                      questForm.allowedVerificationTypes.includes(t)
+                        ? 'bg-primary-600 text-white border-primary-600'
+                        : 'bg-white text-gray-600 border-gray-300'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <input
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                placeholder="인증 가이드(선택)"
+                value={questForm.verificationGuide}
+                onChange={(e) => setQuestForm((p) => ({ ...p, verificationGuide: e.target.value }))}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs text-gray-600">
+                  보상 포인트
+                  <input
+                    type="number"
+                    min={0}
+                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={questForm.rewardPoints}
+                    onChange={(e) => setQuestForm((p) => ({ ...p, rewardPoints: Number(e.target.value) || 0 }))}
+                  />
+                </label>
+                <label className="text-xs text-gray-600">
+                  표시 순서
+                  <input
+                    type="number"
+                    min={0}
+                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={questForm.displayOrder}
+                    onChange={(e) => setQuestForm((p) => ({ ...p, displayOrder: Number(e.target.value) || 0 }))}
+                  />
+                </label>
+                <label className="text-xs text-gray-600">
+                  레이어
+                  <select
+                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={questForm.questLayer}
+                    onChange={(e) => setQuestForm((p) => ({ ...p, questLayer: e.target.value as QuestLayer }))}
+                  >
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="D">D</option>
+                  </select>
+                </label>
+                <label className="text-xs text-gray-600">
+                  스코프
+                  <select
+                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={questForm.questScope}
+                    onChange={(e) => setQuestForm((p) => ({ ...p, questScope: e.target.value as QuestScope }))}
+                  >
+                    <option value="leader">leader</option>
+                    <option value="personal">personal</option>
+                    <option value="mixed">mixed</option>
+                  </select>
+                </label>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setQuestFormOpen(false); setEditingQuestId(null); }}
+                  className="px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 text-sm font-semibold"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={submitQuest}
+                  disabled={questSaving}
+                  className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm font-semibold disabled:opacity-50"
+                >
+                  {questSaving ? '저장 중...' : editingQuestId ? '수정 저장' : '생성'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {questsLoading ? (
             <p className="text-sm text-gray-500">퀘스트 목록을 불러오는 중...</p>
           ) : (questsData?.length ?? 0) === 0 ? (
@@ -310,9 +517,18 @@ export const AdminMyChallengesPage = () => {
                 <div key={q.questId} className="border border-gray-200 rounded-xl p-3 space-y-2">
                   <div className="flex items-start justify-between">
                     <p className="font-semibold text-gray-900">{q.title}</p>
-                    {q.status && q.status !== 'active' && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{q.status}</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {q.status && q.status !== 'active' && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{q.status}</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => openQuestEdit(q)}
+                        className="text-xs px-2 py-0.5 rounded-full border border-primary-300 text-primary-700 hover:bg-primary-50"
+                      >
+                        수정
+                      </button>
+                    </div>
                   </div>
                   <p className="text-sm text-gray-600">{q.description}</p>
                   <p className="text-xs text-gray-500">
@@ -321,8 +537,6 @@ export const AdminMyChallengesPage = () => {
                     {(q as any).questScope ? ` · 스코프: ${(q as any).questScope}` : ''}
                     {(q as any).startDay || (q as any).endDay ? ` · Day ${(q as any).startDay ?? '?'}~${(q as any).endDay ?? '?'}` : ''}
                   </p>
-
-                  <p className="text-xs text-gray-400">퀘스트 수정은 재구축 후 지원 예정입니다.</p>
                 </div>
               ))}
             </div>

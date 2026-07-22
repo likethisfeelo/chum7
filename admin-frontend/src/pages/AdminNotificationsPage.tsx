@@ -16,8 +16,8 @@ export const AdminNotificationsPage = () => {
   const { data, refetch } = useQuery({
     queryKey: ['admin-notifications'],
     queryFn: async () => {
-      const res = await apiClient.get('/users/me/notifications');
-      return res.data.data || [];
+      const res = await apiClient.get('/u/notifications');
+      return res.data?.data?.notifications ?? [];
     },
     refetchInterval: 30000,
   });
@@ -27,7 +27,7 @@ export const AdminNotificationsPage = () => {
 
   const readMutation = useMutation({
     mutationFn: async (notificationId: string) => {
-      await apiClient.patch(`/users/me/notifications/${notificationId}/read`);
+      await apiClient.post('/u/notifications/read', { notificationId });
     },
     onSuccess: () => refetch(),
   });
