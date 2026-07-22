@@ -57,11 +57,12 @@ describe('infra2 stacks', () => {
   });
 
   it('ApiStack — /u 프록시는 JWT authorizer, /auth·/health는 퍼블릭', () => {
+    // 메서드별로 라우트가 하나씩 생성된다(OPTIONS 제외 — 프리플라이트는 API GW가 처리)
     dev.api.hasResourceProperties('AWS::ApiGatewayV2::Route', {
-      RouteKey: 'ANY /u/{proxy+}',
+      RouteKey: 'POST /u/{proxy+}',
       AuthorizationType: 'JWT',
     });
-    for (const routeKey of ['ANY /auth/{proxy+}', 'GET /health']) {
+    for (const routeKey of ['POST /auth/{proxy+}', 'GET /health']) {
       const routes = dev.api.findResources('AWS::ApiGatewayV2::Route', {
         Properties: { RouteKey: routeKey },
       });
@@ -70,6 +71,14 @@ describe('infra2 stacks', () => {
       expect(route.Properties.AuthorizationType ?? 'NONE').toBe('NONE');
       expect(route.Properties.AuthorizerId).toBeUndefined();
     }
+  });
+
+  it('ApiStack — OPTIONS 라우트는 없다(프리플라이트는 API Gateway CORS가 자동 응답)', () => {
+    const routes = dev.api.findResources('AWS::ApiGatewayV2::Route');
+    const optionsRoutes = Object.values(routes).filter((r) =>
+      String(r.Properties.RouteKey).startsWith('OPTIONS '),
+    );
+    expect(optionsRoutes).toHaveLength(0);
   });
 
   it('ApiStack — user-api에 도메인 테이블 env 주입', () => {

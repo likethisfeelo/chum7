@@ -17,6 +17,16 @@ export interface ApiStackProps extends cdk.StackProps {
   eventBus: events.EventBus;
 }
 
+/** 프록시 라우트에 등록할 메서드 — OPTIONS 제외(프리플라이트는 API Gateway가 자동 처리) */
+const PROXY_METHODS = [
+  apigwv2.HttpMethod.GET,
+  apigwv2.HttpMethod.POST,
+  apigwv2.HttpMethod.PUT,
+  apigwv2.HttpMethod.PATCH,
+  apigwv2.HttpMethod.DELETE,
+  apigwv2.HttpMethod.HEAD,
+];
+
 interface DomainApiSpec {
   /** services/<name>/src/index.ts */
   name: string;
@@ -255,16 +265,19 @@ export class ApiStack extends cdk.Stack {
     this.functions.push(fn);
 
     const integration = new HttpLambdaIntegration(`${pascal(spec.name)}Integration`, fn);
+    // ANY는 OPTIONS까지 포함해 프리플라이트를 Lambda로 넘겨버린다(→ Hono 404 → CORS 실패).
+    // OPTIONS를 제외한 실제 메서드만 등록하면, OPTIONS 라우트가 없어 API Gateway가
+    // corsPreflight 설정으로 프리플라이트를 자동 응답한다(204 + CORS 헤더).
     this.httpApi.addRoutes({
       path: `${spec.protectedPrefix}/{proxy+}`,
-      methods: [apigwv2.HttpMethod.ANY],
+      methods: PROXY_METHODS,
       integration,
       authorizer: this.authorizer,
     });
     for (const publicPrefix of spec.publicPrefixes ?? []) {
       this.httpApi.addRoutes({
         path: `${publicPrefix}/{proxy+}`,
-        methods: [apigwv2.HttpMethod.ANY],
+        methods: PROXY_METHODS,
         integration,
       });
     }
