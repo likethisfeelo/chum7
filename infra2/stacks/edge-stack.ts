@@ -17,6 +17,8 @@ export interface EdgeStackProps extends cdk.StackProps {
   stateful: StatefulStack;
   /** config.domain 설정 시 CertStack에서 전달 */
   certificate?: acm.ICertificate;
+  /** apex(chum7.com)→www 리다이렉트용 인증서 (config.domain 설정 시) */
+  apexCertificate?: acm.ICertificate;
 }
 
 /**
@@ -37,7 +39,7 @@ export class EdgeStack extends cdk.Stack {
 
   constructor(scope: Construct, id: string, props: EdgeStackProps) {
     super(scope, id, props);
-    const { config, stateful, certificate } = props;
+    const { config, stateful, certificate, apexCertificate } = props;
     const domain = config.domain;
 
     const siteBucketDefaults: s3.BucketProps = {
@@ -115,6 +117,55 @@ export class EdgeStack extends cdk.Stack {
         target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(this.adminDistribution)),
         deleteExisting: true,
       });
+
+      // --- apex(chum7.com) → www 리다이렉트 ---
+      // 맨 도메인으로 접속해도 https://www... 로 301. 전용 배포 + CloudFront Function.
+      // origin은 함수가 viewer-request에서 301을 반환해 실제로 도달하지 않으므로 아무거나(staticOrigin) 재사용.
+      if (apexCertificate) {
+        const redirectFn = new cloudfront.Function(this, 'ApexRedirectFn', {
+          comment: `${config.prefix} apex→www 301`,
+          code: cloudfront.FunctionCode.fromInline(
+            `function handler(event) {\n` +
+              `  var req = event.request;\n` +
+              `  var qs = '';\n` +
+              `  var first = true;\n` +
+              `  for (var k in req.querystring) {\n` +
+              `    qs += (first ? '?' : '&') + k + '=' + req.querystring[k].value;\n` +
+              `    first = false;\n` +
+              `  }\n` +
+              `  return {\n` +
+              `    statusCode: 301,\n` +
+              `    statusDescription: 'Moved Permanently',\n` +
+              `    headers: { location: { value: 'https://${domain.app}' + req.uri + qs } }\n` +
+              `  };\n` +
+              `}`,
+          ),
+        });
+        const apexRedirect = new cloudfront.Distribution(this, 'ApexRedirectDistribution', {
+          comment: `${config.prefix}-apex-redirect`,
+          defaultBehavior: {
+            ...behaviorDefaults,
+            origin: staticOrigin,
+            functionAssociations: [
+              { function: redirectFn, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST },
+            ],
+          },
+          domainNames: [domain.zoneName],
+          certificate: apexCertificate,
+        });
+        new route53.ARecord(this, 'ApexAlias', {
+          zone,
+          recordName: domain.zoneName,
+          target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(apexRedirect)),
+          deleteExisting: true,
+        });
+        new route53.AaaaRecord(this, 'ApexAliasAAAA', {
+          zone,
+          recordName: domain.zoneName,
+          target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(apexRedirect)),
+          deleteExisting: true,
+        });
+      }
     }
 
     // 프론트 산출물 배포 — dist가 없으면 스킵 (deploy.mjs가 빌드 순서를 보장한다)
