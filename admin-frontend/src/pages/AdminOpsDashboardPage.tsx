@@ -16,8 +16,8 @@ export const AdminOpsDashboardPage = () => {
   const { data: notifications } = useQuery({
     queryKey: ['admin-notification-unread-count'],
     queryFn: async () => {
-      const res = await apiClient.get('/users/me/notifications');
-      return res.data.data || [];
+      const res = await apiClient.get('/u/notifications');
+      return res.data?.data?.notifications ?? [];
     },
     refetchInterval: 30000,
   });

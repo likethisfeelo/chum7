@@ -25,7 +25,12 @@ export const MANAGED_LIFECYCLES = ['draft', 'recruiting', 'preparing', 'active']
 
 /** 스케줄 필드 별칭 해석 — 레거시 데이터의 recruitStartAt/recruitingEndAt 승계 */
 export function resolveRecruitOpenAt(ch: ChallengeLike): string | null {
-  return (ch.recruitOpenAt as string) || (ch.recruitStartAt as string) || null;
+  return (
+    (ch.recruitOpenAt as string) ||
+    (ch.recruitStartAt as string) ||
+    (ch.recruitingStartAt as string) ||
+    null
+  );
 }
 export function resolveRecruitCloseAt(ch: ChallengeLike): string | null {
   return (

@@ -55,7 +55,12 @@ import { certDateFromIso, DEFAULT_TIMEZONE, resolveDurationDays } from './day-sy
 
 /** 스케줄 필드 별칭 해석 (레거시 recruitStartAt/recruitingEndAt 승계) */
 export function recruitOpenAtOf(ch: Record<string, unknown>): string | null {
-  return (ch.recruitOpenAt as string) || (ch.recruitStartAt as string) || null;
+  return (
+    (ch.recruitOpenAt as string) ||
+    (ch.recruitStartAt as string) ||
+    (ch.recruitingStartAt as string) ||
+    null
+  );
 }
 export function recruitCloseAtOf(ch: Record<string, unknown>): string | null {
   return (

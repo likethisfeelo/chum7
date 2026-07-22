@@ -33,6 +33,32 @@ describe('decideTransition (resolveDueLifecycle + canTransition)', () => {
     expect(d).toEqual({ action: 'transition', steps: ['active'] });
   });
 
+  // 회귀: 생성 라우트는 모집 시작 시각을 recruitingStartAt로 저장한다.
+  // 이 별칭을 리졸버가 못 읽으면 예약 모집 오픈이 안 돼 draft에 갇히고 탐색에 안 뜬다.
+  test('draft with elapsed recruitingStartAt auto-opens to recruiting (별칭 승계)', () => {
+    const d = decideTransition(
+      challenge({
+        lifecycle: 'draft',
+        recruitingStartAt: '2026-07-20T00:00:00.000Z', // NOW(03:00Z 21일) 이전
+        challengeStartAt: '2026-07-25T00:00:00.000Z',
+      }),
+      NOW,
+    );
+    expect(d).toEqual({ action: 'transition', steps: ['recruiting'] });
+  });
+
+  test('draft with future recruitingStartAt stays draft', () => {
+    const d = decideTransition(
+      challenge({
+        lifecycle: 'draft',
+        recruitingStartAt: '2026-07-23T00:00:00.000Z', // 아직 미래
+        challengeStartAt: '2026-07-25T00:00:00.000Z',
+      }),
+      NOW,
+    );
+    expect(d).toEqual({ action: 'none' });
+  });
+
   test('preparing at start date transitions to active', () => {
     const d = decideTransition(
       challenge({ lifecycle: 'preparing', challengeStartAt: '2026-07-20T23:00:00.000Z' }),
