@@ -54,26 +54,24 @@ if (!flag('skip-tests')) {
   console.log('⚠ --skip-tests: 검증 생략');
 }
 
-// 2) 프론트 빌드 (frontend 대상일 때)
-if (only === 'all' || only === 'frontend') {
-  const mode = stage === 'prod' ? 'production' : 'development';
-  for (const dir of ['frontend', 'admin-frontend']) {
-    const path = join(root, dir);
-    if (existsSync(join(path, 'package.json'))) {
-      run(`npm run build -- --mode ${mode}`, path);
-    }
-  }
-}
+// --- 스택 목록 (cdk가 실제 합성하는 이름 — cert 스택 존재 여부까지 자동 반영) ---
+const infra2Dir = join(root, 'infra2');
+const edgeStack = `chme2-${stage}-edge`;
+const allStacks = capture(`npx cdk list --context stage=${stage}`, infra2Dir)
+  .stdout.trim()
+  .split('\n')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const backendStacks = allStacks.filter((s) => s !== edgeStack);
 
-// 3) diff — prod는 Stateful 삭제/치환 감지 시 강제 중단
-const stackSelector =
+// 2) diff — prod는 Stateful 삭제/치환 감지 시 강제 중단
+const diffSelector =
   only === 'api'
     ? `chme2-${stage}-workers chme2-${stage}-api chme2-${stage}-observability`
     : only === 'frontend'
-      ? `chme2-${stage}-edge`
+      ? edgeStack
       : '--all';
-const diffCmd = `npx cdk diff ${stackSelector} --context stage=${stage}`;
-const diff = capture(diffCmd, join(root, 'infra2'));
+const diff = capture(`npx cdk diff ${diffSelector} --context stage=${stage}`, infra2Dir);
 console.log(diff.stdout || '');
 if (diff.stderr) console.error(diff.stderr);
 
@@ -92,7 +90,7 @@ if (flag('diff')) {
   process.exit(0);
 }
 
-// 4) prod 확인 입력
+// 3) prod 확인 입력
 if (stage === 'prod') {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = await rl.question("\nPROD 배포를 진행하려면 'DEPLOY'를 입력하세요: ");
@@ -103,17 +101,47 @@ if (stage === 'prod') {
   }
 }
 
-// 5) 배포 (+ Outputs 파일)
-mkdirSync(join(root, 'infra2', 'cdk.out'), { recursive: true });
-const outputsFile = join(root, 'infra2', 'cdk.out', `outputs-${stage}.json`);
-run(
-  `npx cdk deploy ${stackSelector} --context stage=${stage} --require-approval never --outputs-file "${outputsFile}"`,
-  join(root, 'infra2'),
-);
+mkdirSync(join(infra2Dir, 'cdk.out'), { recursive: true });
+const outputsFile = join(infra2Dir, 'cdk.out', `outputs-${stage}.json`);
 
-// 6) CfnOutputs → 프론트 .env 자동 생성
+function deployStacks(list) {
+  if (!list.length) return;
+  run(
+    `npx cdk deploy ${list.join(' ')} --context stage=${stage} --require-approval never --outputs-file "${outputsFile}"`,
+    infra2Dir,
+  );
+}
+function genEnv() {
+  if (existsSync(outputsFile)) run(`node scripts/gen-env.mjs --stage ${stage} --outputs "${outputsFile}"`);
+}
+function buildFrontend() {
+  const mode = stage === 'prod' ? 'production' : 'development';
+  for (const dir of ['frontend', 'admin-frontend']) {
+    const path = join(root, dir);
+    if (existsSync(join(path, 'package.json'))) run(`npm run build -- --mode ${mode}`, path);
+  }
+}
+
+// 4) 순서가 핵심: 백엔드 배포 → env 생성 → 프론트 빌드 → edge 배포.
+//    (구버전은 빈 .env로 프론트를 먼저 빌드해 API/Cognito 값이 누락됐음 — CORS·로그인 실패 원인)
+if (only === 'api') {
+  deployStacks([`chme2-${stage}-workers`, `chme2-${stage}-api`, `chme2-${stage}-observability`]);
+  genEnv();
+} else if (only === 'frontend') {
+  if (!existsSync(outputsFile)) deployStacks(backendStacks); // env 소스가 없으면 백엔드부터
+  genEnv();
+  buildFrontend();
+  deployStacks([edgeStack]);
+} else {
+  deployStacks(backendStacks); // API·Cognito·업로드 버킷 Outputs 확보
+  genEnv(); // 확정된 값으로 .env 생성 (빌드 전!)
+  buildFrontend(); // 이제 올바른 API/Cognito가 번들에 박힌다
+  deployStacks(allStacks); // edge가 방금 빌드를 업로드 (백엔드는 no-op)
+  genEnv(); // 최종 Outputs(AppUrl 등)로 .env 갱신 — 다음 빌드 대비
+}
+
+// 5) 주요 Outputs 출력
 if (existsSync(outputsFile)) {
-  run(`node scripts/gen-env.mjs --stage ${stage} --outputs "${outputsFile}"`);
   const outputs = JSON.parse(readFileSync(outputsFile, 'utf8'));
   console.log('\n=== 주요 Outputs ===');
   for (const [stack, values] of Object.entries(outputs)) {
