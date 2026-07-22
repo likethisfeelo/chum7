@@ -3,7 +3,6 @@ import { Construct } from 'constructs';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -27,7 +26,8 @@ export interface EdgeStackProps extends cdk.StackProps {
  *
  * 정적 사이트 버킷 2개는 빌드 산출물 저장소이므로 이 스택이 소유한다 (Stateful 아님).
  * uploads 버킷(사용자 콘텐츠)은 StatefulStack 소유 — 순환 참조를 피하기 위해 이름으로
- * 참조하고 CloudFront 접근 정책(BucketPolicy)을 이 스택에서 부여한다.
+ * 참조만 하고, CloudFront OAC 읽기 정책은 StatefulStack이 단독 소유한다
+ * (버킷 정책은 하나뿐이라 두 스택에서 만들면 서로 덮어쓰는 문제 방지).
  */
 export class EdgeStack extends cdk.Stack {
   readonly appDistribution: cloudfront.Distribution;
@@ -94,22 +94,9 @@ export class EdgeStack extends cdk.Stack {
       ...(domain && certificate ? { domainNames: [domain.admin], certificate } : {}),
     });
 
-    // 이름 참조 버킷에는 OAC 정책이 자동 부여되지 않으므로 여기서 명시 부여
-    new s3.BucketPolicy(this, 'UploadsReadPolicy', { bucket: uploadsBucket }).document.addStatements(
-      new iam.PolicyStatement({
-        actions: ['s3:GetObject'],
-        resources: [`${uploadsBucket.bucketArn}/*`],
-        principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
-        conditions: {
-          StringEquals: {
-            'AWS:SourceArn': [
-              `arn:aws:cloudfront::${this.account}:distribution/${this.appDistribution.distributionId}`,
-              `arn:aws:cloudfront::${this.account}:distribution/${this.adminDistribution.distributionId}`,
-            ],
-          },
-        },
-      }),
-    );
+    // uploads 버킷의 CloudFront OAC 읽기 정책은 StatefulStack이 단독 소유한다
+    // (버킷 정책은 하나뿐 — 두 스택에서 만들면 서로 덮어씀). 여기서는 정책을 만들지 않는다.
+    // withOriginAccessControl의 "imported bucket 정책 미갱신" 경고는 무해하다.
 
     if (domain) {
       const zone = route53.HostedZone.fromLookup(this, 'Zone', { domainName: domain.zoneName });
