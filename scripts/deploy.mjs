@@ -75,9 +75,22 @@ const diff = capture(`npx cdk diff ${diffSelector} --context stage=${stage}`, in
 console.log(diff.stdout || '');
 if (diff.stderr) console.error(diff.stderr);
 
-const statefulDanger = /chme2-.*-stateful[\s\S]*?(\[-\]|\[~\][^\n]*replace)/i.test(
-  `${diff.stdout}\n${diff.stderr}`,
-);
+// stateful 스택 "섹션만" 추출해 검사 — 타 스택의 [-]를 오탐하지 않도록
+// (cdk diff는 "Stack <이름>" 헤딩으로 스택별 블록을 구분한다)
+function stackSection(diffText, stackName) {
+  const out = [];
+  let capturing = false;
+  for (const line of diffText.split('\n')) {
+    if (/^Stack\s+\S/.test(line)) capturing = line.includes(stackName);
+    if (capturing) out.push(line);
+  }
+  return out.join('\n');
+}
+const statefulSection = stackSection(`${diff.stdout}\n${diff.stderr}`, `chme2-${stage}-stateful`);
+const statefulDanger =
+  /(\[-\]|may be replaced|requires replacement|will be destroyed|\[~\][^\n]*replace)/i.test(
+    statefulSection,
+  );
 if (stage === 'prod' && statefulDanger && !flag('allow-stateful-replace')) {
   console.error(
     '\n❌ prod Stateful 리소스 삭제/치환이 감지되었습니다. 의도된 변경이면 --allow-stateful-replace로 재실행하세요.',
