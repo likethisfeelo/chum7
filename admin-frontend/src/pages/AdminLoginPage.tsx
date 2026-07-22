@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 
 export const AdminLoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const notice = (location.state as { notice?: string } | null)?.notice ?? '';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -41,6 +43,10 @@ export const AdminLoginPage = () => {
         <h1 className="text-2xl font-bold text-gray-900 mb-1">CHME Admin 로그인</h1>
         <p className="text-sm text-gray-500 mb-6">admins 그룹 계정으로 로그인하세요</p>
 
+        {notice && (
+          <div className="mb-4 p-3 rounded-xl bg-green-50 border border-green-200 text-sm text-green-700">{notice}</div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
@@ -75,6 +81,12 @@ export const AdminLoginPage = () => {
           >
             {loading ? '로그인 중...' : '로그인'}
           </button>
+
+          <div className="text-center">
+            <Link to="/forgot-password" className="text-sm text-primary-600 font-medium hover:underline">
+              비밀번호를 잊으셨나요?
+            </Link>
+          </div>
         </form>
       </div>
     </div>
