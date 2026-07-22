@@ -21,6 +21,7 @@ const env = {
 const stateful = new StatefulStack(app, `${config.prefix}-stateful`, { env, config });
 
 let certificate;
+let apexCertificate;
 if (config.domain) {
   const cert = new CertStack(app, `${config.prefix}-cert`, {
     env: { account: env.account, region: 'us-east-1' },
@@ -28,6 +29,7 @@ if (config.domain) {
     config,
   });
   certificate = cert.certificate;
+  apexCertificate = cert.apexCertificate;
 }
 
 new EdgeStack(app, `${config.prefix}-edge`, {
@@ -36,6 +38,7 @@ new EdgeStack(app, `${config.prefix}-edge`, {
   config,
   stateful,
   certificate,
+  apexCertificate,
 });
 
 const workers = new WorkersStack(app, `${config.prefix}-workers`, { env, config, stateful });
