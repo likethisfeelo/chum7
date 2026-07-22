@@ -47,13 +47,14 @@ export class EdgeStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY, // 빌드 산출물 — 언제든 재생성 가능
       autoDeleteObjects: true,
     };
+    // 계정 ID 접미사 — S3 버킷명 전역 유니크 (계정 바뀌어도 충돌 방지)
     this.staticBucket = new s3.Bucket(this, 'StaticBucket', {
       ...siteBucketDefaults,
-      bucketName: `${config.prefix}-static`,
+      bucketName: `${config.prefix}-static-${this.account}`,
     });
     this.adminStaticBucket = new s3.Bucket(this, 'AdminStaticBucket', {
       ...siteBucketDefaults,
-      bucketName: `${config.prefix}-admin-static`,
+      bucketName: `${config.prefix}-admin-static-${this.account}`,
     });
 
     // uploads 버킷은 이름 참조 (소유는 StatefulStack — 순환 참조 방지)
