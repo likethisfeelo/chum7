@@ -44,8 +44,13 @@ const prod: StageConfig = {
   stage: 'prod',
   isProd: true,
   prefix: 'chme2-prod',
-  // Phase 5 전환 시 활성화: { zoneName: 'chum7.com', app: 'www.chum7.com', api: 'api.chum7.com', admin: 'admin.chum7.com' }
-  domain: undefined,
+  // Phase 5 DNS 컷오버 활성화 — 이 배포가 www/admin/api.chum7.com을 신규 시스템으로 전환한다.
+  domain: {
+    zoneName: 'chum7.com',
+    app: 'www.chum7.com',
+    api: 'api.chum7.com',
+    admin: 'admin.chum7.com',
+  },
   cors: { allowOrigins: ['https://www.chum7.com', 'https://admin.chum7.com'] },
   platformFeeRate: 0.05,
 };
