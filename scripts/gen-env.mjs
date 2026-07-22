@@ -20,10 +20,12 @@ const outputs = JSON.parse(readFileSync(outputsPath, 'utf8'));
 const flat = {};
 for (const values of Object.values(outputs)) Object.assign(flat, values);
 
+// 커스텀 도메인 배포면 api.chum7.com 을 우선 사용 (없으면 execute-api 기본 URL)
+const apiUrl = flat.ApiCustomDomain || flat.ApiUrl;
 const lines = [
   `# 자동 생성됨 (scripts/gen-env.mjs) — 손으로 수정하지 말 것`,
   `VITE_APP_STAGE=${stage}`,
-  flat.ApiUrl && `VITE_API_URL=${flat.ApiUrl}`,
+  apiUrl && `VITE_API_URL=${apiUrl}`,
   flat.UserPoolId && `VITE_COGNITO_USER_POOL_ID=${flat.UserPoolId}`,
   flat.UserPoolClientId && `VITE_COGNITO_CLIENT_ID=${flat.UserPoolClientId}`,
   flat.AppUrl && `VITE_CLOUDFRONT_URL=${flat.AppUrl}`,
