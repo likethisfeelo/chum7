@@ -1,5 +1,5 @@
 import type { EventBridgeEvent } from 'aws-lambda';
-import { PutCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 import type { DomainEventType } from '@chum7/contracts';
 import { buildPushPayload, decidePush } from './domain/push-rules';
@@ -30,6 +30,12 @@ function routeNotification(
         recipientId: String(detail.targetOwnerId),
         category: 'social',
         message: '내 게시물에 새 댓글이 달렸어요',
+      };
+    case 'reaction.created':
+      return {
+        recipientId: String(detail.targetOwnerId),
+        category: 'social',
+        message: '내 게시물에 새 반응이 있어요',
       };
     case 'follow.requested':
       return {
@@ -96,6 +102,29 @@ function routeNotification(
   }
 }
 
+/**
+ * 친구 실명 식별 (친구 모델 v2 §3) — actor가 recipient의 수락된 친구면 실명을 반환.
+ * 공개 화면은 익명 유지, 알림에서만 "친구 OO님"으로 밝힌다. GRAPH_TABLE 미설정 시 스킵.
+ */
+async function revealFriendActor(recipientId: string, actorId: string): Promise<string | null> {
+  if (!actorId || actorId === recipientId || !process.env.GRAPH_TABLE) return null;
+  try {
+    const edge = await docClient.send(
+      new GetCommand({
+        TableName: tableName('GRAPH_TABLE'),
+        Key: { pk: `USER#${recipientId}`, sk: `FRIEND#${actorId}` },
+      }),
+    );
+    if (edge.Item?.status !== 'accepted') return null;
+    const profile = await docClient.send(
+      new GetCommand({ TableName: tableName('USERS_TABLE'), Key: { pk: `USER#${actorId}`, sk: 'PROFILE' } }),
+    );
+    return (profile.Item?.name as string) || null;
+  } catch {
+    return null;
+  }
+}
+
 export const handler = async (
   event: EventBridgeEvent<string, Record<string, unknown>>,
 ): Promise<void> => {
@@ -104,6 +133,19 @@ export const handler = async (
   if (!routed) {
     console.log(JSON.stringify({ level: 'info', message: 'event ignored', type }));
     return;
+  }
+
+  // 친구가 익명으로 남긴 반응/댓글이면 알림에서만 실명 식별 (v2 §3)
+  let friendActorName: string | null = null;
+  if (type === 'comment.created' || type === 'reaction.created') {
+    const actorId = String(event.detail.authorId ?? event.detail.actorUserId ?? '');
+    friendActorName = await revealFriendActor(routed.recipientId, actorId);
+    if (friendActorName) {
+      routed.message =
+        type === 'comment.created'
+          ? `친구 ${friendActorName}님이 내 게시물에 댓글을 남겼어요`
+          : `친구 ${friendActorName}님이 내 게시물에 반응했어요`;
+    }
   }
 
   const now = new Date().toISOString();
@@ -119,6 +161,7 @@ export const handler = async (
         eventType: type,
         message: routed.message,
         detail: event.detail,
+        ...(friendActorName ? { friendActorName } : {}),
         isRead: false,
         createdAt: now,
       },
