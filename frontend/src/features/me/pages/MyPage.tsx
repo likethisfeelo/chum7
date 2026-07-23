@@ -491,6 +491,12 @@ export function MyPage() {
           <h1 className="text-white font-bold text-lg">마이</h1>
           <div className="flex items-center gap-2">
             <button
+              onClick={() => navigate('/friends')}
+              className="text-white/70 hover:text-white text-sm px-3 py-1 rounded-full border border-white/20 hover:border-white/40 transition-colors"
+            >
+              친구
+            </button>
+            <button
               onClick={() => navigate('/personal-feed/notifications')}
               className="text-white/70 hover:text-white text-sm px-3 py-1 rounded-full border border-white/20 hover:border-white/40 transition-colors"
             >

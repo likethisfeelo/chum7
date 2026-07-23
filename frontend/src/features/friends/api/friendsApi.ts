@@ -45,6 +45,8 @@ export interface RelationshipSummary {
   plazaMeetCount: number;
   firstInteractionAt: string | null;
   lastInteractionAt: string | null;
+  myConsent: { timeline: boolean; fullContent: boolean };
+  counterpartConsent: { timeline: boolean; fullContent: boolean };
 }
 export interface ArchiveEntry {
   interactionId: string;
