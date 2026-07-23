@@ -116,12 +116,11 @@ git push origin main
       legacy 테스트 32개(`test/backend/*` 등 `backend/` import)·stale `admin-docs` 테스트·
       orphan `validate-cheer-widget` 스크립트 제거. **`npm test` 전면 그린(378개)**.
       *`shared/join-requirements`는 프론트가 아직 참조 → `shared/` 유지.*
-- [~] **구 AWS 스택(chme-*) 실제 teardown**: `scripts/teardown-legacy-stacks.ps1` 준비 완료.
-      원격 세션엔 유효한 AWS 자격증명이 없어(토큰 무효) 로컬에서 실행해야 함.
-      스크립트가 `chme2-*`는 이중 가드로 제외하고, 종료보호 해제·S3 비우기·export 의존성
-      반복 재시도까지 한 번에 처리. 데이터 보존 불필요 확인됨(사용자).
-      실행: 미리보기 `-Region ap-northeast-2` → 철거 `-Region ap-northeast-2 -Execute`
-      (엣지/인증서가 us-east-1이면 `-Region us-east-1 -Execute` 한 번 더).
+- [x] **구 AWS 스택(chme-dev-*) 실제 teardown 완료**: `scripts/teardown-legacy-stacks.ps1`로
+      dev 스택 15개 전부 삭제(chme2-* 이중 가드로 미대상). 로컬 실행(원격은 자격증명 무효).
+      막힘 1건: `chme-dev-api`가 `dev.chum7.com` base-path-mapping 때문에 DELETE_FAILED →
+      해당 매핑 제거 후 재실행하니 export 의존성 역순으로 cascade 삭제(core가 마지막).
+      *잔여 확인: 필요 시 미리보기 `-Region ap-northeast-2` / `-Region us-east-1`로 0건 확인.*
 
 ---
 
