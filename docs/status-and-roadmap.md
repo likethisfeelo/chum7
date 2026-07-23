@@ -114,8 +114,12 @@ git push origin main
       legacy 테스트 32개(`test/backend/*` 등 `backend/` import)·stale `admin-docs` 테스트·
       orphan `validate-cheer-widget` 스크립트 제거. **`npm test` 전면 그린(378개)**.
       *`shared/join-requirements`는 프론트가 아직 참조 → `shared/` 유지.*
-- [ ] **구 AWS 스택(chme-*) 실제 teardown**: `cdk destroy`는 **DynamoDB 테이블 삭제 위험** →
-      데이터 백업/무사용 확인 후 사람이 직접 실행(자동화 금지). 컷오버 완료로 dormant 상태.
+- [~] **구 AWS 스택(chme-*) 실제 teardown**: `scripts/teardown-legacy-stacks.ps1` 준비 완료.
+      원격 세션엔 유효한 AWS 자격증명이 없어(토큰 무효) 로컬에서 실행해야 함.
+      스크립트가 `chme2-*`는 이중 가드로 제외하고, 종료보호 해제·S3 비우기·export 의존성
+      반복 재시도까지 한 번에 처리. 데이터 보존 불필요 확인됨(사용자).
+      실행: 미리보기 `-Region ap-northeast-2` → 철거 `-Region ap-northeast-2 -Execute`
+      (엣지/인증서가 us-east-1이면 `-Region us-east-1 -Execute` 한 번 더).
 
 ---
 
