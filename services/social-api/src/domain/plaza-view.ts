@@ -44,6 +44,7 @@ export function exposureScore(post: any, nowMs: number): number {
 export function sanitizePost(post: Record<string, any>): Record<string, any> {
   const {
     sourceUserId,
+    authorId, // 실제 작성자 userId — 반익명 정책상 퍼블릭 응답에서 제거 (저장은 유지, 내부 알림/신고용)
     sourceId,
     sourceType,
     sourceChallengeId,
