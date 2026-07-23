@@ -67,7 +67,19 @@ export async function setArchiveConsent(
 ): Promise<void> {
   await apiClient.post(`/u/friends/${encodeURIComponent(userId)}/archive-consent`, patch);
 }
-export async function fetchArchiveTimeline(userId: string): Promise<ArchiveEntry[]> {
-  const res = await apiClient.get(`/u/friends/${encodeURIComponent(userId)}/archive`);
-  return res.data?.data?.timeline ?? [];
+export interface ArchivePage {
+  timeline: ArchiveEntry[];
+  nextCursor: string | null;
+}
+export async function fetchArchiveTimeline(
+  userId: string,
+  cursor?: string,
+): Promise<ArchivePage> {
+  const res = await apiClient.get(`/u/friends/${encodeURIComponent(userId)}/archive`, {
+    params: cursor ? { cursor } : undefined,
+  });
+  return {
+    timeline: res.data?.data?.timeline ?? [],
+    nextCursor: res.data?.data?.nextCursor ?? null,
+  };
 }

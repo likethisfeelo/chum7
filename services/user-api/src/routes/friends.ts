@@ -211,7 +211,17 @@ friendsRoutes.get('/:otherUserId/archive', async (c) => {
 
   const { lo, hi } = pairOrder(userId, otherUserId);
   const limit = Math.min(Math.max(Number(c.req.query('limit') || 30), 1), 100);
-  const { items, lastKey } = await listPairLedger(lo, hi, limit);
+  // 커서: 이전 응답의 nextCursor(base64 lastKey)를 그대로 전달 → 다음 페이지
+  const cursorRaw = c.req.query('cursor');
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  if (cursorRaw) {
+    try {
+      exclusiveStartKey = JSON.parse(Buffer.from(cursorRaw, 'base64').toString('utf8'));
+    } catch {
+      return fail(c, 400, 'INVALID_CURSOR', '잘못된 커서예요');
+    }
+  }
+  const { items, lastKey } = await listPairLedger(lo, hi, limit, exclusiveStartKey);
   const timeline = items
     .filter((it) => it.visibilityState !== 'deleted' && it.visibilityState !== 'hidden')
     .map((it) => ({

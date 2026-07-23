@@ -98,6 +98,7 @@ challengeFeedRoutes.post(`${BASE}/comments`, async (c) => {
     await publishEvent('comment.created', {
       targetType: 'verification',
       targetId: verificationId,
+      challengeId, // 알림 딥링크(/challenge-feed/:challengeId)용
       targetOwnerId: input.verificationOwnerId,
       authorId: userId,
       commentId,

@@ -1032,6 +1032,11 @@ export function PersonalFeedPage() {
                   {LEADER_BADGE_META[topLeaderBadge.badgeId]?.icon ?? '👑'}
                 </span>
               )}
+              {!isOwn && profile?.isFriend && (
+                <span className="flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/20 text-white">
+                  🤝 친구
+                </span>
+              )}
             </div>
             {isOwn && profile && (
               <p className="text-white/60 text-xs mt-0.5">

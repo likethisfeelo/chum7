@@ -9,6 +9,7 @@ export interface FeedProfile {
   currentLayer: number;
   followStatus: 'none' | 'pending' | 'accepted';
   isMutual: boolean;
+  isFriend?: boolean;
   feedSettings: {
     isPublic: boolean;
     tab02Public: boolean;

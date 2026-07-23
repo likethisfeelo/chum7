@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Loading } from '@/shared/components/Loading';
 import { characterApi } from '@/features/character/api/characterApi';
 import { personalFeedApi, FeedAchievements } from '@/features/personal-feed/api/personalFeedApi';
+import { fetchFriendRequests } from '@/features/friends/api/friendsApi';
 import { apiClient } from '@/lib/api-client';
 import { resolveChallengeBucket, getChallengeDisplayMeta } from '@/features/challenge/utils/challengeLifecycle';
 import { OrderHistorySection } from '@/features/commerce/components/OrderHistorySection';
@@ -481,6 +482,14 @@ export function MyPage() {
     queryFn: () => personalFeedApi.getAchievements(myUserId),
   });
 
+  // 받은 친구 신청 수 — "친구" 버튼 배지 (기능 비활성 시 빈 배열 반환)
+  const { data: friendRequests } = useQuery({
+    queryKey: ['friend-requests'],
+    queryFn: fetchFriendRequests,
+    staleTime: 60_000,
+  });
+  const friendRequestCount = friendRequests?.length ?? 0;
+
   const topLeaderBadge = achievements?.leaderBadges?.[0];
 
   return (
@@ -492,9 +501,14 @@ export function MyPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate('/friends')}
-              className="text-white/70 hover:text-white text-sm px-3 py-1 rounded-full border border-white/20 hover:border-white/40 transition-colors"
+              className="relative text-white/70 hover:text-white text-sm px-3 py-1 rounded-full border border-white/20 hover:border-white/40 transition-colors"
             >
               친구
+              {friendRequestCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold">
+                  {friendRequestCount > 9 ? '9+' : friendRequestCount}
+                </span>
+              )}
             </button>
             <button
               onClick={() => navigate('/personal-feed/notifications')}

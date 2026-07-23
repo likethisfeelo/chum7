@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
   fetchArchiveTimeline,
@@ -40,9 +40,11 @@ export const FriendArchivePage = () => {
   useEffect(() => {
     if (summary.data) setTimelineConsent(summary.data.myConsent.timeline);
   }, [summary.data]);
-  const timeline = useQuery({
+  const timeline = useInfiniteQuery({
     queryKey: ['archive-timeline', userId],
-    queryFn: () => fetchArchiveTimeline(userId),
+    queryFn: ({ pageParam }) => fetchArchiveTimeline(userId, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled: Boolean(userId),
     retry: false,
   });
@@ -59,6 +61,7 @@ export const FriendArchivePage = () => {
   const s = summary.data;
   const timelineBlocked =
     (timeline.error as any)?.response?.data?.error === 'TIMELINE_CONSENT_REQUIRED';
+  const entries = timeline.data?.pages.flatMap((p) => p.timeline) ?? [];
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-6">
@@ -102,22 +105,35 @@ export const FriendArchivePage = () => {
         <h2 className="text-sm font-semibold text-gray-500">타임라인</h2>
         {timelineBlocked ? (
           <p className="text-sm text-gray-400">양쪽이 타임라인 공개에 동의하면 여기에 표시돼요.</p>
-        ) : (timeline.data?.length ?? 0) === 0 ? (
+        ) : timeline.isLoading ? (
+          <p className="text-sm text-gray-400">불러오는 중…</p>
+        ) : entries.length === 0 ? (
           <p className="text-sm text-gray-400">아직 기록이 없어요.</p>
         ) : (
-          timeline.data!.map((e) => (
-            <div key={e.interactionId} className="bg-white rounded-xl border border-gray-200 p-3 text-sm">
-              <span className="text-gray-400 mr-2">{fmtDate(e.occurredAt)}</span>
-              <span className="text-gray-800">
-                {e.actorIsMine ? '내가' : '친구가'}
-                {!e.actorIsMine && e.actorDisplayName && (
-                  <span className="text-gray-400"> [{e.actorDisplayName}]</span>
-                )}{' '}
-                {TYPE_LABEL[e.interactionType] ?? e.interactionType}
-              </span>
-              {e.contextType && <span className="text-gray-400"> · {e.contextType}</span>}
-            </div>
-          ))
+          <>
+            {entries.map((e) => (
+              <div key={e.interactionId} className="bg-white rounded-xl border border-gray-200 p-3 text-sm">
+                <span className="text-gray-400 mr-2">{fmtDate(e.occurredAt)}</span>
+                <span className="text-gray-800">
+                  {e.actorIsMine ? '내가' : '친구가'}
+                  {!e.actorIsMine && e.actorDisplayName && (
+                    <span className="text-gray-400"> [{e.actorDisplayName}]</span>
+                  )}{' '}
+                  {TYPE_LABEL[e.interactionType] ?? e.interactionType}
+                </span>
+                {e.contextType && <span className="text-gray-400"> · {e.contextType}</span>}
+              </div>
+            ))}
+            {timeline.hasNextPage && (
+              <button
+                onClick={() => timeline.fetchNextPage()}
+                disabled={timeline.isFetchingNextPage}
+                className="w-full py-2 text-sm font-semibold text-primary-600 hover:text-primary-700 disabled:opacity-50"
+              >
+                {timeline.isFetchingNextPage ? '불러오는 중…' : '더 보기'}
+              </button>
+            )}
+          </>
         )}
       </section>
     </div>

@@ -13,92 +13,160 @@ import { loadNotificationSettings, loadRecentNotifications, sendPushToUser } fro
  * 이전 푸시를 교체하고, 윈도우 내 폭주 시 비-cheer 푸시를 억제한다 (§4.10 집계 행).
  */
 
+/**
+ * 라우팅 결과. `type`/`title`/`message`(=body)는 프론트 NotificationsPage가
+ * 직접 읽는 필드다 — 워커가 채우지 않으면 목록이 아이콘·제목 없이 렌더된다.
+ */
+interface RoutedNotification {
+  recipientId: string;
+  category: string;
+  type: string; // 프론트 NOTIFICATION_TYPE_META 키
+  title: string;
+  message: string; // 본문(body)
+}
+
 /** 이벤트 유형 → 알림 수신자·카테고리·문구 라우팅 룰 */
 function routeNotification(
   type: DomainEventType,
   detail: Record<string, unknown>,
-): { recipientId: string; category: string; message: string } | null {
+): RoutedNotification | null {
   switch (type) {
     case 'cheer.delivered':
       return {
         recipientId: String(detail.receiverId),
         category: 'cheer',
+        type: 'cheer_received',
+        title: '응원이 도착했어요',
         message: '응원이 도착했어요! 오늘의 실천을 시작해보세요 🎉',
       };
     case 'comment.created':
       return {
         recipientId: String(detail.targetOwnerId),
         category: 'social',
+        type: 'social_comment',
+        title: '새 댓글',
         message: '내 게시물에 새 댓글이 달렸어요',
       };
     case 'reaction.created':
       return {
         recipientId: String(detail.targetOwnerId),
         category: 'social',
+        type: 'social_reaction',
+        title: '새 반응',
         message: '내 게시물에 새 반응이 있어요',
       };
     case 'follow.requested':
       return {
         recipientId: String(detail.followeeId),
         category: 'social',
+        type: 'feed_follow_request',
+        title: '팔로우 요청',
         message: '새 팔로우 요청이 있어요',
       };
     case 'follow.accepted':
       return {
         recipientId: String(detail.followerId),
         category: 'social',
+        type: 'feed_follow_accepted',
+        title: '팔로우 수락',
         message: '팔로우 요청이 수락되었어요',
       };
     case 'friend.requested':
       return {
         recipientId: String(detail.targetUserId),
         category: 'social',
+        type: 'friend_request',
+        title: '새 친구 요청',
         message: '새 친구 요청이 있어요',
       };
     case 'friend.accepted':
       return {
         recipientId: String(detail.requesterId),
         category: 'social',
+        type: 'friend_accepted',
+        title: '친구 수락',
         message: '친구 요청이 수락되었어요',
       };
     case 'feed.invite_link_used':
       return {
         recipientId: String(detail.ownerId),
         category: 'social',
+        type: 'feed_invite_link_used',
+        title: '초대 링크 사용',
         message: '초대 링크로 새 이웃이 들어왔어요',
       };
     case 'order.paid':
       return {
         recipientId: String(detail.userId),
         category: 'commerce',
+        type: 'order_paid',
+        title: '결제 확인',
         message: '결제가 확인되었어요! 이제 챌린지에 참여할 수 있어요 🎉',
       };
     case 'refund.completed':
       return {
         recipientId: String(detail.userId),
         category: 'commerce',
+        type: 'refund_completed',
+        title: '보증금 반환',
         message: '완주 축하해요! 보증금 반환이 완료되었어요 💰',
       };
     case 'settlement.ready':
       return {
         recipientId: String(detail.creatorId),
         category: 'commerce',
+        type: 'settlement_ready',
+        title: '정산서 도착',
         message: '챌린지 정산서가 도착했어요. 확인 후 지급이 진행됩니다',
       };
     case 'order.rejected':
       return {
         recipientId: String(detail.userId),
         category: 'commerce',
+        type: 'order_rejected',
+        title: '입금 확인 실패',
         message: '입금 확인에 실패했어요. 주문 내역을 확인해주세요',
       };
     case 'shipment.updated':
       return {
         recipientId: String(detail.userId),
         category: 'commerce',
+        type: 'shipment_updated',
+        title: '배송 상태 변경',
         message: '리워드 배송 상태가 변경되었어요',
       };
     default:
       return null; // challenge.completed 등은 다중 수신자 — Phase 4에서 확장
+  }
+}
+
+/**
+ * 이벤트 → 프론트 딥링크. 탭하면 관련 화면으로 이동한다(NotificationsPage.handleClick).
+ * 대상 식별자가 detail에 없으면 링크를 생략(목록에서 화살표 미표시).
+ */
+function buildDeepLink(type: DomainEventType, detail: Record<string, unknown>): string | undefined {
+  switch (type) {
+    case 'friend.requested':
+    case 'friend.accepted':
+      return '/friends';
+    case 'cheer.delivered':
+      return '/today';
+    case 'comment.created':
+    case 'reaction.created': {
+      const targetType = String(detail.targetType ?? '');
+      if (targetType === 'plaza') return '/plaza';
+      if (targetType === 'board' && detail.targetId) return `/challenge-board/${detail.targetId}`;
+      if (targetType === 'verification' && detail.challengeId) return `/challenge-feed/${detail.challengeId}`;
+      return undefined;
+    }
+    case 'follow.requested':
+      return detail.followerId ? `/personal-feed/${detail.followerId}` : undefined;
+    case 'follow.accepted':
+      return detail.followeeId ? `/personal-feed/${detail.followeeId}` : undefined;
+    case 'feed.invite_link_used':
+      return '/my';
+    default:
+      return undefined;
   }
 }
 
@@ -141,6 +209,7 @@ export const handler = async (
     const actorId = String(event.detail.authorId ?? event.detail.actorUserId ?? '');
     friendActorName = await revealFriendActor(routed.recipientId, actorId);
     if (friendActorName) {
+      routed.title = `친구 ${friendActorName}님`;
       routed.message =
         type === 'comment.created'
           ? `친구 ${friendActorName}님이 내 게시물에 댓글을 남겼어요`
@@ -148,6 +217,7 @@ export const handler = async (
     }
   }
 
+  const deepLink = buildDeepLink(type, event.detail);
   const now = new Date().toISOString();
   const notificationId = `${now}#${event.id}`;
   await docClient.send(
@@ -157,9 +227,14 @@ export const handler = async (
         pk: `USER#${routed.recipientId}`,
         sk: `NOTIF#${notificationId}`,
         notificationId,
+        // 프론트 NotificationsPage가 직접 읽는 필드 (type/title/body/deepLink)
+        type: routed.type,
+        title: routed.title,
+        body: routed.message,
+        ...(deepLink ? { deepLink } : {}),
         category: routed.category,
         eventType: type,
-        message: routed.message,
+        message: routed.message, // 하위호환(레거시 표면)
         detail: event.detail,
         ...(friendActorName ? { friendActorName } : {}),
         isRead: false,

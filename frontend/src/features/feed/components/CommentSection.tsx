@@ -34,26 +34,30 @@ export function CommentSection({ postId, hook }: Props) {
           <p className="text-xs text-gray-500">아직 댓글이 없어요.</p>
         ) : (
           state.comments.map((comment) => (
-            <div key={comment.commentId} className="text-xs text-gray-700 flex items-start gap-1">
-              <span className="font-medium shrink-0">
-                {comment.displayName}
-              </span>
-              <span className="flex-1 break-all">{comment.content}</span>
-              {comment.isMine && (
-                <>
-                  <span className="shrink-0 text-primary-700 font-medium">나</span>
+            <div key={comment.commentId} className="text-xs text-gray-700">
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-gray-800">{comment.displayName}</span>
+                {comment.isMine && (
+                  <span className="text-[10px] px-1 rounded bg-primary-100 text-primary-700 font-medium">
+                    나
+                  </span>
+                )}
+                <span className="flex-1" />
+                {comment.isMine && (
                   <button
                     type="button"
                     onClick={() => {
                       if (window.confirm('이 댓글을 삭제할까요?')) hook.remove(postId, comment);
                     }}
-                    className="shrink-0 text-gray-400 hover:text-red-500"
+                    className="shrink-0 text-gray-300 hover:text-red-500 text-sm leading-none"
                     aria-label="댓글 삭제"
+                    title="삭제"
                   >
-                    삭제
+                    ✕
                   </button>
-                </>
-              )}
+                )}
+              </div>
+              <p className="mt-0.5 break-words whitespace-pre-wrap">{comment.content}</p>
             </div>
           ))
         )}
