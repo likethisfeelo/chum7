@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
@@ -103,7 +104,9 @@ export const FriendsPage = () => {
         ) : (
           friends.data!.map((f) => (
             <div key={f.userId} className="flex items-center justify-between bg-white rounded-xl border border-gray-200 p-3">
-              <span className="font-medium text-gray-800">{f.displayName}</span>
+              <Link to={`/friends/${f.userId}`} className="font-medium text-gray-800 hover:text-primary-600">
+                {f.displayName}
+              </Link>
               <button
                 onClick={() => { if (window.confirm('친구를 삭제할까요?')) removeM.mutate(f.userId); }}
                 className="text-xs text-gray-400 hover:text-red-500"

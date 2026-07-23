@@ -91,6 +91,8 @@ export class ApiStack extends cdk.Stack {
         USER_POOL_CLIENT_ID: stateful.userPoolClient.userPoolClientId,
         VAPID_SECRET_NAME: stateful.vapidSecret.secretName,
         UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
+        // 관계 아카이브 전체 콘텐츠(P3 단계 E) 글로벌 스위치
+        ARCHIVE_FULL_CONTENT_ENABLED: String(config.archiveFullContentEnabled ?? false),
       },
     });
     stateful.vapidSecret.grantRead(this.userApi); // GET /public/push/key

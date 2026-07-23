@@ -36,3 +36,37 @@ export async function acceptFriendRequest(fromUserId: string): Promise<void> {
 export async function removeFriend(otherUserId: string): Promise<void> {
   await apiClient.delete(`/u/friends/${encodeURIComponent(otherUserId)}`);
 }
+
+export interface RelationshipSummary {
+  sharedChallengeCount: number;
+  commentCount: number;
+  reactionCount: number;
+  cheerCount: number;
+  plazaMeetCount: number;
+  firstInteractionAt: string | null;
+  lastInteractionAt: string | null;
+}
+export interface ArchiveEntry {
+  interactionId: string;
+  occurredAt: string;
+  interactionType: string;
+  contextType: string;
+  contextId: string | null;
+  actorIsMine: boolean;
+  hasSource: boolean;
+}
+
+export async function fetchRelationshipSummary(userId: string): Promise<RelationshipSummary> {
+  const res = await apiClient.get(`/u/friends/${encodeURIComponent(userId)}/relationship-summary`);
+  return res.data?.data;
+}
+export async function setArchiveConsent(
+  userId: string,
+  patch: { timeline?: boolean; fullContent?: boolean },
+): Promise<void> {
+  await apiClient.post(`/u/friends/${encodeURIComponent(userId)}/archive-consent`, patch);
+}
+export async function fetchArchiveTimeline(userId: string): Promise<ArchiveEntry[]> {
+  const res = await apiClient.get(`/u/friends/${encodeURIComponent(userId)}/archive`);
+  return res.data?.data?.timeline ?? [];
+}

@@ -104,6 +104,69 @@ export async function deleteFriendEdge(userId: string, otherUserId: string): Pro
   );
 }
 
+/** 아카이브 동의 플래그 갱신 (내 엣지에만 — 상호 동의는 양쪽 플래그 AND로 판정) */
+export async function setArchiveConsent(
+  userId: string,
+  otherUserId: string,
+  patch: { timelineConsent?: boolean; fullContentConsent?: boolean },
+): Promise<void> {
+  const sets: string[] = ['updatedAt = :now'];
+  const values: Record<string, any> = { ':now': new Date().toISOString() };
+  if (typeof patch.timelineConsent === 'boolean') {
+    sets.push('timelineConsent = :tc');
+    values[':tc'] = patch.timelineConsent;
+  }
+  if (typeof patch.fullContentConsent === 'boolean') {
+    sets.push('fullContentConsent = :fc');
+    values[':fc'] = patch.fullContentConsent;
+  }
+  await docClient.send(
+    new UpdateCommand({
+      TableName: tableName(TABLE),
+      Key: { pk: userPk(userId), sk: friendSk(otherUserId) },
+      UpdateExpression: `SET ${sets.join(', ')}`,
+      ConditionExpression: 'attribute_exists(pk)', // 친구 엣지 있어야
+      ExpressionAttributeValues: values,
+    }),
+  );
+}
+
+/** 사용자쌍 이벤트 원장(아카이브 타임라인) — PAIR#lo#hi 파티션 시간순 */
+export async function listPairLedger(
+  loUserId: string,
+  hiUserId: string,
+  limit: number,
+  exclusiveStartKey?: Record<string, any>,
+): Promise<{ items: Record<string, any>[]; lastKey?: Record<string, any> }> {
+  const res = await docClient.send(
+    new QueryCommand({
+      TableName: tableName(TABLE),
+      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :evt)',
+      ExpressionAttributeValues: { ':pk': `PAIR#${loUserId}#${hiUserId}`, ':evt': 'EVT#' },
+      ScanIndexForward: false, // 최신순
+      Limit: limit,
+      ExclusiveStartKey: exclusiveStartKey,
+    }),
+  );
+  return { items: res.Items ?? [], lastKey: res.LastEvaluatedKey };
+}
+
+/** 특정 상호작용 원장 1건 (실콘텐츠 참조 해석용) */
+export async function getLedgerItem(
+  loUserId: string,
+  hiUserId: string,
+  occurredAt: string,
+  interactionId: string,
+): Promise<Record<string, any> | null> {
+  const res = await docClient.send(
+    new GetCommand({
+      TableName: tableName(TABLE),
+      Key: { pk: `PAIR#${loUserId}#${hiUserId}`, sk: `EVT#${occurredAt}#${interactionId}` },
+    }),
+  );
+  return res.Item ?? null;
+}
+
 /** 내 친구 엣지 목록 (status 필터는 호출부) */
 export async function listFriendEdges(userId: string, limit = 200): Promise<Record<string, any>[]> {
   const res = await docClient.send(

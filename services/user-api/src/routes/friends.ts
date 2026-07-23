@@ -9,15 +9,31 @@ import { ok, fail } from '@chum7/api-kit';
 import {
   deleteFriendEdge,
   getFriendEdge,
+  getLedgerItem,
   getPairStat,
   listFriendEdges,
+  listPairLedger,
   listRecommendationStats,
   putFriendEdge,
+  setArchiveConsent,
   setPairFriendFlag,
 } from '../repo/friends-repo';
 import { getProfileItem } from '../repo/profile-repo';
 
 export const friendsRoutes = new Hono<AppEnv>();
+
+/** 쌍 키 정규화 (원장 파티션) */
+function pairOrder(a: string, b: string): { lo: string; hi: string } {
+  return a < b ? { lo: a, hi: b } : { lo: b, hi: a };
+}
+
+/** 두 사람이 수락된 친구이고 차단이 아닌지 — 아니면 null */
+async function friendshipOf(me: string, other: string) {
+  const mine = await getFriendEdge(me, other);
+  const theirs = await getFriendEdge(other, me);
+  if (mine?.status !== 'accepted' || theirs?.status !== 'accepted') return null;
+  return { mine, theirs };
+}
 
 async function displayNameOf(userId: string): Promise<string> {
   const p = await getProfileItem(userId);
@@ -122,6 +138,124 @@ friendsRoutes.get('/', async (c) => {
     })),
   );
   return ok(c, { friends, total: friends.length });
+});
+
+// ── 관계 아카이브 (P3) ──────────────────────────────────────────────
+
+// 단계 C: 관계 요약 — 친구면 자동 공개 (집계 숫자만)
+friendsRoutes.get('/:otherUserId/relationship-summary', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const otherUserId = c.req.param('otherUserId');
+  if (!(await friendshipOf(userId, otherUserId))) {
+    return fail(c, 403, 'NOT_FRIENDS', '친구 사이에서만 볼 수 있어요');
+  }
+  const stat = (await getPairStat(userId, otherUserId)) ?? {};
+  return ok(c, {
+    sharedChallengeCount: Number(stat.sharedChallengeCount ?? 0),
+    commentCount: Number(stat.commentCount ?? 0) + Number(stat.replyCount ?? 0),
+    reactionCount: Number(stat.reactionCount ?? 0),
+    cheerCount: Number(stat.cheerCount ?? 0),
+    plazaMeetCount: Number(stat.plazaMeetCount ?? 0),
+    firstInteractionAt: stat.firstInteractionAt ?? null,
+    lastInteractionAt: stat.lastInteractionAt ?? null,
+  });
+});
+
+// 아카이브 동의 설정 (내 쪽 — 타임라인/전체는 양쪽 동의 AND)
+friendsRoutes.post('/:otherUserId/archive-consent', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const otherUserId = c.req.param('otherUserId');
+  if (!(await friendshipOf(userId, otherUserId))) {
+    return fail(c, 403, 'NOT_FRIENDS', '친구 사이에서만 설정할 수 있어요');
+  }
+  const body = (await c.req.json().catch(() => ({}))) as {
+    timeline?: boolean;
+    fullContent?: boolean;
+  };
+  await setArchiveConsent(userId, otherUserId, {
+    timelineConsent: body.timeline,
+    fullContentConsent: body.fullContent,
+  });
+  return ok(c, { updated: true });
+});
+
+// 단계 D: 관계 타임라인 — 양쪽 timeline 동의 필요
+friendsRoutes.get('/:otherUserId/archive', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const otherUserId = c.req.param('otherUserId');
+  const fs = await friendshipOf(userId, otherUserId);
+  if (!fs) return fail(c, 403, 'NOT_FRIENDS', '친구 사이에서만 볼 수 있어요');
+  if (fs.mine.timelineConsent !== true || fs.theirs.timelineConsent !== true) {
+    return fail(c, 403, 'TIMELINE_CONSENT_REQUIRED', '양쪽이 타임라인 공개에 동의해야 볼 수 있어요');
+  }
+
+  const { lo, hi } = pairOrder(userId, otherUserId);
+  const limit = Math.min(Math.max(Number(c.req.query('limit') || 30), 1), 100);
+  const { items, lastKey } = await listPairLedger(lo, hi, limit);
+  const timeline = items
+    .filter((it) => it.visibilityState !== 'deleted' && it.visibilityState !== 'hidden')
+    .map((it) => ({
+      interactionId: it.interactionId,
+      occurredAt: it.occurredAt,
+      interactionType: it.interactionType,
+      contextType: it.contextType,
+      contextId: it.contextId ?? null,
+      // 당사자 표기는 나/친구로만 (실명·활동명 재작성 금지)
+      actorIsMine: it.actorUserId === userId,
+      hasSource: Boolean(it.sourceEntityId),
+    }));
+  return ok(c, {
+    timeline,
+    nextCursor: lastKey
+      ? Buffer.from(JSON.stringify(lastKey)).toString('base64')
+      : null,
+  });
+});
+
+// 단계 E: 실콘텐츠 참조 — 양쪽 전체 동의 + 글로벌 플래그. 원본 링크 참조를 돌려준다
+// (크로스 도메인 원문 조회 대신 컨텍스트 id를 제공 → 프론트가 기존 화면으로 딥링크).
+friendsRoutes.get('/:otherUserId/archive/:interactionId', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const otherUserId = c.req.param('otherUserId');
+  const interactionId = c.req.param('interactionId');
+  const occurredAt = c.req.query('occurredAt');
+  if (!occurredAt) return fail(c, 400, 'MISSING_OCCURRED_AT', 'occurredAt 쿼리가 필요합니다');
+
+  const fs = await friendshipOf(userId, otherUserId);
+  if (!fs) return fail(c, 403, 'NOT_FRIENDS', '친구 사이에서만 볼 수 있어요');
+  if (process.env.ARCHIVE_FULL_CONTENT_ENABLED !== 'true') {
+    return fail(c, 403, 'FEATURE_DISABLED', '전체 아카이브는 아직 제공되지 않아요');
+  }
+  if (fs.mine.fullContentConsent !== true || fs.theirs.fullContentConsent !== true) {
+    return fail(c, 403, 'FULL_CONTENT_CONSENT_REQUIRED', '양쪽이 전체 공개에 동의해야 볼 수 있어요');
+  }
+
+  const { lo, hi } = pairOrder(userId, otherUserId);
+  const item = await getLedgerItem(lo, hi, occurredAt, interactionId);
+  if (!item || item.visibilityState === 'deleted' || item.visibilityState === 'hidden') {
+    return fail(c, 404, 'CONTENT_UNAVAILABLE', '원본을 볼 수 없어요(삭제·비공개)');
+  }
+  // 감사 로그 (전체 아카이브 조회) — CloudWatch 구조화 로그
+  console.log(
+    JSON.stringify({
+      level: 'audit',
+      action: 'archive_item_viewed',
+      viewerUserId: userId,
+      counterpartUserId: otherUserId,
+      interactionId,
+      sourceEntityId: item.sourceEntityId ?? null,
+      at: new Date().toISOString(),
+    }),
+  );
+  return ok(c, {
+    interactionType: item.interactionType,
+    contextType: item.contextType,
+    contextId: item.contextId ?? null,
+    sourceEntityType: item.sourceEntityType ?? null,
+    sourceEntityId: item.sourceEntityId ?? null,
+    sourcePostId: item.sourcePostId ?? null,
+    occurredAt: item.occurredAt,
+  });
 });
 
 // 받은 친구 요청 (incoming pending)

@@ -24,6 +24,7 @@ import { TodayPage } from '@/features/today/pages/TodayPage';
 import { FeedPage } from '@/features/feed/pages/FeedPage';
 import { ProfilePage } from '@/features/profile/pages/ProfilePage';
 import { FriendsPage } from '@/features/friends/pages/FriendsPage';
+import { FriendArchivePage } from '@/features/friends/pages/FriendArchivePage';
 import { BadgeCollectionPage } from '@/features/profile/pages/BadgeCollectionPage';
 import { RemedyPage } from '@/features/verification/pages/RemedyPage';
 import { QuestBoardPage } from '@/features/quest/pages/QuestBoardPage';
@@ -230,6 +231,16 @@ export default function App() {
             <ProtectedRoute>
               <MainLayout>
                 <FriendsPage />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/friends/:userId"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <FriendArchivePage />
               </MainLayout>
             </ProtectedRoute>
           }
