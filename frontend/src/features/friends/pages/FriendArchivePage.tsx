@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -35,6 +35,11 @@ export const FriendArchivePage = () => {
     queryFn: () => fetchRelationshipSummary(userId),
     enabled: Boolean(userId),
   });
+
+  // 저장된 내 동의값으로 체크박스 초기화
+  useEffect(() => {
+    if (summary.data) setTimelineConsent(summary.data.myConsent.timeline);
+  }, [summary.data]);
   const timeline = useQuery({
     queryKey: ['archive-timeline', userId],
     queryFn: () => fetchArchiveTimeline(userId),
@@ -85,6 +90,11 @@ export const FriendArchivePage = () => {
         <p className="text-xs text-gray-400 mt-1">
           양쪽 모두 동의해야 타임라인이 열려요. 과거 활동의 익명 표기는 그대로 유지돼요.
         </p>
+        {s && (
+          <p className="text-xs text-gray-400 mt-1">
+            친구 동의: {s.counterpartConsent.timeline ? '✅ 동의함' : '⏳ 아직 동의 안 함'}
+          </p>
+        )}
       </section>
 
       {/* 타임라인 (양쪽 동의 시) */}
@@ -99,7 +109,11 @@ export const FriendArchivePage = () => {
             <div key={e.interactionId} className="bg-white rounded-xl border border-gray-200 p-3 text-sm">
               <span className="text-gray-400 mr-2">{fmtDate(e.occurredAt)}</span>
               <span className="text-gray-800">
-                {e.actorIsMine ? '내가' : '친구가'} {TYPE_LABEL[e.interactionType] ?? e.interactionType}
+                {e.actorIsMine ? '내가' : '친구가'}
+                {!e.actorIsMine && e.actorDisplayName && (
+                  <span className="text-gray-400"> [{e.actorDisplayName}]</span>
+                )}{' '}
+                {TYPE_LABEL[e.interactionType] ?? e.interactionType}
               </span>
               {e.contextType && <span className="text-gray-400"> · {e.contextType}</span>}
             </div>

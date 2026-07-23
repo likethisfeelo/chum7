@@ -25,6 +25,8 @@ export const domainEventSchemas = {
     targetOwnerId: z.string(),
     authorId: z.string(),
     commentId: z.string(),
+    // 작성 당시 공개 활동명(아무개N·수달N·챌린지 리더) — 관계 아카이브 타임라인 스냅샷용
+    actorDisplayName: z.string().optional(),
   }),
   // 리액션(좋아요/이모지) — 관계 원장(interaction-projector) 소스. 통지가 아니라 집계 신호.
   'reaction.created': z.object({
@@ -34,6 +36,12 @@ export const domainEventSchemas = {
     actorUserId: z.string(),
     emoji: z.string().optional(),
   }),
+  // 콘텐츠 삭제 — 관계 아카이브에서 원본 재노출 금지(원장 visibilityState=deleted 동기화).
+  'content.deleted': z.object({
+    targetType: z.enum(['plaza', 'board', 'verification', 'bulletin']),
+    sourceEntityType: z.string(), // comment | post | verification ...
+    sourceEntityId: z.string(),
+  }),
   'follow.requested': z.object({
     followerId: z.string(),
     followeeId: z.string(),
@@ -41,6 +49,14 @@ export const domainEventSchemas = {
   'follow.accepted': z.object({
     followerId: z.string(),
     followeeId: z.string(),
+  }),
+  'friend.requested': z.object({
+    requesterId: z.string(),
+    targetUserId: z.string(),
+  }),
+  'friend.accepted': z.object({
+    accepterId: z.string(),
+    requesterId: z.string(),
   }),
   'feed.invite_link_used': z.object({
     ownerId: z.string(),

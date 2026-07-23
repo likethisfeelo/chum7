@@ -101,6 +101,7 @@ challengeFeedRoutes.post(`${BASE}/comments`, async (c) => {
       targetOwnerId: input.verificationOwnerId,
       authorId: userId,
       commentId,
+      actorDisplayName: displayName,
     });
   }
 
@@ -129,6 +130,12 @@ challengeFeedRoutes.delete(`${BASE}/comments/:commentId`, async (c) => {
   }
 
   await deleteVerificationComment(verificationId, existing.sk);
+  // 관계 아카이브 동기화 — 원장에서 이 댓글 원문 재노출 차단
+  await publishEvent('content.deleted', {
+    targetType: 'verification',
+    sourceEntityType: 'comment',
+    sourceEntityId: commentId,
+  });
   return c.json({ data: { deleted: true, commentId } });
 });
 

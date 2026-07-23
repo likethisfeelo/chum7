@@ -284,6 +284,7 @@ plazaRoutes.post('/:plazaPostId/comments', async (c) => {
       targetOwnerId,
       authorId: userId,
       commentId,
+      actorDisplayName: `아무개${anonymousNumber}`,
     });
   }
 
@@ -325,6 +326,12 @@ plazaRoutes.delete('/:plazaPostId/comments/:commentId', async (c) => {
     return fail(c, 404, 'COMMENT_NOT_FOUND', '삭제할 댓글이 없거나 권한이 없습니다');
   }
   await incrementPostCounter(plazaPostId, 'commentCount', -1, new Date().toISOString());
+  // 관계 아카이브 동기화 — 원장에서 이 댓글 원문 재노출 차단
+  await publishEvent('content.deleted', {
+    targetType: 'plaza',
+    sourceEntityType: 'comment',
+    sourceEntityId: commentId,
+  });
   return ok(c, { deleted: true, commentId });
 });
 

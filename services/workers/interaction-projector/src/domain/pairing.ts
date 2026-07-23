@@ -21,6 +21,8 @@ export interface PairInteraction {
   contextId: string | null;
   sourceEntityType: string;
   sourceEntityId: string | null;
+  /** 작성 당시 actor 공개 활동명(아무개N·수달N·챌린지 리더) — 타임라인 스냅샷. 없으면 null */
+  actorDisplayName: string | null;
   /** 원장 멱등 키 — 같은 이벤트 재수신 시 동일해야 한다 */
   interactionId: string;
 }
@@ -52,6 +54,13 @@ export const WEIGHTS: Record<InteractionType, number> = {
 
 /** 이 점수 미만이면 추천 후보에서 제외(gsi1 미기록) */
 export const RECOMMEND_THRESHOLD = 3;
+
+/**
+ * challenge.completed 팬아웃 상한 — 완주자 N명이면 N*(N-1)/2 쌍이 생겨 Lambda가
+ * 타임아웃될 수 있다. 완주자를 이 수로 제한(초과분은 co_challenge 쌍에서 제외).
+ * 25명 → 300쌍(안전). 초과 시 index 핸들러가 드롭 수를 로깅한다.
+ */
+export const MAX_CO_CHALLENGE_USERS = 25;
 
 export interface PairStatLike {
   sharedChallengeCount?: number;
@@ -113,6 +122,7 @@ export function interactionsFromEvent(
           contextId: detail.targetId ?? null,
           sourceEntityType: 'comment',
           sourceEntityId: detail.commentId ?? null,
+          actorDisplayName: detail.actorDisplayName ? String(detail.actorDisplayName) : null,
           interactionId: String(detail.commentId ?? `cmt:${actor}:${target}:${occurredAt}`),
         },
       ];
@@ -130,6 +140,7 @@ export function interactionsFromEvent(
           contextId: detail.targetId ?? null,
           sourceEntityType: 'reaction',
           sourceEntityId: detail.targetId ?? null,
+          actorDisplayName: null,
           interactionId: `rx:${actor}:${detail.targetId ?? ''}:${occurredAt}`,
         },
       ];
@@ -147,12 +158,15 @@ export function interactionsFromEvent(
           contextId: detail.challengeId ?? null,
           sourceEntityType: 'cheer',
           sourceEntityId: detail.cheerId ?? null,
+          actorDisplayName: null,
           interactionId: String(detail.cheerId ?? `cheer:${actor}:${target}:${occurredAt}`),
         },
       ];
     }
     case 'challenge.completed': {
-      const users: string[] = Array.isArray(detail.completedUserIds) ? detail.completedUserIds : [];
+      const all: string[] = Array.isArray(detail.completedUserIds) ? detail.completedUserIds : [];
+      // 팬아웃 상한 — 초과 완주자는 co_challenge 쌍 생성에서 제외(개인 집계엔 영향 없음)
+      const users = all.slice(0, MAX_CO_CHALLENGE_USERS);
       const challengeId = String(detail.challengeId ?? '');
       const out: PairInteraction[] = [];
       for (let i = 0; i < users.length; i += 1) {
@@ -168,6 +182,7 @@ export function interactionsFromEvent(
             contextId: challengeId,
             sourceEntityType: 'challenge',
             sourceEntityId: challengeId,
+            actorDisplayName: null,
             // 챌린지·쌍당 1건 — 재완료 이벤트에도 멱등
             interactionId: `cc:${challengeId}:${a < b ? a : b}:${a < b ? b : a}`,
           });

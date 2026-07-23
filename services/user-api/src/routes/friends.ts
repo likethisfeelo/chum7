@@ -5,7 +5,7 @@
  */
 import { Hono } from 'hono';
 import type { AppEnv } from '@chum7/api-kit';
-import { ok, fail } from '@chum7/api-kit';
+import { ok, fail, publishEvent } from '@chum7/api-kit';
 import {
   deleteFriendEdge,
   getFriendEdge,
@@ -85,6 +85,7 @@ friendsRoutes.post('/requests', async (c) => {
   const now = new Date().toISOString();
   await putFriendEdge({ userId, otherUserId: toUserId, status: 'pending', direction: 'outgoing', requestedAt: now });
   await putFriendEdge({ userId: toUserId, otherUserId: userId, status: 'pending', direction: 'incoming', requestedAt: now });
+  await publishEvent('friend.requested', { requesterId: userId, targetUserId: toUserId });
   return ok(c, { requested: true, toUserId }, '친구 요청을 보냈습니다');
 });
 
@@ -103,6 +104,7 @@ friendsRoutes.post('/requests/:fromUserId/accept', async (c) => {
   await putFriendEdge({ userId: fromUserId, otherUserId: userId, status: 'accepted', direction: 'mutual', acceptedAt: now });
   await setPairFriendFlag(userId, fromUserId, true);
   await setPairFriendFlag(fromUserId, userId, true);
+  await publishEvent('friend.accepted', { accepterId: userId, requesterId: fromUserId });
   return ok(c, { accepted: true, friendUserId: fromUserId }, '친구가 되었습니다');
 });
 
@@ -146,9 +148,8 @@ friendsRoutes.get('/', async (c) => {
 friendsRoutes.get('/:otherUserId/relationship-summary', async (c) => {
   const { userId } = c.get('authUser')!;
   const otherUserId = c.req.param('otherUserId');
-  if (!(await friendshipOf(userId, otherUserId))) {
-    return fail(c, 403, 'NOT_FRIENDS', '친구 사이에서만 볼 수 있어요');
-  }
+  const fs = await friendshipOf(userId, otherUserId);
+  if (!fs) return fail(c, 403, 'NOT_FRIENDS', '친구 사이에서만 볼 수 있어요');
   const stat = (await getPairStat(userId, otherUserId)) ?? {};
   return ok(c, {
     sharedChallengeCount: Number(stat.sharedChallengeCount ?? 0),
@@ -158,6 +159,15 @@ friendsRoutes.get('/:otherUserId/relationship-summary', async (c) => {
     plazaMeetCount: Number(stat.plazaMeetCount ?? 0),
     firstInteractionAt: stat.firstInteractionAt ?? null,
     lastInteractionAt: stat.lastInteractionAt ?? null,
+    // 동의 상태 — 프론트가 체크박스 초기값 + 상호 동의 여부 표시에 사용
+    myConsent: {
+      timeline: fs.mine.timelineConsent === true,
+      fullContent: fs.mine.fullContentConsent === true,
+    },
+    counterpartConsent: {
+      timeline: fs.theirs.timelineConsent === true,
+      fullContent: fs.theirs.fullContentConsent === true,
+    },
   });
 });
 
@@ -200,8 +210,9 @@ friendsRoutes.get('/:otherUserId/archive', async (c) => {
       interactionType: it.interactionType,
       contextType: it.contextType,
       contextId: it.contextId ?? null,
-      // 당사자 표기는 나/친구로만 (실명·활동명 재작성 금지)
+      // 당사자 표기는 나/친구 + 작성 당시 활동명 스냅샷(있으면). 실명 재작성 금지.
       actorIsMine: it.actorUserId === userId,
+      actorDisplayName: it.actorDisplayName ?? null,
       hasSource: Boolean(it.sourceEntityId),
     }));
   return ok(c, {
