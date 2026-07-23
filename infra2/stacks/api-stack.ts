@@ -159,10 +159,13 @@ export class ApiStack extends cdk.Stack {
       environment: {
         SOCIAL_TABLE: stateful.tables.social.tableName,
         UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
+        // 익명 활동명 솔트 — 보드·인증 댓글 익명 ID 생성에 필수 (미주입 시 500/폴백)
+        ANON_ID_SALT_SECRET_NAME: stateful.anonSaltSecret.secretName,
       },
     });
     stateful.tables.social.grantReadWriteData(socialApi);
     stateful.uploadsBucket.grantRead(socialApi); // 미디어 URL 재서명
+    stateful.anonSaltSecret.grantRead(socialApi); // 익명 ID 솔트 로드
     eventBus.grantPutEventsTo(socialApi);
 
     // --- cheer-api: /ch (challenges 읽기 전용 — porting-guide §4 예외) ---

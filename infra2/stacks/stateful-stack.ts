@@ -46,6 +46,7 @@ export class StatefulStack extends cdk.Stack {
   readonly pgSecret: secretsmanager.Secret;
   readonly identitySecret: secretsmanager.Secret;
   readonly vapidSecret: secretsmanager.Secret;
+  readonly anonSaltSecret: secretsmanager.Secret;
 
   constructor(scope: Construct, id: string, props: StatefulStackProps) {
     super(scope, id, props);
@@ -153,6 +154,12 @@ export class StatefulStack extends cdk.Stack {
     this.vapidSecret = new secretsmanager.Secret(this, 'VapidSecret', {
       secretName: `${config.prefix}/vapid`,
       description: 'Web Push VAPID 키쌍 — Phase 4에서 사용',
+      ...secretDefaults,
+    });
+    // 익명 ID 솔트 — 값은 `npm run ops:set-anon-salt`로 1회 주입. 회전 금지(과거 활동명 전부 변경됨).
+    this.anonSaltSecret = new secretsmanager.Secret(this, 'AnonSaltSecret', {
+      secretName: `${config.prefix}/anon-id-salt`,
+      description: '익명 활동명 생성 솔트 (social-api) — 고정, 회전 금지',
       ...secretDefaults,
     });
 

@@ -38,8 +38,8 @@ describe('infra2 stacks', () => {
     }
   });
 
-  it('StatefulStack — 시크릿 셸 3종 (PG/본인확인/VAPID)', () => {
-    dev.stateful.resourceCountIs('AWS::SecretsManager::Secret', 3);
+  it('StatefulStack — 시크릿 셸 4종 (PG/본인확인/VAPID/익명솔트)', () => {
+    dev.stateful.resourceCountIs('AWS::SecretsManager::Secret', 4);
   });
 
   it('prod — 모든 테이블과 Cognito가 RETAIN (데이터 보호)', () => {

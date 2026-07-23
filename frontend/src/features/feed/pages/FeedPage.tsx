@@ -6,7 +6,6 @@ import { CHALLENGE_CATEGORIES, SLUG_TO_COLOR, SLUG_TO_LABEL } from '@/features/c
 import { EmptyState } from '@/shared/components/EmptyState';
 import { SkeletonList } from '@/shared/components/Skeleton';
 
-import { AnonymousModeBanner } from '@/features/feed/components/AnonymousModeBanner';
 import { PlazaPostCard } from '@/features/feed/components/PlazaPostCard';
 import { usePlazaFeed } from '@/features/feed/hooks/usePlazaFeed';
 import { usePlazaComments } from '@/features/feed/hooks/usePlazaComments';
@@ -16,7 +15,6 @@ import { apiClient } from '@/lib/api-client';
 import { hashtagApi } from '@/features/hashtag/api/hashtagApi';
 import type { HashtagSummary } from '@/features/hashtag/api/hashtagApi';
 
-const ANONYMITY_STORAGE_KEY = 'outer-space-anonymous-mode';
 const SUBSCRIBED_HASHTAGS_KEY = 'plaza-subscribed-hashtags';
 
 // ── 모집 중인 챌린지 캐러셀 ────────────────────────────────────────────
@@ -153,7 +151,6 @@ export const FeedPage = () => {
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
-  const [isAnonymousMode, setIsAnonymousMode] = useState(false);
   const [subscribedTags] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem(SUBSCRIBED_HASHTAGS_KEY) || '[]') as string[]; }
     catch { return []; }
@@ -187,10 +184,6 @@ export const FeedPage = () => {
     [savedPostsData],
   );
 
-  useEffect(() => {
-    setIsAnonymousMode(localStorage.getItem(ANONYMITY_STORAGE_KEY) === 'true');
-  }, []);
-
   const { posts, isLoading, isError, hasNextPage, fetchNextPage, isFetchingNextPage } = usePlazaFeed(
     'all',
     selectedCategory ?? undefined,
@@ -220,14 +213,6 @@ export const FeedPage = () => {
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts]);
-
-  const toggleAnonymousMode = () => {
-    setIsAnonymousMode((prev) => {
-      const next = !prev;
-      localStorage.setItem(ANONYMITY_STORAGE_KEY, String(next));
-      return next;
-    });
-  };
 
   const activeCat = selectedCategory
     ? CHALLENGE_CATEGORIES.find((c) => c.slug === selectedCategory)
@@ -287,11 +272,6 @@ export const FeedPage = () => {
 
         {/* ── Main Feed ── */}
         <div className="space-y-4">
-
-          {/* 모바일용 익명 배너 */}
-          <div className="lg:hidden">
-            <AnonymousModeBanner isActive={isAnonymousMode} onToggle={toggleAnonymousMode} />
-          </div>
 
           {/* 활성 해쉬태그 필터 표시 */}
           {(activeCat || selectedHashtag) && (
@@ -382,9 +362,6 @@ export const FeedPage = () => {
               onNavigate={(id) => navigate(`/challenges/${id}`)}
             />
           )}
-
-          {/* 마당 댓글 익명 활동명 */}
-          <AnonymousModeBanner isActive={isAnonymousMode} onToggle={toggleAnonymousMode} />
 
         </aside>
       </div>
