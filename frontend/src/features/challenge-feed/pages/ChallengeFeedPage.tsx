@@ -178,15 +178,19 @@ function VerificationComments({
   challengeId,
   canComment,
   challengeEnded,
+  isLeader = false,
 }: {
   verificationId: string;
   challengeId: string;
   canComment: boolean;
   challengeEnded: boolean;
+  isLeader?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
+  // 리더 전용: 이 댓글을 '챌린지 리더'로 쓸지 '참여자'(일일 활동명)로 쓸지
+  const [asLeader, setAsLeader] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: comments = [], isLoading } = useQuery<FeedComment[]>({
@@ -205,7 +209,7 @@ function VerificationComments({
     mutationFn: async (content: string) =>
       apiClient.post(
         `/s/challenge-feed/${challengeId}/verifications/${verificationId}/comments`,
-        { content },
+        { content, authorMode: isLeader && asLeader ? "leader" : "participant" },
       ),
     onSuccess: () => {
       setText("");
@@ -322,6 +326,35 @@ function VerificationComments({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* 리더 전용: 작성 역할 선택 */}
+          {canComment && isLeader && (
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-[11px] text-gray-500">작성 모드</span>
+              <button
+                type="button"
+                onClick={() => setAsLeader(true)}
+                className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                  asLeader
+                    ? "bg-primary-600 text-white border-primary-600"
+                    : "bg-white text-gray-600 border-gray-300"
+                }`}
+              >
+                👑 챌린지 리더
+              </button>
+              <button
+                type="button"
+                onClick={() => setAsLeader(false)}
+                className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                  !asLeader
+                    ? "bg-primary-600 text-white border-primary-600"
+                    : "bg-white text-gray-600 border-gray-300"
+                }`}
+              >
+                참여자
+              </button>
             </div>
           )}
 
@@ -1393,6 +1426,7 @@ export const ChallengeFeedPage = () => {
                           challengeId={challengeId!}
                           canComment={isActive && Boolean(userChallenge) && !isGaveUp}
                           challengeEnded={!isActive}
+                          isLeader={isLeader}
                         />
                       </div>
                     </div>

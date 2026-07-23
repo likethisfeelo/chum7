@@ -26,6 +26,7 @@ import {
   verCommentSk,
 } from '../repo/verification-social';
 import { verificationPk } from '../repo/shared';
+import { getChallengeLeaderId } from '../repo/challenge-ref';
 
 export const challengeFeedRoutes = new Hono<AppEnv>();
 
@@ -38,14 +39,17 @@ challengeFeedRoutes.get(`${BASE}/comments`, async (c) => {
   const verificationId = c.req.param('verificationId');
 
   const items = await listVerificationComments(verificationId);
-  const comments = items.map((item) => ({
-    commentId: item.commentId,
-    displayName: item.dailyAnonymousId ?? '익명',
-    isLeader: false,
-    isOwn: item.userId === userId,
-    content: item.content,
-    createdAt: item.createdAt,
-  }));
+  const comments = items.map((item) => {
+    const isLeader = item.authorMode === 'leader';
+    return {
+      commentId: item.commentId,
+      displayName: isLeader ? '챌린지 리더' : item.dailyAnonymousId ?? '익명',
+      isLeader,
+      isOwn: item.userId === userId,
+      content: item.content,
+      createdAt: item.createdAt,
+    };
+  });
 
   return c.json({ data: comments });
 });
@@ -64,6 +68,15 @@ challengeFeedRoutes.post(`${BASE}/comments`, async (c) => {
     // ANON_ID_SALT 미설정 시 fallback (레거시 동작 승계)
   }
 
+  // 리더 모드 요청 시 서버 검증 — 실제 리더가 아니면 참여자로 강등(변조 차단)
+  let authorMode: 'leader' | 'participant' = input.authorMode ?? 'participant';
+  if (authorMode === 'leader') {
+    const leaderId = await getChallengeLeaderId(challengeId);
+    if (!leaderId || leaderId !== userId) authorMode = 'participant';
+  }
+  const isLeader = authorMode === 'leader';
+  const displayName = isLeader ? '챌린지 리더' : dailyAnonymousId;
+
   const commentId = randomUUID();
   const now = new Date().toISOString();
 
@@ -75,6 +88,7 @@ challengeFeedRoutes.post(`${BASE}/comments`, async (c) => {
     challengeId,
     userId,
     dailyAnonymousId,
+    authorMode,
     content: input.content,
     createdAt: now,
   });
@@ -93,8 +107,8 @@ challengeFeedRoutes.post(`${BASE}/comments`, async (c) => {
   return c.json({
     data: {
       commentId,
-      displayName: dailyAnonymousId,
-      isLeader: false,
+      displayName,
+      isLeader,
       isOwn: true,
       content: input.content,
       createdAt: now,
