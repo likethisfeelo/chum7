@@ -95,7 +95,9 @@ git push origin main
 - [x] **단계 E 프론트**: 전체콘텐츠 동의 체크박스 + '원본 보기' 딥링크(플래그 off면 우아한 토스트).
 - [x] **친구 요청 배지**: 마이 "친구" 버튼에 받은 신청 수 배지.
 - [x] **차단·해제 시** 관계 정리: block도 집계 `isFriend` 해제(delete와 정합).
-- [ ] bulletin 댓글 등 기타 표면의 활동명 스냅샷(현재 생략).
+- [x] **bulletin 익명 누수 수정**: 게시글·댓글 목록이 실 `userId`를 노출하던 잠복 버그
+      (P0-2와 동일 클래스) → 활동명(수달N) 스냅샷 + isMine으로 교체, userId 응답 제거.
+      순수 뷰 도메인 분리 + 프라이버시 불변식 테스트. *(현재 프론트 미노출 — API 레벨 방어)*
 
 ### 6.4 견고성·정합성
 - [x] 친구 신청 판정 로직 도메인 분리 + **단위테스트**(양방향 임계값·상호신청·우선단락).
@@ -114,8 +116,12 @@ git push origin main
       legacy 테스트 32개(`test/backend/*` 등 `backend/` import)·stale `admin-docs` 테스트·
       orphan `validate-cheer-widget` 스크립트 제거. **`npm test` 전면 그린(378개)**.
       *`shared/join-requirements`는 프론트가 아직 참조 → `shared/` 유지.*
-- [ ] **구 AWS 스택(chme-*) 실제 teardown**: `cdk destroy`는 **DynamoDB 테이블 삭제 위험** →
-      데이터 백업/무사용 확인 후 사람이 직접 실행(자동화 금지). 컷오버 완료로 dormant 상태.
+- [~] **구 AWS 스택(chme-*) 실제 teardown**: `scripts/teardown-legacy-stacks.ps1` 준비 완료.
+      원격 세션엔 유효한 AWS 자격증명이 없어(토큰 무효) 로컬에서 실행해야 함.
+      스크립트가 `chme2-*`는 이중 가드로 제외하고, 종료보호 해제·S3 비우기·export 의존성
+      반복 재시도까지 한 번에 처리. 데이터 보존 불필요 확인됨(사용자).
+      실행: 미리보기 `-Region ap-northeast-2` → 철거 `-Region ap-northeast-2 -Execute`
+      (엣지/인증서가 us-east-1이면 `-Region us-east-1 -Execute` 한 번 더).
 
 ---
 

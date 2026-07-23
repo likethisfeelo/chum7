@@ -7,6 +7,9 @@ import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import type { AppEnv } from '@chum7/api-kit';
 import { ok, fail, publishEvent } from '@chum7/api-kit';
+import { createDailyAnonymousId } from '@chum7/core';
+import { loadAnonSalt } from '../anon-salt';
+import { bulletinView } from '../domain/bulletin-view';
 import { bulletinCommentSchema, bulletinCreatePostSchema, BULLETIN_PHASES } from '../schemas';
 import { parseNextToken, toNextToken } from '../domain/pagination';
 import {
@@ -20,7 +23,7 @@ import {
   putBulletinItem,
   updateBulletinPostCounter,
 } from '../repo/bulletin';
-import { bulletinPk, stripKeys } from '../repo/shared';
+import { bulletinPk } from '../repo/shared';
 
 export const bulletinRoutes = new Hono<AppEnv>();
 
@@ -43,7 +46,9 @@ bulletinRoutes.get('/:challengeId/:phase/posts', async (c) => {
   }
 
   const page = await listBulletinPosts(challengeId, phase, limit, exclusiveStartKey);
-  const posts = page.items.map(stripKeys);
+  const salt = await loadAnonSalt();
+  const viewerId = c.get('authUser')?.userId;
+  const posts = page.items.map((it) => bulletinView(it, viewerId, salt));
   const nextToken = toNextToken(page.lastKey);
 
   return ok(c, {
@@ -65,11 +70,14 @@ bulletinRoutes.post('/:challengeId/:phase/posts', async (c) => {
   const input = bulletinCreatePostSchema.parse(await c.req.json());
   const postId = randomUUID();
   const now = new Date().toISOString();
+  // 작성 당시 활동명 스냅샷(P1-2 패턴) — 이후 날짜가 바뀌어도 표기 고정
+  const authorDisplayName = createDailyAnonymousId(challengeId, userId, await loadAnonSalt(), new Date(now));
 
   const post = {
     postId,
     challengeId,
     userId,
+    authorDisplayName,
     phase,
     challengePhaseKey: `${challengeId}#${phase}`, // 레거시 응답 필드 유지
     content: {
@@ -91,7 +99,8 @@ bulletinRoutes.post('/:challengeId/:phase/posts', async (c) => {
     ...post,
   });
 
-  return ok(c, post, '게시글이 작성되었습니다', 201);
+  // 응답도 익명 뷰 — 작성자 본인이라 isMine=true, 실 userId 미노출
+  return ok(c, bulletinView(post, userId, await loadAnonSalt()), '게시글이 작성되었습니다', 201);
 });
 
 // 좋아요 토글 (레거시 POST /bulletin/{id}/posts/{postId}/like)
@@ -152,7 +161,9 @@ bulletinRoutes.get('/:challengeId/:phase/posts/:postId/comments', async (c) => {
   }
 
   const page = await listBulletinComments(challengeId, phase, postId, limit, exclusiveStartKey);
-  const comments = page.items.map(stripKeys);
+  const salt = await loadAnonSalt();
+  const viewerId = c.get('authUser')?.userId;
+  const comments = page.items.map((it) => bulletinView(it, viewerId, salt));
   const nextToken = toNextToken(page.lastKey);
 
   return ok(c, { comments, total: comments.length, nextToken, hasMore: !!nextToken });
@@ -175,10 +186,14 @@ bulletinRoutes.post('/:challengeId/:phase/posts/:postId/comments', async (c) => 
 
   const commentId = randomUUID();
   const now = new Date().toISOString();
+  const salt = await loadAnonSalt();
+  const authorDisplayName = createDailyAnonymousId(challengeId, userId, salt, new Date(now));
   const comment = {
     commentId,
     postId,
+    challengeId,
     userId,
+    authorDisplayName,
     content: input.content,
     isDeleted: false,
     createdAt: now,
@@ -187,7 +202,6 @@ bulletinRoutes.post('/:challengeId/:phase/posts/:postId/comments', async (c) => 
   await putBulletinItem({
     pk: bulletinPk(challengeId, phase),
     sk: bulletinCommentSk(postId, now, commentId),
-    challengeId,
     phase,
     ...comment,
   });
@@ -201,8 +215,9 @@ bulletinRoutes.post('/:challengeId/:phase/posts/:postId/comments', async (c) => 
       targetOwnerId: post.userId,
       authorId: userId,
       commentId,
+      actorDisplayName: authorDisplayName,
     });
   }
 
-  return ok(c, comment, '댓글이 작성되었습니다', 201);
+  return ok(c, bulletinView(comment, userId, salt), '댓글이 작성되었습니다', 201);
 });
