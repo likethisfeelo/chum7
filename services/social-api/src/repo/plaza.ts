@@ -87,6 +87,27 @@ export async function putPostComment(item: Record<string, any>): Promise<void> {
   await docClient.send(new PutCommand({ TableName: tableName(TABLE), Item: item }));
 }
 
+/** 댓글 삭제 — 본인(userId 일치)만. 조건 미충족/없음이면 false. */
+export async function deletePostComment(
+  plazaPostId: string,
+  sk: string,
+  userId: string,
+): Promise<boolean> {
+  try {
+    await docClient.send(
+      new DeleteCommand({
+        TableName: tableName(TABLE),
+        Key: { pk: postPk(plazaPostId), sk },
+        ConditionExpression: 'userId = :uid',
+        ExpressionAttributeValues: { ':uid': userId },
+      }),
+    );
+    return true;
+  } catch {
+    return false; // ConditionalCheckFailed = 본인 아님 또는 존재하지 않음
+  }
+}
+
 export async function listPostComments(
   plazaPostId: string,
   limit: number,

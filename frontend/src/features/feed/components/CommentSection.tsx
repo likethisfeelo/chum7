@@ -40,7 +40,19 @@ export function CommentSection({ postId, hook }: Props) {
               </span>
               <span className="flex-1 break-all">{comment.content}</span>
               {comment.isMine && (
-                <span className="shrink-0 text-primary-700 font-medium">나</span>
+                <>
+                  <span className="shrink-0 text-primary-700 font-medium">나</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('이 댓글을 삭제할까요?')) hook.remove(postId, comment);
+                    }}
+                    className="shrink-0 text-gray-400 hover:text-red-500"
+                    aria-label="댓글 삭제"
+                  >
+                    삭제
+                  </button>
+                </>
               )}
             </div>
           ))

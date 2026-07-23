@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   createPlazaComment,
+  deletePlazaComment,
   fetchPlazaCommentsPage,
   PlazaComment,
 } from '@/features/feed/api/plazaApi';
@@ -149,5 +150,23 @@ export function usePlazaComments(initialCounts: Record<string, number> = {}) {
     update(postId, { input: value, submitError: null });
   }
 
-  return { getState, toggle, loadMore, submit, setInput };
+  async function remove(postId: string, comment: PlazaComment) {
+    const state = getState(postId);
+    const prev = state.comments;
+    // 낙관적 제거
+    update(postId, {
+      comments: prev.filter((c) => c.commentId !== comment.commentId),
+      count: Math.max(0, state.count - 1),
+    });
+    try {
+      const ok = await deletePlazaComment(postId, comment.commentId, comment.createdAt);
+      if (!ok) throw new Error('delete failed');
+    } catch {
+      // 롤백
+      update(postId, { comments: prev, count: state.count });
+      toast.error('댓글 삭제에 실패했어요.');
+    }
+  }
+
+  return { getState, toggle, loadMore, submit, setInput, remove };
 }

@@ -24,6 +24,7 @@ import { decodeFeedCursor, encodeFeedCursor, CursorMap } from '../domain/paginat
 import {
   buildPostKeys,
   countReactions,
+  deletePostComment,
   deleteReaction,
   getOrAssignAnonNumber,
   getPost,
@@ -309,6 +310,22 @@ plazaRoutes.get('/:plazaPostId/comments', async (c) => {
       userId,
     ),
   );
+});
+
+// 댓글 삭제 (본인만). sk 재구성을 위해 createdAt 쿼리 필요.
+plazaRoutes.delete('/:plazaPostId/comments/:commentId', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const plazaPostId = c.req.param('plazaPostId');
+  const commentId = c.req.param('commentId');
+  const createdAt = c.req.query('createdAt');
+  if (!createdAt) return fail(c, 400, 'MISSING_CREATED_AT', 'createdAt 쿼리가 필요합니다');
+
+  const deleted = await deletePostComment(plazaPostId, commentSk(createdAt, commentId), userId);
+  if (!deleted) {
+    return fail(c, 404, 'COMMENT_NOT_FOUND', '삭제할 댓글이 없거나 권한이 없습니다');
+  }
+  await incrementPostCounter(plazaPostId, 'commentCount', -1, new Date().toISOString());
+  return ok(c, { deleted: true, commentId });
 });
 
 // 리액션 추가 (레거시 POST /plaza/{id}/react — 유저당 1개 RCT#<userId>)

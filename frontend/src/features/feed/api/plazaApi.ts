@@ -149,3 +149,11 @@ export async function createPlazaComment(plazaPostId: string, content: string): 
   const response = await apiClient.post(`/s/plaza/${encodeURIComponent(plazaPostId)}/comments`, { content });
   return response.data?.data ?? null;
 }
+
+export async function deletePlazaComment(plazaPostId: string, commentId: string, createdAt: string): Promise<boolean> {
+  const query = new URLSearchParams({ createdAt });
+  const response = await apiClient.delete(
+    `/s/plaza/${encodeURIComponent(plazaPostId)}/comments/${encodeURIComponent(commentId)}?${query.toString()}`,
+  );
+  return Boolean(response.data?.data?.deleted);
+}
