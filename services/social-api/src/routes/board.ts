@@ -21,7 +21,7 @@ import {
   upsertPreviewSchema,
 } from '../schemas';
 import { validateBlocks } from '../domain/blocks';
-import { createDailyAnonymousId } from '../domain/anonymous-id';
+import { createDailyAnonymousId } from '@chum7/core';
 import { loadAnonSalt } from '../anon-salt';
 import { parseNextToken, toNextToken } from '../domain/pagination';
 import {

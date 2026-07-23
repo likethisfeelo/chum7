@@ -1304,11 +1304,11 @@ export const ChallengeFeedPage = () => {
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center text-xs font-bold text-primary-700 flex-shrink-0">
-                            {item.isAnonymous ? "익" : (item.userName?.[0]?.toUpperCase() ?? "?")}
+                            {item.displayName?.[0]?.toUpperCase() ?? "?"}
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-semibold text-gray-800 truncate">
-                              {item.isAnonymous ? "익명 참여자" : item.userName || "참여자"}
+                              {item.displayName || "참여자"}
                             </p>
                             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                               <span className="text-[11px] font-semibold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-md border border-primary-100">
@@ -1344,7 +1344,7 @@ export const ChallengeFeedPage = () => {
                       {item.verificationType === "video" && item.mediaValidationStatus === "invalid" && (
                         <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 space-y-2">
                           <p>영상 검증에서 문제가 발견되었습니다. 다시 업로드 해주세요.</p>
-                          {item.userId === userChallenge?.userId && (
+                          {item.isMine && (
                             <button
                               type="button"
                               onClick={() => {

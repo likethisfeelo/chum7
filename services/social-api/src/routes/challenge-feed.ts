@@ -13,7 +13,7 @@ import {
   verificationReactionSchema,
   VERIFICATION_REACTION_EMOJIS,
 } from '../schemas';
-import { createDailyAnonymousId } from '../domain/anonymous-id';
+import { createDailyAnonymousId } from '@chum7/core';
 import { loadAnonSalt } from '../anon-salt';
 import {
   deleteVerificationComment,

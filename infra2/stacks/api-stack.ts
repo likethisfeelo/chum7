@@ -127,11 +127,14 @@ export class ApiStack extends cdk.Stack {
         CHALLENGES_TABLE: stateful.tables.challenges.tableName,
         UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
         COMMERCE_TABLE: stateful.tables.commerce.tableName,
+        // 인증글 작성자 일일 활동명 생성용 (social-api와 동일 salt·알고리즘 공유)
+        ANON_ID_SALT_SECRET_NAME: stateful.anonSaltSecret.secretName,
       },
     });
     stateful.tables.challenges.grantReadWriteData(this.challengeApi);
     stateful.uploadsBucket.grantPut(this.challengeApi); // presigned PUT 서명용
     stateful.uploadsBucket.grantRead(this.challengeApi);
+    stateful.anonSaltSecret.grantRead(this.challengeApi); // 인증글 일일 활동명 생성
     // 유료 참여 시 paid 주문 검증 — 읽기 전용 (COMMERCE_V0.md)
     stateful.tables.commerce.grantReadData(this.challengeApi);
     eventBus.grantPutEventsTo(this.challengeApi);
