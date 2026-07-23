@@ -1,14 +1,6 @@
 import { PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
-import {
-  COUNT_ATTR,
-  InteractionType,
-  PairInteraction,
-  pairKey,
-  RECOMMEND_THRESHOLD,
-  scorePair,
-  scoreSortKey,
-} from '../domain/pairing';
+import { COUNT_ATTR, InteractionType, PairInteraction, pairKey } from '../domain/pairing';
 
 const GRAPH_TABLE = 'GRAPH_TABLE';
 
@@ -50,64 +42,40 @@ export async function appendLedger(x: PairInteraction, occurredAt: string): Prom
   }
 }
 
-/** 한 방향 집계 갱신 + 추천 점수/gsi 재계산 */
+/**
+ * 한 방향 집계 갱신 (친구 모델 v2 — 방향별 카운트).
+ * dir='out': 이 파티션 주인이 actor (owner→other). dir='in': 주인이 target (other→owner).
+ * 자격 판정은 read 시 outCount≥T && inCount≥T (docs/friend-model-v2.md).
+ */
 async function bumpOneDirection(
-  userId: string,
+  ownerUserId: string,
   otherUserId: string,
+  dir: 'out' | 'in',
   interactionType: InteractionType,
   occurredAt: string,
-  nowMs: number,
 ): Promise<void> {
-  const key = { pk: `USER#${userId}`, sk: `PAIRSTAT#${otherUserId}` };
-  const updated = await docClient.send(
+  await docClient.send(
     new UpdateCommand({
       TableName: tableName(GRAPH_TABLE),
-      Key: key,
+      Key: { pk: `USER#${ownerUserId}`, sk: `PAIRSTAT#${otherUserId}` },
       UpdateExpression:
-        'ADD #cnt :one ' +
+        'ADD #dir :one, #cnt :one ' +
         'SET otherUserId = :other, lastInteractionAt = :occ, updatedAt = :occ, ' +
         'firstInteractionAt = if_not_exists(firstInteractionAt, :occ), ' +
         'isFriend = if_not_exists(isFriend, :false)',
-      ExpressionAttributeNames: { '#cnt': COUNT_ATTR[interactionType] },
+      ExpressionAttributeNames: {
+        '#dir': dir === 'out' ? 'outCount' : 'inCount',
+        '#cnt': COUNT_ATTR[interactionType], // per-type (요약 표시용)
+      },
       ExpressionAttributeValues: { ':one': 1, ':other': otherUserId, ':occ': occurredAt, ':false': false },
-      ReturnValues: 'ALL_NEW',
     }),
   );
-  const stat = updated.Attributes ?? {};
-  const score = scorePair(stat, nowMs);
-  const isFriend = stat.isFriend === true;
-
-  if (!isFriend && score >= RECOMMEND_THRESHOLD) {
-    // 추천 후보 — gsi1에 점수 기록(내림차순 정렬용 제로패딩 sk)
-    await docClient.send(
-      new UpdateCommand({
-        TableName: tableName(GRAPH_TABLE),
-        Key: key,
-        UpdateExpression: 'SET recommendationScore = :s, gsi1pk = :g, gsi1sk = :gs',
-        ExpressionAttributeValues: {
-          ':s': score,
-          ':g': `REC#${userId}`,
-          ':gs': scoreSortKey(score, otherUserId),
-        },
-      }),
-    );
-  } else {
-    // 친구이거나 임계값 미만 — 추천 후보에서 제외(gsi 제거)
-    await docClient.send(
-      new UpdateCommand({
-        TableName: tableName(GRAPH_TABLE),
-        Key: key,
-        UpdateExpression: 'SET recommendationScore = :s REMOVE gsi1pk, gsi1sk',
-        ExpressionAttributeValues: { ':s': score },
-      }),
-    );
-  }
 }
 
-/** 사용자쌍 집계 — 양방향 미러 갱신 */
-export async function bumpPairStat(x: PairInteraction, occurredAt: string, nowMs: number): Promise<void> {
-  await bumpOneDirection(x.actorUserId, x.targetUserId, x.interactionType, occurredAt, nowMs);
-  await bumpOneDirection(x.targetUserId, x.actorUserId, x.interactionType, occurredAt, nowMs);
+/** 사용자쌍 집계 — 양방향 미러 (actor 파티션=out, target 파티션=in) */
+export async function bumpPairStat(x: PairInteraction, occurredAt: string): Promise<void> {
+  await bumpOneDirection(x.actorUserId, x.targetUserId, 'out', x.interactionType, occurredAt);
+  await bumpOneDirection(x.targetUserId, x.actorUserId, 'in', x.interactionType, occurredAt);
 }
 
 /**

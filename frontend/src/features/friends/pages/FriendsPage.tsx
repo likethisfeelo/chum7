@@ -2,10 +2,9 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
-  acceptFriendRequest,
+  fetchCandidates,
   fetchFriendRequests,
   fetchFriends,
-  fetchRecommendations,
   removeFriend,
   sendFriendRequest,
 } from '../api/friendsApi';
@@ -24,17 +23,18 @@ export const FriendsPage = () => {
     qc.invalidateQueries({ queryKey: ['friends'] });
   };
 
-  const recs = useQuery({ queryKey: ['friend-recommendations'], queryFn: fetchRecommendations });
+  const recs = useQuery({ queryKey: ['friend-candidates'], queryFn: fetchCandidates });
   const requests = useQuery({ queryKey: ['friend-requests'], queryFn: fetchFriendRequests });
   const friends = useQuery({ queryKey: ['friends'], queryFn: fetchFriends });
 
   const requestM = useMutation({
     mutationFn: sendFriendRequest,
-    onSuccess: () => { toast.success('친구 요청을 보냈어요'); invalidate(); },
-    onError: () => toast.error('요청에 실패했어요'),
+    onSuccess: () => { toast.success('친구 신청을 보냈어요'); invalidate(); },
+    onError: () => toast.error('신청에 실패했어요'),
   });
+  // 받은 신청 수락 = 상대에게 되-신청(상호 신청 → 자동 친구)
   const acceptM = useMutation({
-    mutationFn: acceptFriendRequest,
+    mutationFn: sendFriendRequest,
     onSuccess: () => { toast.success('친구가 되었어요'); invalidate(); },
     onError: () => toast.error('수락에 실패했어요'),
   });
@@ -67,16 +67,18 @@ export const FriendsPage = () => {
         </section>
       )}
 
-      {/* 추천 */}
+      {/* 친구 신청 가능 후보 (양방향 접점 충족) */}
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-gray-500">알 수도 있는 이웃</h2>
+        <h2 className="text-sm font-semibold text-gray-500">친구 신청 가능한 이웃을 찾았어요!</h2>
         {recs.isLoading ? (
           <p className="text-sm text-gray-400">불러오는 중…</p>
         ) : (recs.data?.length ?? 0) === 0 ? (
-          <p className="text-sm text-gray-400">아직 추천할 이웃이 없어요. 챌린지·마당에서 활동해보세요.</p>
+          <p className="text-sm text-gray-400">
+            아직 충분히 마주친 이웃이 없어요. 챌린지·마당에서 함께 활동하다 보면 나타나요.
+          </p>
         ) : (
           recs.data!.map((rec) => (
-            <div key={rec.user.userId} className="flex items-center justify-between bg-white rounded-xl border border-gray-200 p-3">
+            <div key={rec.user.userId} className="flex items-center justify-between bg-white rounded-xl border border-primary-200 bg-primary-50/30 p-3">
               <div className="min-w-0">
                 <p className="font-medium text-gray-800 truncate">{rec.user.displayName}</p>
                 <p className="text-xs text-gray-500">
@@ -89,7 +91,7 @@ export const FriendsPage = () => {
                 disabled={requestM.isPending}
                 className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm font-semibold disabled:opacity-50"
               >
-                친구 요청
+                친구 신청
               </button>
             </div>
           ))
