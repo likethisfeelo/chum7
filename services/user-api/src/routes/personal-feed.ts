@@ -8,6 +8,7 @@ import {
   FollowStatus,
 } from '../domain/feed-visibility';
 import { isValidHandle, nextHandleChangeAt, normalizeHandle } from '../domain/handle';
+import { getFriendEdge } from '../repo/friends-repo';
 import {
   deleteBlock,
   deleteFollow,
@@ -76,15 +77,22 @@ async function feedProfileResponse(c: ApiContext, requesterId: string | null, ra
   let followStatus: FollowStatus = 'none';
   let reverseFollowStatus: FollowStatus = 'none';
   let blockedByTarget = false;
+  let isFriend = false;
   if (requesterId && !isOwn) {
-    [followStatus, reverseFollowStatus, blockedByTarget] = await Promise.all([
+    const [fs, rfs, blk, friendEdge] = await Promise.all([
       followStatusOf(targetUserId, requesterId),
       followStatusOf(requesterId, targetUserId),
       isBlocked(targetUserId, requesterId),
+      getFriendEdge(requesterId, targetUserId),
     ]);
+    followStatus = fs;
+    reverseFollowStatus = rfs;
+    blockedByTarget = blk;
+    isFriend = friendEdge?.status === 'accepted';
   }
 
-  const isMutual = followStatus === 'accepted' && reverseFollowStatus === 'accepted';
+  // 친구는 상호 팔로우와 동일한 열람 권한 (친구 모델 v2 §4 — 실명 프로필 피드 상호 열람)
+  const isMutual = (followStatus === 'accepted' && reverseFollowStatus === 'accepted') || isFriend;
 
   const layer = resolveLayer({
     isOwn,
@@ -111,6 +119,7 @@ async function feedProfileResponse(c: ApiContext, requesterId: string | null, ra
     currentLayer: layer,
     followStatus,
     isMutual,
+    isFriend,
     feedSettings: { isPublic, tab02Public },
   });
 }
