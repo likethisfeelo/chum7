@@ -21,6 +21,10 @@ declare module '@aws-sdk/lib-dynamodb' {
     constructor(input: Record<string, unknown>);
   }
 
+  export class DeleteCommand {
+    constructor(input: Record<string, unknown>);
+  }
+
   export class BatchGetCommand {
     constructor(input: Record<string, unknown>);
   }
@@ -30,7 +34,7 @@ declare module '@aws-sdk/lib-dynamodb' {
   }
 
   export const DynamoDBDocumentClient: {
-    from(client: unknown): {
+    from(client: unknown, translateConfig?: Record<string, unknown>): {
       send(command: unknown): Promise<any>;
     };
   };
