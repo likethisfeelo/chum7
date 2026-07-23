@@ -53,6 +53,7 @@ export interface ArchiveEntry {
   contextType: string;
   contextId: string | null;
   actorIsMine: boolean;
+  actorDisplayName: string | null;
   hasSource: boolean;
 }
 

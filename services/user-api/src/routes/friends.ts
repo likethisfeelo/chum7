@@ -200,8 +200,9 @@ friendsRoutes.get('/:otherUserId/archive', async (c) => {
       interactionType: it.interactionType,
       contextType: it.contextType,
       contextId: it.contextId ?? null,
-      // 당사자 표기는 나/친구로만 (실명·활동명 재작성 금지)
+      // 당사자 표기는 나/친구 + 작성 당시 활동명 스냅샷(있으면). 실명 재작성 금지.
       actorIsMine: it.actorUserId === userId,
+      actorDisplayName: it.actorDisplayName ?? null,
       hasSource: Boolean(it.sourceEntityId),
     }));
   return ok(c, {

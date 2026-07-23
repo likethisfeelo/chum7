@@ -21,6 +21,8 @@ export interface PairInteraction {
   contextId: string | null;
   sourceEntityType: string;
   sourceEntityId: string | null;
+  /** 작성 당시 actor 공개 활동명(아무개N·수달N·챌린지 리더) — 타임라인 스냅샷. 없으면 null */
+  actorDisplayName: string | null;
   /** 원장 멱등 키 — 같은 이벤트 재수신 시 동일해야 한다 */
   interactionId: string;
 }
@@ -113,6 +115,7 @@ export function interactionsFromEvent(
           contextId: detail.targetId ?? null,
           sourceEntityType: 'comment',
           sourceEntityId: detail.commentId ?? null,
+          actorDisplayName: detail.actorDisplayName ? String(detail.actorDisplayName) : null,
           interactionId: String(detail.commentId ?? `cmt:${actor}:${target}:${occurredAt}`),
         },
       ];
@@ -130,6 +133,7 @@ export function interactionsFromEvent(
           contextId: detail.targetId ?? null,
           sourceEntityType: 'reaction',
           sourceEntityId: detail.targetId ?? null,
+          actorDisplayName: null,
           interactionId: `rx:${actor}:${detail.targetId ?? ''}:${occurredAt}`,
         },
       ];
@@ -147,6 +151,7 @@ export function interactionsFromEvent(
           contextId: detail.challengeId ?? null,
           sourceEntityType: 'cheer',
           sourceEntityId: detail.cheerId ?? null,
+          actorDisplayName: null,
           interactionId: String(detail.cheerId ?? `cheer:${actor}:${target}:${occurredAt}`),
         },
       ];
@@ -168,6 +173,7 @@ export function interactionsFromEvent(
             contextId: challengeId,
             sourceEntityType: 'challenge',
             sourceEntityId: challengeId,
+            actorDisplayName: null,
             // 챌린지·쌍당 1건 — 재완료 이벤트에도 멱등
             interactionId: `cc:${challengeId}:${a < b ? a : b}:${a < b ? b : a}`,
           });

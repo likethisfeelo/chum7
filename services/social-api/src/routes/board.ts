@@ -208,6 +208,7 @@ boardRoutes.post('/:challengeId/comments', async (c) => {
       targetOwnerId: board.updatedBy,
       authorId: userId,
       commentId,
+      actorDisplayName: dailyAnonymousId,
     });
   }
 

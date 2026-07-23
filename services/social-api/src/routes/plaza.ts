@@ -284,6 +284,7 @@ plazaRoutes.post('/:plazaPostId/comments', async (c) => {
       targetOwnerId,
       authorId: userId,
       commentId,
+      actorDisplayName: `아무개${anonymousNumber}`,
     });
   }
 

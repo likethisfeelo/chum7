@@ -33,6 +33,7 @@ export async function appendLedger(x: PairInteraction, occurredAt: string): Prom
           contextId: x.contextId,
           sourceEntityType: x.sourceEntityType,
           sourceEntityId: x.sourceEntityId,
+          ...(x.actorDisplayName ? { actorDisplayName: x.actorDisplayName } : {}),
           visibilityState: 'active',
           archiveEligible: true,
           occurredAt,

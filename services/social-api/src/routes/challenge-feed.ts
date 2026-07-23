@@ -101,6 +101,7 @@ challengeFeedRoutes.post(`${BASE}/comments`, async (c) => {
       targetOwnerId: input.verificationOwnerId,
       authorId: userId,
       commentId,
+      actorDisplayName: displayName,
     });
   }
 

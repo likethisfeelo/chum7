@@ -99,7 +99,11 @@ export const FriendArchivePage = () => {
             <div key={e.interactionId} className="bg-white rounded-xl border border-gray-200 p-3 text-sm">
               <span className="text-gray-400 mr-2">{fmtDate(e.occurredAt)}</span>
               <span className="text-gray-800">
-                {e.actorIsMine ? '내가' : '친구가'} {TYPE_LABEL[e.interactionType] ?? e.interactionType}
+                {e.actorIsMine ? '내가' : '친구가'}
+                {!e.actorIsMine && e.actorDisplayName && (
+                  <span className="text-gray-400"> [{e.actorDisplayName}]</span>
+                )}{' '}
+                {TYPE_LABEL[e.interactionType] ?? e.interactionType}
               </span>
               {e.contextType && <span className="text-gray-400"> · {e.contextType}</span>}
             </div>
