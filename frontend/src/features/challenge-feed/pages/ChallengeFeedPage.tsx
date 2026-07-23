@@ -274,12 +274,8 @@ function VerificationComments({
           ) : (
             <div className="space-y-2.5">
               {comments.map((c) => {
-                /* 진행 중엔 익명, 종료 후엔 실제 활동명 */
-                const displayName = challengeEnded
-                  ? c.displayName
-                  : c.isOwn
-                  ? "나"
-                  : "익명 참여자";
+                /* 게시물과 동일하게 항상 일일 활동명(수달N)/리더 표시. 본인은 "나" 배지로만 구분 */
+                const displayName = c.displayName || "익명";
 
                 return (
                   <div key={c.commentId} className="flex items-start gap-2">
@@ -303,6 +299,11 @@ function VerificationComments({
                           {c.isLeader && <span className="mr-0.5">👑</span>}
                           {displayName}
                         </span>
+                        {c.isOwn && (
+                          <span className="text-[10px] px-1 rounded bg-primary-100 text-primary-700 font-medium">
+                            나
+                          </span>
+                        )}
                         <span className="text-[10px] text-gray-400">
                           {new Date(c.createdAt).toLocaleDateString("ko-KR", {
                             month: "2-digit",
