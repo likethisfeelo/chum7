@@ -21,7 +21,8 @@ import {
   upsertPreviewSchema,
 } from '../schemas';
 import { validateBlocks } from '../domain/blocks';
-import { anonSaltFromEnv, createDailyAnonymousId } from '../domain/anonymous-id';
+import { createDailyAnonymousId } from '../domain/anonymous-id';
+import { loadAnonSalt } from '../anon-salt';
 import { parseNextToken, toNextToken } from '../domain/pagination';
 import {
   boardCommentSk,
@@ -176,7 +177,7 @@ boardRoutes.post('/:challengeId/comments', async (c) => {
 
   let dailyAnonymousId: string;
   try {
-    dailyAnonymousId = createDailyAnonymousId(challengeId, userId, anonSaltFromEnv());
+    dailyAnonymousId = createDailyAnonymousId(challengeId, userId, await loadAnonSalt());
   } catch {
     return fail(c, 500, 'ANON_SALT_NOT_CONFIGURED', '익명 ID 설정값이 누락되었습니다');
   }

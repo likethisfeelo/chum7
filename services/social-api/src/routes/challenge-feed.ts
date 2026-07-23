@@ -13,7 +13,8 @@ import {
   verificationReactionSchema,
   VERIFICATION_REACTION_EMOJIS,
 } from '../schemas';
-import { anonSaltFromEnv, createDailyAnonymousId } from '../domain/anonymous-id';
+import { createDailyAnonymousId } from '../domain/anonymous-id';
+import { loadAnonSalt } from '../anon-salt';
 import {
   deleteVerificationComment,
   deleteVerificationReaction,
@@ -58,7 +59,7 @@ challengeFeedRoutes.post(`${BASE}/comments`, async (c) => {
 
   let dailyAnonymousId = '익명';
   try {
-    dailyAnonymousId = createDailyAnonymousId(challengeId, userId, anonSaltFromEnv());
+    dailyAnonymousId = createDailyAnonymousId(challengeId, userId, await loadAnonSalt());
   } catch {
     // ANON_ID_SALT 미설정 시 fallback (레거시 동작 승계)
   }
