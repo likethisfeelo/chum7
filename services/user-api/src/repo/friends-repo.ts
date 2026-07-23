@@ -15,16 +15,45 @@ const friendSk = (other: string) => `FRIEND#${other}`;
 
 export type FriendStatus = 'pending' | 'accepted' | 'blocked' | 'removed';
 
-/** 내 사용자쌍 집계 전체 — 자격(양방향 임계값) 판정용 (친구 모델 v2) */
-export async function listPairStatsForUser(userId: string): Promise<Record<string, any>[]> {
-  const res = await docClient.send(
-    new QueryCommand({
-      TableName: tableName(TABLE),
-      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :ps)',
-      ExpressionAttributeValues: { ':pk': userPk(userId), ':ps': 'PAIRSTAT#' },
-    }),
-  );
-  return res.Items ?? [];
+/**
+ * 내 사용자쌍 집계 전체 — 자격(양방향 임계값) 판정용 (친구 모델 v2).
+ * 활동이 많은 사용자는 파티션이 1MB(Query 단일 응답 상한)를 넘을 수 있어
+ * LastEvaluatedKey로 끝까지 페이지네이션한다(자르면 자격 후보를 놓친다).
+ * 안전 상한(maxPages)으로 폭주는 방지 — 초과 시 로깅.
+ */
+export async function listPairStatsForUser(
+  userId: string,
+  maxPages = 20,
+): Promise<Record<string, any>[]> {
+  const items: Record<string, any>[] = [];
+  let exclusiveStartKey: Record<string, any> | undefined;
+  let pages = 0;
+  do {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: tableName(TABLE),
+        KeyConditionExpression: 'pk = :pk AND begins_with(sk, :ps)',
+        ExpressionAttributeValues: { ':pk': userPk(userId), ':ps': 'PAIRSTAT#' },
+        ExclusiveStartKey: exclusiveStartKey,
+      }),
+    );
+    items.push(...(res.Items ?? []));
+    exclusiveStartKey = res.LastEvaluatedKey;
+    pages += 1;
+    if (exclusiveStartKey && pages >= maxPages) {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          message: 'listPairStatsForUser hit maxPages — candidate scan truncated',
+          userId,
+          pages,
+          collected: items.length,
+        }),
+      );
+      break;
+    }
+  } while (exclusiveStartKey);
+  return items;
 }
 
 export async function getPairStat(

@@ -19,6 +19,8 @@ export async function handler(
   const type = event['detail-type'];
   const detail = event.detail ?? {};
   const occurredAt = String(detail.occurredAt ?? new Date().toISOString());
+  // 팬아웃 상한 — 환경변수로 튜닝 가능(미설정 시 도메인 기본값)
+  const coChallengeCap = Number(process.env.CO_CHALLENGE_CAP) || MAX_CO_CHALLENGE_USERS;
 
   // 콘텐츠 삭제 → 원장 항목 deleted 처리(아카이브 원문 재노출 차단)
   if (type === 'content.deleted') {
@@ -29,20 +31,20 @@ export async function handler(
   // 팬아웃 상한 초과 시 드롭 수 로깅(무언의 상한 금지)
   if (type === 'challenge.completed' && Array.isArray(detail.completedUserIds)) {
     const n = detail.completedUserIds.length;
-    if (n > MAX_CO_CHALLENGE_USERS) {
+    if (n > coChallengeCap) {
       console.warn(
         JSON.stringify({
           level: 'warn',
           message: 'co_challenge fan-out capped',
           challengeId: detail.challengeId,
           completers: n,
-          cap: MAX_CO_CHALLENGE_USERS,
+          cap: coChallengeCap,
         }),
       );
     }
   }
 
-  const interactions = interactionsFromEvent(type, detail);
+  const interactions = interactionsFromEvent(type, detail, coChallengeCap);
   if (interactions.length === 0) return;
 
   for (const x of interactions) {
