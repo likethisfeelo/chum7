@@ -93,6 +93,9 @@ export class ApiStack extends cdk.Stack {
         UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
         // 관계 아카이브 전체 콘텐츠(P3 단계 E) 글로벌 스위치
         ARCHIVE_FULL_CONTENT_ENABLED: String(config.archiveFullContentEnabled ?? false),
+        // 친구 기능(v2) — 순차 출시 스위치 + 자격 임계값(각 방향)
+        FRIENDS_ENABLED: String(config.friendsEnabled ?? false),
+        FRIEND_ELIGIBILITY_THRESHOLD: String(config.friendEligibilityThreshold ?? 100),
       },
     });
     stateful.vapidSecret.grantRead(this.userApi); // GET /public/push/key

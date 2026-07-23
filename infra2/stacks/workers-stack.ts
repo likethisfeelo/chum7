@@ -44,9 +44,12 @@ export class WorkersStack extends cdk.Stack {
         STAGE: config.stage,
         USERS_TABLE: stateful.tables.users.tableName,
         VAPID_SECRET_NAME: stateful.vapidSecret.secretName,
+        // 친구 실명 식별(v2 §3) — actor↔recipient 친구 여부 조회
+        GRAPH_TABLE: stateful.tables.graph.tableName,
       },
     });
     stateful.tables.users.grantReadWriteData(this.notificationWorker);
+    stateful.tables.graph.grantReadData(this.notificationWorker); // 친구 엣지 조회
     stateful.vapidSecret.grantRead(this.notificationWorker); // Web Push 발송 키
     this.workerFunctions.push(this.notificationWorker);
 

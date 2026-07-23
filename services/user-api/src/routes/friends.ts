@@ -13,7 +13,7 @@ import {
   getPairStat,
   listFriendEdges,
   listPairLedger,
-  listRecommendationStats,
+  listPairStatsForUser,
   putFriendEdge,
   setArchiveConsent,
   setPairFriendFlag,
@@ -21,6 +21,15 @@ import {
 import { getProfileItem } from '../repo/profile-repo';
 
 export const friendsRoutes = new Hono<AppEnv>();
+
+const FRIENDS_ENABLED = () => process.env.FRIENDS_ENABLED === 'true';
+const ELIGIBILITY_THRESHOLD = () => Number(process.env.FRIEND_ELIGIBILITY_THRESHOLD ?? 100);
+
+/** 양방향 임계값 충족 여부 (친구 모델 v2 — outCount≥T && inCount≥T) */
+function isEligible(stat: Record<string, any> | null, threshold: number): boolean {
+  if (!stat) return false;
+  return Number(stat.outCount ?? 0) >= threshold && Number(stat.inCount ?? 0) >= threshold;
+}
 
 /** 쌍 키 정규화 (원장 파티션) */
 function pairOrder(a: string, b: string): { lo: string; hi: string } {
@@ -40,26 +49,28 @@ async function displayNameOf(userId: string): Promise<string> {
   return (p?.name as string) || '이웃';
 }
 
-/** 집계 → 비식별 상호작용 강도 */
+/** 집계 → 비식별 상호작용 강도 (양방향 총량 기준) */
 function interactionLevel(stat: Record<string, any>): 'frequent' | 'regular' | 'occasional' {
-  const score = Number(stat.recommendationScore ?? 0);
-  if (score >= 12) return 'frequent';
-  if (score >= 6) return 'regular';
+  const total = Number(stat.outCount ?? 0) + Number(stat.inCount ?? 0);
+  if (total >= 300) return 'frequent';
+  if (total >= 150) return 'regular';
   return 'occasional';
 }
 
-// 추천 목록 — 이미 관계(친구/요청/차단)인 상대는 제외
-friendsRoutes.get('/recommendations', async (c) => {
+// 친구 가능 후보 — 양방향 임계값 충족 + 아직 관계 없음 ("찾았어요!")
+friendsRoutes.get('/candidates', async (c) => {
   const { userId } = c.get('authUser')!;
-  const limit = Math.min(Math.max(Number(c.req.query('limit') || 20), 1), 50);
+  if (!FRIENDS_ENABLED()) return ok(c, { candidates: [], total: 0 });
 
-  const stats = await listRecommendationStats(userId, limit * 2);
-  const edges = await listFriendEdges(userId);
+  const threshold = ELIGIBILITY_THRESHOLD();
+  const [stats, edges] = await Promise.all([listPairStatsForUser(userId), listFriendEdges(userId)]);
   const related = new Set(edges.map((e) => String(e.otherUserId)));
 
-  const candidates = stats.filter((s) => s.otherUserId && !related.has(String(s.otherUserId))).slice(0, limit);
-  const recommendations = await Promise.all(
-    candidates.map(async (s) => ({
+  const eligible = stats.filter(
+    (s) => s.otherUserId && !related.has(String(s.otherUserId)) && isEligible(s, threshold),
+  );
+  const candidates = await Promise.all(
+    eligible.map(async (s) => ({
       user: { userId: s.otherUserId, displayName: await displayNameOf(String(s.otherUserId)) },
       reason: {
         sharedChallenges: Number(s.sharedChallengeCount ?? 0),
@@ -67,45 +78,44 @@ friendsRoutes.get('/recommendations', async (c) => {
       },
     })),
   );
-  return ok(c, { recommendations, total: recommendations.length });
+  return ok(c, { candidates, total: candidates.length });
 });
 
-// 친구 요청 — 양쪽에 pending 엣지(방향 표기)
+// 친구 신청 — 자격(양방향 임계값) 필요. 상대가 이미 신청했으면 둘 다 신청 = 자동 친구.
 friendsRoutes.post('/requests', async (c) => {
   const { userId } = c.get('authUser')!;
+  if (!FRIENDS_ENABLED()) return fail(c, 403, 'FEATURE_DISABLED', '친구 기능이 아직 열리지 않았어요');
   const body = (await c.req.json().catch(() => ({}))) as { toUserId?: string };
   const toUserId = body.toUserId;
   if (!toUserId) return fail(c, 400, 'MISSING_TARGET', 'toUserId가 필요합니다');
-  if (toUserId === userId) return fail(c, 400, 'SELF_REQUEST', '자기 자신에게는 요청할 수 없습니다');
+  if (toUserId === userId) return fail(c, 400, 'SELF_REQUEST', '자기 자신에게는 신청할 수 없습니다');
 
   const existing = await getFriendEdge(userId, toUserId);
   if (existing?.status === 'accepted') return fail(c, 409, 'ALREADY_FRIENDS', '이미 친구입니다');
   if (existing?.status === 'blocked') return fail(c, 409, 'BLOCKED', '차단된 관계입니다');
 
-  const now = new Date().toISOString();
-  await putFriendEdge({ userId, otherUserId: toUserId, status: 'pending', direction: 'outgoing', requestedAt: now });
-  await putFriendEdge({ userId: toUserId, otherUserId: userId, status: 'pending', direction: 'incoming', requestedAt: now });
-  await publishEvent('friend.requested', { requesterId: userId, targetUserId: toUserId });
-  return ok(c, { requested: true, toUserId }, '친구 요청을 보냈습니다');
-});
-
-// 수락 — 양쪽 accepted + 집계 isFriend=true (추천에서 제외)
-friendsRoutes.post('/requests/:fromUserId/accept', async (c) => {
-  const { userId } = c.get('authUser')!;
-  const fromUserId = c.req.param('fromUserId');
-
-  const incoming = await getFriendEdge(userId, fromUserId);
-  if (!incoming || incoming.status !== 'pending' || incoming.direction !== 'incoming') {
-    return fail(c, 404, 'NO_PENDING_REQUEST', '수락할 요청이 없습니다');
+  // 자격: 양방향 임계값 충족해야 신청 가능(임의 신청 차단)
+  const stat = await getPairStat(userId, toUserId);
+  if (!isEligible(stat, ELIGIBILITY_THRESHOLD())) {
+    return fail(c, 403, 'NOT_ELIGIBLE', '아직 서로 충분히 마주치지 않았어요');
   }
 
   const now = new Date().toISOString();
-  await putFriendEdge({ userId, otherUserId: fromUserId, status: 'accepted', direction: 'mutual', acceptedAt: now });
-  await putFriendEdge({ userId: fromUserId, otherUserId: userId, status: 'accepted', direction: 'mutual', acceptedAt: now });
-  await setPairFriendFlag(userId, fromUserId, true);
-  await setPairFriendFlag(fromUserId, userId, true);
-  await publishEvent('friend.accepted', { accepterId: userId, requesterId: fromUserId });
-  return ok(c, { accepted: true, friendUserId: fromUserId }, '친구가 되었습니다');
+  // 상대가 이미 나에게 신청(내 쪽 incoming pending)했으면 → 상호 신청 완료 → 자동 친구
+  if (existing?.status === 'pending' && existing.direction === 'incoming') {
+    await putFriendEdge({ userId, otherUserId: toUserId, status: 'accepted', direction: 'mutual', acceptedAt: now });
+    await putFriendEdge({ userId: toUserId, otherUserId: userId, status: 'accepted', direction: 'mutual', acceptedAt: now });
+    await setPairFriendFlag(userId, toUserId, true);
+    await setPairFriendFlag(toUserId, userId, true);
+    await publishEvent('friend.accepted', { accepterId: userId, requesterId: toUserId });
+    return ok(c, { friend: true, friendUserId: toUserId }, '친구가 되었습니다');
+  }
+
+  // 첫 신청 — 양쪽 pending(방향 표기) + 상대에게 알림
+  await putFriendEdge({ userId, otherUserId: toUserId, status: 'pending', direction: 'outgoing', requestedAt: now });
+  await putFriendEdge({ userId: toUserId, otherUserId: userId, status: 'pending', direction: 'incoming', requestedAt: now });
+  await publishEvent('friend.requested', { requesterId: userId, targetUserId: toUserId });
+  return ok(c, { requested: true, toUserId }, '친구 신청을 보냈어요');
 });
 
 // 차단 — 양쪽 blocked (추천/요청 대상에서 제외)

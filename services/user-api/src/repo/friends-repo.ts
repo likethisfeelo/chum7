@@ -15,19 +15,13 @@ const friendSk = (other: string) => `FRIEND#${other}`;
 
 export type FriendStatus = 'pending' | 'accepted' | 'blocked' | 'removed';
 
-/** 추천 후보 상위 N — gsi1(REC#<uid>) 점수 내림차순 */
-export async function listRecommendationStats(
-  userId: string,
-  limit: number,
-): Promise<Record<string, any>[]> {
+/** 내 사용자쌍 집계 전체 — 자격(양방향 임계값) 판정용 (친구 모델 v2) */
+export async function listPairStatsForUser(userId: string): Promise<Record<string, any>[]> {
   const res = await docClient.send(
     new QueryCommand({
       TableName: tableName(TABLE),
-      IndexName: 'gsi1',
-      KeyConditionExpression: 'gsi1pk = :pk',
-      ExpressionAttributeValues: { ':pk': `REC#${userId}` },
-      ScanIndexForward: false, // 점수 내림차순 (제로패딩 sk)
-      Limit: limit,
+      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :ps)',
+      ExpressionAttributeValues: { ':pk': userPk(userId), ':ps': 'PAIRSTAT#' },
     }),
   );
   return res.Items ?? [];
@@ -53,11 +47,8 @@ export async function setPairFriendFlag(
     new UpdateCommand({
       TableName: tableName(TABLE),
       Key: { pk: userPk(userId), sk: pairStatSk(otherUserId) },
-      // 친구가 되면 추천에서 빠지도록 gsi1 제거. 집계 항목이 없으면 생성만.
-      UpdateExpression: isFriend
-        ? 'SET isFriend = :t REMOVE gsi1pk, gsi1sk'
-        : 'SET isFriend = :f',
-      ExpressionAttributeValues: isFriend ? { ':t': true } : { ':f': false },
+      UpdateExpression: 'SET isFriend = :v',
+      ExpressionAttributeValues: { ':v': isFriend },
     }),
   );
 }

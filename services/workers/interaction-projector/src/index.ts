@@ -19,7 +19,6 @@ export async function handler(
   const type = event['detail-type'];
   const detail = event.detail ?? {};
   const occurredAt = String(detail.occurredAt ?? new Date().toISOString());
-  const nowMs = Date.now();
 
   // 콘텐츠 삭제 → 원장 항목 deleted 처리(아카이브 원문 재노출 차단)
   if (type === 'content.deleted') {
@@ -50,7 +49,7 @@ export async function handler(
     try {
       const fresh = await appendLedger(x, occurredAt);
       if (!fresh) continue; // 중복 이벤트 — 집계 갱신 스킵(과다 카운트 방지)
-      await bumpPairStat(x, occurredAt, nowMs);
+      await bumpPairStat(x, occurredAt);
     } catch (err) {
       // 개별 쌍 실패는 로깅 후 계속 — 이벤트 전체는 DLQ 재처리(멱등이라 안전)
       console.error(

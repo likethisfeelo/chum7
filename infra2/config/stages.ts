@@ -30,6 +30,10 @@ export interface StageConfig {
   platformFeeRate: number;
   /** 관계 아카이브 전체 콘텐츠(단계 E) 글로벌 스위치 — 기본 off, 검증 후 점진 오픈 */
   archiveFullContentEnabled?: boolean;
+  /** 친구 기능 글로벌 스위치 — 기본 off(순차 출시) */
+  friendsEnabled?: boolean;
+  /** 친구 자격 임계값 — 각 방향 상호작용 수(초기 100, 조정 가능) */
+  friendEligibilityThreshold?: number;
 }
 
 const dev: StageConfig = {

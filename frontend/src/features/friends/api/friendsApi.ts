@@ -1,6 +1,6 @@
 import { apiClient } from '@/lib/api-client';
 
-export interface FriendRecommendation {
+export interface FriendCandidate {
   user: { userId: string; displayName: string };
   reason: { sharedChallenges: number; interactionLevel: 'frequent' | 'regular' | 'occasional' };
 }
@@ -15,9 +15,9 @@ export interface FriendRequestItem {
   requestedAt: string | null;
 }
 
-export async function fetchRecommendations(): Promise<FriendRecommendation[]> {
-  const res = await apiClient.get('/u/friends/recommendations');
-  return res.data?.data?.recommendations ?? [];
+export async function fetchCandidates(): Promise<FriendCandidate[]> {
+  const res = await apiClient.get('/u/friends/candidates');
+  return res.data?.data?.candidates ?? [];
 }
 export async function fetchFriends(): Promise<FriendItem[]> {
   const res = await apiClient.get('/u/friends');
@@ -27,11 +27,9 @@ export async function fetchFriendRequests(): Promise<FriendRequestItem[]> {
   const res = await apiClient.get('/u/friends/requests');
   return res.data?.data?.requests ?? [];
 }
+// 신청 = 수락. 상대가 이미 신청했으면 서버가 자동으로 친구로 만든다(상호 신청).
 export async function sendFriendRequest(toUserId: string): Promise<void> {
   await apiClient.post('/u/friends/requests', { toUserId });
-}
-export async function acceptFriendRequest(fromUserId: string): Promise<void> {
-  await apiClient.post(`/u/friends/requests/${encodeURIComponent(fromUserId)}/accept`);
 }
 export async function removeFriend(otherUserId: string): Promise<void> {
   await apiClient.delete(`/u/friends/${encodeURIComponent(otherUserId)}`);
