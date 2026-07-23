@@ -5,7 +5,7 @@
  */
 import { Hono } from 'hono';
 import type { AppEnv } from '@chum7/api-kit';
-import { ok, fail } from '@chum7/api-kit';
+import { ok, fail, publishEvent } from '@chum7/api-kit';
 import {
   deleteFriendEdge,
   getFriendEdge,
@@ -85,6 +85,7 @@ friendsRoutes.post('/requests', async (c) => {
   const now = new Date().toISOString();
   await putFriendEdge({ userId, otherUserId: toUserId, status: 'pending', direction: 'outgoing', requestedAt: now });
   await putFriendEdge({ userId: toUserId, otherUserId: userId, status: 'pending', direction: 'incoming', requestedAt: now });
+  await publishEvent('friend.requested', { requesterId: userId, targetUserId: toUserId });
   return ok(c, { requested: true, toUserId }, '친구 요청을 보냈습니다');
 });
 
@@ -103,6 +104,7 @@ friendsRoutes.post('/requests/:fromUserId/accept', async (c) => {
   await putFriendEdge({ userId: fromUserId, otherUserId: userId, status: 'accepted', direction: 'mutual', acceptedAt: now });
   await setPairFriendFlag(userId, fromUserId, true);
   await setPairFriendFlag(fromUserId, userId, true);
+  await publishEvent('friend.accepted', { accepterId: userId, requesterId: fromUserId });
   return ok(c, { accepted: true, friendUserId: fromUserId }, '친구가 되었습니다');
 });
 

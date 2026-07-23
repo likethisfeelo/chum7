@@ -10,7 +10,7 @@
  * 설계: docs/relationship-archive-design.md
  */
 import type { EventBridgeEvent } from 'aws-lambda';
-import { interactionsFromEvent } from './domain/pairing';
+import { interactionsFromEvent, MAX_CO_CHALLENGE_USERS } from './domain/pairing';
 import { appendLedger, bumpPairStat, markLedgerDeleted } from './repo/relationship';
 
 export async function handler(
@@ -25,6 +25,22 @@ export async function handler(
   if (type === 'content.deleted') {
     await markLedgerDeleted(String(detail.sourceEntityId ?? ''));
     return;
+  }
+
+  // 팬아웃 상한 초과 시 드롭 수 로깅(무언의 상한 금지)
+  if (type === 'challenge.completed' && Array.isArray(detail.completedUserIds)) {
+    const n = detail.completedUserIds.length;
+    if (n > MAX_CO_CHALLENGE_USERS) {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          message: 'co_challenge fan-out capped',
+          challengeId: detail.challengeId,
+          completers: n,
+          cap: MAX_CO_CHALLENGE_USERS,
+        }),
+      );
+    }
   }
 
   const interactions = interactionsFromEvent(type, detail);

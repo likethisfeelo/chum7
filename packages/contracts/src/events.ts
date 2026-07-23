@@ -50,6 +50,14 @@ export const domainEventSchemas = {
     followerId: z.string(),
     followeeId: z.string(),
   }),
+  'friend.requested': z.object({
+    requesterId: z.string(),
+    targetUserId: z.string(),
+  }),
+  'friend.accepted': z.object({
+    accepterId: z.string(),
+    requesterId: z.string(),
+  }),
   'feed.invite_link_used': z.object({
     ownerId: z.string(),
     usedByUserId: z.string(),

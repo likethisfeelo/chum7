@@ -43,6 +43,18 @@ function routeNotification(
         category: 'social',
         message: '팔로우 요청이 수락되었어요',
       };
+    case 'friend.requested':
+      return {
+        recipientId: String(detail.targetUserId),
+        category: 'social',
+        message: '새 친구 요청이 있어요',
+      };
+    case 'friend.accepted':
+      return {
+        recipientId: String(detail.requesterId),
+        category: 'social',
+        message: '친구 요청이 수락되었어요',
+      };
     case 'feed.invite_link_used':
       return {
         recipientId: String(detail.ownerId),

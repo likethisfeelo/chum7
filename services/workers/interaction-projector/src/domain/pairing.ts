@@ -55,6 +55,13 @@ export const WEIGHTS: Record<InteractionType, number> = {
 /** 이 점수 미만이면 추천 후보에서 제외(gsi1 미기록) */
 export const RECOMMEND_THRESHOLD = 3;
 
+/**
+ * challenge.completed 팬아웃 상한 — 완주자 N명이면 N*(N-1)/2 쌍이 생겨 Lambda가
+ * 타임아웃될 수 있다. 완주자를 이 수로 제한(초과분은 co_challenge 쌍에서 제외).
+ * 25명 → 300쌍(안전). 초과 시 index 핸들러가 드롭 수를 로깅한다.
+ */
+export const MAX_CO_CHALLENGE_USERS = 25;
+
 export interface PairStatLike {
   sharedChallengeCount?: number;
   commentCount?: number;
@@ -157,7 +164,9 @@ export function interactionsFromEvent(
       ];
     }
     case 'challenge.completed': {
-      const users: string[] = Array.isArray(detail.completedUserIds) ? detail.completedUserIds : [];
+      const all: string[] = Array.isArray(detail.completedUserIds) ? detail.completedUserIds : [];
+      // 팬아웃 상한 — 초과 완주자는 co_challenge 쌍 생성에서 제외(개인 집계엔 영향 없음)
+      const users = all.slice(0, MAX_CO_CHALLENGE_USERS);
       const challengeId = String(detail.challengeId ?? '');
       const out: PairInteraction[] = [];
       for (let i = 0; i < users.length; i += 1) {

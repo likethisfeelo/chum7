@@ -57,6 +57,17 @@ describe('pairing — 이벤트 → 사용자쌍 상호작용', () => {
   it('알 수 없는 이벤트 → 빈 배열', () => {
     expect(interactionsFromEvent('order.paid', { orderId: 'o1' })).toHaveLength(0);
   });
+
+  it('challenge.completed 팬아웃 상한 — 완주자 초과 시 쌍 수 제한', () => {
+    const many = Array.from({ length: 60 }, (_, i) => `u${i}`);
+    const out = interactionsFromEvent('challenge.completed', {
+      challengeId: 'big',
+      completedUserIds: many,
+      occurredAt: '2026-07-23T00:00:00.000Z',
+    });
+    // 25명 상한 → 300쌍 (60*59/2=1770이 아님)
+    expect(out.length).toBe((25 * 24) / 2);
+  });
 });
 
 describe('pairing — 점수/키', () => {
