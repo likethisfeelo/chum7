@@ -75,6 +75,34 @@ function commentView(item: Record<string, any>, userId?: string) {
 
 // ═══ 퍼블릭 ═══════════════════════════════════════════════════════════
 
+/** 댓글 페이지 빌드 — 퍼블릭/인증 라우트 공용. viewerUserId 있으면 isMine 계산됨. */
+async function buildCommentsPage(
+  plazaPostId: string,
+  limitRaw: string | undefined,
+  cursorRaw: string | undefined,
+  viewerUserId?: string,
+) {
+  const limit = Math.max(1, Math.min(100, Number(limitRaw || '50')));
+  let exclusiveStartKey: Record<string, any> | undefined;
+  if (cursorRaw) {
+    try {
+      const parsed = JSON.parse(Buffer.from(cursorRaw, 'base64').toString('utf8'));
+      exclusiveStartKey = parsed?.lastEvaluatedKey ?? undefined;
+    } catch {
+      exclusiveStartKey = undefined; // 손상 커서는 무시
+    }
+  }
+  const page = await listPostComments(plazaPostId, limit, exclusiveStartKey);
+  const hasMore = Boolean(page.lastKey);
+  return {
+    comments: page.items.map((item) => commentView(item, viewerUserId)),
+    hasMore,
+    nextCursor: hasMore
+      ? Buffer.from(JSON.stringify({ lastEvaluatedKey: page.lastKey })).toString('base64')
+      : null,
+  };
+}
+
 export const plazaPublicRoutes = new Hono<AppEnv>();
 
 // 피드 (레거시 GET /plaza/feed — postType-createdAt-index → gsi1 FEED#<postType> Query)
@@ -157,30 +185,12 @@ plazaPublicRoutes.get('/:plazaPostId', async (c) => {
   return ok(c, await toPublicPost(post));
 });
 
-// 댓글 목록 (레거시 GET /plaza/{id}/comments — 퍼블릭이므로 isMine 항상 false)
+// 댓글 목록 (퍼블릭 — 비로그인 열람. 클레임 없어 isMine 항상 false)
 plazaPublicRoutes.get('/:plazaPostId/comments', async (c) => {
-  const plazaPostId = c.req.param('plazaPostId');
-  const limit = Math.max(1, Math.min(100, Number(c.req.query('limit') || '50')));
-  const cursorRaw = c.req.query('cursor');
-  let exclusiveStartKey: Record<string, any> | undefined;
-  if (cursorRaw) {
-    try {
-      const parsed = JSON.parse(Buffer.from(cursorRaw, 'base64').toString('utf8'));
-      exclusiveStartKey = parsed?.lastEvaluatedKey ?? undefined;
-    } catch {
-      exclusiveStartKey = undefined; // 레거시: 손상 커서는 무시
-    }
-  }
-
-  const page = await listPostComments(plazaPostId, limit, exclusiveStartKey);
-  const hasMore = Boolean(page.lastKey);
-  return ok(c, {
-    comments: page.items.map((item) => commentView(item)),
-    hasMore,
-    nextCursor: hasMore
-      ? Buffer.from(JSON.stringify({ lastEvaluatedKey: page.lastKey })).toString('base64')
-      : null,
-  });
+  return ok(
+    c,
+    await buildCommentsPage(c.req.param('plazaPostId'), c.req.query('limit'), c.req.query('cursor')),
+  );
 });
 
 // ═══ 보호 (/s/plaza) ══════════════════════════════════════════════════
@@ -285,6 +295,20 @@ plazaRoutes.post('/:plazaPostId/comments', async (c) => {
     createdAt: now,
     isMine: true,
   });
+});
+
+// 댓글 목록 (인증 — 로그인 시 isMine 정확 계산. 프론트는 로그인 상태면 이 경로 사용)
+plazaRoutes.get('/:plazaPostId/comments', async (c) => {
+  const { userId } = c.get('authUser')!;
+  return ok(
+    c,
+    await buildCommentsPage(
+      c.req.param('plazaPostId'),
+      c.req.query('limit'),
+      c.req.query('cursor'),
+      userId,
+    ),
+  );
 });
 
 // 리액션 추가 (레거시 POST /plaza/{id}/react — 유저당 1개 RCT#<userId>)

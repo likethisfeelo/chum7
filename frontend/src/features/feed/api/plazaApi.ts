@@ -133,7 +133,10 @@ export async function fetchPlazaCommentsPage(params: { plazaPostId: string; curs
   query.set('limit', String(params.limit ?? 30));
   if (params.cursor) query.set('cursor', params.cursor);
 
-  const response = await apiClient.get(`/public/plaza/${encodeURIComponent(params.plazaPostId)}/comments?${query.toString()}`);
+  // 로그인 상태면 인증 경로(/s/plaza)로 조회해 isMine을 정확히 받고, 아니면 퍼블릭 경로.
+  const loggedIn = Boolean(localStorage.getItem('accessToken'));
+  const base = loggedIn ? '/s/plaza' : '/public/plaza';
+  const response = await apiClient.get(`${base}/${encodeURIComponent(params.plazaPostId)}/comments?${query.toString()}`);
   return response.data?.data || { comments: [], hasMore: false, nextCursor: null };
 }
 

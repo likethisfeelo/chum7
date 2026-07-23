@@ -80,11 +80,10 @@ export function usePlazaComments(initialCounts: Record<string, number> = {}) {
         nextCursor: page.nextCursor || null,
         isLoading: false,
       });
-    } catch (e: any) {
-      const status = e?.response?.status;
+    } catch {
       update(postId, {
         isLoading: false,
-        error: status === 401 ? '로그인 후 댓글을 볼 수 있어요.' : '댓글을 불러오지 못했어요.',
+        error: '댓글을 불러오지 못했어요.',
       });
     }
   }
