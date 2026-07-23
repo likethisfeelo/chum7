@@ -110,8 +110,12 @@ git push origin main
       gsi로 후보만 조회(현재는 파티션 Query 후 인메모리 필터, 페이지네이션으로 정확).
 
 ### 6.5 레거시 정리 (재설계 마무리)
-- [ ] 구 시스템(chme-*) 스택·리소스 철거(Phase 5 잔여).
-- [ ] pre-existing 레거시 테스트 실패(`test/backend/*`, ~30개) 정리 또는 제외.
+- [x] **레거시 소스 트리 철거**: `backend/`(구 서비스 12M)·`infra/`(구 CDK 앱)·
+      legacy 테스트 32개(`test/backend/*` 등 `backend/` import)·stale `admin-docs` 테스트·
+      orphan `validate-cheer-widget` 스크립트 제거. **`npm test` 전면 그린(378개)**.
+      *`shared/join-requirements`는 프론트가 아직 참조 → `shared/` 유지.*
+- [ ] **구 AWS 스택(chme-*) 실제 teardown**: `cdk destroy`는 **DynamoDB 테이블 삭제 위험** →
+      데이터 백업/무사용 확인 후 사람이 직접 실행(자동화 금지). 컷오버 완료로 dormant 상태.
 
 ---
 

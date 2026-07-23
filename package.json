@@ -14,7 +14,6 @@
     "deploy": "node scripts/deploy.mjs",
     "ops:set-vapid": "node scripts/ops/set-vapid.mjs",
     "ops:set-anon-salt": "node scripts/ops/set-anon-salt.mjs",
-    "lint:cheer-widgets": "node scripts/validate-cheer-widget-catalog.mjs",
     "backfill:challenge-layer-policy": "node scripts/backfill-challenge-layer-policy.mjs"
   },
   "devDependencies": {
