@@ -112,7 +112,11 @@ export async function dismissRecommendation(recommendationId?: string): Promise<
 
 export interface PlazaComment {
   commentId: string;
-  animalIcon: string;
+  /** 게시물별 고정 익명 표시명 (예: "아무개3") — 서버 제공 */
+  displayName: string;
+  anonymousNumber?: number;
+  /** @deprecated 하위 호환용 — displayName 사용 */
+  animalIcon?: string;
   content: string;
   createdAt: string;
   isMine: boolean;
@@ -129,7 +133,10 @@ export async function fetchPlazaCommentsPage(params: { plazaPostId: string; curs
   query.set('limit', String(params.limit ?? 30));
   if (params.cursor) query.set('cursor', params.cursor);
 
-  const response = await apiClient.get(`/public/plaza/${encodeURIComponent(params.plazaPostId)}/comments?${query.toString()}`);
+  // 로그인 상태면 인증 경로(/s/plaza)로 조회해 isMine을 정확히 받고, 아니면 퍼블릭 경로.
+  const loggedIn = Boolean(localStorage.getItem('accessToken'));
+  const base = loggedIn ? '/s/plaza' : '/public/plaza';
+  const response = await apiClient.get(`${base}/${encodeURIComponent(params.plazaPostId)}/comments?${query.toString()}`);
   return response.data?.data || { comments: [], hasMore: false, nextCursor: null };
 }
 
@@ -141,4 +148,12 @@ export async function fetchPlazaComments(plazaPostId: string): Promise<PlazaComm
 export async function createPlazaComment(plazaPostId: string, content: string): Promise<PlazaComment | null> {
   const response = await apiClient.post(`/s/plaza/${encodeURIComponent(plazaPostId)}/comments`, { content });
   return response.data?.data ?? null;
+}
+
+export async function deletePlazaComment(plazaPostId: string, commentId: string, createdAt: string): Promise<boolean> {
+  const query = new URLSearchParams({ createdAt });
+  const response = await apiClient.delete(
+    `/s/plaza/${encodeURIComponent(plazaPostId)}/comments/${encodeURIComponent(commentId)}?${query.toString()}`,
+  );
+  return Boolean(response.data?.data?.deleted);
 }

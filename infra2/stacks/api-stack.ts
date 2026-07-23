@@ -91,6 +91,8 @@ export class ApiStack extends cdk.Stack {
         USER_POOL_CLIENT_ID: stateful.userPoolClient.userPoolClientId,
         VAPID_SECRET_NAME: stateful.vapidSecret.secretName,
         UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
+        // 관계 아카이브 전체 콘텐츠(P3 단계 E) 글로벌 스위치
+        ARCHIVE_FULL_CONTENT_ENABLED: String(config.archiveFullContentEnabled ?? false),
       },
     });
     stateful.vapidSecret.grantRead(this.userApi); // GET /public/push/key
@@ -164,11 +166,14 @@ export class ApiStack extends cdk.Stack {
         UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
         // 익명 활동명 솔트 — 보드·인증 댓글 익명 ID 생성에 필수 (미주입 시 500/폴백)
         ANON_ID_SALT_SECRET_NAME: stateful.anonSaltSecret.secretName,
+        // 리더 모드 댓글 검증용 단일키 조회(스캔 아님) — 리더 판별 전용
+        CHALLENGES_TABLE: stateful.tables.challenges.tableName,
       },
     });
     stateful.tables.social.grantReadWriteData(socialApi);
     stateful.uploadsBucket.grantRead(socialApi); // 미디어 URL 재서명
     stateful.anonSaltSecret.grantRead(socialApi); // 익명 ID 솔트 로드
+    stateful.tables.challenges.grantReadData(socialApi); // 리더 검증 GetItem 전용
     eventBus.grantPutEventsTo(socialApi);
 
     // --- cheer-api: /ch (challenges 읽기 전용 — porting-guide §4 예외) ---

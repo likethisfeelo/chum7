@@ -28,6 +28,8 @@ export interface StageConfig {
   opsAlertEmail?: string;
   /** 플랫폼 수수료율 (정산 v0 — PAYMENT_SPEC §6.1, 기본 5%) */
   platformFeeRate: number;
+  /** 관계 아카이브 전체 콘텐츠(단계 E) 글로벌 스위치 — 기본 off, 검증 후 점진 오픈 */
+  archiveFullContentEnabled?: boolean;
 }
 
 const dev: StageConfig = {

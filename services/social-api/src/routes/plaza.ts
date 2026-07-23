@@ -24,7 +24,9 @@ import { decodeFeedCursor, encodeFeedCursor, CursorMap } from '../domain/paginat
 import {
   buildPostKeys,
   countReactions,
+  deletePostComment,
   deleteReaction,
+  getOrAssignAnonNumber,
   getPost,
   incrementPostCounter,
   listPostComments,
@@ -50,10 +52,22 @@ async function toPublicPost(item: Record<string, any>): Promise<Record<string, a
   return sanitized;
 }
 
+/** 레거시 댓글(순번 미보유) 표시용 — 기존 프론트 파생과 동일한 10–99 매핑 */
+function legacyAnonNumber(icon: string): number {
+  const sum = [...(icon || '')].reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return (sum % 90) + 10;
+}
+
 function commentView(item: Record<string, any>, userId?: string) {
+  const anonymousNumber =
+    typeof item.anonymousNumber === 'number'
+      ? item.anonymousNumber
+      : legacyAnonNumber(item.animalIcon);
   return {
     commentId: item.commentId,
-    animalIcon: item.animalIcon,
+    anonymousNumber,
+    displayName: `아무개${anonymousNumber}`,
+    animalIcon: item.animalIcon, // 하위 호환 (구 프론트)
     content: item.content,
     createdAt: item.createdAt,
     isMine: Boolean(userId && item.userId === userId),
@@ -61,6 +75,34 @@ function commentView(item: Record<string, any>, userId?: string) {
 }
 
 // ═══ 퍼블릭 ═══════════════════════════════════════════════════════════
+
+/** 댓글 페이지 빌드 — 퍼블릭/인증 라우트 공용. viewerUserId 있으면 isMine 계산됨. */
+async function buildCommentsPage(
+  plazaPostId: string,
+  limitRaw: string | undefined,
+  cursorRaw: string | undefined,
+  viewerUserId?: string,
+) {
+  const limit = Math.max(1, Math.min(100, Number(limitRaw || '50')));
+  let exclusiveStartKey: Record<string, any> | undefined;
+  if (cursorRaw) {
+    try {
+      const parsed = JSON.parse(Buffer.from(cursorRaw, 'base64').toString('utf8'));
+      exclusiveStartKey = parsed?.lastEvaluatedKey ?? undefined;
+    } catch {
+      exclusiveStartKey = undefined; // 손상 커서는 무시
+    }
+  }
+  const page = await listPostComments(plazaPostId, limit, exclusiveStartKey);
+  const hasMore = Boolean(page.lastKey);
+  return {
+    comments: page.items.map((item) => commentView(item, viewerUserId)),
+    hasMore,
+    nextCursor: hasMore
+      ? Buffer.from(JSON.stringify({ lastEvaluatedKey: page.lastKey })).toString('base64')
+      : null,
+  };
+}
 
 export const plazaPublicRoutes = new Hono<AppEnv>();
 
@@ -144,30 +186,12 @@ plazaPublicRoutes.get('/:plazaPostId', async (c) => {
   return ok(c, await toPublicPost(post));
 });
 
-// 댓글 목록 (레거시 GET /plaza/{id}/comments — 퍼블릭이므로 isMine 항상 false)
+// 댓글 목록 (퍼블릭 — 비로그인 열람. 클레임 없어 isMine 항상 false)
 plazaPublicRoutes.get('/:plazaPostId/comments', async (c) => {
-  const plazaPostId = c.req.param('plazaPostId');
-  const limit = Math.max(1, Math.min(100, Number(c.req.query('limit') || '50')));
-  const cursorRaw = c.req.query('cursor');
-  let exclusiveStartKey: Record<string, any> | undefined;
-  if (cursorRaw) {
-    try {
-      const parsed = JSON.parse(Buffer.from(cursorRaw, 'base64').toString('utf8'));
-      exclusiveStartKey = parsed?.lastEvaluatedKey ?? undefined;
-    } catch {
-      exclusiveStartKey = undefined; // 레거시: 손상 커서는 무시
-    }
-  }
-
-  const page = await listPostComments(plazaPostId, limit, exclusiveStartKey);
-  const hasMore = Boolean(page.lastKey);
-  return ok(c, {
-    comments: page.items.map((item) => commentView(item)),
-    hasMore,
-    nextCursor: hasMore
-      ? Buffer.from(JSON.stringify({ lastEvaluatedKey: page.lastKey })).toString('base64')
-      : null,
-  });
+  return ok(
+    c,
+    await buildCommentsPage(c.req.param('plazaPostId'), c.req.query('limit'), c.req.query('cursor')),
+  );
 });
 
 // ═══ 보호 (/s/plaza) ══════════════════════════════════════════════════
@@ -234,6 +258,8 @@ plazaRoutes.post('/:plazaPostId/comments', async (c) => {
 
   const now = new Date().toISOString();
   const commentId = randomUUID();
+  // 게시물별 고정 익명 순번(아무개N) — 8이모지 방식 폐기(P1-3). animalIcon은 하위 호환용으로만 병기.
+  const anonymousNumber = await getOrAssignAnonNumber(plazaPostId, userId, now);
   const animalIcon = toAnimalIcon(`${userId}:${plazaPostId}`);
 
   await putPostComment({
@@ -242,6 +268,7 @@ plazaRoutes.post('/:plazaPostId/comments', async (c) => {
     commentId,
     plazaPostId,
     userId,
+    anonymousNumber,
     animalIcon,
     content: input.content,
     createdAt: now,
@@ -260,7 +287,45 @@ plazaRoutes.post('/:plazaPostId/comments', async (c) => {
     });
   }
 
-  return ok(c, { commentId, animalIcon, content: input.content, createdAt: now, isMine: true });
+  return ok(c, {
+    commentId,
+    anonymousNumber,
+    displayName: `아무개${anonymousNumber}`,
+    animalIcon,
+    content: input.content,
+    createdAt: now,
+    isMine: true,
+  });
+});
+
+// 댓글 목록 (인증 — 로그인 시 isMine 정확 계산. 프론트는 로그인 상태면 이 경로 사용)
+plazaRoutes.get('/:plazaPostId/comments', async (c) => {
+  const { userId } = c.get('authUser')!;
+  return ok(
+    c,
+    await buildCommentsPage(
+      c.req.param('plazaPostId'),
+      c.req.query('limit'),
+      c.req.query('cursor'),
+      userId,
+    ),
+  );
+});
+
+// 댓글 삭제 (본인만). sk 재구성을 위해 createdAt 쿼리 필요.
+plazaRoutes.delete('/:plazaPostId/comments/:commentId', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const plazaPostId = c.req.param('plazaPostId');
+  const commentId = c.req.param('commentId');
+  const createdAt = c.req.query('createdAt');
+  if (!createdAt) return fail(c, 400, 'MISSING_CREATED_AT', 'createdAt 쿼리가 필요합니다');
+
+  const deleted = await deletePostComment(plazaPostId, commentSk(createdAt, commentId), userId);
+  if (!deleted) {
+    return fail(c, 404, 'COMMENT_NOT_FOUND', '삭제할 댓글이 없거나 권한이 없습니다');
+  }
+  await incrementPostCounter(plazaPostId, 'commentCount', -1, new Date().toISOString());
+  return ok(c, { deleted: true, commentId });
 });
 
 // 리액션 추가 (레거시 POST /plaza/{id}/react — 유저당 1개 RCT#<userId>)
@@ -281,6 +346,18 @@ plazaRoutes.post('/:plazaPostId/react', async (c) => {
 
   const likeCount = await countReactions(plazaPostId);
   await setPostLikeCount(plazaPostId, likeCount, now);
+
+  // 관계 원장 신호 — 게시물 소유자에게 리액션(본인 제외)
+  const reactionOwnerId = post.sourceUserId || post.authorId || post.leaderId || null;
+  if (reactionOwnerId && reactionOwnerId !== userId) {
+    await publishEvent('reaction.created', {
+      targetType: 'plaza',
+      targetId: plazaPostId,
+      targetOwnerId: reactionOwnerId,
+      actorUserId: userId,
+      emoji: input.reactionType || 'like',
+    });
+  }
 
   const recommendation = challengeId
     ? {

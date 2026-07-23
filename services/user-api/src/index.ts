@@ -7,6 +7,7 @@ import { notificationsRoutes } from './routes/notifications';
 import { personalFeedRoutes, publicUsersRoutes } from './routes/personal-feed';
 import { personalFeedContentRoutes } from './routes/personal-feed-content';
 import { getPublicPushKey, pushRoutes } from './routes/push';
+import { friendsRoutes } from './routes/friends';
 
 const app = createApi({ service: 'user-api' });
 
@@ -33,5 +34,6 @@ app.route('/u/notifications', notificationsRoutes);
 app.route('/u/feed', personalFeedRoutes); // 프로필·팔로우·차단·핸들·공개 설정
 app.route('/u/feed', personalFeedContentRoutes); // 자유글·저장 게시물·초대 링크
 app.route('/u/push-subscriptions', pushRoutes);
+app.route('/u/friends', friendsRoutes); // 친구 관계·추천 (P2 단계 B)
 
 export const handler = handle(app);
