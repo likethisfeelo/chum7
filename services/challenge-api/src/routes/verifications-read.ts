@@ -9,6 +9,8 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { AppEnv } from '@chum7/api-kit';
 import { ok, fail } from '@chum7/api-kit';
+import { createDailyAnonymousId } from '@chum7/core';
+import { loadAnonSalt } from '../anon-salt';
 import { performedAtSchema, uploadUrlSchema, visibilitySchema } from '../schemas';
 import { certDateFromIso, DEFAULT_TIMEZONE, calculateEffectiveCurrentDay, isChallengePeriodEnded, resolveDurationDays } from '../domain/day-sync';
 import { isValidTrimRange, resolveVerificationType } from '../domain/verification-rules';
@@ -57,7 +59,24 @@ function isPublicVerification(v: VerificationItem): boolean {
   return isPublic && !isPersonalOnly;
 }
 
-async function normalizeVerification(v: VerificationItem) {
+interface ViewerCtx {
+  /** 익명 활동명 솔트 (로드 실패 시 null → '익명' 폴백) */
+  salt: string | null;
+  /** 조회자 userId — 본인 인증 판별(isMine)용 */
+  viewerUserId: string;
+}
+
+/** 작성일 기준 일일 활동명 — createdAt 스냅샷으로 결정적 계산(조회일 무관) */
+function verificationDisplayName(v: VerificationItem, salt: string | null): string {
+  if (!salt || !v.challengeId || !v.userId) return '익명';
+  try {
+    return createDailyAnonymousId(v.challengeId, v.userId, salt, new Date(v.createdAt));
+  } catch {
+    return '익명';
+  }
+}
+
+async function normalizeVerification(v: VerificationItem, ctx: ViewerCtx) {
   const imageUrl = await toRenderableMediaUrl(v.imageUrl || null);
   const videoUrl = await toRenderableMediaUrl(v.videoUrl || null);
 
@@ -75,10 +94,11 @@ async function normalizeVerification(v: VerificationItem) {
 
   return {
     verificationId: v.verificationId,
-    userId: v.userId,
+    // 실 userId·userName 미노출 — 반익명 정책. 작성일 기준 일일 활동명 + 본인 여부만 제공.
+    displayName: verificationDisplayName(v, ctx.salt),
+    isMine: v.userId === ctx.viewerUserId,
     challengeId: v.challengeId || null,
     userChallengeId: v.userChallengeId || null,
-    userName: v.userName || null,
     day: v.day,
     verificationType,
     questType: v.questType || null,
@@ -157,8 +177,16 @@ verificationReadRoutes.get('/', async (c) => {
     nextToken = toNextToken(result.lastKey);
   }
 
+  let salt: string | null = null;
+  try {
+    salt = await loadAnonSalt();
+  } catch {
+    salt = null; // 솔트 미설정 시 '익명' 폴백 (개별 항목 계산에서 처리)
+  }
+  const ctx: ViewerCtx = { salt, viewerUserId: userId };
+
   return ok(c, {
-    verifications: await Promise.all(items.map(normalizeVerification)),
+    verifications: await Promise.all(items.map((v) => normalizeVerification(v, ctx))),
     count: items.length,
     nextToken,
   });
