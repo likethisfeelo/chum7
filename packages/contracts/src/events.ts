@@ -34,6 +34,12 @@ export const domainEventSchemas = {
     actorUserId: z.string(),
     emoji: z.string().optional(),
   }),
+  // 콘텐츠 삭제 — 관계 아카이브에서 원본 재노출 금지(원장 visibilityState=deleted 동기화).
+  'content.deleted': z.object({
+    targetType: z.enum(['plaza', 'board', 'verification', 'bulletin']),
+    sourceEntityType: z.string(), // comment | post | verification ...
+    sourceEntityId: z.string(),
+  }),
   'follow.requested': z.object({
     followerId: z.string(),
     followeeId: z.string(),

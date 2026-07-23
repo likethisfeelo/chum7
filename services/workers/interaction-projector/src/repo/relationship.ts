@@ -1,4 +1,4 @@
-import { PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 import {
   COUNT_ATTR,
@@ -36,6 +36,8 @@ export async function appendLedger(x: PairInteraction, occurredAt: string): Prom
           visibilityState: 'active',
           archiveEligible: true,
           occurredAt,
+          // 원본 삭제 시 역조회용 인덱스 (content.deleted → 이 항목을 deleted 처리)
+          ...(x.sourceEntityId ? { gsi2pk: `SRC#${x.sourceEntityId}`, gsi2sk: occurredAt } : {}),
         },
         ConditionExpression: 'attribute_not_exists(pk)',
       }),
@@ -105,4 +107,30 @@ async function bumpOneDirection(
 export async function bumpPairStat(x: PairInteraction, occurredAt: string, nowMs: number): Promise<void> {
   await bumpOneDirection(x.actorUserId, x.targetUserId, x.interactionType, occurredAt, nowMs);
   await bumpOneDirection(x.targetUserId, x.actorUserId, x.interactionType, occurredAt, nowMs);
+}
+
+/**
+ * 원본 삭제 반영 — sourceEntityId로 gsi2 역조회해 원장 항목을 deleted 처리.
+ * 아카이브에서 원문 재노출을 막는다(집계 수치는 유지 — 정책상 허용).
+ */
+export async function markLedgerDeleted(sourceEntityId: string): Promise<void> {
+  if (!sourceEntityId) return;
+  const found = await docClient.send(
+    new QueryCommand({
+      TableName: tableName(GRAPH_TABLE),
+      IndexName: 'gsi2',
+      KeyConditionExpression: 'gsi2pk = :pk',
+      ExpressionAttributeValues: { ':pk': `SRC#${sourceEntityId}` },
+    }),
+  );
+  for (const item of found.Items ?? []) {
+    await docClient.send(
+      new UpdateCommand({
+        TableName: tableName(GRAPH_TABLE),
+        Key: { pk: item.pk, sk: item.sk },
+        UpdateExpression: 'SET visibilityState = :d, archiveEligible = :f',
+        ExpressionAttributeValues: { ':d': 'deleted', ':f': false },
+      }),
+    );
+  }
 }

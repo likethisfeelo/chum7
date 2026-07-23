@@ -11,7 +11,7 @@
  */
 import type { EventBridgeEvent } from 'aws-lambda';
 import { interactionsFromEvent } from './domain/pairing';
-import { appendLedger, bumpPairStat } from './repo/relationship';
+import { appendLedger, bumpPairStat, markLedgerDeleted } from './repo/relationship';
 
 export async function handler(
   event: EventBridgeEvent<string, Record<string, any>>,
@@ -20,6 +20,12 @@ export async function handler(
   const detail = event.detail ?? {};
   const occurredAt = String(detail.occurredAt ?? new Date().toISOString());
   const nowMs = Date.now();
+
+  // 콘텐츠 삭제 → 원장 항목 deleted 처리(아카이브 원문 재노출 차단)
+  if (type === 'content.deleted') {
+    await markLedgerDeleted(String(detail.sourceEntityId ?? ''));
+    return;
+  }
 
   const interactions = interactionsFromEvent(type, detail);
   if (interactions.length === 0) return;
