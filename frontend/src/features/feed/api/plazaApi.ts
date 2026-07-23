@@ -112,7 +112,11 @@ export async function dismissRecommendation(recommendationId?: string): Promise<
 
 export interface PlazaComment {
   commentId: string;
-  animalIcon: string;
+  /** 게시물별 고정 익명 표시명 (예: "아무개3") — 서버 제공 */
+  displayName: string;
+  anonymousNumber?: number;
+  /** @deprecated 하위 호환용 — displayName 사용 */
+  animalIcon?: string;
   content: string;
   createdAt: string;
   isMine: boolean;

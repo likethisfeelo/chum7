@@ -122,6 +122,56 @@ export async function incrementPostCounter(
   );
 }
 
+// ── 게시물별 익명 순번 (아무개N) ────────────────────────────────────────
+// pk=POST#<id>, sk=ANONNUM#<userId> → { anonymousNumber }  (사용자 매핑, 게시물 내 고정)
+// pk=POST#<id>, sk=ANONCOUNTER      → { nextNumber }        (원자 증가 카운터)
+// 게시물마다 카운터·매핑이 분리되어 사용자 간·게시물 간 연결이 불가능하다.
+export const anonNumberSk = (userId: string) => `ANONNUM#${userId}`;
+const ANON_COUNTER_SK = 'ANONCOUNTER';
+
+export async function getOrAssignAnonNumber(
+  plazaPostId: string,
+  userId: string,
+  now: string,
+): Promise<number> {
+  const pk = postPk(plazaPostId);
+
+  // 1) 이미 배정된 번호가 있으면 그대로 (게시물 내 고정)
+  const existing = await docClient.send(
+    new GetCommand({ TableName: tableName(TABLE), Key: { pk, sk: anonNumberSk(userId) } }),
+  );
+  if (existing.Item?.anonymousNumber) return Number(existing.Item.anonymousNumber);
+
+  // 2) 게시물 카운터 원자 증가 (최초 → 1)
+  const counter = await docClient.send(
+    new UpdateCommand({
+      TableName: tableName(TABLE),
+      Key: { pk, sk: ANON_COUNTER_SK },
+      UpdateExpression: 'SET nextNumber = if_not_exists(nextNumber, :zero) + :one',
+      ExpressionAttributeValues: { ':zero': 0, ':one': 1 },
+      ReturnValues: 'UPDATED_NEW',
+    }),
+  );
+  const assigned = Number(counter.Attributes?.nextNumber ?? 1);
+
+  // 3) 매핑 조건부 생성 — 동시 중복이면 재조회 값 사용(번호 건너뜀은 무해)
+  try {
+    await docClient.send(
+      new PutCommand({
+        TableName: tableName(TABLE),
+        Item: { pk, sk: anonNumberSk(userId), anonymousNumber: assigned, createdAt: now },
+        ConditionExpression: 'attribute_not_exists(pk)',
+      }),
+    );
+    return assigned;
+  } catch {
+    const re = await docClient.send(
+      new GetCommand({ TableName: tableName(TABLE), Key: { pk, sk: anonNumberSk(userId) } }),
+    );
+    return Number(re.Item?.anonymousNumber ?? assigned);
+  }
+}
+
 // ── 리액션 (RCT#<userId>) ──────────────────────────────────────────────
 
 export async function putReaction(

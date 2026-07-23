@@ -1,10 +1,5 @@
 import type { usePlazaComments } from '@/features/feed/hooks/usePlazaComments';
 
-function anonNumber(icon: string): number {
-  const sum = [...icon].reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return (sum % 90) + 10; // 10–99
-}
-
 type CommentHook = ReturnType<typeof usePlazaComments>;
 
 interface Props {
@@ -41,7 +36,7 @@ export function CommentSection({ postId, hook }: Props) {
           state.comments.map((comment) => (
             <div key={comment.commentId} className="text-xs text-gray-700 flex items-start gap-1">
               <span className="font-medium shrink-0">
-                {`아무개${anonNumber(comment.animalIcon)}`}
+                {comment.displayName}
               </span>
               <span className="flex-1 break-all">{comment.content}</span>
               {comment.isMine && (

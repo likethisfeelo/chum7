@@ -25,6 +25,7 @@ import {
   buildPostKeys,
   countReactions,
   deleteReaction,
+  getOrAssignAnonNumber,
   getPost,
   incrementPostCounter,
   listPostComments,
@@ -50,10 +51,22 @@ async function toPublicPost(item: Record<string, any>): Promise<Record<string, a
   return sanitized;
 }
 
+/** 레거시 댓글(순번 미보유) 표시용 — 기존 프론트 파생과 동일한 10–99 매핑 */
+function legacyAnonNumber(icon: string): number {
+  const sum = [...(icon || '')].reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return (sum % 90) + 10;
+}
+
 function commentView(item: Record<string, any>, userId?: string) {
+  const anonymousNumber =
+    typeof item.anonymousNumber === 'number'
+      ? item.anonymousNumber
+      : legacyAnonNumber(item.animalIcon);
   return {
     commentId: item.commentId,
-    animalIcon: item.animalIcon,
+    anonymousNumber,
+    displayName: `아무개${anonymousNumber}`,
+    animalIcon: item.animalIcon, // 하위 호환 (구 프론트)
     content: item.content,
     createdAt: item.createdAt,
     isMine: Boolean(userId && item.userId === userId),
@@ -234,6 +247,8 @@ plazaRoutes.post('/:plazaPostId/comments', async (c) => {
 
   const now = new Date().toISOString();
   const commentId = randomUUID();
+  // 게시물별 고정 익명 순번(아무개N) — 8이모지 방식 폐기(P1-3). animalIcon은 하위 호환용으로만 병기.
+  const anonymousNumber = await getOrAssignAnonNumber(plazaPostId, userId, now);
   const animalIcon = toAnimalIcon(`${userId}:${plazaPostId}`);
 
   await putPostComment({
@@ -242,6 +257,7 @@ plazaRoutes.post('/:plazaPostId/comments', async (c) => {
     commentId,
     plazaPostId,
     userId,
+    anonymousNumber,
     animalIcon,
     content: input.content,
     createdAt: now,
@@ -260,7 +276,15 @@ plazaRoutes.post('/:plazaPostId/comments', async (c) => {
     });
   }
 
-  return ok(c, { commentId, animalIcon, content: input.content, createdAt: now, isMine: true });
+  return ok(c, {
+    commentId,
+    anonymousNumber,
+    displayName: `아무개${anonymousNumber}`,
+    animalIcon,
+    content: input.content,
+    createdAt: now,
+    isMine: true,
+  });
 });
 
 // 리액션 추가 (레거시 POST /plaza/{id}/react — 유저당 1개 RCT#<userId>)
