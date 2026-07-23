@@ -110,6 +110,6 @@ describe('infra2 stacks', () => {
     dev.workers.hasResourceProperties('AWS::Events::Rule', {
       EventPattern: { source: [{ prefix: 'chme.' }] },
     });
-    dev.workers.resourceCountIs('AWS::SQS::Queue', 2); // notification + settlement DLQ
+    dev.workers.resourceCountIs('AWS::SQS::Queue', 3); // notification + settlement + projector DLQ
   });
 });

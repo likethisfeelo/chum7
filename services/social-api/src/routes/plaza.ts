@@ -347,6 +347,18 @@ plazaRoutes.post('/:plazaPostId/react', async (c) => {
   const likeCount = await countReactions(plazaPostId);
   await setPostLikeCount(plazaPostId, likeCount, now);
 
+  // 관계 원장 신호 — 게시물 소유자에게 리액션(본인 제외)
+  const reactionOwnerId = post.sourceUserId || post.authorId || post.leaderId || null;
+  if (reactionOwnerId && reactionOwnerId !== userId) {
+    await publishEvent('reaction.created', {
+      targetType: 'plaza',
+      targetId: plazaPostId,
+      targetOwnerId: reactionOwnerId,
+      actorUserId: userId,
+      emoji: input.reactionType || 'like',
+    });
+  }
+
   const recommendation = challengeId
     ? {
         recommendationId: `${userId}#${challengeId}`,

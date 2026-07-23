@@ -26,6 +26,14 @@ export const domainEventSchemas = {
     authorId: z.string(),
     commentId: z.string(),
   }),
+  // 리액션(좋아요/이모지) — 관계 원장(interaction-projector) 소스. 통지가 아니라 집계 신호.
+  'reaction.created': z.object({
+    targetType: z.enum(['plaza', 'board', 'verification']),
+    targetId: z.string(),
+    targetOwnerId: z.string(),
+    actorUserId: z.string(),
+    emoji: z.string().optional(),
+  }),
   'follow.requested': z.object({
     followerId: z.string(),
     followeeId: z.string(),

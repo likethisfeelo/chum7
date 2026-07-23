@@ -277,6 +277,17 @@ boardRoutes.post('/:challengeId/comments/:commentId/react', async (c) => {
     throw error;
   }
 
+  // 관계 원장 신호 — 댓글 작성자에게 리액션(추가 시, 본인 제외)
+  if (input.action === 'add' && comment.userId && comment.userId !== userId) {
+    await publishEvent('reaction.created', {
+      targetType: 'board',
+      targetId: challengeId,
+      targetOwnerId: comment.userId,
+      actorUserId: userId,
+      emoji: input.emoji,
+    });
+  }
+
   return c.json({ success: true, emoji: input.emoji, action: input.action });
 });
 

@@ -67,6 +67,39 @@ export class WorkersStack extends cdk.Stack {
       ],
     });
 
+    // --- interaction-projector: 도메인 이벤트 → 관계 원장/집계 (P2 단계 A) ---
+    const interactionProjector = new NodejsFunction(this, 'InteractionProjector', {
+      functionName: `${config.prefix}-interaction-projector`,
+      entry: join(__dirname, '../../services/workers/interaction-projector/src/index.ts'),
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      bundling: { minify: true, sourceMap: !config.isProd, externalModules: ['@aws-sdk/*'] },
+      environment: {
+        STAGE: config.stage,
+        GRAPH_TABLE: stateful.tables.graph.tableName,
+      },
+    });
+    stateful.tables.graph.grantReadWriteData(interactionProjector);
+    this.workerFunctions.push(interactionProjector);
+
+    const projectorDlq = new sqs.Queue(this, 'ProjectorDlq', {
+      queueName: `${config.prefix}-projector-dlq`,
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    new events.Rule(this, 'DomainEventsToProjector', {
+      eventBus: this.eventBus,
+      ruleName: `${config.prefix}-projector-events`,
+      eventPattern: { source: [{ prefix: 'chme.' }] as unknown as string[] },
+      targets: [
+        new eventsTargets.LambdaFunction(interactionProjector, {
+          deadLetterQueue: projectorDlq,
+          retryAttempts: 2,
+        }),
+      ],
+    });
+
     // --- cheer-scheduler: 5분 주기 예약 응원 발송 ---
     const cheerScheduler = new NodejsFunction(this, 'CheerScheduler', {
       functionName: `${config.prefix}-cheer-scheduler`,
