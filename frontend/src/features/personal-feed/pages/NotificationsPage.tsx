@@ -17,6 +17,16 @@ const NOTIFICATION_TYPE_META: Record<string, { icon: string; label: string }> = 
   cheer_received:           { icon: '📣', label: '응원 수신' },
   join_request_approved:    { icon: '🎊', label: '참가 승인' },
   join_request_rejected:    { icon: '🚫', label: '참가 거절' },
+  // 이벤트 워커 알림 (notification-worker)
+  social_comment:           { icon: '💬', label: '새 댓글' },
+  social_reaction:          { icon: '❤️', label: '새 반응' },
+  friend_request:           { icon: '🤝', label: '친구 요청' },
+  friend_accepted:          { icon: '🎉', label: '친구 수락' },
+  order_paid:               { icon: '💳', label: '결제 확인' },
+  refund_completed:         { icon: '💰', label: '보증금 반환' },
+  settlement_ready:         { icon: '🧾', label: '정산서 도착' },
+  order_rejected:           { icon: '⚠️', label: '입금 확인 실패' },
+  shipment_updated:         { icon: '📦', label: '배송 상태 변경' },
 };
 
 function formatRelativeTime(iso: string): string {

@@ -19,22 +19,17 @@ import {
   setPairFriendFlag,
 } from '../repo/friends-repo';
 import { getProfileItem } from '../repo/profile-repo';
+import {
+  decideFriendRequest,
+  interactionLevel,
+  isEligible,
+  pairOrder,
+} from '../domain/friend-eligibility';
 
 export const friendsRoutes = new Hono<AppEnv>();
 
 const FRIENDS_ENABLED = () => process.env.FRIENDS_ENABLED === 'true';
 const ELIGIBILITY_THRESHOLD = () => Number(process.env.FRIEND_ELIGIBILITY_THRESHOLD ?? 100);
-
-/** 양방향 임계값 충족 여부 (친구 모델 v2 — outCount≥T && inCount≥T) */
-function isEligible(stat: Record<string, any> | null, threshold: number): boolean {
-  if (!stat) return false;
-  return Number(stat.outCount ?? 0) >= threshold && Number(stat.inCount ?? 0) >= threshold;
-}
-
-/** 쌍 키 정규화 (원장 파티션) */
-function pairOrder(a: string, b: string): { lo: string; hi: string } {
-  return a < b ? { lo: a, hi: b } : { lo: b, hi: a };
-}
 
 /** 두 사람이 수락된 친구이고 차단이 아닌지 — 아니면 null */
 async function friendshipOf(me: string, other: string) {
@@ -47,14 +42,6 @@ async function friendshipOf(me: string, other: string) {
 async function displayNameOf(userId: string): Promise<string> {
   const p = await getProfileItem(userId);
   return (p?.name as string) || '이웃';
-}
-
-/** 집계 → 비식별 상호작용 강도 (양방향 총량 기준) */
-function interactionLevel(stat: Record<string, any>): 'frequent' | 'regular' | 'occasional' {
-  const total = Number(stat.outCount ?? 0) + Number(stat.inCount ?? 0);
-  if (total >= 300) return 'frequent';
-  if (total >= 150) return 'regular';
-  return 'occasional';
 }
 
 // 친구 가능 후보 — 양방향 임계값 충족 + 아직 관계 없음 ("찾았어요!")
@@ -91,18 +78,21 @@ friendsRoutes.post('/requests', async (c) => {
   if (toUserId === userId) return fail(c, 400, 'SELF_REQUEST', '자기 자신에게는 신청할 수 없습니다');
 
   const existing = await getFriendEdge(userId, toUserId);
-  if (existing?.status === 'accepted') return fail(c, 409, 'ALREADY_FRIENDS', '이미 친구입니다');
-  if (existing?.status === 'blocked') return fail(c, 409, 'BLOCKED', '차단된 관계입니다');
-
-  // 자격: 양방향 임계값 충족해야 신청 가능(임의 신청 차단)
   const stat = await getPairStat(userId, toUserId);
-  if (!isEligible(stat, ELIGIBILITY_THRESHOLD())) {
-    return fail(c, 403, 'NOT_ELIGIBLE', '아직 서로 충분히 마주치지 않았어요');
+  const decision = decideFriendRequest(existing, stat, ELIGIBILITY_THRESHOLD());
+
+  switch (decision) {
+    case 'already_friends':
+      return fail(c, 409, 'ALREADY_FRIENDS', '이미 친구입니다');
+    case 'blocked':
+      return fail(c, 409, 'BLOCKED', '차단된 관계입니다');
+    case 'not_eligible':
+      return fail(c, 403, 'NOT_ELIGIBLE', '아직 서로 충분히 마주치지 않았어요');
   }
 
   const now = new Date().toISOString();
   // 상대가 이미 나에게 신청(내 쪽 incoming pending)했으면 → 상호 신청 완료 → 자동 친구
-  if (existing?.status === 'pending' && existing.direction === 'incoming') {
+  if (decision === 'auto_friend') {
     await putFriendEdge({ userId, otherUserId: toUserId, status: 'accepted', direction: 'mutual', acceptedAt: now });
     await putFriendEdge({ userId: toUserId, otherUserId: userId, status: 'accepted', direction: 'mutual', acceptedAt: now });
     await setPairFriendFlag(userId, toUserId, true);
@@ -118,12 +108,15 @@ friendsRoutes.post('/requests', async (c) => {
   return ok(c, { requested: true, toUserId }, '친구 신청을 보냈어요');
 });
 
-// 차단 — 양쪽 blocked (추천/요청 대상에서 제외)
+// 차단 — 양쪽 blocked (추천/요청 대상에서 제외). 친구였다면 관계 해제도 함께.
 friendsRoutes.post('/:otherUserId/block', async (c) => {
   const { userId } = c.get('authUser')!;
   const otherUserId = c.req.param('otherUserId');
   await putFriendEdge({ userId, otherUserId, status: 'blocked', direction: 'outgoing' });
   await putFriendEdge({ userId: otherUserId, otherUserId: userId, status: 'blocked', direction: 'incoming' });
+  // 차단 시 더 이상 친구가 아니므로 집계의 친구 플래그를 내린다(추천 후보 복귀는 blocked 엣지가 막음).
+  await setPairFriendFlag(userId, otherUserId, false);
+  await setPairFriendFlag(otherUserId, userId, false);
   return ok(c, { blocked: true, otherUserId });
 });
 
@@ -211,7 +204,17 @@ friendsRoutes.get('/:otherUserId/archive', async (c) => {
 
   const { lo, hi } = pairOrder(userId, otherUserId);
   const limit = Math.min(Math.max(Number(c.req.query('limit') || 30), 1), 100);
-  const { items, lastKey } = await listPairLedger(lo, hi, limit);
+  // 커서: 이전 응답의 nextCursor(base64 lastKey)를 그대로 전달 → 다음 페이지
+  const cursorRaw = c.req.query('cursor');
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  if (cursorRaw) {
+    try {
+      exclusiveStartKey = JSON.parse(Buffer.from(cursorRaw, 'base64').toString('utf8'));
+    } catch {
+      return fail(c, 400, 'INVALID_CURSOR', '잘못된 커서예요');
+    }
+  }
+  const { items, lastKey } = await listPairLedger(lo, hi, limit, exclusiveStartKey);
   const timeline = items
     .filter((it) => it.visibilityState !== 'deleted' && it.visibilityState !== 'hidden')
     .map((it) => ({

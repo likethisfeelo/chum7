@@ -355,6 +355,9 @@ function VerificationComments({
               >
                 참여자
               </button>
+              <span className="text-[10px] text-gray-400">
+                {asLeader ? "· 리더 이름으로 표시" : "· 익명 활동명으로 표시"}
+              </span>
             </div>
           )}
 
@@ -371,7 +374,11 @@ function VerificationComments({
                     handleSubmit();
                   }
                 }}
-                placeholder="응원 댓글 입력... (Enter)"
+                placeholder={
+                  isLeader && asLeader
+                    ? "👑 리더로 응원 댓글 입력... (Enter)"
+                    : "응원 댓글 입력... (Enter)"
+                }
                 maxLength={300}
                 className="flex-1 text-xs px-3 py-2 rounded-xl bg-white/70 border border-gray-200 focus:outline-none focus:border-primary-300 placeholder-gray-400"
               />

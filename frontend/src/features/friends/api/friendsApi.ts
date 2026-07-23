@@ -67,7 +67,56 @@ export async function setArchiveConsent(
 ): Promise<void> {
   await apiClient.post(`/u/friends/${encodeURIComponent(userId)}/archive-consent`, patch);
 }
-export async function fetchArchiveTimeline(userId: string): Promise<ArchiveEntry[]> {
-  const res = await apiClient.get(`/u/friends/${encodeURIComponent(userId)}/archive`);
-  return res.data?.data?.timeline ?? [];
+export interface ArchivePage {
+  timeline: ArchiveEntry[];
+  nextCursor: string | null;
+}
+export async function fetchArchiveTimeline(
+  userId: string,
+  cursor?: string,
+): Promise<ArchivePage> {
+  const res = await apiClient.get(`/u/friends/${encodeURIComponent(userId)}/archive`, {
+    params: cursor ? { cursor } : undefined,
+  });
+  return {
+    timeline: res.data?.data?.timeline ?? [],
+    nextCursor: res.data?.data?.nextCursor ?? null,
+  };
+}
+
+// 단계 E: 실콘텐츠 참조 — 양쪽 fullContent 동의 + 글로벌 플래그 필요(아니면 403).
+export interface ArchiveItemRef {
+  interactionType: string;
+  contextType: string;
+  contextId: string | null;
+  sourceEntityType: string | null;
+  sourceEntityId: string | null;
+  sourcePostId: string | null;
+  occurredAt: string;
+}
+export async function fetchArchiveItem(
+  userId: string,
+  interactionId: string,
+  occurredAt: string,
+): Promise<ArchiveItemRef> {
+  const res = await apiClient.get(
+    `/u/friends/${encodeURIComponent(userId)}/archive/${encodeURIComponent(interactionId)}`,
+    { params: { occurredAt } },
+  );
+  return res.data?.data;
+}
+
+/** 참조 → 기존 화면 딥링크(원본 보기). 매핑 없으면 null. */
+export function sourceDeepLink(ref: ArchiveItemRef): string | null {
+  const cid = ref.contextId ?? undefined;
+  switch (ref.contextType) {
+    case 'plaza':
+      return '/plaza';
+    case 'board':
+      return cid ? `/challenge-board/${cid}` : null;
+    case 'verification':
+      return cid ? `/challenge-feed/${cid}` : null;
+    default:
+      return null;
+  }
 }

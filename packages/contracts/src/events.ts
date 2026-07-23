@@ -25,6 +25,8 @@ export const domainEventSchemas = {
     targetOwnerId: z.string(),
     authorId: z.string(),
     commentId: z.string(),
+    // 알림 딥링크용 — verification 대상일 때 /challenge-feed/:challengeId
+    challengeId: z.string().optional(),
     // 작성 당시 공개 활동명(아무개N·수달N·챌린지 리더) — 관계 아카이브 타임라인 스냅샷용
     actorDisplayName: z.string().optional(),
   }),
