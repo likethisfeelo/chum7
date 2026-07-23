@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { SkeletonRows } from '@/shared/components/Skeleton';
 import {
   fetchArchiveItem,
   fetchArchiveTimeline,
@@ -157,7 +158,7 @@ export const FriendArchivePage = () => {
         {timelineBlocked ? (
           <p className="text-sm text-gray-400">양쪽이 타임라인 공개에 동의하면 여기에 표시돼요.</p>
         ) : timeline.isLoading ? (
-          <p className="text-sm text-gray-400">불러오는 중…</p>
+          <SkeletonRows count={3} />
         ) : entries.length === 0 ? (
           <p className="text-sm text-gray-400">아직 기록이 없어요.</p>
         ) : (

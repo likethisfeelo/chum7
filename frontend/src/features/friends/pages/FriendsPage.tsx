@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { SkeletonRows } from '@/shared/components/Skeleton';
 import {
   fetchCandidates,
   fetchFriendRequests,
@@ -9,10 +10,11 @@ import {
   sendFriendRequest,
 } from '../api/friendsApi';
 
+// TODO(copy): 임시 문구 — 실서비스 카피로 교체 예정
 const LEVEL_LABEL: Record<string, string> = {
-  frequent: '자주 마주쳤어요',
-  regular: '종종 마주쳤어요',
-  occasional: '가끔 마주쳤어요',
+  frequent: '자주 마주친 이웃',
+  regular: '종종 마주친 이웃',
+  occasional: '가끔 마주친 이웃',
 };
 
 export const FriendsPage = () => {
@@ -71,7 +73,7 @@ export const FriendsPage = () => {
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-gray-500">친구 신청 가능한 이웃을 찾았어요!</h2>
         {recs.isLoading ? (
-          <p className="text-sm text-gray-400">불러오는 중…</p>
+          <SkeletonRows count={2} />
         ) : (recs.data?.length ?? 0) === 0 ? (
           <p className="text-sm text-gray-400">
             아직 충분히 마주친 이웃이 없어요. 챌린지·마당에서 함께 활동하다 보면 나타나요.
@@ -101,7 +103,9 @@ export const FriendsPage = () => {
       {/* 내 친구 */}
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-gray-500">내 친구</h2>
-        {(friends.data?.length ?? 0) === 0 ? (
+        {friends.isLoading ? (
+          <SkeletonRows count={2} />
+        ) : (friends.data?.length ?? 0) === 0 ? (
           <p className="text-sm text-gray-400">아직 친구가 없어요.</p>
         ) : (
           friends.data!.map((f) => (
