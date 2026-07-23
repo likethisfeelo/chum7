@@ -268,6 +268,16 @@ export class ApiStack extends cdk.Stack {
     // ANY는 OPTIONS까지 포함해 프리플라이트를 Lambda로 넘겨버린다(→ Hono 404 → CORS 실패).
     // OPTIONS를 제외한 실제 메서드만 등록하면, OPTIONS 라우트가 없어 API Gateway가
     // corsPreflight 설정으로 프리플라이트를 자동 응답한다(204 + CORS 헤더).
+    //
+    // 중요: {proxy+}는 하위 세그먼트 1개 이상을 요구해 "맨 경로"(예: GET /public/challenges,
+    // Hono의 route('/'))는 매칭하지 못한다 → API GW 404. 따라서 정확 경로와 프록시 경로를
+    // 둘 다 등록한다(목록/피드 등 루트 핸들러가 죽지 않도록).
+    this.httpApi.addRoutes({
+      path: spec.protectedPrefix,
+      methods: PROXY_METHODS,
+      integration,
+      authorizer: this.authorizer,
+    });
     this.httpApi.addRoutes({
       path: `${spec.protectedPrefix}/{proxy+}`,
       methods: PROXY_METHODS,
@@ -275,6 +285,11 @@ export class ApiStack extends cdk.Stack {
       authorizer: this.authorizer,
     });
     for (const publicPrefix of spec.publicPrefixes ?? []) {
+      this.httpApi.addRoutes({
+        path: publicPrefix,
+        methods: PROXY_METHODS,
+        integration,
+      });
       this.httpApi.addRoutes({
         path: `${publicPrefix}/{proxy+}`,
         methods: PROXY_METHODS,

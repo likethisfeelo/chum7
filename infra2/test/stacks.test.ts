@@ -81,6 +81,17 @@ describe('infra2 stacks', () => {
     expect(optionsRoutes).toHaveLength(0);
   });
 
+  it('ApiStack — 맨 경로와 프록시 경로가 둘 다 등록된다(루트 핸들러 도달성)', () => {
+    // {proxy+}는 하위 세그먼트를 요구하므로 GET /public/challenges(목록) 같은 루트 핸들러가
+    // 죽지 않도록 정확 경로도 등록되어야 한다.
+    for (const routeKey of ['GET /public/challenges', 'GET /public/challenges/{proxy+}']) {
+      const routes = dev.api.findResources('AWS::ApiGatewayV2::Route', {
+        Properties: { RouteKey: routeKey },
+      });
+      expect(Object.keys(routes)).toHaveLength(1);
+    }
+  });
+
   it('ApiStack — user-api에 도메인 테이블 env 주입', () => {
     dev.api.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'chme2-dev-user-api',
