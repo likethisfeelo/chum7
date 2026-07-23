@@ -101,10 +101,12 @@ export function scoreSortKey(score: number, otherUserId: string): string {
   return `${padded}#${otherUserId}`;
 }
 
-/** 도메인 이벤트 → 사용자쌍 상호작용 목록 (본인-본인 제외) */
+/** 도메인 이벤트 → 사용자쌍 상호작용 목록 (본인-본인 제외).
+ *  coChallengeCap: challenge.completed 팬아웃 상한(기본 MAX_CO_CHALLENGE_USERS). */
 export function interactionsFromEvent(
   type: string,
   detail: Record<string, any>,
+  coChallengeCap: number = MAX_CO_CHALLENGE_USERS,
 ): PairInteraction[] {
   const occurredAt = String(detail.occurredAt ?? '');
 
@@ -166,7 +168,7 @@ export function interactionsFromEvent(
     case 'challenge.completed': {
       const all: string[] = Array.isArray(detail.completedUserIds) ? detail.completedUserIds : [];
       // 팬아웃 상한 — 초과 완주자는 co_challenge 쌍 생성에서 제외(개인 집계엔 영향 없음)
-      const users = all.slice(0, MAX_CO_CHALLENGE_USERS);
+      const users = all.slice(0, Math.max(1, coChallengeCap));
       const challengeId = String(detail.challengeId ?? '');
       const out: PairInteraction[] = [];
       for (let i = 0; i < users.length; i += 1) {

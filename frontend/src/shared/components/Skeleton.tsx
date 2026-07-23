@@ -32,3 +32,22 @@ export const SkeletonList = ({ count = 3 }: { count?: number }) => (
     ))}
   </div>
 );
+
+/** 컴팩트 목록 행 스켈레톤 — 친구·아카이브·알림 등 한 줄짜리 리스트용 */
+export const SkeletonRow = () => (
+  <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 p-3">
+    <div className="flex-1 space-y-1.5">
+      <Skeleton className="h-3 w-1/3" />
+      <Skeleton className="h-2.5 w-1/2" />
+    </div>
+    <Skeleton className="h-7 w-16 rounded-lg" />
+  </div>
+);
+
+export const SkeletonRows = ({ count = 3 }: { count?: number }) => (
+  <div className="space-y-2">
+    {Array.from({ length: count }, (_, i) => (
+      <SkeletonRow key={i} />
+    ))}
+  </div>
+);

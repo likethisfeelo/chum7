@@ -68,6 +68,16 @@ describe('pairing — 이벤트 → 사용자쌍 상호작용', () => {
     // 25명 상한 → 300쌍 (60*59/2=1770이 아님)
     expect(out.length).toBe((25 * 24) / 2);
   });
+
+  it('팬아웃 상한은 인자로 조정 가능(운영 튜닝)', () => {
+    const many = Array.from({ length: 60 }, (_, i) => `u${i}`);
+    const out = interactionsFromEvent(
+      'challenge.completed',
+      { challengeId: 'big', completedUserIds: many, occurredAt: '2026-07-23T00:00:00.000Z' },
+      10,
+    );
+    expect(out.length).toBe((10 * 9) / 2); // 10명 상한 → 45쌍
+  });
 });
 
 describe('pairing — 점수/키', () => {
