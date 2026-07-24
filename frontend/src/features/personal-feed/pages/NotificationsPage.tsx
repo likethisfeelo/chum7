@@ -27,6 +27,7 @@ const NOTIFICATION_TYPE_META: Record<string, { icon: string; label: string }> = 
   settlement_ready:         { icon: '🧾', label: '정산서 도착' },
   order_rejected:           { icon: '⚠️', label: '입금 확인 실패' },
   shipment_updated:         { icon: '📦', label: '배송 상태 변경' },
+  challenge_recruiting:     { icon: '🔔', label: '관심 리더 새 챌린지' },
 };
 
 function formatRelativeTime(iso: string): string {
