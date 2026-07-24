@@ -17,14 +17,17 @@ export interface ApiStackProps extends cdk.StackProps {
   eventBus: events.EventBus;
 }
 
-/** 프록시 라우트에 등록할 메서드 — OPTIONS 제외(프리플라이트는 API Gateway가 자동 처리) */
+/**
+ * 프록시 라우트에 등록할 메서드 — OPTIONS 제외(프리플라이트는 API Gateway가 자동 처리).
+ * HEAD 제외: 사용처가 없고, 라우트×메서드마다 Lambda 리소스 정책 문장이 1개씩 쌓여
+ * 20KB 한도(AWS::Lambda::Permission)를 넘기던 원인 중 하나였다. (route별 권한 누적 이슈)
+ */
 const PROXY_METHODS = [
   apigwv2.HttpMethod.GET,
   apigwv2.HttpMethod.POST,
   apigwv2.HttpMethod.PUT,
   apigwv2.HttpMethod.PATCH,
   apigwv2.HttpMethod.DELETE,
-  apigwv2.HttpMethod.HEAD,
 ];
 
 interface DomainApiSpec {
