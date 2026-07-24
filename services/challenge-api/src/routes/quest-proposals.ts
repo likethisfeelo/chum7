@@ -12,6 +12,7 @@ import { questProposalSchema } from '../schemas';
 import {
   canProposeInLifecycle,
   decideSubmit,
+  shouldAutoApproveProposal,
   sortProposalsLatestFirst,
   type ProposalStatus,
 } from '../domain/proposal-rules';
@@ -45,35 +46,50 @@ questProposalRoutes.post('/:challengeId/quest-proposals', async (c) => {
     return fail(c, 409, 'INVALID_LIFECYCLE', '제안 제출 가능 기간이 아닙니다');
   }
 
+  // 기본 자동승인 — 챌린지가 수동검토를 명시적으로 켠 경우에만 pending
+  const autoApprove = shouldAutoApproveProposal(challenge);
   const proposals = sortProposalsLatestFirst(await listMyProposals(challengeId, userId));
   const latest = proposals[0];
   const decision = decideSubmit(latest?.status as ProposalStatus | undefined);
-  if (!decision.allowed) {
+  // 수동검토 모드에서만 이미 승인된 제안의 재제출을 차단.
+  // 자동승인 모드에서는 승인된 제안도 내용 교체(재등록)를 허용한다.
+  if (!decision.allowed && !autoApprove) {
     return fail(c, 409, 'ALREADY_APPROVED', '이미 승인된 제안이 있습니다', {
       data: { proposal: latest ? stripKeys(latest) : null },
     });
   }
 
   const now = new Date().toISOString();
+  const nextStatus = autoApprove ? 'approved' : 'pending';
+  const reviewedBy = autoApprove ? 'auto' : null;
+  const reviewedAt = autoApprove ? now : null;
+  const isUpdate = Boolean(latest) && (decision.mode === 'update' || !decision.allowed);
+  const successMessage = autoApprove
+    ? '개인 퀘스트가 등록됐어요'
+    : '개인 퀘스트 제안이 제출됐어요. 리더 승인 후 인증할 수 있어요';
 
-  if (decision.mode === 'update' && latest) {
-    // 재제출 — 최신 내용으로 교체 + pending 복귀, 피드백 초기화 (레거시 submit upsert 승계)
+  if (isUpdate && latest) {
+    // 재제출 — 최신 내용으로 교체, 상태는 자동승인 여부에 따름, 피드백 초기화
     await updateProposalFields(challengeId, latest.sk as string, {
       title: input.title,
       description: input.description ?? '',
-      status: 'pending',
+      status: nextStatus,
       leaderFeedback: null,
+      reviewedBy,
+      reviewedAt,
       updatedAt: now,
     });
     const updated = {
       ...stripKeys(latest),
       title: input.title,
       description: input.description ?? '',
-      status: 'pending',
+      status: nextStatus,
       leaderFeedback: null,
+      reviewedBy,
+      reviewedAt,
       updatedAt: now,
     };
-    return ok(c, updated, '개인 퀘스트 제안이 다시 제출됐어요');
+    return ok(c, updated, successMessage);
   }
 
   const proposalId = randomUUID();
@@ -85,13 +101,15 @@ questProposalRoutes.post('/:challengeId/quest-proposals', async (c) => {
     userId,
     title: input.title,
     description: input.description ?? '',
-    status: 'pending' as const,
+    status: nextStatus,
     leaderFeedback: null,
+    reviewedBy,
+    reviewedAt,
     createdAt: now,
     updatedAt: now,
   };
   await putProposal(item);
-  return ok(c, stripKeys(item), '개인 퀘스트 제안이 제출됐어요', 201);
+  return ok(c, stripKeys(item), successMessage, 201);
 });
 
 // 내 제안 조회 (레거시 GET /challenges/{id}/personal-quest — { latestProposal, proposals } 계약)

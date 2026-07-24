@@ -38,7 +38,8 @@ export const createChallengeSchema = z.object({
     })
     .default({ type: 'anytime', maxRemedyDays: null }),
   personalQuestEnabled: z.boolean().default(false),
-  personalQuestAutoApprove: z.boolean().default(false),
+  // 개인 퀘스트 제안 자동승인 — 기본 자동승인. false 시 리더/어드민 검토 후 승인
+  personalQuestAutoApprove: z.boolean().default(true),
   requireStartConfirmation: z.boolean().default(false),
   joinApprovalRequired: z.boolean().default(true),
   allowedVerificationTypes: z.array(VERIFICATION_TYPE_ENUM).min(1).default(['image', 'text', 'link', 'video']),

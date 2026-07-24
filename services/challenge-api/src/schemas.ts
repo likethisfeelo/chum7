@@ -29,7 +29,8 @@ export const createChallengeSchema = z.object({
     maxRemedyDays: z.number().int().min(1).max(30).nullable().default(null),
   }).default({ type: 'anytime', maxRemedyDays: null }),
   personalQuestEnabled: z.boolean().default(false),
-  personalQuestAutoApprove: z.boolean().default(false),
+  // 개인 퀘스트 제안 자동승인 — 기본 자동승인. false 시 리더/어드민 검토 후 승인
+  personalQuestAutoApprove: z.boolean().default(true),
   requireStartConfirmation: z.boolean().default(false),
   joinApprovalRequired: z.boolean().default(false),
   allowedVerificationTypes: z.array(z.enum(['image', 'text', 'link', 'video'])).min(1).default(['image', 'text', 'link', 'video']),
@@ -160,6 +161,13 @@ export const questProposalSchema = z.object({
   description: z.string().max(1000).optional(),
 });
 export type QuestProposalInput = z.infer<typeof questProposalSchema>;
+
+// 리더 제안 심사 (challengeId 는 경로 파라미터에서 취득 — 바디는 결정/사유만)
+export const proposalReviewSchema = z.object({
+  decision: z.enum(['approve', 'reject']),
+  reason: z.string().max(500).optional(),
+});
+export type ProposalReviewInput = z.infer<typeof proposalReviewSchema>;
 
 // ── 퀘스트 제출 (레거시 quest/submit) ───────────────────────────────────────
 
