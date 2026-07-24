@@ -73,6 +73,17 @@ export async function fetchPlazaFeed(params: {
   return response.data?.data || { posts: [], hasMore: false, nextCursor: null };
 }
 
+/** 단일 마당 게시물 조회 — 저장(북마크) 탭에서 게시물 하나씩 다시 볼 때 사용. 삭제/비공개면 null. */
+export async function fetchPlazaPost(plazaPostId: string): Promise<PlazaPost | null> {
+  try {
+    const response = await apiClient.get(`/public/plaza/${encodeURIComponent(plazaPostId)}`);
+    return (response.data?.data as PlazaPost) ?? null;
+  } catch {
+    // 404(삭제됨) 등은 조용히 null 처리 — 저장 목록에서 스킵
+    return null;
+  }
+}
+
 export async function reactPlazaPost(params: { plazaPostId: string }): Promise<PlazaReactionResponse | null> {
   try {
     const response = await apiClient.post(`/s/plaza/${encodeURIComponent(params.plazaPostId)}/react`, {
