@@ -2,7 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 import { Loading } from '@/shared/components/Loading';
+import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import { ChallengeControlCard } from './ChallengeControlCard';
+import { VerificationComments } from './VerificationComments';
 
 /**
  * 리더 운영 탭 v1 (PRODUCT_SPEC §4.12-A)
@@ -246,6 +248,100 @@ function ParticipantsSection({ challengeId }: { challengeId: string }) {
   );
 }
 
+interface OpsVerification {
+  verificationId: string;
+  displayName: string;
+  day: number;
+  verificationType: string;
+  todayNote: string | null;
+  imageUrl: string | null;
+  videoUrl: string | null;
+  createdAt: string;
+}
+
+const VERIFICATION_TYPE_META: Record<string, string> = {
+  image: '📸 사진',
+  video: '🎬 영상',
+  link: '🔗 링크',
+  text: '📝 텍스트',
+};
+
+// 리더가 게시물을 조회하고 '챌린지 리더' 신원으로 댓글을 다는 운영 전용 섹션.
+// (피드 탭 댓글은 익명 고정 — 리더 신원 댓글은 여기서만 가능)
+function OpsPostsSection({ challengeId }: { challengeId: string }) {
+  const { data: posts = [], isLoading, isError } = useQuery<OpsVerification[]>({
+    queryKey: ['challenge-feed-verifications', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(
+        `/c/verifications?isPublic=true&limit=50&challengeId=${challengeId}`,
+      );
+      return res.data?.data?.verifications ?? [];
+    },
+    staleTime: 15_000,
+  });
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="font-bold text-gray-900">📰 게시물 · 리더 댓글</h3>
+        {posts.length > 0 && <span className="text-xs text-gray-400">{posts.length}건</span>}
+      </div>
+      <p className="text-[11px] text-gray-400 mb-4">여기서 다는 댓글은 👑 챌린지 리더로 표시됩니다.</p>
+
+      {isLoading ? (
+        <Loading />
+      ) : isError ? (
+        <p className="text-sm text-gray-500">게시물을 불러오지 못했어요. 잠시 후 다시 시도해주세요.</p>
+      ) : posts.length === 0 ? (
+        <p className="text-sm text-gray-500 py-6 text-center">아직 인증 게시물이 없어요.</p>
+      ) : (
+        <div className="space-y-3">
+          {posts.map((post) => {
+            const thumb = post.imageUrl ? resolveMediaUrl(post.imageUrl) : null;
+            return (
+              <div key={post.verificationId} className="rounded-xl bg-white/60 border border-gray-100 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[11px] font-semibold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-md border border-primary-100">
+                    Day {post.day || '-'}
+                  </span>
+                  <span className="text-[11px] font-medium text-gray-600 truncate">{post.displayName || '익명'}</span>
+                  <span className="text-[11px] text-gray-400 ml-auto flex-shrink-0">
+                    {new Date(post.createdAt).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}
+                  </span>
+                </div>
+
+                <div className="flex gap-2.5">
+                  {thumb && (
+                    <img src={thumb} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-gray-400">{VERIFICATION_TYPE_META[post.verificationType] ?? '📝 텍스트'}</p>
+                    {post.todayNote ? (
+                      <p className="text-sm text-gray-700 leading-relaxed line-clamp-3 mt-0.5">{post.todayNote}</p>
+                    ) : (
+                      <p className="text-sm text-gray-400 mt-0.5">내용 없음</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-2 pt-2 border-t border-gray-100">
+                  <VerificationComments
+                    verificationId={post.verificationId}
+                    challengeId={challengeId}
+                    canComment
+                    challengeEnded={false}
+                    authorMode="leader"
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function LeaderOpsTab({ challengeId }: { challengeId: string }) {
   const navigate = useNavigate();
 
@@ -254,6 +350,7 @@ export function LeaderOpsTab({ challengeId }: { challengeId: string }) {
       <ChallengeControlCard challengeId={challengeId} />
       <BriefingSection challengeId={challengeId} />
       <ParticipantsSection challengeId={challengeId} />
+      <OpsPostsSection challengeId={challengeId} />
 
       {/* 퀘스트 심사 바로가기 */}
       <button
