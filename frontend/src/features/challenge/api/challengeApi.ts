@@ -48,6 +48,8 @@ export interface CreateChallengeParams {
   joinApprovalRequired: boolean;
   allowedVerificationTypes: Array<'image' | 'text' | 'link' | 'video'>;
   participateAsCreator: boolean;
+  /** 개인 퀘스트 제안 자동승인 (기본 true). false 시 리더 검토 후 승인 */
+  personalQuestAutoApprove?: boolean;
 }
 
 export interface InterestStatus {
@@ -106,6 +108,29 @@ export const challengeApi = {
     challengeId: string,
   ): Promise<{ latestProposal: QuestProposal | null; proposals: QuestProposal[] }> => {
     const res = await apiClient.get(`/c/challenges/${challengeId}/quest-proposals/my`);
+    return res.data.data;
+  },
+
+  // ── 리더 개인 퀘스트 제안 심사 (challenge-api /c/:id/leader/quest-proposals) ──
+  getLeaderQuestProposals: async (
+    challengeId: string,
+    status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending',
+  ): Promise<{ proposals: QuestProposal[]; total: number }> => {
+    const res = await apiClient.get(
+      `/c/${challengeId}/leader/quest-proposals?status=${status}`,
+    );
+    return res.data.data;
+  },
+
+  reviewQuestProposal: async (
+    challengeId: string,
+    proposalId: string,
+    params: { decision: 'approve' | 'reject'; reason?: string },
+  ): Promise<{ proposalId: string; status: 'approved' | 'rejected' }> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/quest-proposals/${proposalId}/review`,
+      params,
+    );
     return res.data.data;
   },
 };

@@ -17,6 +17,11 @@ interface VerificationSheetProps {
   onSuccess?: (data: any) => void;
 }
 
+// 해쉬태그 정규화: 한글/영문/숫자/_/- 만 허용, 최대 20자
+function sanitizeHashtag(raw: string): string {
+  return raw.replace(/[^가-힣a-zA-Z0-9_-]/g, '').slice(0, 20);
+}
+
 function toIsoFromLocalDateTime(localDateTime: string): string {
   if (!localDateTime) return new Date().toISOString();
   const parsed = new Date(localDateTime);
@@ -79,6 +84,7 @@ export const VerificationSheet = ({
 }: VerificationSheetProps) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isHashtagComposingRef = useRef(false);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -340,8 +346,22 @@ export const VerificationSheet = ({
               type="text"
               value={formData.hashtag}
               onChange={(e) => {
-                const val = e.target.value.replace(/[^가-힣a-zA-Z0-9_-]/g, '').slice(0, 20);
-                setFormData({ ...formData, hashtag: val });
+                const raw = e.target.value;
+                // 한글 IME 조합 중에는 자모가 완성되기 전이라 필터링을 건너뛴다
+                // (조합 중 필터링하면 자모가 즉시 제거돼 한글 입력이 불가능)
+                if (isHashtagComposingRef.current) {
+                  setFormData((prev) => ({ ...prev, hashtag: raw.slice(0, 20) }));
+                  return;
+                }
+                setFormData((prev) => ({ ...prev, hashtag: sanitizeHashtag(raw) }));
+              }}
+              onCompositionStart={() => {
+                isHashtagComposingRef.current = true;
+              }}
+              onCompositionEnd={(e) => {
+                isHashtagComposingRef.current = false;
+                const val = sanitizeHashtag((e.target as HTMLInputElement).value);
+                setFormData((prev) => ({ ...prev, hashtag: val }));
               }}
               className="flex-1 py-3 pr-3 bg-transparent focus:outline-none text-sm"
               placeholder="새벽운동 (최대 20자)"

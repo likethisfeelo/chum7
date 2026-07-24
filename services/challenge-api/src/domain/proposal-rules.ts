@@ -38,6 +38,30 @@ export function canReviewProposal(status: unknown): boolean {
   return status === 'pending';
 }
 
+/**
+ * 제안 자동승인 여부 — 기본 자동승인.
+ * 챌린지가 `personalQuestAutoApprove === false` 로 명시적 수동검토(리더 검토 후 승인)를
+ * 켠 경우에만 pending. 미설정(undefined)은 자동승인 — "기본 자동승인" 정책.
+ */
+export function shouldAutoApproveProposal(challenge: { personalQuestAutoApprove?: unknown } | null | undefined): boolean {
+  return challenge?.personalQuestAutoApprove !== false;
+}
+
+export type ProposalDecision = 'approve' | 'reject';
+
+export interface ProposalReviewOutcome {
+  status: 'approved' | 'rejected';
+  message: string;
+}
+
+/** 심사 결과 — 상태 갱신만 (승인 시 퀘스트 아이템 자동 생성 없음 — admin-api 와 동일 규칙) */
+export function proposalReviewOutcome(decision: ProposalDecision): ProposalReviewOutcome {
+  if (decision === 'approve') {
+    return { status: 'approved', message: '개인 퀘스트 제안이 승인되었습니다' };
+  }
+  return { status: 'rejected', message: '개인 퀘스트 제안이 반려되었습니다. 참여자가 재제출할 수 있습니다.' };
+}
+
 /** updatedAt 최신순 정렬 후 가장 최근 제안 (레거시 my 핸들러 latestProposal 계약) */
 export function sortProposalsLatestFirst<T extends { updatedAt?: unknown }>(items: T[]): T[] {
   return [...items].sort((a, b) =>

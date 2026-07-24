@@ -11,12 +11,16 @@ import { apiClient } from '@/lib/api-client';
 import { resolveChallengeBucket, getChallengeDisplayMeta } from '@/features/challenge/utils/challengeLifecycle';
 import { OrderHistorySection } from '@/features/commerce/components/OrderHistorySection';
 import { CouponWalletSection } from '@/features/commerce/components/CouponWalletSection';
+import { SavedPlazaTab } from '@/features/me/components/SavedPlazaTab';
+import { InterestAreaTab } from '@/features/me/components/InterestAreaTab';
 
-type MyTab = 'character' | 'challenges' | 'badges' | 'orders';
+type MyTab = 'character' | 'challenges' | 'saved' | 'interest' | 'badges' | 'orders';
 
 const TAB_CONFIG: { key: MyTab; label: string }[] = [
   { key: 'character', label: '캐릭터' },
   { key: 'challenges', label: '챌린지' },
+  { key: 'saved', label: '저장' },
+  { key: 'interest', label: '관심영역' },
   { key: 'badges', label: '뱃지' },
   { key: 'orders', label: '주문' },
 ];
@@ -575,6 +579,8 @@ export function MyPage() {
       <div className="p-4">
         {activeTab === 'character' && <CharacterTab />}
         {activeTab === 'challenges' && <ChallengesTab />}
+        {activeTab === 'saved' && <SavedPlazaTab />}
+        {activeTab === 'interest' && <InterestAreaTab />}
         {activeTab === 'orders' && <OrdersTab />}
         {activeTab === 'badges' && (
           achievementsLoading || !achievements ? (

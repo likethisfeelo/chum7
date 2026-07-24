@@ -46,10 +46,13 @@ export class WorkersStack extends cdk.Stack {
         VAPID_SECRET_NAME: stateful.vapidSecret.secretName,
         // 친구 실명 식별(v2 §3) — actor↔recipient 친구 여부 조회
         GRAPH_TABLE: stateful.tables.graph.tableName,
+        // 관심영역(리더+카테고리) 구독자 조회 — challenge.recruiting 팬아웃
+        SOCIAL_TABLE: stateful.tables.social.tableName,
       },
     });
     stateful.tables.users.grantReadWriteData(this.notificationWorker);
     stateful.tables.graph.grantReadData(this.notificationWorker); // 친구 엣지 조회
+    stateful.tables.social.grantReadData(this.notificationWorker); // 관심영역 구독자 조회
     stateful.vapidSecret.grantRead(this.notificationWorker); // Web Push 발송 키
     this.workerFunctions.push(this.notificationWorker);
 

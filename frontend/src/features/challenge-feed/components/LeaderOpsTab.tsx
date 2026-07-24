@@ -1,8 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { Loading } from '@/shared/components/Loading';
+import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
+import { challengeApi, type QuestProposal } from '@/features/challenge/api/challengeApi';
 import { ChallengeControlCard } from './ChallengeControlCard';
+import { VerificationComments } from './VerificationComments';
 
 /**
  * 리더 운영 탭 v1 (PRODUCT_SPEC §4.12-A)
@@ -246,6 +251,251 @@ function ParticipantsSection({ challengeId }: { challengeId: string }) {
   );
 }
 
+const PROPOSAL_STATUS_META: Record<string, { label: string; cls: string }> = {
+  pending: { label: '검토중', cls: 'bg-amber-100 text-amber-700' },
+  approved: { label: '승인됨', cls: 'bg-emerald-100 text-emerald-700' },
+  rejected: { label: '반려', cls: 'bg-rose-100 text-rose-700' },
+};
+
+// 개인 퀘스트 제안 심사 섹션 — 기본 자동승인이지만 수동검토 챌린지·재검토용.
+function ProposalReviewSection({ challengeId }: { challengeId: string }) {
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<'pending' | 'all'>('pending');
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+
+  const { data, isLoading, isError } = useQuery<{ proposals: QuestProposal[]; total: number }>({
+    queryKey: ['leader-quest-proposals', challengeId, tab],
+    queryFn: () => challengeApi.getLeaderQuestProposals(challengeId, tab),
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: (vars: { proposalId: string; decision: 'approve' | 'reject'; reason?: string }) =>
+      challengeApi.reviewQuestProposal(challengeId, vars.proposalId, {
+        decision: vars.decision,
+        reason: vars.reason,
+      }),
+    onSuccess: (_res, vars) => {
+      toast.success(vars.decision === 'approve' ? '승인했어요' : '반려했어요');
+      setRejectingId(null);
+      setReason('');
+      queryClient.invalidateQueries({ queryKey: ['leader-quest-proposals', challengeId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '처리에 실패했어요'),
+  });
+
+  const proposals = data?.proposals ?? [];
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-gray-900">📝 개인 퀘스트 제안 심사</h3>
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
+          {(['pending', 'all'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors ${
+                tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+              }`}
+            >
+              {t === 'pending' ? '대기' : '전체'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <Loading />
+      ) : isError ? (
+        <p className="text-sm text-gray-500">제안을 불러오지 못했어요.</p>
+      ) : proposals.length === 0 ? (
+        <p className="text-sm text-gray-500 py-6 text-center">
+          {tab === 'pending' ? '대기 중인 제안이 없어요. (기본 자동승인)' : '아직 제안이 없어요.'}
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {proposals.map((p) => {
+            const meta = PROPOSAL_STATUS_META[p.status] ?? { label: p.status, cls: 'bg-gray-100 text-gray-500' };
+            const isRejecting = rejectingId === p.proposalId;
+            const isPending = p.status === 'pending';
+            return (
+              <div key={p.proposalId} className="rounded-xl bg-white/60 border border-gray-100 p-3">
+                <div className="flex items-start gap-2">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center text-[11px] font-bold text-primary-700 flex-shrink-0">
+                    {p.userId?.[0]?.toUpperCase() ?? '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{p.title}</p>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${meta.cls}`}>
+                        {meta.label}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-400">{maskUserId(p.userId)}</p>
+                    {p.description && (
+                      <p className="text-xs text-gray-600 mt-1 leading-relaxed whitespace-pre-wrap break-words">{p.description}</p>
+                    )}
+                    {p.leaderFeedback && (
+                      <p className="text-[11px] text-rose-600 bg-rose-50 rounded-lg px-2 py-1 mt-1">💬 {p.leaderFeedback}</p>
+                    )}
+                  </div>
+                </div>
+
+                {isPending && (
+                  <div className="mt-2 pt-2 border-t border-gray-100">
+                    {isRejecting ? (
+                      <div className="space-y-2">
+                        <input
+                          value={reason}
+                          onChange={(e) => setReason(e.target.value)}
+                          placeholder="반려 사유(선택)"
+                          maxLength={500}
+                          className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-rose-300"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={reviewMutation.isPending}
+                            onClick={() => reviewMutation.mutate({ proposalId: p.proposalId, decision: 'reject', reason: reason.trim() || undefined })}
+                            className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 text-white disabled:opacity-50"
+                          >
+                            반려 확정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setRejectingId(null); setReason(''); }}
+                            className="flex-1 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white"
+                          >
+                            취소
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={reviewMutation.isPending}
+                          onClick={() => reviewMutation.mutate({ proposalId: p.proposalId, decision: 'approve' })}
+                          className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white disabled:opacity-50"
+                        >
+                          승인
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setRejectingId(p.proposalId); setReason(''); }}
+                          className="flex-1 py-1.5 text-xs font-medium rounded-lg border border-rose-200 text-rose-600 bg-white"
+                        >
+                          반려
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+interface OpsVerification {
+  verificationId: string;
+  displayName: string;
+  day: number;
+  verificationType: string;
+  todayNote: string | null;
+  imageUrl: string | null;
+  videoUrl: string | null;
+  createdAt: string;
+}
+
+const VERIFICATION_TYPE_META: Record<string, string> = {
+  image: '📸 사진',
+  video: '🎬 영상',
+  link: '🔗 링크',
+  text: '📝 텍스트',
+};
+
+// 리더가 게시물을 조회하고 '챌린지 리더' 신원으로 댓글을 다는 운영 전용 섹션.
+// (피드 탭 댓글은 익명 고정 — 리더 신원 댓글은 여기서만 가능)
+function OpsPostsSection({ challengeId }: { challengeId: string }) {
+  const { data: posts = [], isLoading, isError } = useQuery<OpsVerification[]>({
+    queryKey: ['challenge-feed-verifications', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(
+        `/c/verifications?isPublic=true&limit=50&challengeId=${challengeId}`,
+      );
+      return res.data?.data?.verifications ?? [];
+    },
+    staleTime: 15_000,
+  });
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="font-bold text-gray-900">📰 게시물 · 리더 댓글</h3>
+        {posts.length > 0 && <span className="text-xs text-gray-400">{posts.length}건</span>}
+      </div>
+      <p className="text-[11px] text-gray-400 mb-4">여기서 다는 댓글은 👑 챌린지 리더로 표시됩니다.</p>
+
+      {isLoading ? (
+        <Loading />
+      ) : isError ? (
+        <p className="text-sm text-gray-500">게시물을 불러오지 못했어요. 잠시 후 다시 시도해주세요.</p>
+      ) : posts.length === 0 ? (
+        <p className="text-sm text-gray-500 py-6 text-center">아직 인증 게시물이 없어요.</p>
+      ) : (
+        <div className="space-y-3">
+          {posts.map((post) => {
+            const thumb = post.imageUrl ? resolveMediaUrl(post.imageUrl) : null;
+            return (
+              <div key={post.verificationId} className="rounded-xl bg-white/60 border border-gray-100 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[11px] font-semibold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-md border border-primary-100">
+                    Day {post.day || '-'}
+                  </span>
+                  <span className="text-[11px] font-medium text-gray-600 truncate">{post.displayName || '익명'}</span>
+                  <span className="text-[11px] text-gray-400 ml-auto flex-shrink-0">
+                    {new Date(post.createdAt).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}
+                  </span>
+                </div>
+
+                <div className="flex gap-2.5">
+                  {thumb && (
+                    <img src={thumb} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-gray-400">{VERIFICATION_TYPE_META[post.verificationType] ?? '📝 텍스트'}</p>
+                    {post.todayNote ? (
+                      <p className="text-sm text-gray-700 leading-relaxed line-clamp-3 mt-0.5">{post.todayNote}</p>
+                    ) : (
+                      <p className="text-sm text-gray-400 mt-0.5">내용 없음</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-2 pt-2 border-t border-gray-100">
+                  <VerificationComments
+                    verificationId={post.verificationId}
+                    challengeId={challengeId}
+                    canComment
+                    challengeEnded={false}
+                    authorMode="leader"
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function LeaderOpsTab({ challengeId }: { challengeId: string }) {
   const navigate = useNavigate();
 
@@ -254,6 +504,8 @@ export function LeaderOpsTab({ challengeId }: { challengeId: string }) {
       <ChallengeControlCard challengeId={challengeId} />
       <BriefingSection challengeId={challengeId} />
       <ParticipantsSection challengeId={challengeId} />
+      <ProposalReviewSection challengeId={challengeId} />
+      <OpsPostsSection challengeId={challengeId} />
 
       {/* 퀘스트 심사 바로가기 */}
       <button

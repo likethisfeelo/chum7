@@ -17,6 +17,8 @@ export interface Recommendation {
 const DISMISS_KEY = 'outer-space-recommend-dismiss';
 const MAX_EXPOSE_PER_SESSION = 2;
 const SUPPRESS_HOURS = 48;
+// 관심 챌린지 프롬프트 노출 확률 (좋아요 10번 중 1번 정도)
+const RECOMMEND_SHOW_PROBABILITY = 0.1;
 
 function getDismissMap(): Record<string, string> {
   try {
@@ -81,6 +83,8 @@ export function usePlazaReactions(initialCounts: Record<string, number> = {}) {
     setReactingIds((prev) => ({ ...prev, [postId]: false }));
 
     if (exposeCount >= MAX_EXPOSE_PER_SESSION) return;
+    // 관심 챌린지 프롬프트 과다 노출 방지 — 좋아요 10번 중 1번 정도만 노출
+    if (Math.random() >= RECOMMEND_SHOW_PROBABILITY) return;
 
     const inline = reactResponse?.recommendation;
     if (inline && !isSuppressed(inline.challengeId)) {

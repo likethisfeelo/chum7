@@ -19,6 +19,13 @@ export const domainEventSchemas = {
     challengeId: z.string(),
     completedUserIds: z.array(z.string()),
   }),
+  // 챌린지 모집 시작(draft→recruiting) — 관심영역(리더+카테고리) 구독자에게 알림 팬아웃 신호.
+  'challenge.recruiting': z.object({
+    challengeId: z.string(),
+    leaderId: z.string(),
+    category: z.string(),
+    title: z.string(),
+  }),
   'comment.created': z.object({
     targetType: z.enum(['plaza', 'board', 'verification', 'bulletin', 'personal']),
     targetId: z.string(),

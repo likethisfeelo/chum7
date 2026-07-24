@@ -20,6 +20,14 @@ import { createDayCompletionRules } from '../domain/verification-rules';
 import { getChallenge } from '../repo/challenges';
 import { listChallengeParticipations } from '../repo/participations';
 import { countPendingSubmissions, listQuests } from '../repo/quests';
+import {
+  findProposalById,
+  listChallengeProposals,
+  updateProposalReview,
+} from '../repo/quest-proposals';
+import { canReviewProposal, proposalReviewOutcome } from '../domain/proposal-rules';
+import { proposalReviewSchema } from '../schemas';
+import { stripKeys } from '../repo/shared';
 
 export const leaderRoutes = new Hono<AppEnv>();
 
@@ -167,4 +175,49 @@ leaderRoutes.get('/participants', async (c) => {
       gaveUp: enriched.filter((p) => p.status === 'gave_up').length,
     },
   });
+});
+
+// 개인 퀘스트 제안 심사 목록 (리더 — 기본 pending, status=all 지원)
+leaderRoutes.get('/quest-proposals', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+
+  const status = (c.req.query('status') ?? 'pending').trim();
+  const proposals = (await listChallengeProposals(challengeId))
+    .filter((item) => (status === 'all' ? true : item.status === status))
+    .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
+    .map(stripKeys);
+
+  return ok(c, { proposals, total: proposals.length });
+});
+
+// 개인 퀘스트 제안 심사 (리더 — 승인/반려, admin-api 와 동일 규칙)
+leaderRoutes.put('/quest-proposals/:proposalId/review', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const proposalId = c.req.param('proposalId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+
+  const input = proposalReviewSchema.parse(await c.req.json().catch(() => ({})));
+  const now = new Date();
+
+  const proposal = await findProposalById(challengeId, proposalId);
+  if (!proposal) return fail(c, 404, 'PROPOSAL_NOT_FOUND', '제안서를 찾을 수 없습니다');
+  if (!canReviewProposal(proposal.status)) {
+    return fail(c, 409, 'ALREADY_REVIEWED', `이미 처리된 제안서입니다 (status: ${proposal.status})`);
+  }
+
+  const outcome = proposalReviewOutcome(input.decision);
+  const applied = await updateProposalReview({
+    challengeId,
+    sk: String(proposal.sk),
+    status: outcome.status,
+    reason: input.reason ?? null,
+    reviewerId: c.get('authUser')!.userId,
+    nowIso: now.toISOString(),
+  });
+  if (!applied) return fail(c, 409, 'ALREADY_REVIEWED', '이미 처리된 제안서입니다');
+
+  return ok(c, { proposalId, status: outcome.status }, outcome.message);
 });

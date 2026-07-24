@@ -14,6 +14,8 @@ interface InlineVerificationFormProps {
   quest?: any;
   onQuestSuccess?: () => void;
   defaultExpanded?: boolean;
+  /** 개인 퀘스트 제안이 아직 승인 대기중이면 개인 퀘스트 인증 경로를 차단 */
+  personalQuestPending?: boolean;
 }
 
 type VerificationType = "text" | "image" | "video" | "link";
@@ -64,6 +66,11 @@ function getChallengeDay(userChallenge: any): number {
   const diffMs = today.getTime() - startDate.getTime();
   const elapsed = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   return Math.max(1, elapsed + 1);
+}
+
+// 해쉬태그 정규화: 한글/영문/숫자/_/- 만 허용, 최대 20자
+function sanitizeHashtag(raw: string): string {
+  return raw.replace(/[^가-힣a-zA-Z0-9_-]/g, "").slice(0, 20);
 }
 
 function toIsoFromLocalDateTime(localDateTime: string): string {
@@ -165,10 +172,12 @@ export const InlineVerificationForm = ({
   quest,
   onQuestSuccess,
   defaultExpanded = false,
+  personalQuestPending = false,
 }: InlineVerificationFormProps) => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaPreviewUrlRef = useRef<string | null>(null);
+  const isHashtagComposingRef = useRef(false);
   const lastUploadedUrlRef = useRef<string | undefined>(undefined);
   const lastUploadedObjectKeyRef = useRef<string | undefined>(undefined);
 
@@ -206,6 +215,13 @@ export const InlineVerificationForm = ({
 
   const showQuestTypeSelector = !forcedQuestType && isMixedType && hasLeaderQuests; // 혼합형 + 리더 퀘스트 존재 시만 선택UI 표시
   const defaultQuestType: 'leader' | 'personal' = forcedQuestType ?? ((isPersonalOnlyType || (isMixedType && !hasLeaderQuests)) ? 'personal' : 'leader');
+
+  // 개인 퀘스트 승인 대기중 차단 (챌린지 피드와 동일 규칙)
+  // - 리더 인증 경로가 있으면(혼합형) 리더로만 인증 가능, 개인 옵션만 비활성
+  // - 개인 인증만 가능한 챌린지(personal_only 등)면 인증 자체가 불가
+  const personalQuestBlocked = Boolean(personalQuestPending);
+  const leaderPathAvailable = showQuestTypeSelector || defaultQuestType === 'leader';
+  const personalOnlyBlocked = personalQuestBlocked && !leaderPathAvailable;
 
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [selectedType, setSelectedType] = useState<VerificationType>(
@@ -251,6 +267,13 @@ export const InlineVerificationForm = ({
       setSelectedQuestType('personal');
     }
   }, [hasLeaderQuests, isMixedType, selectedQuestType]);
+
+  // 개인 퀘스트가 승인 대기중인데 개인이 선택돼 있고 리더 경로가 있으면 리더로 전환
+  useEffect(() => {
+    if (personalQuestBlocked && leaderPathAvailable && selectedQuestType === 'personal') {
+      setSelectedQuestType('leader');
+    }
+  }, [personalQuestBlocked, leaderPathAvailable, selectedQuestType]);
 
   useEffect(() => {
     if (!openVideoPickerSignal) return;
@@ -547,6 +570,12 @@ export const InlineVerificationForm = ({
 
     if (verificationMutation.isPending) return;
 
+    // 개인 퀘스트 승인 대기중이면 개인 인증 차단 (서버 day 불일치 등 혼란스러운 에러 방지)
+    if (selectedQuestType === "personal" && personalQuestBlocked) {
+      toast.error("개인 퀘스트가 승인 대기 중이에요. 리더 승인 후 인증할 수 있어요.");
+      return;
+    }
+
     if (selectedType === "image" && !mediaFile) {
       toast.error("사진을 첨부해주세요.");
       return;
@@ -689,8 +718,22 @@ export const InlineVerificationForm = ({
                   type="text"
                   value={formData.hashtag}
                   onChange={(e) => {
-                    const val = e.target.value.replace(/[^가-힣a-zA-Z0-9_-]/g, '').slice(0, 20);
-                    setFormData({ ...formData, hashtag: val });
+                    const raw = e.target.value;
+                    // 한글 IME 조합 중에는 자모가 완성되기 전이라 필터링을 건너뛴다
+                    // (조합 중 필터링하면 자모가 즉시 제거돼 한글 입력이 불가능)
+                    if (isHashtagComposingRef.current) {
+                      setFormData((prev) => ({ ...prev, hashtag: raw.slice(0, 20) }));
+                      return;
+                    }
+                    setFormData((prev) => ({ ...prev, hashtag: sanitizeHashtag(raw) }));
+                  }}
+                  onCompositionStart={() => {
+                    isHashtagComposingRef.current = true;
+                  }}
+                  onCompositionEnd={(e) => {
+                    isHashtagComposingRef.current = false;
+                    const val = sanitizeHashtag((e.target as HTMLInputElement).value);
+                    setFormData((prev) => ({ ...prev, hashtag: val }));
                   }}
                   className="flex-1 py-2.5 pr-2 bg-transparent focus:outline-none text-sm"
                   placeholder="해쉬태그 (선택, 최대 20자)"
@@ -864,14 +907,20 @@ export const InlineVerificationForm = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSelectedQuestType('personal')}
+                    disabled={personalQuestBlocked}
+                    onClick={() => {
+                      if (personalQuestBlocked) return;
+                      setSelectedQuestType('personal');
+                    }}
                     className={`flex-1 py-2 text-xs rounded-xl border font-medium transition-colors ${
-                      selectedQuestType === 'personal'
+                      personalQuestBlocked
+                        ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
+                        : selectedQuestType === 'personal'
                         ? 'bg-primary-600 text-white border-primary-600'
                         : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'
                     }`}
                   >
-                    개인 퀘스트
+                    {personalQuestBlocked ? '개인 퀘스트 (승인 대기중)' : '개인 퀘스트'}
                   </button>
                 </div>
               </div>
@@ -902,6 +951,14 @@ export const InlineVerificationForm = ({
                     나중에
                   </button>
                 </div>
+              </div>
+            )}
+
+            {personalOnlyBlocked && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs text-amber-800">
+                  ⏳ 개인 퀘스트가 승인 대기 중이에요. 리더 승인 후 인증할 수 있어요.
+                </p>
               </div>
             )}
 
@@ -953,6 +1010,7 @@ export const InlineVerificationForm = ({
                 type="submit"
                 disabled={
                   verificationMutation.isPending ||
+                  personalOnlyBlocked ||
                   (acceptsFile && uploadProgress > 0 && uploadProgress < 100)
                 }
                 className="px-5 py-2 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 transition-colors disabled:opacity-50"

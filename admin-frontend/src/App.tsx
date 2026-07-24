@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminQuestSubmissionsPage } from '@/pages/AdminQuestSubmissionsPage';
+import { AdminQuestProposalsPage } from '@/pages/AdminQuestProposalsPage';
 import { AdminChallengeCreatePage } from '@/pages/AdminChallengeCreatePage';
 import { AdminLoginPage } from '@/pages/AdminLoginPage';
 import { AdminForgotPasswordPage } from '@/pages/AdminForgotPasswordPage';
@@ -115,6 +116,7 @@ const Sidebar = () => {
   if (hasAnyRole(groups, ['admins', 'operators', 'creators'])) {
     nav.push({ path: '/admin/challenges/mine', label: '📚 내 챌린지/퀘스트' });
     nav.push({ path: '/admin/quests/submissions', label: '📋 제출물 심사' });
+    nav.push({ path: '/admin/quests/proposals', label: '📝 개인 퀘스트 제안 심사' });
   }
 
   if (hasAnyRole(groups, ['admins', 'operators'])) {
@@ -257,6 +259,17 @@ export default function App() {
               <RoleRoute roles={['admins', 'operators', 'creators']}>
                 <Layout>
                   <AdminQuestSubmissionsPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/admin/quests/proposals"
+            element={
+              <RoleRoute roles={['admins', 'operators', 'creators']}>
+                <Layout>
+                  <AdminQuestProposalsPage />
                 </Layout>
               </RoleRoute>
             }

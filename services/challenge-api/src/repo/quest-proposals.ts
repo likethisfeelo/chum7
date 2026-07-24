@@ -44,6 +44,74 @@ export async function listMyProposals(
   return items;
 }
 
+/** 챌린지의 제안 전체 — pk 파티션 QPROP# Query (리더 심사 목록용) */
+export async function listChallengeProposals(challengeId: string): Promise<Record<string, any>[]> {
+  const items: Record<string, any>[] = [];
+  let lastKey: Record<string, any> | undefined;
+  do {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: tableName(TABLE),
+        KeyConditionExpression: 'pk = :pk AND begins_with(sk, :q)',
+        ExpressionAttributeValues: { ':pk': challengePk(challengeId), ':q': 'QPROP#' },
+        ExclusiveStartKey: lastKey,
+      }),
+    );
+    items.push(...(res.Items ?? []));
+    lastKey = res.LastEvaluatedKey;
+  } while (lastKey);
+  return items;
+}
+
+/** proposalId 로 제안 탐색 — 챌린지 파티션 내 필터 (신규 키에서 단독 Get 불가) */
+export async function findProposalById(
+  challengeId: string,
+  proposalId: string,
+): Promise<Record<string, any> | undefined> {
+  const items = await listChallengeProposals(challengeId);
+  return items.find((item) => item.proposalId === proposalId);
+}
+
+export interface ProposalReviewUpdateInput {
+  challengeId: string;
+  /** 제안 아이템의 sk (`QPROP#<userId>#<proposalId>`) */
+  sk: string;
+  status: 'approved' | 'rejected';
+  reason: string | null;
+  reviewerId: string;
+  nowIso: string;
+}
+
+/**
+ * 심사 반영 — pending 조건부 갱신 (중복 심사 방지). 조건 실패 시 false 반환.
+ * (admin-api repo/quest-proposals.ts 와 동일 규칙 — 서비스 간 import 금지로 복제)
+ */
+export async function updateProposalReview(input: ProposalReviewUpdateInput): Promise<boolean> {
+  try {
+    await docClient.send(
+      new UpdateCommand({
+        TableName: tableName(TABLE),
+        Key: { pk: challengePk(input.challengeId), sk: input.sk },
+        UpdateExpression:
+          'SET #st = :status, leaderFeedback = :fb, reviewedBy = :reviewer, reviewedAt = :now, updatedAt = :now',
+        ConditionExpression: '#st = :pending',
+        ExpressionAttributeNames: { '#st': 'status' },
+        ExpressionAttributeValues: {
+          ':status': input.status,
+          ':pending': 'pending',
+          ':fb': input.reason,
+          ':reviewer': input.reviewerId,
+          ':now': input.nowIso,
+        },
+      }),
+    );
+    return true;
+  } catch (error) {
+    if ((error as { name?: string }).name === 'ConditionalCheckFailedException') return false;
+    throw error;
+  }
+}
+
 /** 재제출(내용 교체 + pending 복귀) — 존재 조건부 부분 갱신 */
 export async function updateProposalFields(
   challengeId: string,
