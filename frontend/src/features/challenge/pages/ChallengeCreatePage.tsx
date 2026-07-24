@@ -26,6 +26,7 @@ interface FormState {
   maxParticipants: string;
   challengeType: ChallengeType;
   joinApprovalRequired: boolean;
+  personalQuestAutoApprove: boolean;
 
   // Step 4
   participateAsCreator: boolean;
@@ -47,6 +48,7 @@ const INITIAL_FORM: FormState = {
   maxParticipants: '',
   challengeType: 'leader_personal',
   joinApprovalRequired: false,
+  personalQuestAutoApprove: true,
   participateAsCreator: true,
 };
 
@@ -373,6 +375,26 @@ function Step3({ form, onChange }: { form: FormState; onChange: (patch: Partial<
           <div className={`w-5 h-5 bg-white rounded-full shadow absolute top-0.5 transition-transform ${form.joinApprovalRequired ? 'translate-x-5' : 'translate-x-0.5'}`} />
         </button>
       </div>
+
+      {/* 개인 퀘스트 승인 방식 (leader_only 제외) */}
+      {form.challengeType !== 'leader_only' && (
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+          <div className="pr-3">
+            <p className="text-sm font-semibold text-gray-700">개인 퀘스트 자동 승인</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              {form.personalQuestAutoApprove
+                ? '참여자의 개인 퀘스트 제안을 즉시 확정해요'
+                : '끄면 참여자 제안을 리더가 검토 후 승인해요'}
+            </p>
+          </div>
+          <button
+            onClick={() => onChange({ personalQuestAutoApprove: !form.personalQuestAutoApprove })}
+            className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${form.personalQuestAutoApprove ? 'bg-primary-500' : 'bg-gray-300'}`}
+          >
+            <div className={`w-5 h-5 bg-white rounded-full shadow absolute top-0.5 transition-transform ${form.personalQuestAutoApprove ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -475,6 +497,7 @@ export function ChallengeCreatePage() {
         joinApprovalRequired: form.joinApprovalRequired,
         allowedVerificationTypes: form.allowedVerificationTypes,
         participateAsCreator: form.participateAsCreator,
+        personalQuestAutoApprove: form.personalQuestAutoApprove,
       };
       return challengeApi.createChallenge(params);
     },

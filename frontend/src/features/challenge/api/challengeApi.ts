@@ -48,6 +48,8 @@ export interface CreateChallengeParams {
   joinApprovalRequired: boolean;
   allowedVerificationTypes: Array<'image' | 'text' | 'link' | 'video'>;
   participateAsCreator: boolean;
+  /** 개인 퀘스트 제안 자동승인 (기본 true). false 시 리더 검토 후 승인 */
+  personalQuestAutoApprove?: boolean;
 }
 
 export interface InterestStatus {
