@@ -1272,6 +1272,11 @@ export const ChallengeFeedPage = () => {
                 <InlineVerificationForm
                   userChallenge={userChallenge}
                   allowedVerificationTypes={challengeData?.allowedVerificationTypes}
+                  personalQuestPending={
+                    Boolean(challengeData?.personalQuestEnabled) &&
+                    (myProposalData?.latestProposal?.status === "pending" ||
+                      myProposalData?.latestProposal?.status === "revision_pending")
+                  }
                   onSuccess={handleVerificationSuccess}
                   openVideoPickerSignal={openVideoPickerSignal}
                 />

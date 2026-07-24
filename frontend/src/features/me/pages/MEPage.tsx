@@ -191,6 +191,19 @@ const getProposalStatusMeta = (status?: string) => {
   return { label: '검토중', color: 'text-amber-700 bg-amber-50 border-amber-200', nextAction: '리더 검토 결과를 기다려주세요.' };
 };
 
+// 개인 퀘스트 제안이 아직 승인 전(검토중/재심사 대기)인지 — 승인 대기중이면 개인 인증 차단
+const PENDING_PROPOSAL_STATUSES = new Set(['pending', 'revision_pending']);
+function isPersonalProposalPending(
+  challenge: any,
+  proposalMap?: Record<string, any>,
+): boolean {
+  if (!challenge?.challenge?.personalQuestEnabled) return false;
+  const cid = challenge?.challengeId ?? challenge?.challenge?.challengeId;
+  if (!cid) return false;
+  const status = String(proposalMap?.[cid]?.status || '');
+  return PENDING_PROPOSAL_STATUSES.has(status);
+}
+
 // ─── lifecycle 메타 ───────────────────────────────────────────────────
 const LIFECYCLE_META: Record<ChallengeLifecycle, { icon: string; label: string }> = {
   draft:      { icon: '🔒', label: '준비 중' },
@@ -641,6 +654,7 @@ export const MEPage = () => {
                         <InlineVerificationForm
                           userChallenge={primaryUnverified}
                           allowedVerificationTypes={primaryUnverified.challenge?.allowedVerificationTypes}
+                          personalQuestPending={isPersonalProposalPending(primaryUnverified, personalQuestProposalMap)}
                           onSuccess={() => {
                             void queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
                             void queryClient.invalidateQueries({ queryKey: ['my-challenges-completed', 'all'] });
