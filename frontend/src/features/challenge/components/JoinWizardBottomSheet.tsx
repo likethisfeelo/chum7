@@ -310,7 +310,7 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
               </div>
 
               <p className="text-xs text-gray-500">
-                {challenge.personalQuestAutoApprove
+                {challenge.personalQuestAutoApprove !== false
                   ? '✓ 등록 즉시 자동 승인됩니다'
                   : getManualReviewGuide(challenge, userTimezone)}
               </p>
@@ -353,7 +353,7 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
               {showQuestDetailFields && <p className="text-xs text-gray-500">인증: {formState.questAllowedVerificationTypes.map(getVerificationTypeLabel).join(', ')}</p>}
               {showQuestDetailFields && (
                 <p className="text-xs text-gray-500">
-                  {challenge.personalQuestAutoApprove ? '자동 승인' : '리더 검토 후 승인'}
+                  {challenge.personalQuestAutoApprove !== false ? '자동 승인' : '리더 검토 후 승인'}
                 </p>
               )}
               {showQuestDetailFields && confirmQuestPolicy.guide && (

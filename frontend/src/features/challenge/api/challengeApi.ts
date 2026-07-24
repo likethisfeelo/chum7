@@ -108,4 +108,27 @@ export const challengeApi = {
     const res = await apiClient.get(`/c/challenges/${challengeId}/quest-proposals/my`);
     return res.data.data;
   },
+
+  // ── 리더 개인 퀘스트 제안 심사 (challenge-api /c/:id/leader/quest-proposals) ──
+  getLeaderQuestProposals: async (
+    challengeId: string,
+    status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending',
+  ): Promise<{ proposals: QuestProposal[]; total: number }> => {
+    const res = await apiClient.get(
+      `/c/${challengeId}/leader/quest-proposals?status=${status}`,
+    );
+    return res.data.data;
+  },
+
+  reviewQuestProposal: async (
+    challengeId: string,
+    proposalId: string,
+    params: { decision: 'approve' | 'reject'; reason?: string },
+  ): Promise<{ proposalId: string; status: 'approved' | 'rejected' }> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/quest-proposals/${proposalId}/review`,
+      params,
+    );
+    return res.data.data;
+  },
 };
