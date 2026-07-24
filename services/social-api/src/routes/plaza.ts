@@ -40,6 +40,9 @@ import {
   commentSk,
 } from '../repo/plaza';
 import { registerHashtag } from '../repo/hashtags';
+import { getChallengeRef } from '../repo/challenge-ref';
+import { upsertSubscriptionOnLike } from '../repo/interest-subscriptions';
+import { autoSubscriptionName } from '../domain/interest-area';
 import { toSignedImageUrl } from '../repo/media';
 import { stripKeys } from '../repo/shared';
 
@@ -364,6 +367,27 @@ plazaRoutes.post('/:plazaPostId/react', async (c) => {
       actorUserId: userId,
       emoji: input.reactionType || 'like',
     });
+  }
+
+  // 자동 관심영역 구독 — 좋아요한 게시물의 챌린지(리더+카테고리)로 upsert(카운트 누적).
+  // 본인이 리더인 챌린지는 제외. 실패해도 좋아요 응답에는 영향 없음.
+  if (challengeId) {
+    try {
+      const ref = await getChallengeRef(challengeId);
+      if (ref && ref.leaderId && ref.category && ref.leaderId !== userId) {
+        await upsertSubscriptionOnLike({
+          leaderId: ref.leaderId,
+          category: ref.category,
+          userId,
+          name: autoSubscriptionName(ref.category, ref.title || post.challengeTitle),
+          now,
+          sampleChallengeId: challengeId,
+          sampleChallengeTitle: ref.title || post.challengeTitle || undefined,
+        });
+      }
+    } catch (err: any) {
+      console.warn('interest-area auto-subscribe skipped (non-fatal):', err?.message);
+    }
   }
 
   const recommendation = challengeId

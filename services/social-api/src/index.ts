@@ -10,6 +10,7 @@ import { boardPublicRoutes, boardRoutes } from './routes/board';
 import { challengeFeedRoutes } from './routes/challenge-feed';
 import { bulletinRoutes } from './routes/bulletin';
 import { hashtagPublicRoutes, hashtagRoutes } from './routes/hashtags';
+import { interestSubscriptionRoutes } from './routes/interest-subscriptions';
 
 const app = createApi({ service: 'social-api' });
 
@@ -27,5 +28,6 @@ app.route('/s/board', boardRoutes);
 app.route('/s/challenge-feed', challengeFeedRoutes);
 app.route('/s/bulletin', bulletinRoutes);
 app.route('/s/hashtags', hashtagRoutes);
+app.route('/s/interest-subscriptions', interestSubscriptionRoutes);
 
 export const handler = handle(app);

@@ -23,3 +23,30 @@ export async function getChallengeLeaderId(challengeId: string): Promise<string 
     return null;
   }
 }
+
+export interface ChallengeRef {
+  leaderId: string;
+  category: string;
+  title: string;
+}
+
+/** 관심영역 구독용 — 챌린지 META에서 리더/카테고리/제목을 함께 조회 (GetItem 1회). */
+export async function getChallengeRef(challengeId: string): Promise<ChallengeRef | null> {
+  if (!process.env.CHALLENGES_TABLE || !challengeId) return null;
+  try {
+    const res = await docClient.send(
+      new GetCommand({
+        TableName: tableName('CHALLENGES_TABLE'),
+        Key: { pk: `CHAL#${challengeId}`, sk: 'META' },
+      }),
+    );
+    const item = res.Item;
+    if (!item) return null;
+    const leaderId = (item.leaderId as string) || (item.createdBy as string) || '';
+    const category = (item.category as string) || '';
+    if (!leaderId || !category) return null;
+    return { leaderId, category, title: (item.title as string) || '' };
+  } catch {
+    return null;
+  }
+}

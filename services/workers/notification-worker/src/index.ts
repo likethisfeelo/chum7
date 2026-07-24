@@ -1,5 +1,5 @@
 import type { EventBridgeEvent } from 'aws-lambda';
-import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 import type { DomainEventType } from '@chum7/contracts';
 import { buildPushPayload, decidePush } from './domain/push-rules';
@@ -193,10 +193,156 @@ async function revealFriendActor(recipientId: string, actorId: string): Promise<
   }
 }
 
+/**
+ * 관심영역(리더+카테고리) 구독자 조회 — social 테이블
+ *   pk=`INTSUB#LEADER#<leaderId>#CAT#<category>` begins_with(sk,'USER#')
+ * SOCIAL_TABLE 미설정 시 빈 배열(안전 폴백).
+ */
+async function listInterestSubscribers(
+  leaderId: string,
+  category: string,
+): Promise<Array<{ userId: string; enabled: boolean }>> {
+  if (!process.env.SOCIAL_TABLE || !leaderId || !category) return [];
+  const out: Array<{ userId: string; enabled: boolean }> = [];
+  let lastKey: Record<string, unknown> | undefined;
+  do {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: tableName('SOCIAL_TABLE'),
+        KeyConditionExpression: 'pk = :pk AND begins_with(sk, :u)',
+        ExpressionAttributeValues: {
+          ':pk': `INTSUB#LEADER#${leaderId}#CAT#${category}`,
+          ':u': 'USER#',
+        },
+        ExclusiveStartKey: lastKey,
+      }),
+    );
+    for (const item of res.Items ?? []) {
+      if (item.userId) out.push({ userId: String(item.userId), enabled: item.enabled !== false });
+    }
+    lastKey = res.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (lastKey);
+  return out;
+}
+
+/** 단일 수신자에게 인앱 기록 + Web Push 발송 (푸시 실패는 인앱에 영향 없음). */
+async function deliverToRecipient(input: {
+  routed: RoutedNotification;
+  eventType: DomainEventType;
+  detail: Record<string, unknown>;
+  deepLink?: string;
+  now: string;
+  notificationId: string;
+  friendActorName?: string | null;
+}): Promise<void> {
+  const { routed, eventType, detail, deepLink, now, notificationId, friendActorName } = input;
+  await docClient.send(
+    new PutCommand({
+      TableName: tableName('USERS_TABLE'),
+      Item: {
+        pk: `USER#${routed.recipientId}`,
+        sk: `NOTIF#${notificationId}`,
+        notificationId,
+        type: routed.type,
+        title: routed.title,
+        body: routed.message,
+        ...(deepLink ? { deepLink } : {}),
+        category: routed.category,
+        eventType,
+        message: routed.message, // 하위호환(레거시 표면)
+        detail,
+        ...(friendActorName ? { friendActorName } : {}),
+        isRead: false,
+        createdAt: now,
+      },
+    }),
+  );
+  console.log(
+    JSON.stringify({ level: 'info', message: 'notification recorded', type: eventType, recipientId: routed.recipientId }),
+  );
+
+  try {
+    const nowDate = new Date(now);
+    const settings = await loadNotificationSettings(routed.recipientId);
+    const decision = decidePush({ category: routed.category, settings, now: nowDate });
+    if (!decision.send) {
+      console.log(JSON.stringify({ level: 'info', message: 'push suppressed', type: eventType, reason: decision.reason }));
+      return;
+    }
+    const recent = await loadRecentNotifications(routed.recipientId, `NOTIF#${notificationId}`).catch(() => []);
+    if (isPushRateLimited({ category: routed.category, recent, now: nowDate })) {
+      console.log(JSON.stringify({ level: 'info', message: 'push rate-limited', type: eventType, recipientId: routed.recipientId }));
+      return;
+    }
+    const bundle = decideBundle({
+      category: routed.category,
+      eventType,
+      message: routed.message,
+      detail,
+      recent,
+      now: nowDate,
+    });
+    await sendPushToUser(routed.recipientId, {
+      ...buildPushPayload({ message: routed.message, category: routed.category, eventType }),
+      body: bundle.body,
+      tag: bundle.tag,
+      ...(bundle.renotify !== undefined ? { renotify: bundle.renotify } : {}),
+    });
+  } catch (err) {
+    console.log(JSON.stringify({ level: 'warn', message: 'push pipeline failed', type: eventType, error: (err as Error).message }));
+  }
+}
+
+/** 관심영역 모집 알림 팬아웃 — (리더+카테고리) 구독자 전체에게 발송. */
+async function fanOutChallengeRecruiting(
+  event: EventBridgeEvent<string, Record<string, unknown>>,
+  now: string,
+): Promise<void> {
+  const detail = event.detail;
+  const leaderId = String(detail.leaderId ?? '');
+  const category = String(detail.category ?? '');
+  const title = String(detail.title ?? '');
+  const challengeId = String(detail.challengeId ?? '');
+  const subscribers = await listInterestSubscribers(leaderId, category);
+  const enabled = subscribers.filter((s) => s.enabled && s.userId !== leaderId);
+  console.log(JSON.stringify({ level: 'info', message: 'interest fan-out', leaderId, category, total: subscribers.length, enabled: enabled.length }));
+
+  const deepLink = challengeId ? `/challenges/${challengeId}` : undefined;
+  const message = title
+    ? `관심 리더가 '${title}' 챌린지 모집을 시작했어요`
+    : '관심 리더가 새 챌린지 모집을 시작했어요';
+
+  for (const sub of enabled) {
+    await deliverToRecipient({
+      routed: {
+        recipientId: sub.userId,
+        category: 'interest_area',
+        type: 'challenge_recruiting',
+        title: '관심 리더의 새 챌린지',
+        message,
+      },
+      eventType: 'challenge.recruiting',
+      detail,
+      deepLink,
+      now,
+      // 수신자별 고유 NOTIF 키 (같은 이벤트라도 파티션이 다르지만 안전하게 분리)
+      notificationId: `${now}#${event.id}#${sub.userId}`,
+    });
+  }
+}
+
 export const handler = async (
   event: EventBridgeEvent<string, Record<string, unknown>>,
 ): Promise<void> => {
   const type = event['detail-type'] as DomainEventType;
+  const now = new Date().toISOString();
+
+  // 다중 수신자 팬아웃 — 관심영역 구독자 알림
+  if (type === 'challenge.recruiting') {
+    await fanOutChallengeRecruiting(event, now);
+    return;
+  }
+
   const routed = routeNotification(type, event.detail);
   if (!routed) {
     console.log(JSON.stringify({ level: 'info', message: 'event ignored', type }));
@@ -217,85 +363,13 @@ export const handler = async (
     }
   }
 
-  const deepLink = buildDeepLink(type, event.detail);
-  const now = new Date().toISOString();
-  const notificationId = `${now}#${event.id}`;
-  await docClient.send(
-    new PutCommand({
-      TableName: tableName('USERS_TABLE'),
-      Item: {
-        pk: `USER#${routed.recipientId}`,
-        sk: `NOTIF#${notificationId}`,
-        notificationId,
-        // 프론트 NotificationsPage가 직접 읽는 필드 (type/title/body/deepLink)
-        type: routed.type,
-        title: routed.title,
-        body: routed.message,
-        ...(deepLink ? { deepLink } : {}),
-        category: routed.category,
-        eventType: type,
-        message: routed.message, // 하위호환(레거시 표면)
-        detail: event.detail,
-        ...(friendActorName ? { friendActorName } : {}),
-        isRead: false,
-        createdAt: now,
-      },
-    }),
-  );
-  console.log(
-    JSON.stringify({ level: 'info', message: 'notification recorded', type, recipientId: routed.recipientId }),
-  );
-
-  // ── Web Push 발송 — 인앱 기록은 이미 완료, 여기서의 실패는 인앱에 영향 없음 ──
-  try {
-    const nowDate = new Date(now);
-    const settings = await loadNotificationSettings(routed.recipientId);
-    const decision = decidePush({ category: routed.category, settings, now: nowDate });
-    if (!decision.send) {
-      console.log(
-        JSON.stringify({ level: 'info', message: 'push suppressed', type, reason: decision.reason }),
-      );
-      return;
-    }
-
-    // 묶음 발송·폭주 가드 (§4.10 집계) — 조회 실패 시 단건 발송으로 폴백
-    const recent = await loadRecentNotifications(
-      routed.recipientId,
-      `NOTIF#${notificationId}`,
-    ).catch(() => []);
-    if (isPushRateLimited({ category: routed.category, recent, now: nowDate })) {
-      console.log(
-        JSON.stringify({
-          level: 'info',
-          message: 'push rate-limited',
-          type,
-          recipientId: routed.recipientId,
-        }),
-      );
-      return;
-    }
-    const bundle = decideBundle({
-      category: routed.category,
-      eventType: type,
-      message: routed.message,
-      detail: event.detail,
-      recent,
-      now: nowDate,
-    });
-    await sendPushToUser(routed.recipientId, {
-      ...buildPushPayload({ message: routed.message, category: routed.category, eventType: type }),
-      body: bundle.body,
-      tag: bundle.tag,
-      ...(bundle.renotify !== undefined ? { renotify: bundle.renotify } : {}),
-    });
-  } catch (err) {
-    console.log(
-      JSON.stringify({
-        level: 'warn',
-        message: 'push pipeline failed',
-        type,
-        error: (err as Error).message,
-      }),
-    );
-  }
+  await deliverToRecipient({
+    routed,
+    eventType: type,
+    detail: event.detail,
+    deepLink: buildDeepLink(type, event.detail),
+    now,
+    notificationId: `${now}#${event.id}`,
+    friendActorName,
+  });
 };

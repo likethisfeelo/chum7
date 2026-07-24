@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import type { AppEnv } from '@chum7/api-kit';
-import { ok, fail } from '@chum7/api-kit';
+import { ok, fail, publishEvent } from '@chum7/api-kit';
 import { canTransition, type ChallengeLifecycle } from '@chum7/core';
 import { createChallengeSchema, updateChallengeSchema } from '../schemas';
 import { resolveLayerPolicy, resolvePersonalQuestEnabled } from '../domain/join-requirements';
@@ -176,6 +176,14 @@ challengeRoutes.patch('/:challengeId/publish', async (c) => {
       challengeStartAt: challenge.challengeStartAt,
     },
   );
+
+  // 관심영역(리더+카테고리) 구독자 알림 — 통지이므로 실패해도 무시
+  await publishEvent('challenge.recruiting', {
+    challengeId,
+    leaderId: String(challenge.leaderId || challenge.createdBy),
+    category: String(challenge.category || ''),
+    title: String(challenge.title || ''),
+  });
 
   return ok(c, { challengeId, lifecycle: 'recruiting' }, '챌린지 모집이 시작됐어요!');
 });

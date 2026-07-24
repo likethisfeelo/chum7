@@ -237,6 +237,15 @@ async function processChallenge(challenge: ChallengeLike, now: Date, summary: Ru
 
     if (step === 'active') await activateParticipants(challenge, nowIso);
     if (step === 'completed') await completeChallenge(challenge, now, summary);
+    if (step === 'recruiting') {
+      // 예약 오픈으로 모집 시작 — 관심영역 구독자 알림 팬아웃 신호 (통지, 실패 무시)
+      await publishEvent('challenge.recruiting', {
+        challengeId: challenge.challengeId,
+        leaderId: String((challenge.leaderId as string) || challenge.createdBy || ''),
+        category: String(challenge.category ?? ''),
+        title: String((challenge.title as string) ?? ''),
+      });
+    }
     from = step;
   }
 }
