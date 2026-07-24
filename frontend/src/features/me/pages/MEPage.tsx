@@ -555,27 +555,49 @@ export const MEPage = () => {
 
   return (
     <div className="min-h-screen">
-      {/* 헤더 */}
-      <div className="bg-gradient-to-br from-primary-500 to-primary-700 pt-12 pb-8 px-6">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <p className="text-white/80 text-sm">안녕하세요!</p>
-            <h1 className="text-white font-bold text-2xl">{user?.name || '챌린저'}님 👋</h1>
-          </div>
-          <div className="flex items-center gap-2">
+      {/* 프로필 — 좌측 정렬 · 여백/위계 중심 · depth는 선으로 (그림자 X) */}
+      <div className="px-6 pt-12 pb-2">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-14 h-14 rounded-full border border-gray-200 flex items-center justify-center text-3xl flex-shrink-0">
+                {user?.animalIcon || '🐰'}
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold text-gray-900 leading-tight truncate">
+                  {user?.name || '챌린저'}님
+                </h1>
+                <button
+                  onClick={() => navigate('/personal-feed/me')}
+                  className="mt-0.5 text-xs text-gray-400 hover:text-primary-600 transition-colors"
+                >
+                  프로필 피드 보기 →
+                </button>
+              </div>
+            </div>
             <button
               onClick={() => navigate('/personal-feed/notifications')}
-              className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-lg"
               aria-label="알림"
+              className="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base text-gray-500 hover:border-primary-300 hover:text-primary-600 transition-colors flex-shrink-0"
             >
               🔔
             </button>
-            <button
-              onClick={() => navigate('/personal-feed/me')}
-              className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-2xl"
-            >
-              {user?.animalIcon || '🐰'}
-            </button>
+          </div>
+
+          {/* 통계 — 큰 숫자/작은 라벨의 위계, 항목은 선으로 구분 */}
+          <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-3">
+            <div>
+              <p className="text-xl font-bold text-gray-900 leading-none">{activeChallenges.length}</p>
+              <p className="mt-1 text-[11px] text-gray-400">진행중</p>
+            </div>
+            <div className="pl-4 border-l border-gray-100">
+              <p className="text-xl font-bold text-gray-900 leading-none">{pendingChallenges.length}</p>
+              <p className="mt-1 text-[11px] text-gray-400">준비중</p>
+            </div>
+            <div className="pl-4 border-l border-gray-100">
+              <p className="text-xl font-bold text-gray-900 leading-none">{completedChallenges.length}</p>
+              <p className="mt-1 text-[11px] text-gray-400">완료</p>
+            </div>
           </div>
         </div>
       </div>
