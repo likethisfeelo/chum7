@@ -480,10 +480,10 @@ export const TodayPage = () => {
           onClick={() => setDrawerOpen(true)}
           className="relative block w-full text-left active:translate-y-0.5 transition-transform"
         >
-          {/* 폴더 뒤판 — 우측 뒤가 위로 올라온 탭 */}
+          {/* 폴더 뒤판 — 우측 뒤가 위로 올라온 탭 (앱 톤에 맞춘 연한 회색) */}
           <div
-            className="absolute right-5 h-6 w-28 rounded-t-xl bg-amber-100 border border-amber-200/70"
-            style={{ top: -10, zIndex: 0 }}
+            className="absolute right-5 h-5 w-24 rounded-t-xl bg-gray-100 border border-gray-200/80"
+            style={{ top: -8, zIndex: 0 }}
           />
           {/* 폴더 앞판 */}
           <div
