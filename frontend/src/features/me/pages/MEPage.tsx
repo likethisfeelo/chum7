@@ -23,6 +23,9 @@ import toast from 'react-hot-toast';
 
 type METab = 'active' | 'pending' | 'completed';
 
+// 선택 탭 + 본문이 공유하는 아주 연한 아이보리 (폴더처럼 연결)
+const ME_TAB_BG = '#FAF8F2';
+
 
 function getChallengeTypeLabel(challenge: any) {
   const type = String(challenge?.challenge?.challengeType || challenge?.challenge?.type || 'leader_personal');
@@ -557,12 +560,11 @@ export const MEPage = () => {
     <div className="min-h-screen">
       {/* ── Page Header (신규 디자인: CHALLENGE/MADANG과 동일 레이아웃) ── */}
       <div
-        className="sticky top-0 z-10 px-6 pt-5 pb-3"
+        className="sticky top-0 z-10 px-6 pt-5 pb-0"
         style={{
           background: 'rgba(255,255,255,0.78)',
           backdropFilter: 'blur(18px)',
           WebkitBackdropFilter: 'blur(18px)',
-          borderBottom: '1px solid rgba(0,0,0,0.07)',
         }}
       >
         {/* 사용자명(=Page Title) + 인사말(부제) + 우측 알림/프로필 */}
@@ -591,8 +593,8 @@ export const MEPage = () => {
           </div>
         </div>
 
-        {/* persistent flat tabs — active는 슬라이드 언더라인 */}
-        <div className="mt-5 flex">
+        {/* 폴더형 탭 — 선택 탭은 아이보리 배경 + 상단 둥근 모서리로 본문과 연결, 하단 구분선 없음 */}
+        <div className="mt-5 flex gap-1">
           {TAB_CONFIG.map((tab) => {
             const active = activeTab === tab.key;
             return (
@@ -600,21 +602,15 @@ export const MEPage = () => {
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className="flex-1 flex justify-center"
+                className={`flex-1 flex items-center justify-center gap-1 pt-2 pb-2.5 tab-mono whitespace-nowrap rounded-t-xl transition-colors ${
+                  active ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'
+                }`}
+                style={active ? { backgroundColor: ME_TAB_BG } : undefined}
               >
-                <span className="relative inline-flex items-center gap-1 pb-2 tab-mono whitespace-nowrap">
-                  <span className={active ? 'text-gray-900' : 'text-gray-500'}>{tab.label}</span>
-                  {tab.count > 0 && (
-                    <span className={`text-xs ${active ? 'text-primary-600' : 'text-gray-400'}`}>{tab.count}</span>
-                  )}
-                  {active && (
-                    <motion.span
-                      layoutId="me-tab-underline"
-                      className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full bg-gray-800"
-                      transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                    />
-                  )}
-                </span>
+                <span>{tab.label}</span>
+                {tab.count > 0 && (
+                  <span className={active ? 'text-primary-600' : 'text-gray-300'}>{tab.count}</span>
+                )}
               </button>
             );
           })}
@@ -626,8 +622,8 @@ export const MEPage = () => {
         <MyCreatedChallengesSection />
       </div>
 
-      {/* 챌린지 목록 */}
-      <div className="p-6 space-y-4">
+      {/* 챌린지 목록 — 선택 탭과 동일 아이보리 배경으로 연결 */}
+      <div className="p-6 space-y-4 min-h-[70vh]" style={{ backgroundColor: ME_TAB_BG }}>
         {isLoading ? (
           <Loading />
         ) : isEmpty ? (

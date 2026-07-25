@@ -276,7 +276,7 @@ export const FeedPage = () => {
                     className="relative flex-shrink-0 tab-mono whitespace-nowrap pb-1.5"
                   >
                     <span className={!selectedCategory ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700 transition-colors'}>
-                      Show All
+                      All
                     </span>
                     {!selectedCategory && (
                       <motion.span
