@@ -9,7 +9,7 @@ const NAV_ITEMS: (
   { path: '/challenges', iconKey: 'challenges', label: '챌린지' },
   { path: '/plaza', iconKey: 'outer-space', label: '마당' },
   { path: '/me', isME: true, label: 'ME' },
-  { path: '/today', iconKey: 'today', label: '오늘' },
+  { path: '/today', iconKey: 'today', label: '여정' },
   { path: '/my', iconKey: 'my', label: '마이' },
 ];
 
