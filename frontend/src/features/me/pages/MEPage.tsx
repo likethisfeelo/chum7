@@ -555,31 +555,69 @@ export const MEPage = () => {
 
   return (
     <div className="min-h-screen">
-      {/* 프로필 — 좌측 정렬 · 여백/위계 중심 · depth는 선으로 (그림자 X) */}
-      <div className="px-6 pt-12 pb-2">
-        <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4">
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="text-lg font-bold text-gray-900 leading-tight truncate min-w-0">
+      {/* ── Page Header (신규 디자인: CHALLENGE/MADANG과 동일 레이아웃) ── */}
+      <div
+        className="sticky top-0 z-10 px-6 pt-5 pb-3"
+        style={{
+          background: 'rgba(255,255,255,0.78)',
+          backdropFilter: 'blur(18px)',
+          WebkitBackdropFilter: 'blur(18px)',
+          borderBottom: '1px solid rgba(0,0,0,0.07)',
+        }}
+      >
+        {/* 사용자명(=Page Title) + 인사말(부제) + 우측 알림/프로필 */}
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-bold tracking-tight text-gray-800 leading-none truncate">
               {user?.name || '챌린저'}님
             </h1>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                onClick={() => navigate('/personal-feed/notifications')}
-                aria-label="알림"
-                className="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base text-gray-500 hover:border-primary-300 hover:text-primary-600 transition-colors"
-              >
-                🔔
-              </button>
-              {/* 프로필 사진 — 클릭 시 프로필 피드로 이동 */}
-              <button
-                onClick={() => navigate('/personal-feed/me')}
-                aria-label="프로필 피드 보기"
-                className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-xl hover:border-primary-300 transition-colors"
-              >
-                {user?.animalIcon || '🐰'}
-              </button>
-            </div>
+            <p className="text-sm text-gray-500 mt-2">오늘도 하나씩 이어가볼까요?</p>
           </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => navigate('/personal-feed/notifications')}
+              aria-label="알림"
+              className="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base text-gray-500 hover:border-primary-300 hover:text-primary-600 transition-colors"
+            >
+              🔔
+            </button>
+            <button
+              onClick={() => navigate('/personal-feed/me')}
+              aria-label="프로필 피드 보기"
+              className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-xl hover:border-primary-300 transition-colors"
+            >
+              {user?.animalIcon || '🐰'}
+            </button>
+          </div>
+        </div>
+
+        {/* persistent flat tabs — active는 슬라이드 언더라인 */}
+        <div className="mt-5 flex">
+          {TAB_CONFIG.map((tab) => {
+            const active = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className="flex-1 flex justify-center"
+              >
+                <span className="relative inline-flex items-center gap-1 pb-2 tab-mono whitespace-nowrap">
+                  <span className={active ? 'text-gray-900' : 'text-gray-500'}>{tab.label}</span>
+                  {tab.count > 0 && (
+                    <span className={`text-xs ${active ? 'text-primary-600' : 'text-gray-400'}`}>{tab.count}</span>
+                  )}
+                  {active && (
+                    <motion.span
+                      layoutId="me-tab-underline"
+                      className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full bg-gray-800"
+                      transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                    />
+                  )}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -604,27 +642,6 @@ export const MEPage = () => {
           />
         ) : (
           <>
-            {/* 탭 */}
-            <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-              {TAB_CONFIG.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                    activeTab === tab.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-                  }`}
-                >
-                  {tab.label}
-                  {tab.count > 0 && (
-                    <span className={`ml-1 text-xs ${activeTab === tab.key ? 'text-primary-600' : 'text-gray-400'}`}>
-                      {tab.count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
             {/* 진행중 탭 */}
             {activeTab === 'active' && (
               <div className="space-y-4">

@@ -5,7 +5,7 @@ const NAV_ITEMS = [
   { path: '/challenges', icon: '🎯', label: '챌린지' },
   { path: '/plaza', icon: '🚀', label: '마당' },
   { path: '/me', icon: null, label: 'ME', isME: true },
-  { path: '/today', icon: '📊', label: '오늘' },
+  { path: '/today', icon: '📊', label: '여정' },
   { path: '/my', icon: '✨', label: '마이' },
 ];
 

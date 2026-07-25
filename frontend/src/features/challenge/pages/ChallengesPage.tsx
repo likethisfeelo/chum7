@@ -527,7 +527,7 @@ export const ChallengesPage = () => {
             type="button"
             onClick={() => setStatusOpen((o) => !o)}
             aria-expanded={statusOpen}
-            className="lg:hidden flex items-center gap-1 text-sm font-semibold tracking-wide text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
+            className="lg:hidden flex items-center gap-1 tab-mono text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
           >
             STATUS
             <svg
@@ -559,9 +559,9 @@ export const ChallengesPage = () => {
                         key={tab.value}
                         type="button"
                         onClick={() => setLifecycleTab(tab.value)}
-                        className="relative flex-shrink-0 text-sm whitespace-nowrap pb-1.5"
+                        className="relative flex-shrink-0 tab-mono whitespace-nowrap pb-1.5"
                       >
-                        <span className={active ? 'text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-700 transition-colors'}>
+                        <span className={active ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700 transition-colors'}>
                           {tab.label}
                         </span>
                         {active && (
