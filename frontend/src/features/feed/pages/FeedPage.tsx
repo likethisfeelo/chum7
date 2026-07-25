@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { CHALLENGE_CATEGORIES, SLUG_TO_COLOR, SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
+
+// 마당 헤더에 노출할 카테고리 — 목업 기준 5개(Selflove/Attitude/Discipline/Create/Impact)
+const FEED_CATEGORY_SLUGS = ['health', 'mindfulness', 'habit', 'development', 'impact'] as const;
+const FEED_CATEGORIES = FEED_CATEGORY_SLUGS
+  .map((slug) => CHALLENGE_CATEGORIES.find((c) => c.slug === slug))
+  .filter((c): c is (typeof CHALLENGE_CATEGORIES)[number] => Boolean(c));
 import { EmptyState } from '@/shared/components/EmptyState';
 import { SkeletonList } from '@/shared/components/Skeleton';
 
@@ -14,8 +21,6 @@ import { personalFeedApi } from '@/features/personal-feed/api/personalFeedApi';
 import { apiClient } from '@/lib/api-client';
 import { hashtagApi } from '@/features/hashtag/api/hashtagApi';
 import type { HashtagSummary } from '@/features/hashtag/api/hashtagApi';
-
-const SUBSCRIBED_HASHTAGS_KEY = 'plaza-subscribed-hashtags';
 
 // ── 모집 중인 챌린지 캐러셀 ────────────────────────────────────────────
 function RecruitingChallengeBanner({
@@ -151,10 +156,8 @@ export const FeedPage = () => {
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
-  const [subscribedTags] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem(SUBSCRIBED_HASHTAGS_KEY) || '[]') as string[]; }
-    catch { return []; }
-  });
+  // 카테고리 행 펼침 여부 — 기본 접힘(전체), CATEGORY 토글로 펼침
+  const [categoryOpen, setCategoryOpen] = useState(false);
 
   // 최신 유저 해쉬태그 (사이드바 표시용)
   const { data: latestTags = [] } = useQuery({
@@ -231,39 +234,71 @@ export const FeedPage = () => {
           borderBottom: '1px solid rgba(0,0,0,0.07)',
         }}
       >
-        <div className="px-6 py-4">
-          <h1 className="text-2xl font-bold text-gray-900">마당 🚀</h1>
-          <p className="text-sm text-gray-600 mt-1">광장 피드 · 반익명 커뮤니티</p>
-        </div>
-
-        {/* 카테고리/해쉬태그 가로 스크롤 탭 */}
-        <div className="px-4 pb-3 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-          <button
-            type="button"
-            onClick={() => { setSelectedCategory(null); setSelectedHashtag(null); }}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              !selectedCategory && !selectedHashtag ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            전체
-          </button>
-          {CHALLENGE_CATEGORIES.map((cat) => (
+        <div className="px-6 pt-5 pb-3">
+          {/* 타이틀 + CATEGORY 토글 */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-3xl font-bold tracking-tight text-gray-800 leading-none">MADANG</h1>
+              <p className="text-sm text-gray-500 mt-2">광장 피드 반익명 커뮤니티</p>
+            </div>
             <button
-              key={cat.slug}
               type="button"
-              onClick={() => handleCategorySelect(cat.slug)}
-              className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                selectedCategory === cat.slug
-                  ? 'bg-gray-900 text-white'
-                  : subscribedTags.includes(cat.slug)
-                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              onClick={() => setCategoryOpen((o) => !o)}
+              aria-expanded={categoryOpen}
+              className="flex items-center gap-1 mt-1 text-sm font-semibold tracking-wide text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
             >
-              <span>{cat.emoji}</span>
-              <span>{cat.label}</span>
+              CATEGORY
+              {/* 접힘 시 위(▲), 펼침 시 아래(▼) — 아래 화살표를 접힘 상태에서 180° 회전 */}
+              <svg
+                className={`w-4 h-4 transition-transform duration-200 ${categoryOpen ? '' : 'rotate-180'}`}
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+              </svg>
             </button>
-          ))}
+          </div>
+
+          {/* 카테고리 행 — CATEGORY 토글로 펼침/접힘 (기본 접힘 = 전체) */}
+          <AnimatePresence initial={false}>
+            {categoryOpen && (
+              <motion.div
+                key="category-row"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-4 flex items-center gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategory(null); setSelectedHashtag(null); }}
+                    className={`flex-shrink-0 text-sm whitespace-nowrap pb-1 border-b-2 transition-colors ${
+                      !selectedCategory
+                        ? 'text-gray-900 font-semibold border-gray-800'
+                        : 'text-gray-500 border-transparent hover:text-gray-700'
+                    }`}
+                  >
+                    Show All
+                  </button>
+                  {FEED_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.slug}
+                      type="button"
+                      onClick={() => handleCategorySelect(cat.slug)}
+                      className={`flex-shrink-0 text-sm whitespace-nowrap pb-1 border-b-2 transition-colors ${
+                        selectedCategory === cat.slug
+                          ? 'text-gray-900 font-semibold border-gray-800'
+                          : 'text-gray-500 border-transparent hover:text-gray-700'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
