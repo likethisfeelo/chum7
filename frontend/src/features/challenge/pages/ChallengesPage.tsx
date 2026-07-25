@@ -359,6 +359,8 @@ export const ChallengesPage = () => {
   const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [lifecycleTab, setLifecycleTab] = useState<LifecycleTab>('recruiting');
+  // 모바일 STATUS 메뉴 펼침 여부 (마당 카테고리와 동일 패턴)
+  const [statusOpen, setStatusOpen] = useState(false);
   const [hoveredChallenge, setHoveredChallenge] = useState<Challenge | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -384,12 +386,15 @@ export const ChallengesPage = () => {
   });
 
   // Mobile: single lifecycle query
+  // 진행중은 카테고리 무관 전체 목록, 모집중은 선택 카테고리로 조회
   const { data: mobileData, isLoading: mobileLoading } = useQuery({
-    queryKey: ['challenges-mobile', currentCategory.slug, lifecycleTab],
+    queryKey: ['challenges-mobile', lifecycleTab === 'active' ? 'all' : currentCategory.slug, lifecycleTab],
     queryFn: async () => {
-      const response = await apiClient.get(
-        `/public/challenges?category=${currentCategory.slug}&lifecycle=${lifecycleTab}`,
-      );
+      const query =
+        lifecycleTab === 'active'
+          ? 'lifecycle=active&limit=50'
+          : `category=${currentCategory.slug}&lifecycle=recruiting`;
+      const response = await apiClient.get(`/public/challenges?${query}`);
       return response.data.data;
     },
   });
@@ -503,7 +508,7 @@ export const ChallengesPage = () => {
     <div className="min-h-screen">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div
-        className="sticky top-0 z-10 px-6 py-4"
+        className="sticky top-0 z-10 px-6 pt-5 pb-3"
         style={{
           background: 'rgba(255,255,255,0.78)',
           backdropFilter: 'blur(18px)',
@@ -511,24 +516,68 @@ export const ChallengesPage = () => {
           borderBottom: '1px solid rgba(0,0,0,0.07)',
         }}
       >
-        <h1 className="text-2xl font-bold text-gray-900">챌린지 🎯</h1>
-        <p className="text-sm text-gray-500 mt-0.5">7일간의 짧고 강렬한 도전</p>
-
-        {/* Mobile: lifecycle tabs */}
-        <div className="flex gap-2 mt-3 lg:hidden">
-          {LIFECYCLE_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => setLifecycleTab(tab.value)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                lifecycleTab === tab.value
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+        {/* 타이틀 + (모바일) STATUS 토글 — 부제 라인에 맞춰 하단 정렬 */}
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-bold tracking-tight text-gray-800 leading-none">CHALLENGE</h1>
+            <p className="text-sm text-gray-500 mt-2">7일간의 짧고 강렬한 도전</p>
+          </div>
+          {/* 모바일: STATUS 토글 (접힘 ▲ / 펼침 ▼) */}
+          <button
+            type="button"
+            onClick={() => setStatusOpen((o) => !o)}
+            aria-expanded={statusOpen}
+            className="lg:hidden flex items-center gap-1 text-sm font-semibold tracking-wide text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
+          >
+            STATUS
+            <svg
+              className={`w-4 h-4 transition-transform duration-200 ${statusOpen ? '' : 'rotate-180'}`}
+              viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
             >
-              {tab.label}
-            </button>
-          ))}
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+        </div>
+
+        {/* 모바일: STATUS 행 (모집중/진행중) — 펼침/접힘 + 슬라이드 밑줄 */}
+        <div className="lg:hidden">
+          <AnimatePresence initial={false}>
+            {statusOpen && (
+              <motion.div
+                key="status-row"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-4 flex items-center gap-5 pb-1">
+                  {LIFECYCLE_TABS.map((tab) => {
+                    const active = lifecycleTab === tab.value;
+                    return (
+                      <button
+                        key={tab.value}
+                        type="button"
+                        onClick={() => setLifecycleTab(tab.value)}
+                        className="relative flex-shrink-0 text-sm whitespace-nowrap pb-1.5"
+                      >
+                        <span className={active ? 'text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-700 transition-colors'}>
+                          {tab.label}
+                        </span>
+                        {active && (
+                          <motion.span
+                            layoutId="challenge-status-underline"
+                            className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full bg-gray-800"
+                            transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Desktop: category pill tabs */}
@@ -571,7 +620,8 @@ export const ChallengesPage = () => {
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.1}
             onDragEnd={handleDragEnd}
-            className="select-none mt-4 mb-4 lg:col-span-3"
+            /* 진행중 탭에서는 모바일에서 카테고리 배너 숨김 (데스크탑은 유지) */
+            className={`select-none mt-4 mb-4 lg:col-span-3 ${lifecycleTab === 'active' ? 'hidden lg:block' : ''}`}
           >
             <div className="rounded-2xl overflow-hidden shadow-sm relative">
               {activeBanner?.imageUrl ? (
@@ -660,7 +710,7 @@ export const ChallengesPage = () => {
         </AnimatePresence>
 
         {/* ── Mobile: single lifecycle tab (col-span-3) ─────── */}
-        <div className="pb-6 lg:hidden lg:col-span-3">
+        <div className={`pb-6 lg:hidden lg:col-span-3 ${lifecycleTab === 'active' ? 'pt-4' : ''}`}>
           <div className="mb-2">
             <span className="text-sm text-gray-400">
               {lifecycleTab === 'recruiting' ? '모집 중인 챌린지' : '진행 중인 챌린지'}
