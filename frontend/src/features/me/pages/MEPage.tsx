@@ -531,8 +531,8 @@ export const MEPage = () => {
   );
 
   const TAB_CONFIG: { key: METab; label: string; count: number }[] = [
-    { key: 'active', label: '진행중', count: activeChallenges.length },
     { key: 'pending', label: '준비중', count: pendingChallenges.length },
+    { key: 'active', label: '진행중', count: activeChallenges.length },
     { key: 'completed', label: '완료', count: completedChallenges.length },
   ];
 
@@ -557,46 +557,27 @@ export const MEPage = () => {
     <div className="min-h-screen">
       {/* 프로필 — 좌측 정렬 · 여백/위계 중심 · depth는 선으로 (그림자 X) */}
       <div className="px-6 pt-12 pb-2">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="w-14 h-14 rounded-full border border-gray-200 flex items-center justify-center text-3xl flex-shrink-0">
+        <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-lg font-bold text-gray-900 leading-tight truncate min-w-0">
+              {user?.name || '챌린저'}님
+            </h1>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() => navigate('/personal-feed/notifications')}
+                aria-label="알림"
+                className="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base text-gray-500 hover:border-primary-300 hover:text-primary-600 transition-colors"
+              >
+                🔔
+              </button>
+              {/* 프로필 사진 — 클릭 시 프로필 피드로 이동 */}
+              <button
+                onClick={() => navigate('/personal-feed/me')}
+                aria-label="프로필 피드 보기"
+                className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-xl hover:border-primary-300 transition-colors"
+              >
                 {user?.animalIcon || '🐰'}
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-lg font-bold text-gray-900 leading-tight truncate">
-                  {user?.name || '챌린저'}님
-                </h1>
-                <button
-                  onClick={() => navigate('/personal-feed/me')}
-                  className="mt-0.5 text-xs text-gray-400 hover:text-primary-600 transition-colors"
-                >
-                  프로필 피드 보기 →
-                </button>
-              </div>
-            </div>
-            <button
-              onClick={() => navigate('/personal-feed/notifications')}
-              aria-label="알림"
-              className="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base text-gray-500 hover:border-primary-300 hover:text-primary-600 transition-colors flex-shrink-0"
-            >
-              🔔
-            </button>
-          </div>
-
-          {/* 통계 — 큰 숫자/작은 라벨의 위계, 항목은 선으로 구분 */}
-          <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-3">
-            <div>
-              <p className="text-xl font-bold text-gray-900 leading-none">{activeChallenges.length}</p>
-              <p className="mt-1 text-[11px] text-gray-400">진행중</p>
-            </div>
-            <div className="pl-4 border-l border-gray-100">
-              <p className="text-xl font-bold text-gray-900 leading-none">{pendingChallenges.length}</p>
-              <p className="mt-1 text-[11px] text-gray-400">준비중</p>
-            </div>
-            <div className="pl-4 border-l border-gray-100">
-              <p className="text-xl font-bold text-gray-900 leading-none">{completedChallenges.length}</p>
-              <p className="mt-1 text-[11px] text-gray-400">완료</p>
+              </button>
             </div>
           </div>
         </div>
