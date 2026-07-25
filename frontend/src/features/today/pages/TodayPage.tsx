@@ -97,9 +97,9 @@ function Moon({ area }: { area: WorldArea }) {
 }
 
 // ── 반원 회전 휠 ──────────────────────────────────────────────────────
-const WHEEL_SPACING = 27;  // 노드 간 각도(도)
-const WHEEL_R = 300;       // 반지름(px)
-const WHEEL_APEX_TOP = 6;  // 정점 노드 상단 오프셋
+const WHEEL_SPACING = 21;  // 노드 간 각도(도) — 5개가 모두 보이도록 좁게
+const WHEEL_R = 215;       // 반지름(px) — 화면 폭 안에 5개 수용
+const WHEEL_BASE_TOP = 58; // 선택(정점) 노드 top — 바깥 노드는 위로 올라감(위로 휜 호)
 
 function WorldWheel({
   selectedIndex,
@@ -109,26 +109,24 @@ function WorldWheel({
   onSelect: (i: number) => void;
 }) {
   return (
-    <div className="relative w-full" style={{ height: 150 }}>
+    <div className="relative w-full" style={{ height: 128 }}>
       {WORLD_AREAS.map((area, i) => {
         const a = ((i - selectedIndex) * WHEEL_SPACING * Math.PI) / 180; // rad
         const dx = WHEEL_R * Math.sin(a);
-        const dy = WHEEL_R * (1 - Math.cos(a));
+        const rise = WHEEL_R * (1 - Math.cos(a)); // 바깥일수록 위로 상승(위로 휜 호)
         const isSel = i === selectedIndex;
-        const proximity = Math.cos(a); // 1 at apex → 0 at 90°
-        const scale = isSel ? 1.2 : Math.max(0.62, proximity);
-        const opacity = isSel ? 1 : Math.max(0.28, proximity);
+        const scale = isSel ? 1.15 : 0.82;
         return (
           <motion.button
             key={area.key}
             onClick={() => onSelect(i)}
             className="absolute flex items-center justify-center rounded-full"
-            style={{ left: 'calc(50% - 26px)', top: WHEEL_APEX_TOP }}
+            style={{ left: 'calc(50% - 26px)', top: WHEEL_BASE_TOP }}
             animate={{
               x: dx,
-              y: dy,
+              y: -rise,
               scale,
-              opacity,
+              opacity: 1,
             }}
             transition={{ type: 'spring', stiffness: 120, damping: 20 }}
           >
@@ -391,14 +389,16 @@ export const TodayPage = () => {
       className="relative flex flex-col bg-white overflow-hidden"
       style={{ minHeight: 'calc(100vh - 64px)' }}
     >
-      <div className="flex-1 flex flex-col items-center px-6 pt-10 pb-40">
-        {/* 달 */}
-        <div className="flex items-center justify-center" style={{ height: 190 }}>
-          <Moon area={area} />
+      <div className="flex-1 flex flex-col items-center px-6 pt-0 pb-28">
+        {/* 달 — 상단에 반원만 노출 (위로 올려 클리핑) */}
+        <div className="w-full flex justify-center overflow-hidden" style={{ height: 92 }}>
+          <div style={{ marginTop: -88 }}>
+            <Moon area={area} />
+          </div>
         </div>
 
         {/* 영역 이름 + 설명 */}
-        <div className="text-center mt-4 min-h-[64px]">
+        <div className="text-center mt-5 min-h-[64px]">
           <AnimatePresence mode="wait">
             <motion.div
               key={area.key}
@@ -444,7 +444,7 @@ export const TodayPage = () => {
         </AnimatePresence>
 
         {/* 반원 회전 휠 */}
-        <div className="w-full max-w-md mt-8">
+        <div className="w-full max-w-md mt-6">
           <WorldWheel selectedIndex={selectedIndex} onSelect={setSelectedIndex} />
         </div>
       </div>
