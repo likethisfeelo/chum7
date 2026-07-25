@@ -269,7 +269,7 @@ export const FeedPage = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="mt-4 flex items-center gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                <div className="mt-4 flex items-center justify-end gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                   <button
                     type="button"
                     onClick={() => { setSelectedCategory(null); setSelectedHashtag(null); }}
