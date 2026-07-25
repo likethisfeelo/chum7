@@ -101,6 +101,21 @@ const WHEEL_SPACING = 21;  // 노드 간 각도(도) — 5개가 모두 보이�
 const WHEEL_R = 215;       // 반지름(px) — 화면 폭 안에 5개 수용
 const WHEEL_BASE_TOP = 58; // 선택(정점) 노드 top — 바깥 노드는 위로 올라감(위로 휜 호)
 
+// 노드 뒤에 깔리는 얇은 회색 호(실선) — 노드와 동일한 파라미터로 그려 항상 정렬됨
+const WHEEL_SVG_W = 360;
+const WHEEL_SVG_H = 128;
+const WHEEL_CENTER_Y = WHEEL_BASE_TOP + 26; // 선택 노드 중심 y
+const WHEEL_ARC_PATH = (() => {
+  const pts: string[] = [];
+  for (let deg = -48; deg <= 48; deg += 2) {
+    const r = (deg * Math.PI) / 180;
+    const x = WHEEL_SVG_W / 2 + WHEEL_R * Math.sin(r);
+    const y = WHEEL_CENTER_Y - WHEEL_R * (1 - Math.cos(r));
+    pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+  }
+  return 'M' + pts.join(' L');
+})();
+
 function WorldWheel({
   selectedIndex,
   onSelect,
@@ -110,6 +125,16 @@ function WorldWheel({
 }) {
   return (
     <div className="relative w-full" style={{ height: 128 }}>
+      {/* 뒤에 깔리는 얇은 회색 호(실선) */}
+      <svg
+        className="absolute left-1/2 top-0 -translate-x-1/2 pointer-events-none"
+        width={WHEEL_SVG_W}
+        height={WHEEL_SVG_H}
+        viewBox={`0 0 ${WHEEL_SVG_W} ${WHEEL_SVG_H}`}
+        style={{ zIndex: 0 }}
+      >
+        <path d={WHEEL_ARC_PATH} fill="none" stroke="#D6D6DB" strokeWidth={1.5} strokeLinecap="round" />
+      </svg>
       {WORLD_AREAS.map((area, i) => {
         const a = ((i - selectedIndex) * WHEEL_SPACING * Math.PI) / 180; // rad
         const dx = WHEEL_R * Math.sin(a);
@@ -120,7 +145,7 @@ function WorldWheel({
           <motion.button
             key={area.key}
             onClick={() => onSelect(i)}
-            className="absolute flex items-center justify-center rounded-full"
+            className="absolute z-10 flex items-center justify-center rounded-full"
             style={{ left: 'calc(50% - 26px)', top: WHEEL_BASE_TOP }}
             animate={{
               x: dx,
@@ -449,23 +474,35 @@ export const TodayPage = () => {
         </div>
       </div>
 
-      {/* 오늘의 응원 폴더 (하단 고정 바) */}
-      <button
-        onClick={() => setDrawerOpen(true)}
-        className="fixed left-0 right-0 z-30 bg-white border-t border-gray-100 px-6 py-3.5 flex items-center justify-between active:bg-gray-50"
-        style={{ bottom: 64 }}
-      >
-        <div className="flex items-center gap-2.5">
-          <span className="text-lg">🗂️</span>
-          <span className="text-sm font-semibold text-gray-800">오늘의 응원</span>
-          {todayReceivedCount > 0 && (
-            <span className="px-2 py-0.5 bg-primary-100 text-primary-600 text-[11px] font-bold rounded-full">
-              {todayReceivedCount}
-            </span>
-          )}
-        </div>
-        <span className="text-gray-400 text-sm">▲</span>
-      </button>
+      {/* 오늘의 응원 — 폴더 모양 하단 고정 (네비 위로 띄움) */}
+      <div className="fixed left-0 right-0 z-20 px-3" style={{ bottom: 96 }}>
+        <button
+          onClick={() => setDrawerOpen(true)}
+          className="relative block w-full text-left active:translate-y-0.5 transition-transform"
+        >
+          {/* 폴더 뒤판 — 우측 뒤가 위로 올라온 탭 */}
+          <div
+            className="absolute right-5 h-6 w-28 rounded-t-xl bg-amber-100 border border-amber-200/70"
+            style={{ top: -10, zIndex: 0 }}
+          />
+          {/* 폴더 앞판 */}
+          <div
+            className="relative flex items-center justify-between rounded-2xl bg-white px-5 py-3.5 border border-gray-100"
+            style={{ zIndex: 1, boxShadow: '0 -2px 14px rgba(0,0,0,0.05), 0 10px 26px rgba(0,0,0,0.10)' }}
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-lg">🗂️</span>
+              <span className="text-sm font-semibold text-gray-800">오늘의 응원</span>
+              {todayReceivedCount > 0 && (
+                <span className="px-2 py-0.5 bg-primary-100 text-primary-600 text-[11px] font-bold rounded-full">
+                  {todayReceivedCount}
+                </span>
+              )}
+            </div>
+            <span className="text-gray-400 text-sm">▲</span>
+          </div>
+        </button>
+      </div>
 
       <CheerDrawer
         open={drawerOpen}
