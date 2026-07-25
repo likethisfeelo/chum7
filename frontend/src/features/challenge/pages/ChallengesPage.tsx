@@ -551,7 +551,7 @@ export const ChallengesPage = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="mt-4 flex items-center gap-5 pb-1">
+                <div className="mt-4 flex items-center justify-end gap-5 pb-1">
                   {LIFECYCLE_TABS.map((tab) => {
                     const active = lifecycleTab === tab.value;
                     return (
