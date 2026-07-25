@@ -235,8 +235,8 @@ export const FeedPage = () => {
         }}
       >
         <div className="px-6 pt-5 pb-3">
-          {/* 타이틀 + CATEGORY 토글 */}
-          <div className="flex items-start justify-between gap-3">
+          {/* 타이틀 + CATEGORY 토글 (CATEGORY는 부제 라인에 맞춰 하단 정렬) */}
+          <div className="flex items-end justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-3xl font-bold tracking-tight text-gray-800 leading-none">MADANG</h1>
               <p className="text-sm text-gray-500 mt-2">광장 피드 반익명 커뮤니티</p>
@@ -245,7 +245,7 @@ export const FeedPage = () => {
               type="button"
               onClick={() => setCategoryOpen((o) => !o)}
               aria-expanded={categoryOpen}
-              className="flex items-center gap-1 mt-1 text-sm font-semibold tracking-wide text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
+              className="flex items-center gap-1 text-sm font-semibold tracking-wide text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
             >
               CATEGORY
               {/* 접힘 시 위(▲), 펼침 시 아래(▼) — 아래 화살표를 접힘 상태에서 180° 회전 */}
@@ -273,28 +273,41 @@ export const FeedPage = () => {
                   <button
                     type="button"
                     onClick={() => { setSelectedCategory(null); setSelectedHashtag(null); }}
-                    className={`flex-shrink-0 text-sm whitespace-nowrap pb-1 border-b-2 transition-colors ${
-                      !selectedCategory
-                        ? 'text-gray-900 font-semibold border-gray-800'
-                        : 'text-gray-500 border-transparent hover:text-gray-700'
-                    }`}
+                    className="relative flex-shrink-0 text-sm whitespace-nowrap pb-1.5"
                   >
-                    Show All
+                    <span className={!selectedCategory ? 'text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-700 transition-colors'}>
+                      Show All
+                    </span>
+                    {!selectedCategory && (
+                      <motion.span
+                        layoutId="madang-cat-underline"
+                        className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full bg-gray-800"
+                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                      />
+                    )}
                   </button>
-                  {FEED_CATEGORIES.map((cat) => (
-                    <button
-                      key={cat.slug}
-                      type="button"
-                      onClick={() => handleCategorySelect(cat.slug)}
-                      className={`flex-shrink-0 text-sm whitespace-nowrap pb-1 border-b-2 transition-colors ${
-                        selectedCategory === cat.slug
-                          ? 'text-gray-900 font-semibold border-gray-800'
-                          : 'text-gray-500 border-transparent hover:text-gray-700'
-                      }`}
-                    >
-                      {cat.label}
-                    </button>
-                  ))}
+                  {FEED_CATEGORIES.map((cat) => {
+                    const active = selectedCategory === cat.slug;
+                    return (
+                      <button
+                        key={cat.slug}
+                        type="button"
+                        onClick={() => handleCategorySelect(cat.slug)}
+                        className="relative flex-shrink-0 text-sm whitespace-nowrap pb-1.5"
+                      >
+                        <span className={active ? 'text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-700 transition-colors'}>
+                          {cat.label}
+                        </span>
+                        {active && (
+                          <motion.span
+                            layoutId="madang-cat-underline"
+                            className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full bg-gray-800"
+                            transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </motion.div>
             )}
