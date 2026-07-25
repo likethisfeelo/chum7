@@ -472,43 +472,54 @@ export const TodayPage = () => {
         <div className="w-full max-w-md mt-6">
           <WorldWheel selectedIndex={selectedIndex} onSelect={setSelectedIndex} />
         </div>
-      </div>
 
-      {/* 오늘의 응원 — 글로우 종이비행기 버튼 (누르면 바텀시트가 올라옴) */}
-      <div className="fixed right-5 z-20 flex justify-center pointer-events-none" style={{ bottom: 96 }}>
-        <motion.button
-          onClick={() => setDrawerOpen(true)}
-          aria-label="오늘의 응원 열기"
-          className="pointer-events-auto relative flex items-center justify-center rounded-full"
-          style={{ width: 58, height: 58, background: 'linear-gradient(135deg, #F58A99, #D9536A)' }}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{
-            opacity: 1,
-            y: 0,
-            boxShadow: [
-              '0 0 0 0 rgba(217,83,106,0.0)',
-              '0 6px 24px 4px rgba(217,83,106,0.45)',
-              '0 0 0 0 rgba(217,83,106,0.0)',
-            ],
-          }}
-          transition={{
-            opacity: { duration: 0.3 },
-            y: { duration: 0.3 },
-            boxShadow: { duration: 2.4, repeat: Infinity, ease: 'easeInOut' },
-          }}
-          whileTap={{ scale: 0.94 }}
-        >
-          {/* 종이비행기 SVG */}
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style={{ transform: 'translateX(1px)' }}>
-            <path d="M2.3 11.3 L21.2 3.2 C21.9 2.9 22.6 3.6 22.3 4.3 L14.2 23.2 C13.9 23.9 12.9 23.9 12.6 23.1 L10.4 15.8 C10.3 15.5 10.1 15.3 9.8 15.2 L2.5 13 C1.7 12.7 1.7 11.6 2.3 11.3 Z" fill="#ffffff" />
-            <path d="M10.6 14.9 L22 4" stroke="#D9536A" strokeWidth="1" strokeLinecap="round" opacity="0.55" />
-          </svg>
-          {todayReceivedCount > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-white text-primary-600 text-[10px] font-bold flex items-center justify-center border border-primary-100 shadow-sm">
-              {todayReceivedCount}
-            </span>
-          )}
-        </motion.button>
+        {/* 오늘의 응원 — 촛불 버튼 (인플로우: 월드 펼치면 같이 내려감) */}
+        <div className="flex justify-center mt-3">
+          <motion.button
+            onClick={() => setDrawerOpen(true)}
+            aria-label="오늘의 응원 열기"
+            className="relative"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              // 테두리가 은은히 빛나는 글로우 (원 배경 없이 아이콘 외곽)
+              filter: [
+                'drop-shadow(0 0 3px rgba(255,168,64,0.45))',
+                'drop-shadow(0 0 11px rgba(255,168,64,0.85))',
+                'drop-shadow(0 0 3px rgba(255,168,64,0.45))',
+              ],
+            }}
+            transition={{
+              opacity: { duration: 0.3 },
+              y: { duration: 0.3 },
+              filter: { duration: 2.2, repeat: Infinity, ease: 'easeInOut' },
+            }}
+            whileTap={{ scale: 0.93 }}
+          >
+            <svg width="46" height="56" viewBox="0 0 46 56" fill="none">
+              {/* 불꽃 */}
+              <path
+                d="M23 4 C26 11 29 15 29 19.5 C29 23.6 26.3 26.5 23 26.5 C19.7 26.5 17 23.6 17 19.5 C17 15 20 11 23 4 Z"
+                fill="#F5883C"
+              />
+              <path
+                d="M23 11 C24.7 15 26 17 26 19.8 C26 22.3 24.7 24 23 24 C21.3 24 20 22.3 20 19.8 C20 17 21.3 15 23 11 Z"
+                fill="#FCD34D"
+              />
+              {/* 심지 */}
+              <rect x="22" y="25" width="2" height="6" rx="1" fill="#6B4423" />
+              {/* 양초 몸통(티라이트) */}
+              <path d="M7 35 A16 5 0 0 0 39 35 L39 47 A16 5 0 0 1 7 47 Z" fill="#F6C744" />
+              <ellipse cx="23" cy="35" rx="16" ry="5" fill="#FCE38A" />
+            </svg>
+            {todayReceivedCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-white text-primary-600 text-[10px] font-bold flex items-center justify-center border border-primary-100 shadow-sm">
+                {todayReceivedCount}
+              </span>
+            )}
+          </motion.button>
+        </div>
       </div>
 
       <CheerDrawer
