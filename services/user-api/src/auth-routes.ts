@@ -33,28 +33,30 @@ export const authRoutes = new Hono<AppEnv>();
 authRoutes.post('/register', async (c) => {
   const body = await c.req.json().catch(() => ({}));
 
-  if (body.action === 'resendConfirmation') {
-    const input = resendConfirmationSchema.parse(body);
-    await cognito.send(
-      new ResendConfirmationCodeCommand({ ClientId: clientId(), Username: input.email }),
-    );
-    return ok(c, undefined, '인증 코드를 다시 발송했습니다. 메일함을 확인해주세요.');
-  }
-
-  if (typeof body.confirmationCode === 'string') {
-    const input = confirmSignUpSchema.parse(body);
-    await cognito.send(
-      new ConfirmSignUpCommand({
-        ClientId: clientId(),
-        Username: input.email,
-        ConfirmationCode: input.confirmationCode,
-      }),
-    );
-    return ok(c, undefined, '이메일 인증이 완료되었습니다. 로그인해주세요.');
-  }
-
-  const input = registerSchema.parse(body);
+  // Cognito 예외를 의미 있는 메시지로 매핑 — 재발송/확인/가입 전 분기를 한 try로 감싼다
+  // (기존엔 재발송·확인 분기가 try 밖이라 Cognito 에러가 그대로 500 "서버 오류"로 노출됐다)
   try {
+    if (body.action === 'resendConfirmation') {
+      const input = resendConfirmationSchema.parse(body);
+      await cognito.send(
+        new ResendConfirmationCodeCommand({ ClientId: clientId(), Username: input.email }),
+      );
+      return ok(c, undefined, '인증 코드를 다시 발송했습니다. 메일함을 확인해주세요.');
+    }
+
+    if (typeof body.confirmationCode === 'string') {
+      const input = confirmSignUpSchema.parse(body);
+      await cognito.send(
+        new ConfirmSignUpCommand({
+          ClientId: clientId(),
+          Username: input.email,
+          ConfirmationCode: input.confirmationCode,
+        }),
+      );
+      return ok(c, undefined, '이메일 인증이 완료되었습니다. 로그인해주세요.');
+    }
+
+    const input = registerSchema.parse(body);
     const signUpResult = await cognito.send(
       new SignUpCommand({
         ClientId: clientId(),
@@ -80,7 +82,7 @@ authRoutes.post('/register', async (c) => {
   } catch (error) {
     const mapped = mapCognitoError(error as { name?: string });
     if (mapped) return fail(c, mapped.status, mapped.code, mapped.message, { data: mapped.data });
-    throw error;
+    throw error; // ZodError 등은 api-kit onError가 처리(400)
   }
 });
 
