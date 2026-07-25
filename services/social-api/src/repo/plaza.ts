@@ -54,23 +54,38 @@ export interface FeedPageResult {
   lastKey?: Record<string, any>;
 }
 
-/** 타입별 피드 페이지 — gsi1 Query 최신순. hashtag는 레거시처럼 FilterExpression (courtyard 한정은 호출부) */
+/**
+ * 타입별 피드 페이지 — gsi1 Query 최신순.
+ * hashtag / challengeCategory 는 gsi1 위에 FilterExpression 으로 적용 (별도 인덱스 없이).
+ * hashtag 와 category 는 서로 독립 — 둘 다 주면 AND 로 결합.
+ */
 export async function queryFeedByPostType(
   postType: string,
   limit: number,
   exclusiveStartKey?: Record<string, any>,
-  hashtag?: string,
+  filters?: { hashtag?: string; category?: string },
 ): Promise<FeedPageResult> {
+  const hashtag = filters?.hashtag;
+  const category = filters?.category;
+
+  const conditions: string[] = [];
+  const values: Record<string, any> = { ':feed': feedGsi1Pk(postType) };
+  if (hashtag) {
+    conditions.push('hashtag = :hashtag');
+    values[':hashtag'] = hashtag;
+  }
+  if (category) {
+    conditions.push('challengeCategory = :category');
+    values[':category'] = category;
+  }
+
   const res = await docClient.send(
     new QueryCommand({
       TableName: tableName(TABLE),
       IndexName: 'gsi1',
       KeyConditionExpression: 'gsi1pk = :feed',
-      ExpressionAttributeValues: {
-        ':feed': feedGsi1Pk(postType),
-        ...(hashtag ? { ':hashtag': hashtag } : {}),
-      },
-      ...(hashtag ? { FilterExpression: 'hashtag = :hashtag' } : {}),
+      ExpressionAttributeValues: values,
+      ...(conditions.length ? { FilterExpression: conditions.join(' AND ') } : {}),
       ScanIndexForward: false,
       ExclusiveStartKey: exclusiveStartKey,
       Limit: limit,
