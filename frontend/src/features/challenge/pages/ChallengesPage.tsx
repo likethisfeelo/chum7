@@ -14,7 +14,6 @@ import {
   CHALLENGE_CATEGORIES,
   SLUG_TO_LABEL,
   SLUG_TO_COLOR,
-  SLUG_TO_EMOJI,
   DEFAULT_BANNERS,
 } from '../constants/categories';
 
@@ -40,6 +39,8 @@ type Challenge = {
   recruitingEndAt?: string;
 };
 
+type LifecycleTab = 'recruiting' | 'active';
+
 // KST 자정 기준 D-day 계산 (양수 = 앞으로 N일, 0 = D-Day, 음수 = N일 지남)
 function calcDday(isoDate?: string): { label: string; daysLeft: number } | null {
   if (!isoDate) return null;
@@ -60,11 +61,10 @@ function formatStartDate(isoDate?: string): string | null {
   return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
-// 챌린지 모바일 헤더 카테고리 — 마당과 동일한 5개
-const MOBILE_CATEGORY_SLUGS = ['health', 'mindfulness', 'habit', 'development', 'impact'] as const;
-const MOBILE_CATEGORIES = MOBILE_CATEGORY_SLUGS
-  .map((slug) => CHALLENGE_CATEGORIES.find((c) => c.slug === slug))
-  .filter((c): c is (typeof CHALLENGE_CATEGORIES)[number] => Boolean(c));
+const LIFECYCLE_TABS: { value: LifecycleTab; label: string }[] = [
+  { value: 'recruiting', label: '모집중' },
+  { value: 'active', label: '진행중' },
+];
 
 // ─── Enhanced Hover Preview Panel ───────────────────────────────
 const EnhancedPreviewPanel = ({
@@ -358,9 +358,9 @@ const LifecycleSection = ({
 export const ChallengesPage = () => {
   const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
-  // 모바일: 마당과 동일한 CATEGORY 메뉴 (기본 접힘 = 전체)
-  const [categoryOpen, setCategoryOpen] = useState(false);
-  const [mobileCategory, setMobileCategory] = useState<string | null>(null);
+  const [lifecycleTab, setLifecycleTab] = useState<LifecycleTab>('recruiting');
+  // 모바일 STATUS 메뉴 펼침 여부 (마당 카테고리와 동일 패턴)
+  const [statusOpen, setStatusOpen] = useState(false);
   const [hoveredChallenge, setHoveredChallenge] = useState<Challenge | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -385,13 +385,15 @@ export const ChallengesPage = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Mobile: 모집중만, 선택 카테고리(없으면 전체)로 조회
+  // Mobile: single lifecycle query
+  // 진행중은 카테고리 무관 전체 목록, 모집중은 선택 카테고리로 조회
   const { data: mobileData, isLoading: mobileLoading } = useQuery({
-    queryKey: ['challenges-mobile-recruiting', mobileCategory ?? 'all'],
+    queryKey: ['challenges-mobile', lifecycleTab === 'active' ? 'all' : currentCategory.slug, lifecycleTab],
     queryFn: async () => {
-      const query = mobileCategory
-        ? `category=${mobileCategory}&lifecycle=recruiting&limit=50`
-        : 'lifecycle=recruiting&limit=50';
+      const query =
+        lifecycleTab === 'active'
+          ? 'lifecycle=active&limit=50'
+          : `category=${currentCategory.slug}&lifecycle=recruiting`;
       const response = await apiClient.get(`/public/challenges?${query}`);
       return response.data.data;
     },
@@ -520,16 +522,16 @@ export const ChallengesPage = () => {
             <h1 className="text-3xl font-bold tracking-tight text-gray-800 leading-none">CHALLENGE</h1>
             <p className="text-sm text-gray-500 mt-2">7일간의 짧고 강렬한 도전</p>
           </div>
-          {/* 모바일: CATEGORY 토글 (접힘 ▲ / 펼침 ▼) — 마당과 동일 */}
+          {/* 모바일: STATUS 토글 (접힘 ▲ / 펼침 ▼) */}
           <button
             type="button"
-            onClick={() => setCategoryOpen((o) => !o)}
-            aria-expanded={categoryOpen}
+            onClick={() => setStatusOpen((o) => !o)}
+            aria-expanded={statusOpen}
             className="lg:hidden flex items-center gap-1 tab-mono text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
           >
-            CATEGORY
+            STATUS
             <svg
-              className={`w-4 h-4 transition-transform duration-200 ${categoryOpen ? '' : 'rotate-180'}`}
+              className={`w-4 h-4 transition-transform duration-200 ${statusOpen ? '' : 'rotate-180'}`}
               viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
@@ -537,50 +539,34 @@ export const ChallengesPage = () => {
           </button>
         </div>
 
-        {/* 모바일: CATEGORY 행 (Show All + 5개) — 우측 정렬 + 슬라이드 밑줄 */}
+        {/* 모바일: STATUS 행 (모집중/진행중) — 펼침/접힘 + 슬라이드 밑줄 */}
         <div className="lg:hidden">
           <AnimatePresence initial={false}>
-            {categoryOpen && (
+            {statusOpen && (
               <motion.div
-                key="category-row"
+                key="status-row"
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="mt-4 flex items-center justify-end gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                  <button
-                    type="button"
-                    onClick={() => setMobileCategory(null)}
-                    className="relative flex-shrink-0 tab-mono whitespace-nowrap pb-1.5"
-                  >
-                    <span className={!mobileCategory ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700 transition-colors'}>
-                      Show All
-                    </span>
-                    {!mobileCategory && (
-                      <motion.span
-                        layoutId="challenge-cat-underline"
-                        className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full bg-gray-800"
-                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                      />
-                    )}
-                  </button>
-                  {MOBILE_CATEGORIES.map((cat) => {
-                    const active = mobileCategory === cat.slug;
+                <div className="mt-4 flex items-center gap-5 pb-1">
+                  {LIFECYCLE_TABS.map((tab) => {
+                    const active = lifecycleTab === tab.value;
                     return (
                       <button
-                        key={cat.slug}
+                        key={tab.value}
                         type="button"
-                        onClick={() => setMobileCategory((prev) => (prev === cat.slug ? null : cat.slug))}
+                        onClick={() => setLifecycleTab(tab.value)}
                         className="relative flex-shrink-0 tab-mono whitespace-nowrap pb-1.5"
                       >
                         <span className={active ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700 transition-colors'}>
-                          {cat.label}
+                          {tab.label}
                         </span>
                         {active && (
                           <motion.span
-                            layoutId="challenge-cat-underline"
+                            layoutId="challenge-status-underline"
                             className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full bg-gray-800"
                             transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                           />
@@ -634,8 +620,8 @@ export const ChallengesPage = () => {
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.1}
             onDragEnd={handleDragEnd}
-            /* 모바일은 마당형 카테고리 헤더만 사용 → 배너는 데스크탑 전용 */
-            className="select-none mt-4 mb-4 lg:col-span-3 hidden lg:block"
+            /* 진행중 탭에서는 모바일에서 카테고리 배너 숨김 (데스크탑은 유지) */
+            className={`select-none mt-4 mb-4 lg:col-span-3 ${lifecycleTab === 'active' ? 'hidden lg:block' : ''}`}
           >
             <div className="rounded-2xl overflow-hidden shadow-sm relative">
               {activeBanner?.imageUrl ? (
@@ -723,10 +709,12 @@ export const ChallengesPage = () => {
           </motion.div>
         </AnimatePresence>
 
-        {/* ── Mobile: 모집중 목록 (마당형 카테고리 필터) ─────── */}
-        <div className="pb-6 pt-4 lg:hidden lg:col-span-3">
+        {/* ── Mobile: single lifecycle tab (col-span-3) ─────── */}
+        <div className={`pb-6 lg:hidden lg:col-span-3 ${lifecycleTab === 'active' ? 'pt-4' : ''}`}>
           <div className="mb-2">
-            <span className="text-sm text-gray-400">모집 중인 챌린지</span>
+            <span className="text-sm text-gray-400">
+              {lifecycleTab === 'recruiting' ? '모집 중인 챌린지' : '진행 중인 챌린지'}
+            </span>
           </div>
           <div className="space-y-3 md:grid md:grid-cols-2 md:space-y-0 md:gap-3">
             {mobileLoading ? (
@@ -734,7 +722,7 @@ export const ChallengesPage = () => {
             ) : mobileChallenges.length === 0 ? (
               <EmptyState
                 icon="🎯"
-                title="모집 중인 챌린지가 없어요"
+                title="챌린지가 없어요"
                 description="다른 카테고리를 탐색해보세요"
               />
             ) : (
@@ -743,8 +731,8 @@ export const ChallengesPage = () => {
                   key={challenge.challengeId}
                   challenge={challenge}
                   index={index}
-                  lifecycle="recruiting"
-                  categoryEmoji={SLUG_TO_EMOJI[challenge.category] || currentCategory.emoji}
+                  lifecycle={lifecycleTab}
+                  categoryEmoji={currentCategory.emoji}
                   onNavigate={(id) => navigate(`/challenges/${id}`)}
                   onHover={handleHover}
                   onLeave={handleLeave}
