@@ -246,7 +246,7 @@ function CheerDrawer({
         >
           <div className="absolute inset-0 bg-black/40" />
           <motion.div
-            className="relative w-full bg-white rounded-t-3xl max-h-[75vh] flex flex-col"
+            className="relative w-full bg-white rounded-t-3xl h-[85vh] flex flex-col"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
