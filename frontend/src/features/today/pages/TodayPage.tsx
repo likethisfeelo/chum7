@@ -332,13 +332,13 @@ function CheerDrawer({
                 })
               )}
             </div>
-            {/* 전체 이력 링크 */}
+            {/* 전체 이력 링크 — 전용 이력 페이지로 전환 */}
             <div className="px-5 py-3 border-t border-gray-100">
               <button
-                onClick={() => navigate('/personal-feed/me')}
+                onClick={() => { onClose(); navigate('/cheers/history'); }}
                 className="w-full text-center text-sm text-gray-500 hover:text-gray-800 transition-colors"
               >
-                프로필에서 전체 이력 확인 →
+                응원 전체 이력 확인 →
               </button>
             </div>
           </motion.div>
@@ -474,34 +474,41 @@ export const TodayPage = () => {
         </div>
       </div>
 
-      {/* 오늘의 응원 — 폴더 모양 하단 고정 (네비 위로 띄움) */}
-      <div className="fixed left-0 right-0 z-20 px-3" style={{ bottom: 96 }}>
-        <button
+      {/* 오늘의 응원 — 글로우 종이비행기 버튼 (누르면 바텀시트가 올라옴) */}
+      <div className="fixed right-5 z-20 flex justify-center pointer-events-none" style={{ bottom: 96 }}>
+        <motion.button
           onClick={() => setDrawerOpen(true)}
-          className="relative block w-full text-left active:translate-y-0.5 transition-transform"
+          aria-label="오늘의 응원 열기"
+          className="pointer-events-auto relative flex items-center justify-center rounded-full"
+          style={{ width: 58, height: 58, background: 'linear-gradient(135deg, #F58A99, #D9536A)' }}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{
+            opacity: 1,
+            y: 0,
+            boxShadow: [
+              '0 0 0 0 rgba(217,83,106,0.0)',
+              '0 6px 24px 4px rgba(217,83,106,0.45)',
+              '0 0 0 0 rgba(217,83,106,0.0)',
+            ],
+          }}
+          transition={{
+            opacity: { duration: 0.3 },
+            y: { duration: 0.3 },
+            boxShadow: { duration: 2.4, repeat: Infinity, ease: 'easeInOut' },
+          }}
+          whileTap={{ scale: 0.94 }}
         >
-          {/* 폴더 뒤판 탭 — 앞판과 같은 흰색·경계선 없이 한 몸(폴더)처럼 보이게 */}
-          <div
-            className="absolute right-6 h-5 w-24 rounded-t-xl bg-white border border-b-0 border-gray-200"
-            style={{ top: -7, zIndex: 0 }}
-          />
-          {/* 폴더 앞판 — 상단 테두리 제거해 탭과 매끄럽게 연결 */}
-          <div
-            className="relative flex items-center justify-between rounded-2xl bg-white px-5 py-3.5 border-x border-b border-gray-200"
-            style={{ zIndex: 1, boxShadow: '0 -2px 14px rgba(0,0,0,0.05), 0 10px 26px rgba(0,0,0,0.10)' }}
-          >
-            <div className="flex items-center gap-2.5">
-              <span className="text-lg">🗂️</span>
-              <span className="text-sm font-semibold text-gray-800">오늘의 응원</span>
-              {todayReceivedCount > 0 && (
-                <span className="px-2 py-0.5 bg-primary-100 text-primary-600 text-[11px] font-bold rounded-full">
-                  {todayReceivedCount}
-                </span>
-              )}
-            </div>
-            <span className="text-gray-400 text-sm">▲</span>
-          </div>
-        </button>
+          {/* 종이비행기 SVG */}
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style={{ transform: 'translateX(1px)' }}>
+            <path d="M2.3 11.3 L21.2 3.2 C21.9 2.9 22.6 3.6 22.3 4.3 L14.2 23.2 C13.9 23.9 12.9 23.9 12.6 23.1 L10.4 15.8 C10.3 15.5 10.1 15.3 9.8 15.2 L2.5 13 C1.7 12.7 1.7 11.6 2.3 11.3 Z" fill="#ffffff" />
+            <path d="M10.6 14.9 L22 4" stroke="#D9536A" strokeWidth="1" strokeLinecap="round" opacity="0.55" />
+          </svg>
+          {todayReceivedCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-white text-primary-600 text-[10px] font-bold flex items-center justify-center border border-primary-100 shadow-sm">
+              {todayReceivedCount}
+            </span>
+          )}
+        </motion.button>
       </div>
 
       <CheerDrawer
