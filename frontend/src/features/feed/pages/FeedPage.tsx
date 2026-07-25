@@ -245,7 +245,7 @@ export const FeedPage = () => {
               type="button"
               onClick={() => setCategoryOpen((o) => !o)}
               aria-expanded={categoryOpen}
-              className="flex items-center gap-1 text-sm font-semibold tracking-wide text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
+              className="flex items-center gap-1 tab-mono text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
             >
               CATEGORY
               {/* 접힘 시 위(▲), 펼침 시 아래(▼) — 아래 화살표를 접힘 상태에서 180° 회전 */}
@@ -273,9 +273,9 @@ export const FeedPage = () => {
                   <button
                     type="button"
                     onClick={() => { setSelectedCategory(null); setSelectedHashtag(null); }}
-                    className="relative flex-shrink-0 text-sm whitespace-nowrap pb-1.5"
+                    className="relative flex-shrink-0 tab-mono whitespace-nowrap pb-1.5"
                   >
-                    <span className={!selectedCategory ? 'text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-700 transition-colors'}>
+                    <span className={!selectedCategory ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700 transition-colors'}>
                       Show All
                     </span>
                     {!selectedCategory && (
@@ -293,9 +293,9 @@ export const FeedPage = () => {
                         key={cat.slug}
                         type="button"
                         onClick={() => handleCategorySelect(cat.slug)}
-                        className="relative flex-shrink-0 text-sm whitespace-nowrap pb-1.5"
+                        className="relative flex-shrink-0 tab-mono whitespace-nowrap pb-1.5"
                       >
-                        <span className={active ? 'text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-700 transition-colors'}>
+                        <span className={active ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700 transition-colors'}>
                           {cat.label}
                         </span>
                         {active && (

@@ -602,8 +602,8 @@ export const MEPage = () => {
                 onClick={() => setActiveTab(tab.key)}
                 className="flex-1 flex justify-center"
               >
-                <span className="relative inline-flex items-center gap-1 pb-2 text-sm whitespace-nowrap">
-                  <span className={active ? 'text-gray-900 font-semibold' : 'text-gray-500'}>{tab.label}</span>
+                <span className="relative inline-flex items-center gap-1 pb-2 tab-mono whitespace-nowrap">
+                  <span className={active ? 'text-gray-900' : 'text-gray-500'}>{tab.label}</span>
                   {tab.count > 0 && (
                     <span className={`text-xs ${active ? 'text-primary-600' : 'text-gray-400'}`}>{tab.count}</span>
                   )}
