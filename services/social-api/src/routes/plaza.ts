@@ -115,6 +115,8 @@ plazaPublicRoutes.get('/feed', async (c) => {
   const limit = Math.max(1, Math.min(50, Number(c.req.query('limit') || '20')));
   const cursor = decodeFeedCursor(c.req.query('cursor'));
   const hashtag = c.req.query('hashtag')?.trim() || undefined;
+  // 카테고리는 해쉬태그와 독립 — challengeCategory 로 필터 (챌린지 생성 시 정한 카테고리)
+  const category = c.req.query('category')?.trim() || undefined;
 
   const allowTypes = toPostTypes(filter);
   const nowMs = Date.now();
@@ -130,7 +132,7 @@ plazaPublicRoutes.get('/feed', async (c) => {
       postType,
       Math.min(SINGLE_FILTER_QUERY_LIMIT, limit),
       perTypeCursor[postType],
-      postType === 'courtyard' ? hashtag : undefined,
+      { hashtag: postType === 'courtyard' ? hashtag : undefined, category },
     );
     const items = page.items
       .filter((item) => item?.isActive !== false)
@@ -153,7 +155,7 @@ plazaPublicRoutes.get('/feed', async (c) => {
         postType,
         queryLimitPerType,
         perTypeCursor[postType],
-        postType === 'courtyard' ? hashtag : undefined,
+        { hashtag: postType === 'courtyard' ? hashtag : undefined, category },
       );
       const items = page.items
         .filter((item) => item?.isActive !== false)

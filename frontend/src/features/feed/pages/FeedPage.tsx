@@ -330,12 +330,12 @@ export const FeedPage = () => {
         {/* ── Main Feed ── */}
         <div className="space-y-4">
 
-          {/* 활성 해쉬태그 필터 표시 */}
+          {/* 활성 필터 표시 — 카테고리(챌린지 분류)와 해쉬태그는 별개 */}
           {(activeCat || selectedHashtag) && (
             <div className="flex items-center gap-2 px-1">
               {activeCat && (
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${SLUG_TO_COLOR[activeCat.slug] || 'bg-gray-100 text-gray-600'}`}>
-                  {activeCat.emoji} #{SLUG_TO_LABEL[activeCat.slug] || activeCat.label}
+                  {activeCat.emoji} {SLUG_TO_LABEL[activeCat.slug] || activeCat.label}
                 </span>
               )}
               {selectedHashtag && (
@@ -347,7 +347,7 @@ export const FeedPage = () => {
                   #{selectedHashtag} →
                 </button>
               )}
-              <span className="text-xs text-gray-400">해쉬태그 필터 중</span>
+              <span className="text-xs text-gray-400">{activeCat ? '카테고리 필터 중' : '해쉬태그 필터 중'}</span>
               <button
                 type="button"
                 onClick={() => { setSelectedCategory(null); setSelectedHashtag(null); }}
