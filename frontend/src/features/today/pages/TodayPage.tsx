@@ -480,14 +480,14 @@ export const TodayPage = () => {
           onClick={() => setDrawerOpen(true)}
           className="relative block w-full text-left active:translate-y-0.5 transition-transform"
         >
-          {/* 폴더 뒤판 — 우측 뒤가 위로 올라온 탭 */}
+          {/* 폴더 뒤판 탭 — 앞판과 같은 흰색·경계선 없이 한 몸(폴더)처럼 보이게 */}
           <div
-            className="absolute right-5 h-6 w-28 rounded-t-xl bg-amber-100 border border-amber-200/70"
-            style={{ top: -10, zIndex: 0 }}
+            className="absolute right-6 h-5 w-24 rounded-t-xl bg-white border border-b-0 border-gray-200"
+            style={{ top: -7, zIndex: 0 }}
           />
-          {/* 폴더 앞판 */}
+          {/* 폴더 앞판 — 상단 테두리 제거해 탭과 매끄럽게 연결 */}
           <div
-            className="relative flex items-center justify-between rounded-2xl bg-white px-5 py-3.5 border border-gray-100"
+            className="relative flex items-center justify-between rounded-2xl bg-white px-5 py-3.5 border-x border-b border-gray-200"
             style={{ zIndex: 1, boxShadow: '0 -2px 14px rgba(0,0,0,0.05), 0 10px 26px rgba(0,0,0,0.10)' }}
           >
             <div className="flex items-center gap-2.5">
