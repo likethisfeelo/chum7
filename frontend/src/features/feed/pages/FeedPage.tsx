@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -158,6 +158,13 @@ export const FeedPage = () => {
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   // 카테고리 행 펼침 여부 — 기본 접힘(전체), CATEGORY 토글로 펼침
   const [categoryOpen, setCategoryOpen] = useState(false);
+  // 카테고리 선택 시 해당 탭을 가운데로 스크롤 → 좌우 숨은 메뉴 노출
+  const catBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  useEffect(() => {
+    if (!categoryOpen) return;
+    const key = selectedCategory ?? 'all';
+    catBtnRefs.current[key]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [selectedCategory, categoryOpen]);
 
   // 최신 유저 해쉬태그 (사이드바 표시용)
   const { data: latestTags = [] } = useQuery({
@@ -272,6 +279,7 @@ export const FeedPage = () => {
                 <div className="mt-4 flex items-center justify-end gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                   <button
                     type="button"
+                    ref={(el) => { catBtnRefs.current['all'] = el; }}
                     onClick={() => { setSelectedCategory(null); setSelectedHashtag(null); }}
                     className="relative flex-shrink-0 tab-mono whitespace-nowrap pb-1.5"
                   >
@@ -292,6 +300,7 @@ export const FeedPage = () => {
                       <button
                         key={cat.slug}
                         type="button"
+                        ref={(el) => { catBtnRefs.current[cat.slug] = el; }}
                         onClick={() => handleCategorySelect(cat.slug)}
                         className="relative flex-shrink-0 tab-mono whitespace-nowrap pb-1.5"
                       >
