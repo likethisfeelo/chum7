@@ -23,7 +23,7 @@ const LAYER_THEME: Record<string, {
 };
 
 // ── 창조물 개체 (정령 / 젤리) ───────────────────────────────────────
-interface Creature {
+export interface Creature {
   id: string;
   x: number;   // % 0-100
   y: number;   // % 0-100
@@ -32,7 +32,7 @@ interface Creature {
   isNew: boolean;
 }
 
-function buildCreatures(score: number, todayDelta: number, prefix: string): Creature[] {
+export function buildCreatures(score: number, todayDelta: number, prefix: string): Creature[] {
   if (score <= 0) return [];
   const count = Math.min(40, Math.ceil(score / 3));
   // seeded pseudo-random so positions are stable across renders
@@ -54,7 +54,7 @@ function buildCreatures(score: number, todayDelta: number, prefix: string): Crea
 }
 
 // ── 정령형 (cheer) ───────────────────────────────────────────────────
-function SpiritCreature({ c, color }: { c: Creature; color: string }) {
+export function SpiritCreature({ c, color }: { c: Creature; color: string }) {
   return (
     <motion.div
       key={c.id}
@@ -85,7 +85,7 @@ function SpiritCreature({ c, color }: { c: Creature; color: string }) {
 }
 
 // ── 젤리형 (thanks) ──────────────────────────────────────────────────
-function JellyCreature({ c, color }: { c: Creature; color: string }) {
+export function JellyCreature({ c, color }: { c: Creature; color: string }) {
   return (
     <motion.div
       key={c.id}
