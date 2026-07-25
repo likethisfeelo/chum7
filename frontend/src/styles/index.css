@@ -74,11 +74,8 @@
 
   body {
     @apply font-sans antialiased;
-    background:
-      radial-gradient(ellipse 65% 45% at 88% 6%, var(--gradient-accent-1) 0%, transparent 100%),
-      radial-gradient(ellipse 55% 50% at 10% 94%, var(--gradient-accent-2) 0%, transparent 100%),
-      var(--color-bg-app);
-    background-attachment: fixed;
+    /* 신규 디자인 시스템 — 앱 배경 전체 화이트 (기존 카테고리 그라데이션 틴트 제거) */
+    background: #ffffff;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
