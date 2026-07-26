@@ -77,7 +77,7 @@ export const BottomNav = () => {
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85), 0 8px 26px rgba(0,0,0,0.10)',
       }}
     >
-      <div className="relative flex items-end justify-around px-2 pt-2 pb-2">
+      <div className="relative flex items-end justify-around px-2 pt-1 pb-1">
         {NAV_ITEMS.map((item) => {
           const isActive =
             location.pathname === item.path ||
@@ -128,7 +128,7 @@ export const BottomNav = () => {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className="relative flex flex-col items-center py-1 px-3 min-w-[52px]"
+              className="relative flex flex-col items-center py-0.5 px-3 min-w-[52px]"
             >
               <motion.span
                 whileTap={{ scale: 0.9 }}
