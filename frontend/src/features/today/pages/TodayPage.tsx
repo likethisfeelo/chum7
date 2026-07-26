@@ -552,8 +552,8 @@ export const TodayPage = () => {
           </AnimatePresence>
         </div>
 
-        {/* 월드(젤리 정원) 펼침 토글 — 위/아래 뾰족 캐럿만, 우측 정렬, 영역색 */}
-        <div className="w-full max-w-md flex justify-end pr-2 mt-2">
+        {/* 월드(젤리 정원) 펼침 토글 — 위/아래 뾰족 캐럿만, 가운데 정렬, 영역색 */}
+        <div className="w-full max-w-md flex justify-center mt-2">
           <button
             onClick={() => setGardenOpen((v) => !v)}
             aria-label="나의 월드 보기"
