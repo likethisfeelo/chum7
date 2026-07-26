@@ -120,7 +120,7 @@ function CheerCandle() {
     return { key: i, x1: cx + dx * r1, y1: cy + dy * r1, x2: cx + dx * r2, y2: cy + dy * r2 };
   });
   return (
-    <svg width="72" height="100" viewBox="0 0 72 100" fill="none">
+    <svg width="144" height="200" viewBox="0 0 72 100" fill="none">
       <defs>
         <linearGradient id="cndFlame" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#F7C7CC" />
@@ -620,8 +620,8 @@ export const TodayPage = () => {
           />
         </div>
 
-        {/* 오늘의 응원 — 촛불 버튼 (인플로우: 월드 펼치면 같이 내려감) */}
-        <div className="flex justify-center mt-2 shrink-0">
+        {/* 오늘의 응원 — 촛불 버튼 (남은 빈 공간 세로 가운데) */}
+        <div className="flex-1 flex items-center justify-center w-full min-h-[120px]">
           <motion.button
             onClick={() => setDrawerOpen(true)}
             aria-label="오늘의 응원 열기"
