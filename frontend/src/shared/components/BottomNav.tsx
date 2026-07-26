@@ -85,12 +85,12 @@ export const BottomNav = () => {
 
           if (item.isME) {
             return (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className="flex flex-col items-center relative -top-4"
-                aria-label="ME"
-              >
+              <div key={item.path} className="min-w-[56px] flex justify-center">
+                <button
+                  onClick={() => navigate(item.path)}
+                  className="absolute left-1/2 -translate-x-1/2 -top-5"
+                  aria-label="ME"
+                >
                 <motion.div
                   whileTap={{ scale: 0.95 }}
                   className="relative w-16 h-16 rounded-full ring-1 ring-white/60 overflow-hidden"
@@ -120,7 +120,8 @@ export const BottomNav = () => {
                     </span>
                   </div>
                 </motion.div>
-              </button>
+                </button>
+              </div>
             );
           }
 

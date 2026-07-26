@@ -165,8 +165,8 @@ function Moon({ area }: { area: WorldArea }) {
     <AnimatePresence mode="wait">
       <motion.svg
         key={area.key}
-        width="180"
-        height="180"
+        width="224"
+        height="224"
         viewBox="0 0 180 180"
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -298,7 +298,7 @@ function JellyGarden({ area, layer }: { area: WorldArea; layer?: WorldLayer }) {
             ✦{layer?.cheerScore ?? 0} · ●{layer?.thankScore ?? 0}
           </span>
         </div>
-        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+        <div className="mx-6 h-1.5 rounded-full bg-gray-100 overflow-hidden">
           <motion.div
             className="h-full rounded-full"
             style={{ background: area.color }}
@@ -525,11 +525,25 @@ export const TodayPage = () => {
       className="relative flex flex-col bg-white"
       style={{ minHeight: 'calc(100dvh - 80px)' }}
     >
-      <div className="flex-1 flex flex-col items-center px-6 pt-2 pb-24">
-        {/* 달 — 상단에 반원만 노출 (위로 올려 클리핑) */}
-        <div className="w-full flex justify-center overflow-hidden" style={{ height: 92 }}>
-          <div style={{ marginTop: -88 }}>
-            <Moon area={area} />
+      <div className="flex-1 flex flex-col items-center px-6 pt-0 pb-24">
+        {/* 달 — 상단 반원 노출 + 아래로 퍼지는 색 글로우 */}
+        <div className="relative w-full flex justify-center" style={{ height: 92 }}>
+          {/* 색 글로우 (행성 아래로 퍼짐) */}
+          <div
+            className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+            style={{
+              top: 0,
+              width: 300,
+              height: 300,
+              borderRadius: '50%',
+              background: `radial-gradient(circle at 50% 42%, ${rgba(area.color, 0.4)} 0%, ${rgba(area.color, 0)} 60%)`,
+            }}
+          />
+          {/* 달(반원 클립) — svg를 키우고 노출 높이는 유지 → 더 큰 행성의 넓은 호 */}
+          <div className="relative overflow-hidden" style={{ height: 92 }}>
+            <div style={{ marginTop: -132 }}>
+              <Moon area={area} />
+            </div>
           </div>
         </div>
 
