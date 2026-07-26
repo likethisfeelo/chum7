@@ -96,10 +96,10 @@
     letter-spacing: 0.02em;
   }
 
-  /* 여정 월드 라틴 타이틀 (SELFLOVE 등) — Foldit */
+  /* 타이틀 폰트 (여정 SELFLOVE / 마당 / 챌린지) — Fredericka the Great (모노크롬 → CSS 색 적용됨) */
   .font-world {
-    font-family: 'Foldit', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-    letter-spacing: 0.06em;
+    font-family: 'Fredericka the Great', 'Apple SD Gothic Neo', 'Malgun Gothic', cursive;
+    letter-spacing: 0.03em;
   }
 
   /* MADANG/CHALLENGE 헤더 제목 — 서브메뉴(탭)와 동일한 Roboto Mono */

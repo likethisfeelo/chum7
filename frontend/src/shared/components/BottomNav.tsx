@@ -69,12 +69,12 @@ export const BottomNav = () => {
     <nav
       className="fixed bottom-[6px] left-2 right-2 z-30 lg:hidden rounded-[28px]"
       style={{
-        // 리퀴드 스모크 글래스 — 하얀선 아이콘이 보이도록 살짝 어둡게, 배경 비침
-        background: 'rgba(44, 40, 48, 0.42)',
-        backdropFilter: 'blur(30px) saturate(170%)',
-        WebkitBackdropFilter: 'blur(30px) saturate(170%)',
-        border: '1px solid rgba(255,255,255,0.25)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 10px 30px rgba(0,0,0,0.22)',
+        // 연한 리퀴드 글래스 — 밝고 투명하게(배경 비침)
+        background: 'rgba(255, 255, 255, 0.4)',
+        backdropFilter: 'blur(28px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(28px) saturate(180%)',
+        border: '1px solid rgba(255,255,255,0.6)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85), 0 8px 26px rgba(0,0,0,0.10)',
       }}
     >
       <div className="relative flex items-end justify-around px-2 pt-2 pb-2">
@@ -93,17 +93,24 @@ export const BottomNav = () => {
               >
                 <motion.div
                   whileTap={{ scale: 0.95 }}
-                  className={`w-16 h-16 rounded-full flex items-center justify-center ring-1 ring-white/50 ${
-                    isActive
-                      ? 'bg-gradient-to-br from-primary-500 to-primary-700'
-                      : 'bg-gradient-to-br from-primary-400 to-primary-600'
-                  }`}
-                  style={{
-                    boxShadow:
-                      'inset 0 2px 5px rgba(255,255,255,0.5), inset 0 -3px 7px rgba(0,0,0,0.2), 0 8px 20px rgba(217,83,106,0.4)',
-                  }}
+                  className="relative w-16 h-16 rounded-full ring-1 ring-white/60 overflow-hidden"
+                  style={{ boxShadow: '0 8px 22px rgba(0,0,0,0.22)' }}
                 >
-                  <span className="text-white font-bold text-base drop-shadow-sm">ME</span>
+                  {/* 원형으로 도는 무지개 */}
+                  <motion.div
+                    className="absolute inset-0 rounded-full"
+                    style={{
+                      background:
+                        'conic-gradient(from 0deg, #FF3B30, #FF9500, #FFCC00, #34C759, #00C7BE, #007AFF, #5856D6, #AF52DE, #FF2D55, #FF3B30)',
+                    }}
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 4.5, repeat: Infinity, ease: 'linear' }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-white font-bold text-base" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.55)' }}>
+                      ME
+                    </span>
+                  </div>
                 </motion.div>
               </button>
             );
@@ -117,11 +124,11 @@ export const BottomNav = () => {
             >
               <motion.span
                 whileTap={{ scale: 0.9 }}
-                className={`mb-0.5 transition-opacity ${isActive ? 'text-white' : 'text-white/60'}`}
+                className={`mb-0.5 transition-colors ${isActive ? 'text-primary-600' : 'text-gray-400'}`}
               >
                 <NavIcon name={item.iconKey as string} />
               </motion.span>
-              <span className={`text-[11px] font-medium ${isActive ? 'text-white' : 'text-white/55'}`}>
+              <span className={`text-[11px] font-medium ${isActive ? 'text-primary-600' : 'text-gray-400'}`}>
                 {item.label}
               </span>
               {isActive && (
