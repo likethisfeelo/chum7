@@ -351,9 +351,10 @@ function CheerDrawer({
           exit={{ opacity: 0 }}
           onClick={onClose}
         >
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute inset-0 bg-black/20" />
           <motion.div
-            className="relative w-full bg-white rounded-t-3xl h-[85vh] flex flex-col"
+            className="relative w-full rounded-t-3xl h-[85vh] flex flex-col backdrop-blur-2xl"
+            style={{ background: 'rgba(249, 249, 251, 0.68)' }}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -518,10 +519,10 @@ export const TodayPage = () => {
 
   return (
     <div
-      className="relative flex flex-col bg-white overflow-hidden"
-      style={{ height: 'calc(100dvh - 80px)' }}
+      className="relative flex flex-col bg-white"
+      style={{ minHeight: 'calc(100dvh - 80px)' }}
     >
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center px-6 pt-2 pb-4">
+      <div className="flex-1 flex flex-col items-center px-6 pt-2 pb-24">
         {/* 달 — 상단에 반원만 노출 (위로 올려 클리핑) */}
         <div className="w-full flex justify-center overflow-hidden" style={{ height: 92 }}>
           <div style={{ marginTop: -88 }}>

@@ -93,17 +93,24 @@ export const BottomNav = () => {
               >
                 <motion.div
                   whileTap={{ scale: 0.95 }}
-                  className={`w-16 h-16 rounded-full flex items-center justify-center ring-1 ring-white/50 ${
-                    isActive
-                      ? 'bg-gradient-to-br from-primary-500 to-primary-700'
-                      : 'bg-gradient-to-br from-primary-400 to-primary-600'
-                  }`}
-                  style={{
-                    boxShadow:
-                      'inset 0 2px 5px rgba(255,255,255,0.5), inset 0 -3px 7px rgba(0,0,0,0.2), 0 8px 20px rgba(217,83,106,0.4)',
-                  }}
+                  className="relative w-16 h-16 rounded-full ring-1 ring-white/60 overflow-hidden"
+                  style={{ boxShadow: '0 8px 22px rgba(0,0,0,0.22)' }}
                 >
-                  <span className="text-white font-bold text-base drop-shadow-sm">ME</span>
+                  {/* 원형으로 도는 무지개 */}
+                  <motion.div
+                    className="absolute inset-0 rounded-full"
+                    style={{
+                      background:
+                        'conic-gradient(from 0deg, #FF3B30, #FF9500, #FFCC00, #34C759, #00C7BE, #007AFF, #5856D6, #AF52DE, #FF2D55, #FF3B30)',
+                    }}
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 4.5, repeat: Infinity, ease: 'linear' }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-white font-bold text-base" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.55)' }}>
+                      ME
+                    </span>
+                  </div>
                 </motion.div>
               </button>
             );
