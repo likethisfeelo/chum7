@@ -557,7 +557,15 @@ export const ChallengesPage = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="mt-2.5 flex items-center justify-end gap-5 pb-1">
+                <div className="mt-2.5 flex items-center justify-between gap-5 pb-1">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/challenges/new')}
+                    className="flex-shrink-0 tab-mono whitespace-nowrap pb-1.5 text-primary-600 hover:text-primary-700 transition-colors"
+                  >
+                    ＋ 챌린지 만들기
+                  </button>
+                  <div className="flex items-center gap-5">
                   {LIFECYCLE_TABS.map((tab) => {
                     const active = lifecycleTab === tab.value;
                     return (
@@ -580,6 +588,7 @@ export const ChallengesPage = () => {
                       </button>
                     );
                   })}
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -804,15 +813,6 @@ export const ChallengesPage = () => {
 
       </div>
 
-      {/* 챌린지 만들기 FAB */}
-      <button
-        onClick={() => navigate('/challenges/new')}
-        className="fixed bottom-24 right-4 w-13 h-13 bg-primary-500 text-white rounded-full shadow-lg flex items-center justify-center z-20 hover:bg-primary-600 active:scale-95 transition-all"
-        style={{ width: 52, height: 52 }}
-        aria-label="챌린지 만들기"
-      >
-        <span className="text-2xl leading-none">+</span>
-      </button>
     </div>
   );
 };
