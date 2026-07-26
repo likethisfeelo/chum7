@@ -543,7 +543,7 @@ export const TodayPage = () => {
                 className="font-world text-4xl font-medium"
                 style={{ color: shade(area.color, 0.15) }}
               >
-                {area.name}
+                {area.name.charAt(0) + area.name.slice(1).toLowerCase()}
               </h1>
               <p className="text-sm text-gray-500 mt-1">
                 {DEFAULT_BANNERS[area.slug]?.description}
@@ -552,13 +552,29 @@ export const TodayPage = () => {
           </AnimatePresence>
         </div>
 
-        {/* 나의 월드 보기 (text link) */}
-        <button
-          onClick={() => setGardenOpen((v) => !v)}
-          className="mt-3 text-[13px] text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          나의 월드 보기 {gardenOpen ? '↑' : '→'}
-        </button>
+        {/* 월드(젤리 정원) 펼침 토글 — 위/아래 뾰족 캐럿만, 우측 정렬, 영역색 */}
+        <div className="w-full max-w-md flex justify-end pr-2 mt-2">
+          <button
+            onClick={() => setGardenOpen((v) => !v)}
+            aria-label="나의 월드 보기"
+            className="p-1.5"
+            style={{ color: shade(area.color, 0.1) }}
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ transform: gardenOpen ? 'none' : 'rotate(180deg)', transition: 'transform 0.25s' }}
+            >
+              <path d="M6 15l6-6 6 6" />
+            </svg>
+          </button>
+        </div>
 
         {/* 인라인 젤리 정원 */}
         <AnimatePresence initial={false}>
