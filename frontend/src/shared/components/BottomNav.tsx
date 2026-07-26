@@ -1,13 +1,14 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
-const NAV_ITEMS = [
+type NavItem = { path: string; iconKey: string | null; label: string; isME?: boolean };
+const NAV_ITEMS: NavItem[] = [
   { path: '/challenges', iconKey: 'challenge', label: '챌린지' },
   { path: '/plaza', iconKey: 'plaza', label: '마당' },
   { path: '/me', iconKey: null, label: 'ME', isME: true },
   { path: '/today', iconKey: 'today', label: '여정' },
   { path: '/my', iconKey: 'my', label: '마이' },
-] as const;
+];
 
 // 하얀선 라인아트 아이콘 (currentColor 사용)
 function NavIcon({ name }: { name: string }) {

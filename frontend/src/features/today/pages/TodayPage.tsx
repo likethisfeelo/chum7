@@ -519,9 +519,9 @@ export const TodayPage = () => {
   return (
     <div
       className="relative flex flex-col bg-white overflow-hidden"
-      style={{ minHeight: 'calc(100vh - 64px)' }}
+      style={{ height: 'calc(100dvh - 80px)' }}
     >
-      <div className="flex-1 flex flex-col items-center px-6 pt-0 pb-28">
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center px-6 pt-2 pb-4">
         {/* 달 — 상단에 반원만 노출 (위로 올려 클리핑) */}
         <div className="w-full flex justify-center overflow-hidden" style={{ height: 92 }}>
           <div style={{ marginTop: -88 }}>
@@ -530,7 +530,7 @@ export const TodayPage = () => {
         </div>
 
         {/* 영역 이름 + 설명 */}
-        <div className="text-center mt-5 min-h-[64px]">
+        <div className="text-center mt-3 min-h-[60px]">
           <AnimatePresence mode="wait">
             <motion.div
               key={area.key}
@@ -592,12 +592,12 @@ export const TodayPage = () => {
         </AnimatePresence>
 
         {/* 반원 회전 휠 */}
-        <div className="w-full max-w-md mt-6">
+        <div className="w-full max-w-md mt-4">
           <WorldWheel selectedIndex={selectedIndex} onSelect={setSelectedIndex} />
         </div>
 
         {/* 오늘의 응원 — 촛불 버튼 (인플로우: 월드 펼치면 같이 내려감) */}
-        <div className="flex justify-center mt-3">
+        <div className="flex justify-center mt-2 shrink-0">
           <motion.button
             onClick={() => setDrawerOpen(true)}
             aria-label="오늘의 응원 열기"
