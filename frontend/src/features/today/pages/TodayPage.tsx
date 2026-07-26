@@ -290,15 +290,15 @@ function JellyGarden({ area, layer }: { area: WorldArea; layer?: WorldLayer }) {
   const questScore = layer?.questScore ?? 0;
   return (
     <div>
-      {/* 월드 정보 — 색 카드 위(캐럿 바로 아래), 플레인 배경 */}
-      <div className="mb-3 px-1">
+      {/* 월드 정보 — 색 카드 위(캐럿 바로 아래), 텍스트/바 동일 인셋 정렬 */}
+      <div className="mb-3 px-6">
         <div className="flex items-center justify-between mb-1.5">
           <span className="tab-mono text-gray-500">QUEST {questScore}/100</span>
           <span className="tab-mono text-gray-400">
             ✦{layer?.cheerScore ?? 0} · ●{layer?.thankScore ?? 0}
           </span>
         </div>
-        <div className="mx-6 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
           <motion.div
             className="h-full rounded-full"
             style={{ background: area.color }}

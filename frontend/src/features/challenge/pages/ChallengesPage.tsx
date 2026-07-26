@@ -557,7 +557,15 @@ export const ChallengesPage = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="mt-2.5 flex items-center justify-end gap-5 pb-1">
+                <div className="mt-2.5 flex items-center justify-between gap-5 pb-1">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/challenges/new')}
+                    className="flex-shrink-0 tab-mono whitespace-nowrap pb-1.5 text-primary-600 hover:text-primary-700 transition-colors"
+                  >
+                    ＋ 챌린지 만들기
+                  </button>
+                  <div className="flex items-center gap-5">
                   {LIFECYCLE_TABS.map((tab) => {
                     const active = lifecycleTab === tab.value;
                     return (
@@ -580,6 +588,7 @@ export const ChallengesPage = () => {
                       </button>
                     );
                   })}
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -626,10 +635,10 @@ export const ChallengesPage = () => {
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.1}
             onDragEnd={handleDragEnd}
-            /* 진행중 탭에서는 모바일에서 카테고리 배너 숨김 (데스크탑은 유지) */
-            className={`select-none mt-4 mb-4 lg:col-span-3 ${lifecycleTab === 'active' ? 'hidden lg:block' : ''}`}
+            /* 모바일: 상단 여백/좌우 여백 0 + 직각(풀블리드), 데스크탑은 기존 유지 */
+            className={`select-none -mx-4 mb-4 lg:mx-0 lg:mt-4 lg:col-span-3 ${lifecycleTab === 'active' ? 'hidden lg:block' : ''}`}
           >
-            <div className="rounded-2xl overflow-hidden shadow-sm relative">
+            <div className="rounded-none lg:rounded-2xl overflow-hidden shadow-sm relative">
               {activeBanner?.imageUrl ? (
                 <>
                   <div className="aspect-square md:aspect-[3/1] lg:aspect-[21/9]">
@@ -804,15 +813,6 @@ export const ChallengesPage = () => {
 
       </div>
 
-      {/* 챌린지 만들기 FAB */}
-      <button
-        onClick={() => navigate('/challenges/new')}
-        className="fixed bottom-24 right-4 w-13 h-13 bg-primary-500 text-white rounded-full shadow-lg flex items-center justify-center z-20 hover:bg-primary-600 active:scale-95 transition-all"
-        style={{ width: 52, height: 52 }}
-        aria-label="챌린지 만들기"
-      >
-        <span className="text-2xl leading-none">+</span>
-      </button>
     </div>
   );
 };
