@@ -26,6 +26,7 @@ const lines = [
   `# 자동 생성됨 (scripts/gen-env.mjs) — 손으로 수정하지 말 것`,
   `VITE_APP_STAGE=${stage}`,
   apiUrl && `VITE_API_URL=${apiUrl}`,
+  flat.ChatWebSocketUrl && `VITE_WS_URL=${flat.ChatWebSocketUrl}`, // 챌린지 채팅 WebSocket (wss://)
   flat.UserPoolId && `VITE_COGNITO_USER_POOL_ID=${flat.UserPoolId}`,
   flat.UserPoolClientId && `VITE_COGNITO_CLIENT_ID=${flat.UserPoolClientId}`,
   flat.AppUrl && `VITE_CLOUDFRONT_URL=${flat.AppUrl}`,
