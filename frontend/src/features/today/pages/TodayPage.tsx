@@ -351,10 +351,9 @@ function CheerDrawer({
           exit={{ opacity: 0 }}
           onClick={onClose}
         >
-          <div className="absolute inset-0 bg-black/20" />
+          <div className="absolute inset-0 bg-black/40" />
           <motion.div
-            className="relative w-full rounded-t-3xl h-[85vh] flex flex-col backdrop-blur-2xl"
-            style={{ background: 'rgba(249, 249, 251, 0.68)' }}
+            className="relative w-full bg-white rounded-t-3xl h-[85vh] flex flex-col"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
