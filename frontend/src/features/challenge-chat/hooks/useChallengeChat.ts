@@ -12,6 +12,7 @@ export interface ChatMessage {
   displayName: string;
   text: string;
   createdAt: string;
+  isLeader?: boolean;
 }
 
 export type ChatStatus = "connecting" | "open" | "closed" | "error";
@@ -23,6 +24,7 @@ export function useChallengeChat(challengeId: string | undefined, enabled: boole
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<ChatStatus>("closed");
   const [myDisplayName, setMyDisplayName] = useState<string | null>(null);
+  const [myIsLeader, setMyIsLeader] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -66,6 +68,7 @@ export function useChallengeChat(challengeId: string | undefined, enabled: boole
         const payload = JSON.parse(event.data);
         if (payload?.type === "ready") {
           setMyDisplayName(payload.displayName ?? null);
+          setMyIsLeader(Boolean(payload.isLeader));
           setMessages(Array.isArray(payload.messages) ? payload.messages : []);
         } else if (payload?.type === "message" && payload.message) {
           appendMessage(payload.message as ChatMessage);
@@ -100,6 +103,7 @@ export function useChallengeChat(challengeId: string | undefined, enabled: boole
       wsRef.current = null;
       setMessages([]);
       setMyDisplayName(null);
+      setMyIsLeader(false);
       setStatus("closed");
       attemptsRef.current = 0;
     };
@@ -113,5 +117,5 @@ export function useChallengeChat(challengeId: string | undefined, enabled: boole
     return true;
   }, []);
 
-  return { messages, status, myDisplayName, send };
+  return { messages, status, myDisplayName, myIsLeader, send };
 }

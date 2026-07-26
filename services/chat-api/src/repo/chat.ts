@@ -32,6 +32,7 @@ export interface Connection {
   connectionId: string;
   userId: string;
   displayName: string;
+  isLeader: boolean;
 }
 
 export interface ChatMessage {
@@ -39,6 +40,7 @@ export interface ChatMessage {
   displayName: string;
   text: string;
   createdAt: string;
+  isLeader: boolean;
 }
 
 /** $connect — 방 멤버십 + 연결 역참조 두 아이템을 함께 기록. */
@@ -58,6 +60,7 @@ export async function saveConnection(
           connectionId: conn.connectionId,
           userId: conn.userId,
           displayName: conn.displayName,
+          isLeader: conn.isLeader,
           ttl,
         },
       }),
@@ -71,6 +74,7 @@ export async function saveConnection(
           challengeId,
           userId: conn.userId,
           displayName: conn.displayName,
+          isLeader: conn.isLeader,
           ttl,
         },
       }),
@@ -82,6 +86,7 @@ export interface ConnectionMeta {
   challengeId: string;
   userId: string;
   displayName: string;
+  isLeader: boolean;
 }
 
 /** 연결 역참조 조회 — sendMessage/history 에서 방·활동명 확인용. */
@@ -101,6 +106,7 @@ export async function getConnectionMeta(
     challengeId: meta.challengeId,
     userId: meta.userId,
     displayName: meta.displayName,
+    isLeader: Boolean(meta.isLeader),
   };
 }
 
@@ -154,6 +160,7 @@ export async function listRoomConnections(challengeId: string): Promise<Connecti
         connectionId: item.connectionId,
         userId: item.userId,
         displayName: item.displayName,
+        isLeader: Boolean(item.isLeader),
       });
     }
     lastKey = res.LastEvaluatedKey;
@@ -178,6 +185,7 @@ export async function saveMessage(
         displayName: message.displayName,
         text: message.text,
         createdAt: message.createdAt,
+        isLeader: message.isLeader,
         ttl: epochSeconds(nowMs) + MESSAGE_TTL_SECONDS,
       },
     }),
@@ -202,6 +210,7 @@ export async function listRecentMessages(challengeId: string): Promise<ChatMessa
       displayName: item.displayName,
       text: item.text,
       createdAt: item.createdAt,
+      isLeader: Boolean(item.isLeader),
     }))
     .reverse(); // 화면 표시용 오래된→최신
 }

@@ -14,7 +14,7 @@ const EXCLUDED_STATUSES = new Set(['gave_up', 'failed', 'rejected']);
 export async function getChatEligibility(
   challengeId: string,
   userId: string,
-): Promise<{ eligible: boolean; status?: string; lifecycle?: string }> {
+): Promise<{ eligible: boolean; status?: string; lifecycle?: string; isLeader: boolean }> {
   const table = process.env.CHALLENGES_TABLE;
   if (!table) throw new Error('Missing table env: CHALLENGES_TABLE');
 
@@ -31,20 +31,23 @@ export async function getChatEligibility(
       new GetCommand({
         TableName: table,
         Key: { pk: `CHAL#${challengeId}`, sk: 'META' },
-        ProjectionExpression: 'lifecycle',
+        // leaderId 미기록 레거시는 createdBy 로 대체 (routes/challenges.ts 와 동일 규칙)
+        ProjectionExpression: 'lifecycle, leaderId, createdBy',
       }),
     ),
   ]);
 
   const part = partRes.Item;
   const meta = metaRes.Item;
-  if (!part || !meta) return { eligible: false };
+  if (!part || !meta) return { eligible: false, isLeader: false };
 
   const status = typeof part.status === 'string' ? part.status : undefined;
   const phase = typeof part.phase === 'string' ? part.phase : undefined;
   const lifecycle = typeof meta.lifecycle === 'string' ? meta.lifecycle : undefined;
+  const leaderId = String(meta.leaderId || meta.createdBy || '');
 
   const joined = !(status && EXCLUDED_STATUSES.has(status)) && phase !== 'gave_up';
   const preparing = lifecycle ? CHAT_LIFECYCLES.has(lifecycle) : false;
-  return { eligible: joined && preparing, status, lifecycle };
+  const isLeader = leaderId !== '' && leaderId === userId;
+  return { eligible: joined && preparing, status, lifecycle, isLeader };
 }

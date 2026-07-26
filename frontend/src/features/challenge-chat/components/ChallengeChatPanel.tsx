@@ -10,7 +10,10 @@ import { useChallengeChat } from "../hooks/useChallengeChat";
 export function ChallengeChatPanel({ challengeId }: { challengeId: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState("");
-  const { messages, status, myDisplayName, send } = useChallengeChat(challengeId, isOpen);
+  const { messages, status, myDisplayName, myIsLeader, send } = useChallengeChat(
+    challengeId,
+    isOpen,
+  );
   const listRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
 
@@ -89,6 +92,7 @@ export function ChallengeChatPanel({ challengeId }: { challengeId: string }) {
             </span>{" "}
             {statusLabel}
             {myDisplayName ? ` · 나: ${myDisplayName}` : ""}
+            {myIsLeader ? " 👑" : ""}
           </p>
 
           {/* 메시지 목록 */}
@@ -113,13 +117,22 @@ export function ChallengeChatPanel({ challengeId }: { challengeId: string }) {
                     className={`flex flex-col ${mine ? "items-end" : "items-start"}`}
                   >
                     {!mine && (
-                      <span className="mb-0.5 text-xs text-gray-400">{m.displayName}</span>
+                      <span
+                        className={`mb-0.5 flex items-center gap-1 text-xs ${
+                          m.isLeader ? "font-semibold text-amber-600" : "text-gray-400"
+                        }`}
+                      >
+                        {m.isLeader && <span>👑</span>}
+                        {m.displayName}
+                      </span>
                     )}
                     <div
                       className={`max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm ${
                         mine
                           ? "rounded-br-sm bg-primary-500 text-white"
-                          : "rounded-bl-sm bg-white text-gray-800 border border-gray-100"
+                          : m.isLeader
+                            ? "rounded-bl-sm border border-amber-200 bg-amber-50 text-gray-800"
+                            : "rounded-bl-sm border border-gray-100 bg-white text-gray-800"
                       }`}
                     >
                       {m.text}

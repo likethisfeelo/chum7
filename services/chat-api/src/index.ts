@@ -84,11 +84,18 @@ async function onConnect(event: WsEvent): Promise<WsResult> {
     return { statusCode: 401, body: 'UNAUTHORIZED' };
   }
 
-  const { eligible } = await getChatEligibility(challengeId, userId);
+  const { eligible, isLeader } = await getChatEligibility(challengeId, userId);
   if (!eligible) return { statusCode: 403, body: 'FORBIDDEN' };
 
-  const displayName = createDailyAnonymousId(challengeId, userId, await loadAnonSalt());
-  await saveConnection(challengeId, { connectionId, userId, displayName }, Date.now());
+  // 리더는 익명명 대신 '챌린지 리더'로 표시 (challenge-feed 댓글과 동일 컨벤션)
+  const displayName = isLeader
+    ? '챌린지 리더'
+    : createDailyAnonymousId(challengeId, userId, await loadAnonSalt());
+  await saveConnection(
+    challengeId,
+    { connectionId, userId, displayName, isLeader },
+    Date.now(),
+  );
   return okResult;
 }
 
@@ -106,6 +113,7 @@ async function onSendMessage(event: WsEvent): Promise<WsResult> {
     displayName: meta.displayName,
     text,
     createdAt: new Date(now).toISOString(),
+    isLeader: meta.isLeader,
   };
   await saveMessage(meta.challengeId, connectionId, message, now);
 
@@ -129,7 +137,7 @@ async function onDefault(event: WsEvent): Promise<WsResult> {
   await sendTo(
     endpoint,
     connectionId,
-    { type: 'ready', displayName: meta.displayName, messages },
+    { type: 'ready', displayName: meta.displayName, isLeader: meta.isLeader, messages },
     meta.challengeId,
   );
   return okResult;
