@@ -290,23 +290,8 @@ function JellyGarden({ area, layer }: { area: WorldArea; layer?: WorldLayer }) {
   const questScore = layer?.questScore ?? 0;
   return (
     <div>
-      {/* 색 카드 — 정보 텍스트 없이 색/생명체만 */}
-      <div
-        className="relative overflow-hidden rounded-3xl"
-        style={{
-          height: 200,
-          background: `linear-gradient(160deg, ${tint(area.color, 0.55)}, ${tint(area.color, 0.15)})`,
-        }}
-      >
-        {spirits.map((c) => (
-          <SpiritCreature key={c.id} c={c} color={area.color} />
-        ))}
-        {jellies.map((c) => (
-          <JellyCreature key={c.id} c={c} color={area.jelly} />
-        ))}
-      </div>
-      {/* 월드 정보 — 색 영역 밖(하단), 플레인 배경 */}
-      <div className="mt-3 px-1">
+      {/* 월드 정보 — 색 카드 위(캐럿 바로 아래), 플레인 배경 */}
+      <div className="mb-3 px-1">
         <div className="flex items-center justify-between mb-1.5">
           <span className="tab-mono text-gray-500">QUEST {questScore}/100</span>
           <span className="tab-mono text-gray-400">
@@ -322,6 +307,21 @@ function JellyGarden({ area, layer }: { area: WorldArea; layer?: WorldLayer }) {
             transition={{ duration: 1, ease: 'easeOut' }}
           />
         </div>
+      </div>
+      {/* 색 카드 — 정보 텍스트 없이 색/생명체만 */}
+      <div
+        className="relative overflow-hidden rounded-3xl"
+        style={{
+          height: 200,
+          background: `linear-gradient(160deg, ${tint(area.color, 0.55)}, ${tint(area.color, 0.15)})`,
+        }}
+      >
+        {spirits.map((c) => (
+          <SpiritCreature key={c.id} c={c} color={area.color} />
+        ))}
+        {jellies.map((c) => (
+          <JellyCreature key={c.id} c={c} color={area.jelly} />
+        ))}
       </div>
     </div>
   );
