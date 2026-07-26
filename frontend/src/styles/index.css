@@ -96,6 +96,12 @@
     letter-spacing: 0.02em;
   }
 
+  /* 여정 월드 라틴 타이틀 (SELFLOVE 등) — Foldit */
+  .font-world {
+    font-family: 'Foldit', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    letter-spacing: 0.06em;
+  }
+
   /* 글래스 레이어 1 — 카드 (가장 투명) */
   .glass-card {
     background: rgba(255, 255, 255, 0.58);
