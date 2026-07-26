@@ -553,11 +553,12 @@ export const ChallengeFeedPage = () => {
   const isCreator = Boolean(challengeData?.createdBy) && challengeData?.createdBy === user?.userId;
   const isGaveUp = userChallenge?.phase === "gave_up" || userChallenge?.status === "gave_up";
   const canGiveUp = Boolean(userChallenge) && !isLeader && !isGaveUp && isActive;
-  // 채팅 입장 자격 — 진행중(active)·완료(completed) 참여자 (서버 $connect가 최종 검증).
-  const canChat =
-    Boolean(userChallenge) &&
-    (["active", "completed"].includes(userChallenge?.status) ||
-      userChallenge?.phase === "active");
+  // 채팅방 노출 — 준비중(모집중/준비기간) 챌린지의 참여자 전용 (서버 $connect가 최종 검증).
+  const isPreparing = (() => {
+    const lc = challengeData?.effectiveLifecycle || challengeData?.lifecycle;
+    return lc === "preparing" || lc === "recruiting";
+  })();
+  const canChat = isPreparing && Boolean(userChallenge) && !isGaveUp;
 
   // 퀘스트 진행 현황 계산
   const durationDays = challengeData?.durationDays || userChallenge?.durationDays || userChallenge?.challenge?.durationDays || 7;
@@ -1030,6 +1031,9 @@ export const ChallengeFeedPage = () => {
             </section>
           )}
 
+          {/* 채팅방 — 준비중 챌린지 참여자 전용 (오늘의 인증 바로 위) */}
+          {challengeId && canChat && <ChallengeChatPanel challengeId={challengeId} />}
+
           {/* 퀘스트 없을 때 일반 인증 폼 */}
           {(!questsData || questsData.length === 0 || (challengeType === "leader_only" && leaderQuests.length === 0)) &&
             (!iDidTodayVerification || hasInvalidMyVideo) &&
@@ -1343,8 +1347,6 @@ export const ChallengeFeedPage = () => {
         </div>
         )}
       </div>
-
-      {challengeId && canChat && <ChallengeChatPanel challengeId={challengeId} />}
     </div>
   );
 };

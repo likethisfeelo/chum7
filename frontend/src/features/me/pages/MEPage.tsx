@@ -958,6 +958,13 @@ export const MEPage = () => {
                         </button>
                         <button
                           type="button"
+                          onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}#chat`)}
+                          className="px-3 py-1.5 text-xs rounded-lg border border-primary-200 bg-white text-primary-700"
+                        >
+                          채팅방
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleLeaderDm(challenge)}
                           disabled={leaderDmTargetId === (challenge.challengeId || challenge.challenge?.challengeId)}
                           className="px-3 py-1.5 text-xs rounded-lg border border-blue-200 bg-white text-blue-700 disabled:opacity-50"
