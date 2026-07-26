@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
+import { ProgressDayCircles } from '@/features/challenge/components/ProgressDayCircles';
 import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
 import {
   getChallengeDisplayMeta,
@@ -802,51 +803,25 @@ export const MEPage = () => {
                                 );
                               })()}
 
-                              {/* 펼친 상태: Day 1~N 세로 타임라인 */}
+                              {/* 펼친 상태: 진행 현황 (챌린지 피드와 동일한 가로 원형 체크) */}
                               {isExpanded && (
                                 <div className="pt-1">
                                   <p className="text-xs text-primary-500 text-right mb-2">탭하면 피드로 이동 →</p>
-                                  {Array.from({ length: durationDays }, (_, i) => {
-                                    const day = i + 1;
-                                    let p = getProgressEntryByDay(progress, day);
-                                    let status = resolveVerificationStatusForDay(progress, day, challengeDay);
-                                    // progress GSI 지연 보완: 엔트리 없을 때 verifications 테이블 fallback
-                                    // userChallengeId 우선, challengeId fallback
-                                    if (!p && (status === 'pending' || status === 'skipped')) {
-                                      const fbVerif =
-                                        verifiedDaysByUCIdMap.get(challenge.userChallengeId)?.get(day) ||
-                                        verifiedDaysByChallengeMap.get(challenge.challengeId)?.get(day);
-                                      if (fbVerif) {
-                                        status = 'success';
-                                        p = { day, status: 'success', timestamp: fbVerif.performedAt || fbVerif.createdAt, verificationId: fbVerif.verificationId };
+                                  <ProgressDayCircles
+                                    durationDays={durationDays}
+                                    todayDay={challengeDay}
+                                    isDayDone={(day) => {
+                                      const p = getProgressEntryByDay(progress, day);
+                                      let status = resolveVerificationStatusForDay(progress, day, challengeDay);
+                                      if (!p && (status === 'pending' || status === 'skipped')) {
+                                        const fbVerif =
+                                          verifiedDaysByUCIdMap.get(challenge.userChallengeId)?.get(day) ||
+                                          verifiedDaysByChallengeMap.get(challenge.challengeId)?.get(day);
+                                        if (fbVerif) status = 'success';
                                       }
-                                    }
-                                    const isSuccess = status === 'success';
-                                    const timeStr = isSuccess ? formatVerificationTime(p?.timestamp) : null;
-                                    const isLastItem = i === durationDays - 1;
-                                    return (
-                                      <div key={day} className="flex items-start gap-3">
-                                        {/* 왼쪽: 점 + 세로선 */}
-                                        <div className="flex flex-col items-center flex-shrink-0" style={{ width: 16 }}>
-                                          <div className={`w-2.5 h-2.5 rounded-full mt-1 ${isSuccess ? 'bg-green-500' : 'bg-gray-200'}`} />
-                                          {!isLastItem && (
-                                            <div className={`mt-0.5 flex-1 min-h-[22px] ${isSuccess ? 'w-px bg-gray-200' : 'border-l border-dashed border-gray-200'}`} />
-                                          )}
-                                        </div>
-                                        {/* 오른쪽: 텍스트 */}
-                                        <div className="flex-1 min-w-0 pb-2.5">
-                                          {isSuccess ? (
-                                            <p className="text-xs text-gray-500 truncate mt-0.5">
-                                              <span className="font-semibold text-gray-700">{day}일차</span>
-                                              {timeStr && <span className="text-gray-400"> · {timeStr}</span>}
-                                            </p>
-                                          ) : (
-                                            <p className="text-xs text-gray-300 mt-0.5">{day}일차</p>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
+                                      return status === 'success';
+                                    }}
+                                  />
                                 </div>
                               )}
                             </motion.div>
