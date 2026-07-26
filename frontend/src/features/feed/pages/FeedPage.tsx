@@ -158,12 +158,22 @@ export const FeedPage = () => {
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   // 카테고리 행 펼침 여부 — 기본 접힘(전체), CATEGORY 토글로 펼침
   const [categoryOpen, setCategoryOpen] = useState(false);
-  // 카테고리 선택 시 해당 탭을 가운데로 스크롤 → 좌우 숨은 메뉴 노출
+  // 카테고리 선택 시 해당 탭을 가운데로 스크롤 → 좌우 숨은 메뉴가 슬라이드되며 노출
+  // (justify-end + overflow 조합은 시작쪽이 스크롤 불가한 flexbox 버그가 있어 수동 scrollTo 사용)
+  const catRowRef = useRef<HTMLDivElement>(null);
   const catBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   useEffect(() => {
     if (!categoryOpen) return;
     const key = selectedCategory ?? 'all';
-    catBtnRefs.current[key]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    requestAnimationFrame(() => {
+      const el = catBtnRefs.current[key];
+      const container = catRowRef.current;
+      if (!el || !container) return;
+      const cRect = container.getBoundingClientRect();
+      const bRect = el.getBoundingClientRect();
+      const delta = bRect.left + bRect.width / 2 - (cRect.left + cRect.width / 2);
+      container.scrollTo({ left: container.scrollLeft + delta, behavior: 'smooth' });
+    });
   }, [selectedCategory, categoryOpen]);
 
   // 최신 유저 해쉬태그 (사이드바 표시용)
@@ -241,12 +251,12 @@ export const FeedPage = () => {
           borderBottom: '1px solid rgba(0,0,0,0.07)',
         }}
       >
-        <div className="px-6 pt-5 pb-3">
+        <div className="px-6 pt-3 pb-2">
           {/* 타이틀 + CATEGORY 토글 (CATEGORY는 부제 라인에 맞춰 하단 정렬) */}
           <div className="flex items-end justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="text-3xl font-bold tracking-tight text-gray-800 leading-none">MADANG</h1>
-              <p className="text-sm text-gray-500 mt-2">광장 피드 반익명 커뮤니티</p>
+              <h1 className="font-mono-head text-[21px] font-bold tracking-tight text-gray-800 leading-none">MADANG</h1>
+              <p className="text-xs text-gray-500 mt-1.5">광장 피드 반익명 커뮤니티</p>
             </div>
             <button
               type="button"
@@ -276,7 +286,7 @@ export const FeedPage = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="mt-4 flex items-center justify-end gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                <div ref={catRowRef} className="mt-2.5 flex items-center gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                   <button
                     type="button"
                     ref={(el) => { catBtnRefs.current['all'] = el; }}
