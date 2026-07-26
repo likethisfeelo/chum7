@@ -14,6 +14,7 @@ import { BottomSheet } from "@/shared/components/BottomSheet";
 import { BoardGuideSection } from "@/features/challenge-board/components/BoardGuideSection";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import { challengeApi } from "@/features/challenge/api/challengeApi";
+import { ChallengeChatPanel } from "@/features/challenge-chat/components/ChallengeChatPanel";
 import {
   getRemedyType,
   getRemainingRemedyCount,
@@ -552,6 +553,11 @@ export const ChallengeFeedPage = () => {
   const isCreator = Boolean(challengeData?.createdBy) && challengeData?.createdBy === user?.userId;
   const isGaveUp = userChallenge?.phase === "gave_up" || userChallenge?.status === "gave_up";
   const canGiveUp = Boolean(userChallenge) && !isLeader && !isGaveUp && isActive;
+  // 채팅 입장 자격 — 진행중(active)·완료(completed) 참여자 (서버 $connect가 최종 검증).
+  const canChat =
+    Boolean(userChallenge) &&
+    (["active", "completed"].includes(userChallenge?.status) ||
+      userChallenge?.phase === "active");
 
   // 퀘스트 진행 현황 계산
   const durationDays = challengeData?.durationDays || userChallenge?.durationDays || userChallenge?.challenge?.durationDays || 7;
@@ -1338,6 +1344,7 @@ export const ChallengeFeedPage = () => {
         )}
       </div>
 
+      {challengeId && canChat && <ChallengeChatPanel challengeId={challengeId} />}
     </div>
   );
 };

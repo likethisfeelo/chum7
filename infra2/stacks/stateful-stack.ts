@@ -11,7 +11,11 @@ export interface StatefulStackProps extends cdk.StackProps {
   config: StageConfig;
 }
 
-/** 바운디드 컨텍스트당 1테이블 — REDESIGN_PLAN §3.3의 9개 */
+/**
+ * 바운디드 컨텍스트당 1테이블 — REDESIGN_PLAN §3.3의 9개 + chat.
+ * chat: 챌린지 단체 채팅(WebSocket 연결 레지스트리 + 임시 메시지). TTL 로 자동 만료돼
+ * 다른 도메인과 운영 특성(고빈도 쓰기·짧은 수명)이 달라 별도 테이블로 격리한다.
+ */
 export const DOMAIN_TABLES = [
   'users',
   'challenges',
@@ -22,6 +26,7 @@ export const DOMAIN_TABLES = [
   'content',
   'commerce',
   'ops',
+  'chat',
 ] as const;
 export type DomainTable = (typeof DOMAIN_TABLES)[number];
 
@@ -36,6 +41,12 @@ const GSI_COUNT: Record<DomainTable, number> = {
   content: 1,
   commerce: 3, // 주문별 원장 / 크리에이터별 정산 / CI 중복 검사
   ops: 1,
+  chat: 0, // 방/연결/메시지 모두 pk 파티션 Query 로 성립 — GSI 불필요
+};
+
+/** TTL 속성 `ttl`(epoch seconds)을 켜는 테이블 — 아이템 자동 만료(임시성). */
+const TTL_TABLES: Partial<Record<DomainTable, string>> = {
+  chat: 'ttl',
 };
 
 export class StatefulStack extends cdk.Stack {
@@ -62,6 +73,7 @@ export class StatefulStack extends cdk.Stack {
         sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: config.isProd },
+        timeToLiveAttribute: TTL_TABLES[name],
         removalPolicy,
       });
       for (let i = 1; i <= GSI_COUNT[name]; i += 1) {

@@ -27,7 +27,7 @@ function synthAll(stage: 'dev' | 'prod') {
 describe('infra2 stacks', () => {
   const dev = synthAll('dev');
 
-  it('StatefulStack — 도메인 테이블 9개 (REDESIGN_PLAN §3.3)', () => {
+  it('StatefulStack — 도메인 테이블 (REDESIGN_PLAN §3.3의 9개 + chat)', () => {
     dev.stateful.resourceCountIs('AWS::DynamoDB::Table', DOMAIN_TABLES.length);
   });
 

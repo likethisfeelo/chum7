@@ -1,7 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
-import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import {
+  HttpLambdaIntegration,
+  WebSocketLambdaIntegration,
+} from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -231,6 +234,46 @@ export class ApiStack extends cdk.Stack {
     stateful.tables.content.grantReadWriteData(adminApi); // 배너 관리
     stateful.tables.ops.grantReadWriteData(adminApi); // 감사 로그
     eventBus.grantPutEventsTo(adminApi);
+
+    // --- chat-api: 챌린지 단체 채팅 WebSocket API (HTTP API와 별개 엔드포인트) ---
+    // WebSocket 은 JWT authorizer 를 못 쓰므로 토큰 검증은 $connect 핸들러가 직접 수행한다.
+    const chatWs = new NodejsFunction(this, 'ChatApi', {
+      functionName: `${config.prefix}-chat-api`,
+      entry: join(__dirname, '../../services/chat-api/src/index.ts'),
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      bundling: { minify: true, sourceMap: !config.isProd, externalModules: ['@aws-sdk/*'] },
+      environment: {
+        ...this.commonEnv,
+        CHAT_TABLE: stateful.tables.chat.tableName,
+        CHALLENGES_TABLE: stateful.tables.challenges.tableName,
+        USER_POOL_ID: stateful.userPool.userPoolId,
+        USER_POOL_CLIENT_ID: stateful.userPoolClient.userPoolClientId,
+        ANON_ID_SALT_SECRET_NAME: stateful.anonSaltSecret.secretName,
+      },
+    });
+    this.functions.push(chatWs);
+    stateful.tables.chat.grantReadWriteData(chatWs); // 연결 레지스트리 + 메시지
+    stateful.tables.challenges.grantReadData(chatWs); // 참여자 검증 GetItem 전용
+    stateful.anonSaltSecret.grantRead(chatWs); // 일일 활동명 솔트
+
+    const chatIntegration = new WebSocketLambdaIntegration('ChatWsIntegration', chatWs);
+    const chatWsApi = new apigwv2.WebSocketApi(this, 'ChatWebSocketApi', {
+      apiName: `${config.prefix}-chat-ws`,
+      routeSelectionExpression: '$request.body.action',
+      connectRouteOptions: { integration: chatIntegration },
+      disconnectRouteOptions: { integration: chatIntegration },
+      defaultRouteOptions: { integration: chatIntegration }, // {action:'history'} 등
+    });
+    chatWsApi.addRoute('sendMessage', { integration: chatIntegration });
+    const chatWsStage = new apigwv2.WebSocketStage(this, 'ChatWebSocketStage', {
+      webSocketApi: chatWsApi,
+      stageName: config.stage,
+      autoDeploy: true,
+    });
+    chatWsApi.grantManageConnections(chatWs); // execute-api:ManageConnections (postToConnection)
+    new cdk.CfnOutput(this, 'ChatWebSocketUrl', { value: chatWsStage.url }); // wss://...
 
     // --- API 커스텀 도메인 (config.domain 설정 시 — Phase 5 전환) ---
     if (config.domain) {
