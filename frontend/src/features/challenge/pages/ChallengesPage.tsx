@@ -508,7 +508,7 @@ export const ChallengesPage = () => {
     <div className="min-h-screen">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div
-        className="sticky top-0 z-10 px-6 pt-5 pb-3"
+        className="sticky top-0 z-10 px-6 pt-3 pb-2"
         style={{
           background: 'rgba(255,255,255,0.78)',
           backdropFilter: 'blur(18px)',
@@ -519,8 +519,8 @@ export const ChallengesPage = () => {
         {/* 타이틀 + (모바일) STATUS 토글 — 부제 라인에 맞춰 하단 정렬 */}
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-3xl font-bold tracking-tight text-gray-800 leading-none">CHALLENGE</h1>
-            <p className="text-sm text-gray-500 mt-2">7일간의 짧고 강렬한 도전</p>
+            <h1 className="font-mono-head text-[21px] font-bold tracking-tight text-gray-800 leading-none">CHALLENGE</h1>
+            <p className="text-xs text-gray-500 mt-1.5">7일간의 짧고 강렬한 도전</p>
           </div>
           {/* 모바일: STATUS 토글 (접힘 ▲ / 펼침 ▼) */}
           <button
@@ -551,7 +551,7 @@ export const ChallengesPage = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="mt-4 flex items-center justify-end gap-5 pb-1">
+                <div className="mt-2.5 flex items-center justify-end gap-5 pb-1">
                   {LIFECYCLE_TABS.map((tab) => {
                     const active = lifecycleTab === tab.value;
                     return (
