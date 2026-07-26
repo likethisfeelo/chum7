@@ -591,9 +591,15 @@ export const TodayPage = () => {
           )}
         </AnimatePresence>
 
-        {/* 반원 회전 휠 */}
+        {/* 반원 회전 휠 — 이미 가운데인 노드 재탭 시 월드 펼침/접힘 */}
         <div className="w-full max-w-md mt-4">
-          <WorldWheel selectedIndex={selectedIndex} onSelect={setSelectedIndex} />
+          <WorldWheel
+            selectedIndex={selectedIndex}
+            onSelect={(i) => {
+              if (i === selectedIndex) setGardenOpen((v) => !v);
+              else setSelectedIndex(i);
+            }}
+          />
         </div>
 
         {/* 오늘의 응원 — 촛불 버튼 (인플로우: 월드 펼치면 같이 내려감) */}

@@ -14,6 +14,7 @@ import {
   CHALLENGE_CATEGORIES,
   SLUG_TO_LABEL,
   SLUG_TO_COLOR,
+  SLUG_TO_HEX,
   DEFAULT_BANNERS,
 } from '../constants/categories';
 
@@ -519,7 +520,12 @@ export const ChallengesPage = () => {
         {/* 타이틀 + (모바일) STATUS 토글 — 부제 라인에 맞춰 하단 정렬 */}
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="font-mono-head text-[21px] font-bold tracking-tight text-gray-800 leading-none">CHALLENGE</h1>
+            <h1
+              className="font-world font-normal text-[23px] leading-none"
+              style={{ color: SLUG_TO_HEX[currentCategory.slug] ?? '#374151' }}
+            >
+              Challenge
+            </h1>
             <p className="text-xs text-gray-500 mt-1.5">7일간의 짧고 강렬한 도전</p>
           </div>
           {/* 모바일: STATUS 토글 (접힘 ▲ / 펼침 ▼) */}
