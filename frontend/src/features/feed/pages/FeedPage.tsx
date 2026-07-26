@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import { CHALLENGE_CATEGORIES, SLUG_TO_COLOR, SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
+import { CHALLENGE_CATEGORIES, SLUG_TO_COLOR, SLUG_TO_LABEL, SLUG_TO_HEX } from '@/features/challenge/constants/categories';
 
 // 마당 헤더에 노출할 카테고리 — 목업 기준 5개(Selflove/Attitude/Discipline/Create/Impact)
 const FEED_CATEGORY_SLUGS = ['health', 'mindfulness', 'habit', 'development', 'impact'] as const;
@@ -255,7 +255,12 @@ export const FeedPage = () => {
           {/* 타이틀 + CATEGORY 토글 (CATEGORY는 부제 라인에 맞춰 하단 정렬) */}
           <div className="flex items-end justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="font-mono-head text-[21px] font-bold tracking-tight text-gray-800 leading-none">MADANG</h1>
+              <h1
+                className="font-world font-normal text-[23px] leading-none"
+                style={{ color: selectedCategory ? SLUG_TO_HEX[selectedCategory] ?? '#374151' : '#374151' }}
+              >
+                Madang
+              </h1>
               <p className="text-xs text-gray-500 mt-1.5">광장 피드 반익명 커뮤니티</p>
             </div>
             <button

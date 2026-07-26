@@ -23,6 +23,18 @@ export const SLUG_TO_EMOJI: Record<string, string> = Object.fromEntries(
   CHALLENGE_CATEGORIES.map((c) => [c.slug, c.emoji]),
 );
 
+// 타이틀/텍스트 색상용 hex (카테고리별)
+export const SLUG_TO_HEX: Record<string, string> = {
+  health: '#D46A6A',
+  mindfulness: '#E0A05A',
+  habit: '#D8B36A',
+  creativity: '#3FB0A0',
+  development: '#5B8DEF',
+  relationship: '#6E78E0',
+  expand: '#9D8CCF',
+  impact: '#46B36B',
+};
+
 export const DEFAULT_BANNERS: Record<string, { tagline: string; description: string }> = {
   health:       { tagline: 'Love yourself first',          description: '나를 가장 먼저 돌보는 작은 습관들' },
   mindfulness:  { tagline: 'Your mindset is everything',   description: '태도가 결과를 만든다' },
