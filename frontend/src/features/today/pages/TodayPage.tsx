@@ -289,35 +289,39 @@ function JellyGarden({ area, layer }: { area: WorldArea; layer?: WorldLayer }) {
   const jellies = buildCreatures(layer?.thankScore ?? 0, 0, `jl-${area.slug}`);
   const questScore = layer?.questScore ?? 0;
   return (
-    <div
-      className="relative overflow-hidden rounded-3xl"
-      style={{
-        height: 200,
-        background: `linear-gradient(160deg, ${tint(area.color, 0.55)}, ${tint(area.color, 0.15)})`,
-      }}
-    >
-      {spirits.map((c) => (
-        <SpiritCreature key={c.id} c={c} color={area.color} />
-      ))}
-      {jellies.map((c) => (
-        <JellyCreature key={c.id} c={c} color={area.jelly} />
-      ))}
-      <div className="absolute left-0 right-0 bottom-0 p-4">
+    <div>
+      {/* 월드 정보 — 색 카드 위(캐럿 바로 아래), 플레인 배경 */}
+      <div className="mb-3 px-1">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="tab-mono text-white/90">QUEST {questScore}/100</span>
-          <span className="tab-mono text-white/80">
+          <span className="tab-mono text-gray-500">QUEST {questScore}/100</span>
+          <span className="tab-mono text-gray-400">
             ✦{layer?.cheerScore ?? 0} · ●{layer?.thankScore ?? 0}
           </span>
         </div>
-        <div className="h-1.5 rounded-full bg-white/30 overflow-hidden">
+        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
           <motion.div
             className="h-full rounded-full"
-            style={{ background: shade(area.color, 0.1) }}
+            style={{ background: area.color }}
             initial={{ width: 0 }}
             animate={{ width: `${questScore}%` }}
             transition={{ duration: 1, ease: 'easeOut' }}
           />
         </div>
+      </div>
+      {/* 색 카드 — 정보 텍스트 없이 색/생명체만 */}
+      <div
+        className="relative overflow-hidden rounded-3xl"
+        style={{
+          height: 200,
+          background: `linear-gradient(160deg, ${tint(area.color, 0.55)}, ${tint(area.color, 0.15)})`,
+        }}
+      >
+        {spirits.map((c) => (
+          <SpiritCreature key={c.id} c={c} color={area.color} />
+        ))}
+        {jellies.map((c) => (
+          <JellyCreature key={c.id} c={c} color={area.jelly} />
+        ))}
       </div>
     </div>
   );
@@ -552,8 +556,8 @@ export const TodayPage = () => {
           </AnimatePresence>
         </div>
 
-        {/* 월드(젤리 정원) 펼침 토글 — 위/아래 뾰족 캐럿만, 우측 정렬, 영역색 */}
-        <div className="w-full max-w-md flex justify-end pr-2 mt-2">
+        {/* 월드(젤리 정원) 펼침 토글 — 위/아래 뾰족 캐럿만, 가운데 정렬, 영역색 */}
+        <div className="w-full max-w-md flex justify-center mt-2">
           <button
             onClick={() => setGardenOpen((v) => !v)}
             aria-label="나의 월드 보기"

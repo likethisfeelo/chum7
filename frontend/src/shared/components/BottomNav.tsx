@@ -77,7 +77,7 @@ export const BottomNav = () => {
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85), 0 8px 26px rgba(0,0,0,0.10)',
       }}
     >
-      <div className="relative flex items-end justify-around px-2 pt-2 pb-2">
+      <div className="relative flex items-end justify-around px-2 pt-1 pb-1">
         {NAV_ITEMS.map((item) => {
           const isActive =
             location.pathname === item.path ||
@@ -94,20 +94,28 @@ export const BottomNav = () => {
                 <motion.div
                   whileTap={{ scale: 0.95 }}
                   className="relative w-16 h-16 rounded-full ring-1 ring-white/60 overflow-hidden"
-                  style={{ boxShadow: '0 8px 22px rgba(0,0,0,0.22)' }}
+                  style={{ boxShadow: '0 8px 22px rgba(0,0,0,0.18)' }}
                 >
-                  {/* 원형으로 도는 무지개 */}
+                  {/* 월드 5색을 하나씩 은은하게·천천히 순환 */}
                   <motion.div
                     className="absolute inset-0 rounded-full"
-                    style={{
-                      background:
-                        'conic-gradient(from 0deg, #FF3B30, #FF9500, #FFCC00, #34C759, #00C7BE, #007AFF, #5856D6, #AF52DE, #FF2D55, #FF3B30)',
+                    animate={{
+                      backgroundColor: ['#86B183', '#E3A276', '#D97E7E', '#D6BA76', '#A896D4', '#86B183'],
                     }}
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 4.5, repeat: Infinity, ease: 'linear' }}
+                    transition={{
+                      duration: 11,
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                      times: [0, 0.2, 0.4, 0.6, 0.8, 1],
+                    }}
+                  />
+                  {/* 부드러운 광택(그라데이션 느낌) */}
+                  <div
+                    className="absolute inset-0 rounded-full"
+                    style={{ background: 'radial-gradient(circle at 34% 28%, rgba(255,255,255,0.55), rgba(255,255,255,0) 62%)' }}
                   />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-white font-bold text-base" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.55)' }}>
+                    <span className="text-white font-bold text-base" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
                       ME
                     </span>
                   </div>
@@ -120,7 +128,7 @@ export const BottomNav = () => {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className="relative flex flex-col items-center py-1 px-3 min-w-[52px]"
+              className="relative flex flex-col items-center py-0.5 px-3 min-w-[52px]"
             >
               <motion.span
                 whileTap={{ scale: 0.9 }}
