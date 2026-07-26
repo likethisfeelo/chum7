@@ -2,12 +2,63 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
 const NAV_ITEMS = [
-  { path: '/challenges', icon: '🎯', label: '챌린지' },
-  { path: '/plaza', icon: '🚀', label: '마당' },
-  { path: '/me', icon: null, label: 'ME', isME: true },
-  { path: '/today', icon: '📊', label: '여정' },
-  { path: '/my', icon: '✨', label: '마이' },
-];
+  { path: '/challenges', iconKey: 'challenge', label: '챌린지' },
+  { path: '/plaza', iconKey: 'plaza', label: '마당' },
+  { path: '/me', iconKey: null, label: 'ME', isME: true },
+  { path: '/today', iconKey: 'today', label: '여정' },
+  { path: '/my', iconKey: 'my', label: '마이' },
+] as const;
+
+// 하얀선 라인아트 아이콘 (currentColor 사용)
+function NavIcon({ name }: { name: string }) {
+  const p = {
+    width: 24,
+    height: 24,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.7,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  };
+  switch (name) {
+    case 'challenge': // 타겟
+      return (
+        <svg {...p}>
+          <circle cx="12" cy="12" r="8.2" />
+          <circle cx="12" cy="12" r="4" />
+          <circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case 'plaza': // 새싹
+      return (
+        <svg {...p}>
+          <path d="M12 20V11" />
+          <path d="M12 12C12 8.3 9.2 6.3 5.5 6.3 5.5 9.8 8.3 12 12 12Z" />
+          <path d="M12 11.2C12 7.7 14.6 5.7 18 5.7 18 9.1 15.4 11.2 12 11.2Z" />
+        </svg>
+      );
+    case 'today': // 지평선 위 해
+      return (
+        <svg {...p}>
+          <path d="M3 18h18" />
+          <path d="M6.5 18a5.5 5.5 0 0 1 11 0" />
+          <path d="M12 4.5V6" />
+          <path d="M4.8 8.8l1 1" />
+          <path d="M19.2 8.8l-1 1" />
+        </svg>
+      );
+    case 'my': // 사람
+      return (
+        <svg {...p}>
+          <circle cx="12" cy="8" r="3.2" />
+          <path d="M5.8 20a6.2 6.2 0 0 1 12.4 0" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
 
 export const BottomNav = () => {
   const location = useLocation();
@@ -15,25 +66,20 @@ export const BottomNav = () => {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 safe-area-bottom z-30 lg:hidden rounded-t-[26px]"
+      className="fixed bottom-[6px] left-2 right-2 z-30 lg:hidden rounded-[28px]"
       style={{
-        // 리퀴드 글래스 — 배경이 비치는 프로스트 + 유리 엣지 하이라이트
-        background: 'rgba(255, 255, 255, 0.55)',
-        backdropFilter: 'blur(32px) saturate(185%)',
-        WebkitBackdropFilter: 'blur(32px) saturate(185%)',
-        borderTop: '1px solid rgba(255, 255, 255, 0.75)',
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -1px 3px rgba(255,255,255,0.35), 0 -8px 30px rgba(0,0,0,0.08)',
+        // 리퀴드 스모크 글래스 — 하얀선 아이콘이 보이도록 살짝 어둡게, 배경 비침
+        background: 'rgba(44, 40, 48, 0.42)',
+        backdropFilter: 'blur(30px) saturate(170%)',
+        WebkitBackdropFilter: 'blur(30px) saturate(170%)',
+        border: '1px solid rgba(255,255,255,0.25)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 10px 30px rgba(0,0,0,0.22)',
       }}
     >
-      {/* 상단 글로시 시트 (유리 반사) */}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-9 rounded-t-[26px]"
-        style={{ background: 'linear-gradient(to bottom, rgba(255,255,255,0.5), rgba(255,255,255,0))' }}
-      />
-      <div className="relative flex items-end justify-around px-2 pt-1.5 pb-1">
+      <div className="relative flex items-end justify-around px-2 pt-2 pb-2">
         {NAV_ITEMS.map((item) => {
-          const isActive = location.pathname === item.path ||
+          const isActive =
+            location.pathname === item.path ||
             (item.path === '/challenges' && location.pathname === '/');
 
           if (item.isME) {
@@ -41,26 +87,23 @@ export const BottomNav = () => {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className="flex flex-col items-center relative -top-2"
+                className="flex flex-col items-center relative -top-4"
+                aria-label="ME"
               >
                 <motion.div
                   whileTap={{ scale: 0.95 }}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center ring-1 ring-white/70 ${
+                  className={`w-16 h-16 rounded-full flex items-center justify-center ring-1 ring-white/50 ${
                     isActive
                       ? 'bg-gradient-to-br from-primary-500 to-primary-700'
                       : 'bg-gradient-to-br from-primary-400 to-primary-600'
                   }`}
                   style={{
-                    // 유리 베벨 — 상단 하이라이트 + 하단 음영 + 컬러 글로우
                     boxShadow:
-                      'inset 0 2px 4px rgba(255,255,255,0.5), inset 0 -3px 6px rgba(0,0,0,0.18), 0 8px 18px rgba(217,83,106,0.35)',
+                      'inset 0 2px 5px rgba(255,255,255,0.5), inset 0 -3px 7px rgba(0,0,0,0.2), 0 8px 20px rgba(217,83,106,0.4)',
                   }}
                 >
-                  <span className="text-white font-bold text-sm drop-shadow-sm">ME</span>
+                  <span className="text-white font-bold text-base drop-shadow-sm">ME</span>
                 </motion.div>
-                <span className={`text-[11px] mt-0.5 font-medium ${isActive ? 'text-primary-600' : 'text-gray-500'}`}>
-                  {item.label}
-                </span>
               </button>
             );
           }
@@ -69,21 +112,22 @@ export const BottomNav = () => {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className="flex flex-col items-center py-1 px-3 min-w-[52px]"
+              className="relative flex flex-col items-center py-1 px-3 min-w-[52px]"
             >
               <motion.span
                 whileTap={{ scale: 0.9 }}
-                className={`text-xl mb-0.5 ${isActive ? 'scale-110' : ''}`}
+                className={`mb-0.5 transition-opacity ${isActive ? 'text-white' : 'text-white/60'}`}
               >
-                {item.icon}
+                <NavIcon name={item.iconKey as string} />
               </motion.span>
-              <span className={`text-[11px] font-medium ${isActive ? 'text-primary-600' : 'text-gray-500'}`}>
+              <span className={`text-[11px] font-medium ${isActive ? 'text-white' : 'text-white/55'}`}>
                 {item.label}
               </span>
               {isActive && (
                 <motion.div
                   layoutId="activeIndicator"
-                  className="absolute bottom-0 w-1.5 h-1.5 bg-primary-500 rounded-full"
+                  className="absolute left-1/2 -translate-x-1/2 -bottom-0.5 w-1.5 h-1.5 rounded-full"
+                  style={{ background: '#F58AA0' }}
                 />
               )}
             </button>
