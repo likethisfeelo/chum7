@@ -626,10 +626,10 @@ export const ChallengesPage = () => {
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.1}
             onDragEnd={handleDragEnd}
-            /* 진행중 탭에서는 모바일에서 카테고리 배너 숨김 (데스크탑은 유지) */
-            className={`select-none mt-4 mb-4 lg:col-span-3 ${lifecycleTab === 'active' ? 'hidden lg:block' : ''}`}
+            /* 모바일: 상단 여백/좌우 여백 0 + 직각(풀블리드), 데스크탑은 기존 유지 */
+            className={`select-none -mx-4 mb-4 lg:mx-0 lg:mt-4 lg:col-span-3 ${lifecycleTab === 'active' ? 'hidden lg:block' : ''}`}
           >
-            <div className="rounded-2xl overflow-hidden shadow-sm relative">
+            <div className="rounded-none lg:rounded-2xl overflow-hidden shadow-sm relative">
               {activeBanner?.imageUrl ? (
                 <>
                   <div className="aspect-square md:aspect-[3/1] lg:aspect-[21/9]">
