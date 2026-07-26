@@ -570,7 +570,7 @@ export const MEPage = () => {
         {/* 사용자명(=Page Title) + 인사말(부제) + 우측 알림/프로필 */}
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-3xl font-bold tracking-tight text-gray-800 leading-none truncate">
+            <h1 className="font-me-title text-[23px] font-bold tracking-tight text-gray-800 leading-none truncate">
               {user?.name || '챌린저'}님
             </h1>
             <p className="text-sm text-gray-500 mt-2">오늘도 하나씩 이어가볼까요?</p>
