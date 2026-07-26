@@ -55,6 +55,7 @@ export function useChallengeChat(challengeId: string | undefined, enabled: boole
       challengeId,
     )}`;
     const ws = new WebSocket(url);
+    ws.binaryType = "arraybuffer";
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -63,9 +64,9 @@ export function useChallengeChat(challengeId: string | undefined, enabled: boole
       ws.send(JSON.stringify({ action: "history" }));
     };
 
-    ws.onmessage = (event) => {
+    const handlePayload = (raw: string) => {
       try {
-        const payload = JSON.parse(event.data);
+        const payload = JSON.parse(raw);
         if (payload?.type === "ready") {
           setMyDisplayName(payload.displayName ?? null);
           setMyIsLeader(Boolean(payload.isLeader));
@@ -75,6 +76,19 @@ export function useChallengeChat(challengeId: string | undefined, enabled: boole
         }
       } catch {
         // 무시 — 알 수 없는 프레임
+      }
+    };
+
+    ws.onmessage = (event) => {
+      const data = event.data;
+      // API Gateway WebSocket 은 postToConnection 페이로드를 바이너리(Blob/ArrayBuffer)
+      // 프레임으로 전달할 수 있어 문자열로 정규화한 뒤 파싱한다.
+      if (typeof data === "string") {
+        handlePayload(data);
+      } else if (data instanceof ArrayBuffer) {
+        handlePayload(new TextDecoder().decode(data));
+      } else if (typeof Blob !== "undefined" && data instanceof Blob) {
+        data.text().then(handlePayload).catch(() => undefined);
       }
     };
 
