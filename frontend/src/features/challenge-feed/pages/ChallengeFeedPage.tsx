@@ -22,17 +22,15 @@ import {
 } from "@/features/challenge/utils/flowPolicy";
 
 // ─── 이모지 반응 상수 ──────────────────────────────────────────────────
+// DB에서는 모두 '좋아요'로 처리되고, 여기서는 피드 내 재미용(슬랙 스타일·익명).
+// 다양성보다 어느 기기에서나 깨지지 않는 기본 이모지 소수만 노출한다.
 const REACTION_EMOJIS = [
+  { emoji: "👍", label: "좋아요" },
+  { emoji: "❤️", label: "하트" },
   { emoji: "🔥", label: "불꽃" },
-  { emoji: "💪", label: "파이팅" },
   { emoji: "👏", label: "박수" },
-  { emoji: "❤️", label: "좋아요" },
   { emoji: "🎉", label: "축하" },
-  { emoji: "⭐", label: "최고예요" },
-  { emoji: "😮", label: "대단해" },
   { emoji: "😂", label: "웃겨요" },
-  { emoji: "🙌", label: "화이팅" },
-  { emoji: "💡", label: "인사이트" },
 ] as const;
 
 type EmojiReaction = { emoji: string; count: number; myReacted: boolean };
@@ -802,7 +800,7 @@ export const ChallengeFeedPage = () => {
                 </div>
               </div>
               <div className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium ${canCheerNow ? "bg-primary-50 text-primary-700" : "bg-gray-50 text-gray-500"}`}>
-                {canCheerNow ? "🎟 오늘 인증 완료! 다른 참여자를 응원할 수 있어요." : "오늘 인증 후 응원 기능이 열립니다."}
+                {canCheerNow ? "오늘 인증 완료! 다른 참여자에게 응원을 보낼 수 있어요." : "오늘 인증 후 응원 기능이 열립니다."}
               </div>
             </section>
           )}
@@ -1094,7 +1092,7 @@ export const ChallengeFeedPage = () => {
           {isTodayAllDone && !hasInvalidMyVideo && (
             <section className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
               <h3 className="font-bold text-emerald-800">✅ 오늘 인증 완료!</h3>
-              <p className="text-sm text-emerald-700 mt-1">이제 다른 참여자를 응원할 수 있어요.</p>
+              <p className="text-sm text-emerald-700 mt-1">이제 다른 참여자에게 응원을 보낼 수 있어요.</p>
             </section>
           )}
 
@@ -1360,7 +1358,7 @@ export const ChallengeFeedPage = () => {
               </div>
               <div className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium ${canCheerNow ? "bg-primary-50 text-primary-700" : "bg-gray-50 text-gray-500"}`}>
                 {canCheerNow
-                  ? "🎟 오늘 인증 완료! 피드에서 다른 참여자를 응원할 수 있어요."
+                  ? "오늘 인증 완료! 피드에서 다른 참여자에게 응원을 보낼 수 있어요."
                   : "오늘 인증 후 응원 기능이 열립니다."}
               </div>
             </section>
