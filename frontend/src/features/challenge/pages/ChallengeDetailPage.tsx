@@ -296,7 +296,14 @@ export const ChallengeDetailPage = () => {
             onClick={() => navigate(`/challenge-board/${challengeId}`)}
             className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
           >
-            게시판
+            가이드
+          </button>
+
+          <button
+            onClick={() => navigate(`/challenge-feed/${challengeId}`)}
+            className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
+          >
+            챌린지 피드
           </button>
         </div>
       )}
