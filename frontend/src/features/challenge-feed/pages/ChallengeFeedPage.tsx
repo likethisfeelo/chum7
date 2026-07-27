@@ -345,6 +345,7 @@ export const ChallengeFeedPage = () => {
     description: "",
   });
   const [showGiveUpConfirm, setShowGiveUpConfirm] = useState(false);
+  const [giveUpStep, setGiveUpStep] = useState(1);
   const [openVideoPickerSignal, setOpenVideoPickerSignal] = useState(0);
   const handleVerificationSuccess = (_data: any) => {
     queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
@@ -608,43 +609,69 @@ export const ChallengeFeedPage = () => {
           {canGiveUp && (
             <button
               type="button"
-              onClick={() => setShowGiveUpConfirm(true)}
-              className="text-xs text-gray-400 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors flex-shrink-0"
+              onClick={() => {
+                setGiveUpStep(1);
+                setShowGiveUpConfirm(true);
+              }}
+              aria-label="중도 포기"
+              title="중도 포기"
+              className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg border border-gray-200 text-base hover:bg-red-50 hover:border-red-200 transition-colors"
             >
-              중도 포기
+              🏳️
             </button>
           )}
         </div>
 
-        {/* 중도 포기 확인 모달 */}
-        {showGiveUpConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
-              <h2 className="text-lg font-bold text-gray-900 mb-2">중도 포기하시겠어요?</h2>
-              <p className="text-sm text-gray-600 mb-1">포기는 취소할 수 없습니다.</p>
-              <p className="text-sm text-gray-600 mb-4">
-                포기 후에는 인증 게시물을 올릴 수 없지만, 챌린지 피드는 계속 볼 수 있어요. 포기는쉽다 뱃지가 지급됩니다.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowGiveUpConfirm(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-medium text-sm"
-                >
-                  취소
-                </button>
-                <button
-                  type="button"
-                  onClick={() => giveUpMutation.mutate()}
-                  disabled={giveUpMutation.isPending}
-                  className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium text-sm disabled:opacity-50"
-                >
-                  {giveUpMutation.isPending ? "처리 중..." : "포기하기"}
-                </button>
+        {/* 중도 포기 확인 모달 — 3단계 확인 (리더/참여자 분기) */}
+        {showGiveUpConfirm && (() => {
+          const steps = isLeader
+            ? [
+                { title: '정말 포기하시겠어요?', body: '리더로서 이 챌린지를 포기하려고 해요. 이 작업은 되돌릴 수 없어요.' },
+                { title: '한 번 더 확인할게요', body: '포기하면 리더로서의 운영·진행 기록이 사라지고 복구할 수 없어요.' },
+                { title: '마지막 확인이에요', body: '이 결정은 취소할 수 없습니다. 정말 포기할까요?' },
+              ]
+            : [
+                { title: '정말 포기하시겠어요?', body: '중도 포기는 되돌릴 수 없어요.' },
+                { title: '한 번 더 확인할게요', body: '포기하면 더 이상 인증을 올릴 수 없어요. 다른 참여자의 피드는 계속 볼 수 있어요.' },
+                { title: '마지막 확인이에요', body: '이 작업은 취소할 수 없습니다. 포기 시 ‘포기는쉽다’ 뱃지가 지급돼요.' },
+              ];
+          const step = steps[giveUpStep - 1];
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6"
+              onClick={() => setShowGiveUpConfirm(false)}
+            >
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
+                <div className="text-center mb-3">
+                  <span className="text-3xl">🏳️</span>
+                  <p className="text-xs text-gray-400 mt-1">{giveUpStep} / 3</p>
+                </div>
+                <h2 className="text-lg font-bold text-gray-900 mb-2 text-center">{step.title}</h2>
+                <p className="text-sm text-gray-600 mb-4 text-center leading-relaxed">{step.body}</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowGiveUpConfirm(false)}
+                    className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-medium text-sm"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (giveUpStep < 3) setGiveUpStep(giveUpStep + 1);
+                      else giveUpMutation.mutate();
+                    }}
+                    disabled={giveUpMutation.isPending}
+                    className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium text-sm disabled:opacity-50"
+                  >
+                    {giveUpMutation.isPending ? '처리 중...' : giveUpStep < 3 ? '계속' : '포기하기'}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {isCreator && mainTab === "ops" ? (
           <div className="p-4 lg:p-6 mx-auto w-full max-w-2xl">
@@ -657,8 +684,8 @@ export const ChallengeFeedPage = () => {
           {/* ── Left Sidebar ── */}
           <div className="space-y-4 lg:sticky lg:top-20">
 
-          {/* 1) 카테고리 + 설명(좌) · 참여자/완료율 미니 카드(우) */}
-          <section className="glass-card rounded-2xl p-5">
+          {/* 1) 카테고리 + 설명(좌) · 참여자/완료율 미니 카드(우) — 배경 없음 */}
+          <section className="px-1 pt-1">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 {challengeData?.category && (

@@ -129,7 +129,7 @@ export function VerificationCard({
         )}
 
         {post.content && (
-          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+          <p className="text-[15px] text-gray-700 whitespace-pre-wrap leading-relaxed">
             {post.content}
           </p>
         )}

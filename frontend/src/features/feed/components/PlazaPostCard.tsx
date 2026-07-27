@@ -60,14 +60,13 @@ export function BookmarkButton({
         isSaved ? unsaveMutation.mutate() : saveMutation.mutate();
       }}
       title={isSaved ? '저장 취소' : '내 피드에 저장'}
-      className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border font-medium transition-all ${
-        isSaved
-          ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'
-          : 'bg-white text-gray-400 border-gray-200 hover:text-amber-500 hover:border-amber-200'
+      aria-label={isSaved ? '저장 취소' : '내 피드에 저장'}
+      className={`p-1 transition-opacity ${
+        isSaved ? 'text-amber-500 opacity-80' : 'text-gray-500 opacity-50 hover:opacity-80'
       }`}
     >
       <svg
-        className="w-3 h-3 flex-shrink-0"
+        className="w-4 h-4 flex-shrink-0"
         fill={isSaved ? 'currentColor' : 'none'}
         stroke="currentColor"
         strokeWidth={2}
@@ -75,7 +74,6 @@ export function BookmarkButton({
       >
         <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
       </svg>
-      {isSaved ? '저장됨' : '저장'}
     </button>
   );
 }
