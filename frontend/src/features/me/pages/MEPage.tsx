@@ -221,22 +221,10 @@ const LIFECYCLE_META: Record<ChallengeLifecycle, { icon: string; label: string }
 // ─── 내가 만든 챌린지 섹션 ────────────────────────────────────────────
 function MyCreatedChallengesSection() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   const { data: myCreated, isLoading } = useQuery({
     queryKey: ['my-created-challenges'],
     queryFn: challengeApi.getMyCreated,
-  });
-
-  const publishMutation = useMutation({
-    mutationFn: (challengeId: string) => challengeApi.publishChallenge(challengeId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-created-challenges'] });
-      toast.success('모집이 시작됐어요!');
-    },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message ?? '공개에 실패했어요');
-    },
   });
 
   if (isLoading || !myCreated || myCreated.length === 0) return null;
@@ -254,9 +242,6 @@ function MyCreatedChallengesSection() {
       </div>
       {myCreated.map((c: CreatedChallenge) => {
         const meta = LIFECYCLE_META[c.lifecycle] ?? { icon: '•', label: c.lifecycle };
-        const canPublish = c.lifecycle === 'draft';
-        const canReviewJoins = ['recruiting', 'preparing'].includes(c.lifecycle) && (c.stats.pendingParticipants ?? 0) > 0;
-        const canViewBoard = ['recruiting', 'preparing', 'active', 'completed'].includes(c.lifecycle);
 
         return (
           <div key={c.challengeId} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
@@ -275,36 +260,31 @@ function MyCreatedChallengesSection() {
               </div>
             </div>
             <div className="flex gap-2 flex-wrap">
-              {canPublish && (
+              <button
+                onClick={() => navigate(`/challenges/${c.challengeId}`)}
+                className="px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 transition-colors"
+              >
+                상세 보기
+              </button>
+              {['draft', 'recruiting'].includes(c.lifecycle) && (
                 <button
-                  onClick={() => publishMutation.mutate(c.challengeId)}
-                  disabled={publishMutation.isPending}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-full bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 transition-colors"
-                >
-                  {publishMutation.isPending ? '공개 중...' : '모집 시작하기'}
-                </button>
-              )}
-              {canReviewJoins && (
-                <button
-                  onClick={() => navigate(`/challenges/${c.challengeId}/join-requests`)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-full border border-amber-400 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors"
-                >
-                  참여자 심사 ({c.stats.pendingParticipants}명)
-                </button>
-              )}
-              {canViewBoard && (
-                <button
-                  onClick={() => navigate(`/challenge-board/${c.challengeId}`)}
+                  onClick={() => navigate(`/challenges/${c.challengeId}/edit`)}
                   className="px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 transition-colors"
                 >
-                  가이드
+                  수정하기
                 </button>
               )}
               <button
-                onClick={() => navigate(`/challenges/${c.challengeId}`)}
-                className="px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 text-gray-500 bg-white hover:bg-gray-50 transition-colors"
+                onClick={() => navigate(`/challenge-feed/${c.challengeId}`)}
+                className="px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 transition-colors"
               >
-                상세 보기
+                챌린지 피드
+              </button>
+              <button
+                onClick={() => navigate(`/challenge-feed/${c.challengeId}?tab=ops`)}
+                className="px-3 py-1.5 text-xs font-semibold rounded-full border border-primary-200 text-primary-700 bg-primary-50 hover:bg-primary-100 transition-colors"
+              >
+                👑 운영
               </button>
             </div>
           </div>

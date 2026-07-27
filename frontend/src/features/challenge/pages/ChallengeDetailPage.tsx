@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion } from 'framer-motion';
-import { FiArrowLeft, FiUsers, FiTrendingUp, FiClock } from 'react-icons/fi';
+import { FiArrowLeft, FiUsers, FiTrendingUp, FiClock, FiHelpCircle } from 'react-icons/fi';
 import { Button } from '@/shared/components/Button';
 import { Loading } from '@/shared/components/Loading';
 import toast from 'react-hot-toast';
@@ -64,6 +64,7 @@ export const ChallengeDetailPage = () => {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [pendingFormState, setPendingFormState] = useState<WizardFormState | null>(null);
   const [paidOrderId, setPaidOrderId] = useState<string | null>(null);
+  const [showTargetTimeInfo, setShowTargetTimeInfo] = useState(false);
   const useNewJoinWizard = String(import.meta.env.VITE_USE_NEW_JOIN_WIZARD ?? 'true') === 'true';
   const user = useAuthStore((s) => s.user);
 
@@ -270,83 +271,89 @@ export const ChallengeDetailPage = () => {
       </div>
 
       {isCreator && (
-        <div className="bg-primary-50 border-b border-primary-100 px-4 py-3 flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-primary-700 font-semibold">✏️ 내가 만든 챌린지</span>
+        <div className="bg-primary-50 border-b border-primary-100 px-4 py-3">
+          {/* 1줄: 라벨 + 상태 변경 버튼(약간 크게) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-primary-700 font-semibold">✏️ 내가 만든 챌린지</span>
 
-          {/* draft → recruiting */}
-          {lifecycle === 'draft' && (
-            <button
-              onClick={() => publishMutation.mutate()}
-              disabled={publishMutation.isPending}
-              className="text-xs bg-primary-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-primary-600 disabled:opacity-50 transition-colors"
-            >
-              {publishMutation.isPending ? '공개 중...' : '모집 시작하기'}
-            </button>
-          )}
+            {/* draft → recruiting */}
+            {lifecycle === 'draft' && (
+              <button
+                onClick={() => publishMutation.mutate()}
+                disabled={publishMutation.isPending}
+                className="text-sm bg-primary-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-primary-600 disabled:opacity-50 transition-colors"
+              >
+                {publishMutation.isPending ? '공개 중...' : '모집 시작하기'}
+              </button>
+            )}
 
-          {/* recruiting → preparing (수동 모집 마감) */}
-          {lifecycle === 'recruiting' && (
-            <button
-              onClick={() => {
-                if (window.confirm('모집을 지금 마감할까요? 이후 신규 참여 신청이 불가하며, 예약된 마감 시각이 남아 있어도 무시됩니다.')) {
-                  advanceLifecycleMutation.mutate('close_recruiting');
-                }
-              }}
-              disabled={advanceLifecycleMutation.isPending}
-              className="text-xs bg-rose-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-rose-600 disabled:opacity-50 transition-colors"
-            >
-              {advanceLifecycleMutation.isPending ? '처리 중...' : '모집 마감하기'}
-            </button>
-          )}
+            {/* recruiting → preparing (수동 모집 마감) */}
+            {lifecycle === 'recruiting' && (
+              <button
+                onClick={() => {
+                  if (window.confirm('모집을 지금 마감할까요? 이후 신규 참여 신청이 불가하며, 예약된 마감 시각이 남아 있어도 무시됩니다.')) {
+                    advanceLifecycleMutation.mutate('close_recruiting');
+                  }
+                }}
+                disabled={advanceLifecycleMutation.isPending}
+                className="text-sm bg-rose-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-rose-600 disabled:opacity-50 transition-colors"
+              >
+                {advanceLifecycleMutation.isPending ? '처리 중...' : '모집 마감하기'}
+              </button>
+            )}
 
-          {/* preparing → active (챌린지 시작 확인) */}
-          {lifecycle === 'preparing' && (
-            <button
-              onClick={() => {
-                if (window.confirm('챌린지를 지금 시작할까요? 오늘이 Day 1이 되고 예약된 시작 시각은 무시됩니다. 승인된 참여자는 즉시 활성화되고, 승인 대기 중인 신청은 자동 거절됩니다.')) {
-                  advanceLifecycleMutation.mutate('confirm_start');
-                }
-              }}
-              disabled={advanceLifecycleMutation.isPending}
-              className="text-xs bg-emerald-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-emerald-600 disabled:opacity-50 transition-colors"
-            >
-              {advanceLifecycleMutation.isPending ? '처리 중...' : '챌린지 시작하기'}
-            </button>
-          )}
+            {/* preparing → active (챌린지 시작 확인) */}
+            {lifecycle === 'preparing' && (
+              <button
+                onClick={() => {
+                  if (window.confirm('챌린지를 지금 시작할까요? 오늘이 Day 1이 되고 예약된 시작 시각은 무시됩니다. 승인된 참여자는 즉시 활성화되고, 승인 대기 중인 신청은 자동 거절됩니다.')) {
+                    advanceLifecycleMutation.mutate('confirm_start');
+                  }
+                }}
+                disabled={advanceLifecycleMutation.isPending}
+                className="text-sm bg-emerald-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+              >
+                {advanceLifecycleMutation.isPending ? '처리 중...' : '챌린지 시작하기'}
+              </button>
+            )}
+          </div>
 
-          {/* 참여자 심사 */}
-          {['recruiting', 'preparing'].includes(lifecycle) && (stats?.pendingParticipants ?? 0) > 0 && (
-            <button
-              onClick={() => navigate(`/challenges/${challengeId}/join-requests`)}
-              className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-amber-600 transition-colors"
-            >
-              참여자 심사 ({stats?.pendingParticipants}명)
-            </button>
-          )}
+          {/* 2줄: 나머지 버튼 */}
+          <div className="flex gap-2 flex-wrap mt-2">
+            {/* 참여자 심사 */}
+            {['recruiting', 'preparing'].includes(lifecycle) && (stats?.pendingParticipants ?? 0) > 0 && (
+              <button
+                onClick={() => navigate(`/challenges/${challengeId}/join-requests`)}
+                className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-amber-600 transition-colors"
+              >
+                참여자 심사 ({stats?.pendingParticipants}명)
+              </button>
+            )}
 
-          {/* 수정 버튼 (draft, recruiting 상태만) */}
-          {['draft', 'recruiting'].includes(lifecycle) && (
+            {/* 수정 버튼 (draft, recruiting 상태만 — 진행 중엔 숨김) */}
+            {['draft', 'recruiting'].includes(lifecycle) && (
+              <button
+                onClick={() => navigate(`/challenges/${challengeId}/edit`)}
+                className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
+              >
+                수정하기
+              </button>
+            )}
+
             <button
-              onClick={() => navigate(`/challenges/${challengeId}/edit`)}
+              onClick={() => navigate(`/challenge-board/${challengeId}`)}
               className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
             >
-              수정하기
+              가이드
             </button>
-          )}
 
-          <button
-            onClick={() => navigate(`/challenge-board/${challengeId}`)}
-            className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
-          >
-            가이드
-          </button>
-
-          <button
-            onClick={() => navigate(`/challenge-feed/${challengeId}`)}
-            className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
-          >
-            챌린지 피드
-          </button>
+            <button
+              onClick={() => navigate(`/challenge-feed/${challengeId}`)}
+              className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
+            >
+              챌린지 피드
+            </button>
+          </div>
         </div>
       )}
 
@@ -368,7 +375,22 @@ export const ChallengeDetailPage = () => {
               <p className="text-sm text-gray-600 flex items-center gap-1">
                 <FiClock className="w-4 h-4" />
                 목표 시간: {challenge.targetTime}
+                <button
+                  type="button"
+                  onClick={() => setShowTargetTimeInfo((v) => !v)}
+                  aria-label="목표 시간 안내"
+                  aria-expanded={showTargetTimeInfo}
+                  className="ml-0.5 text-gray-400 hover:text-primary-500 transition-colors"
+                >
+                  <FiHelpCircle className="w-4 h-4" />
+                </button>
               </p>
+              {showTargetTimeInfo && (
+                <p className="mt-2 text-xs text-gray-500 leading-relaxed bg-gray-50 rounded-lg p-3">
+                  목표 시간은 리더가 정한 <strong className="font-semibold text-gray-600">기본 기준 시간</strong>이에요.
+                  참여자는 매일 자신에게 맞는 목표 시간을 직접 정할 수 있고, 반드시 이 시간에 맞출 필요는 없어요.
+                </p>
+              )}
             </div>
           </div>
 
@@ -476,7 +498,23 @@ export const ChallengeDetailPage = () => {
               );
             })}
             {guideBlocks.length === 0 && (
-              <p className="text-sm text-gray-500">가이드가 아직 작성되지 않았어요.</p>
+              isCreator ? (
+                <div className="text-center py-3">
+                  <p className="text-sm text-gray-500 mb-3">
+                    아직 가이드를 작성하지 않았어요.
+                    <br />
+                    참여자에게 챌린지 진행 방법을 안내해보세요.
+                  </p>
+                  <button
+                    onClick={() => navigate(`/challenge-board/${challengeId}`)}
+                    className="text-sm bg-primary-500 text-white px-4 py-2 rounded-full font-medium hover:bg-primary-600 transition-colors"
+                  >
+                    가이드 작성하기 →
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">가이드가 아직 작성되지 않았어요.</p>
+              )
             )}
           </div>
         </motion.section>
