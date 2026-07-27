@@ -258,15 +258,19 @@ export class ApiStack extends cdk.Stack {
     stateful.tables.challenges.grantReadData(chatWs); // 참여자 검증 GetItem 전용
     stateful.anonSaltSecret.grantRead(chatWs); // 일일 활동명 솔트
 
-    const chatIntegration = new WebSocketLambdaIntegration('ChatWsIntegration', chatWs);
+    // 라우트마다 별도 integration 인스턴스 — 하나를 재사용하면 CDK가 Lambda 호출 권한
+    // (AWS::Lambda::Permission)을 첫 라우트($connect)에만 생성해, 나머지 라우트는 API GW가
+    // Lambda를 호출하지 못하고 "Internal server error"를 반환한다. 각 인스턴스가 자기 라우트
+    // 스코프의 권한을 emit하도록 분리한다.
+    const chatInteg = (id: string) => new WebSocketLambdaIntegration(id, chatWs);
     const chatWsApi = new apigwv2.WebSocketApi(this, 'ChatWebSocketApi', {
       apiName: `${config.prefix}-chat-ws`,
       routeSelectionExpression: '$request.body.action',
-      connectRouteOptions: { integration: chatIntegration },
-      disconnectRouteOptions: { integration: chatIntegration },
-      defaultRouteOptions: { integration: chatIntegration }, // {action:'history'} 등
+      connectRouteOptions: { integration: chatInteg('ChatWsConnect') },
+      disconnectRouteOptions: { integration: chatInteg('ChatWsDisconnect') },
+      defaultRouteOptions: { integration: chatInteg('ChatWsDefault') }, // {action:'history'} 등
     });
-    chatWsApi.addRoute('sendMessage', { integration: chatIntegration });
+    chatWsApi.addRoute('sendMessage', { integration: chatInteg('ChatWsSend') });
     const chatWsStage = new apigwv2.WebSocketStage(this, 'ChatWebSocketStage', {
       webSocketApi: chatWsApi,
       stageName: config.stage,
