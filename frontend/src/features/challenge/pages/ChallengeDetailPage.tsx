@@ -476,7 +476,23 @@ export const ChallengeDetailPage = () => {
               );
             })}
             {guideBlocks.length === 0 && (
-              <p className="text-sm text-gray-500">가이드가 아직 작성되지 않았어요.</p>
+              isCreator ? (
+                <div className="text-center py-3">
+                  <p className="text-sm text-gray-500 mb-3">
+                    아직 가이드를 작성하지 않았어요.
+                    <br />
+                    참여자에게 챌린지 진행 방법을 안내해보세요.
+                  </p>
+                  <button
+                    onClick={() => navigate(`/challenge-board/${challengeId}`)}
+                    className="text-sm bg-primary-500 text-white px-4 py-2 rounded-full font-medium hover:bg-primary-600 transition-colors"
+                  >
+                    가이드 작성하기 →
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">가이드가 아직 작성되지 않았어요.</p>
+              )
             )}
           </div>
         </motion.section>
