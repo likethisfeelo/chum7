@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FiArrowLeft } from "react-icons/fi";
 import { useAuthStore } from "@/stores/authStore";
@@ -330,7 +330,10 @@ export const ChallengeFeedPage = () => {
   });
 
   // 탭 상태
-  const [mainTab, setMainTab] = useState<"feed" | "ops">("feed");
+  const [searchParams] = useSearchParams();
+  const [mainTab, setMainTab] = useState<"feed" | "ops">(
+    searchParams.get("tab") === "ops" ? "ops" : "feed",
+  );
   const [activeQuestTab, setActiveQuestTab] = useState<"leader" | "personal">("leader");
   const [feedTab, setFeedTab] = useState<"leader" | "personal">("leader");
   const [expandedLeaderQuestId, setExpandedLeaderQuestId] = useState<string | null>(null);
