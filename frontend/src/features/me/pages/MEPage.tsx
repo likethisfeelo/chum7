@@ -297,7 +297,7 @@ function MyCreatedChallengesSection() {
                   onClick={() => navigate(`/challenge-board/${c.challengeId}`)}
                   className="px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 transition-colors"
                 >
-                  게시판
+                  가이드
                 </button>
               )}
               <button

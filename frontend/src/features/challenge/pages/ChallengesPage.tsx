@@ -151,7 +151,7 @@ const EnhancedPreviewPanel = ({
       {/* Challenge board preview */}
       <div className="border-t border-gray-100 pt-3">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-          챌린지 보드
+          챌린지 가이드
         </p>
 
         {isBoardLoading ? (
@@ -180,7 +180,7 @@ const EnhancedPreviewPanel = ({
         ) : richTextFallback ? (
           <p className="text-sm text-gray-700 leading-snug line-clamp-4">{richTextFallback}</p>
         ) : !isBoardLoading ? (
-          <p className="text-sm text-gray-400 italic">아직 보드 안내가 없어요.</p>
+          <p className="text-sm text-gray-400 italic">아직 가이드가 없어요.</p>
         ) : null}
       </div>
 

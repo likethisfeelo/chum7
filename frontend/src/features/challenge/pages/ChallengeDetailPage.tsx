@@ -208,7 +208,7 @@ export const ChallengeDetailPage = () => {
 
   const lifecycleHintMap: Record<string, string> = {
     recruiting: alreadyJoined ? '이미 참여신청을 완료한 챌린지입니다.' : '지금 참여 신청할 수 있습니다.',
-    preparing: '모집이 종료되어 새로운 참여 신청은 불가능합니다. 준비중 공지/게시판만 확인할 수 있어요.',
+    preparing: '모집이 종료되어 새로운 참여 신청은 불가능합니다. 준비중 가이드만 확인할 수 있어요.',
     active: '챌린지가 진행 중이라 신규 참여가 불가능합니다.',
     completed: '종료된 챌린지입니다.',
     archived: '보관된 챌린지입니다.',
@@ -368,7 +368,7 @@ export const ChallengeDetailPage = () => {
           className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900">프리뷰 보드</h3>
+            <h3 className="text-lg font-bold text-gray-900">가이드 미리보기</h3>
             <span className="text-xs px-2 py-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600">
               {previewBoard?.blocks?.length || 0} blocks
             </span>
@@ -393,7 +393,7 @@ export const ChallengeDetailPage = () => {
               );
             })}
             {(!previewBoard?.blocks || previewBoard.blocks.length === 0) && (
-              <p className="text-sm text-gray-500">프리뷰 보드가 아직 작성되지 않았어요.</p>
+              <p className="text-sm text-gray-500">가이드가 아직 작성되지 않았어요.</p>
             )}
           </div>
         </motion.section>

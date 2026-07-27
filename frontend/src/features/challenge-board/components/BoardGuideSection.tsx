@@ -9,7 +9,7 @@ import {
 } from './BoardBlocksViewer';
 
 /**
- * 챌린지 보드 안내 아코디언 (PC·모바일 동일).
+ * 챌린지 가이드 아코디언 (PC·모바일 동일).
  * — 헤더 클릭 시 별도 페이지 이동 대신 아래로 인라인 확장(아코디언)해 보드 블록 전체를 보여준다.
  * — 📌 고정 토글: localStorage(boardGuide:pinned:<challengeId>)에 저장, 재방문 시 펼침 복원.
  * — 콘텐츠 소스: /s/board (본 보드) → 비어 있으면 /public/board/:id/preview (프리뷰 보드) 폴백.
@@ -81,7 +81,7 @@ export const BoardGuideSection = ({ challengeId }: { challengeId: string }) => {
   const previewText = isLoading
     ? '안내를 불러오는 중...'
     : extractBoardPreviewText(blocks) ??
-      (hasContent ? '이미지·영상 안내가 등록되어 있어요.' : '아직 챌린지 보드 안내가 등록되지 않았습니다.');
+      (hasContent ? '이미지·영상 안내가 등록되어 있어요.' : '아직 챌린지 가이드가 등록되지 않았습니다.');
 
   const togglePinned = () => {
     setPinned((prev) => {
@@ -119,7 +119,7 @@ export const BoardGuideSection = ({ challengeId }: { challengeId: string }) => {
         className="w-full text-left p-5 cursor-pointer hover:bg-white/40 transition-colors"
       >
         <div className="flex items-center justify-between gap-2 mb-2">
-          <h3 className="font-bold text-gray-900">챌린지 보드 안내</h3>
+          <h3 className="font-bold text-gray-900">챌린지 가이드</h3>
           <div className="flex items-center gap-1.5">
             {expanded && (
               <button
@@ -172,7 +172,7 @@ export const BoardGuideSection = ({ challengeId }: { challengeId: string }) => {
                 <BoardBlocksViewer blocks={blocks} />
               ) : (
                 <p className="text-sm text-gray-400 py-4 text-center">
-                  아직 챌린지 보드 안내가 등록되지 않았습니다.
+                  아직 챌린지 가이드가 등록되지 않았습니다.
                 </p>
               )}
               <div className="mt-3 pt-3 border-t border-white/50 flex justify-end">
@@ -181,7 +181,7 @@ export const BoardGuideSection = ({ challengeId }: { challengeId: string }) => {
                   onClick={() => navigate(`/challenge-board/${challengeId}`)}
                   className="text-xs font-semibold text-primary-600 hover:text-primary-800 transition-colors"
                 >
-                  보드 페이지에서 전체 보기 →
+                  가이드 전체 보기 →
                 </button>
               </div>
             </div>

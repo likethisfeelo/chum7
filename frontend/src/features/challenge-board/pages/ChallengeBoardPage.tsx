@@ -197,7 +197,7 @@ export const ChallengeBoardPage = () => {
     queryFn: async () => { const r = await apiClient.get(`/s/board/${challengeId}/comments?limit=100`); return r.data; },
   });
 
-  // ── 편집 모드 시작: 현재 보드 내용 로드
+  // ── 편집 모드 시작: 현재 가이드 내용 로드
   useEffect(() => {
     if (!editor) return;
     if (isEditing) {
@@ -253,7 +253,7 @@ export const ChallengeBoardPage = () => {
     setShowVideoInput(false);
   };
 
-  // ── 보드 저장
+  // ── 가이드 저장
   const saveMutation = useMutation({
     mutationFn: async () => {
       const json = editor?.getJSON();
@@ -266,7 +266,7 @@ export const ChallengeBoardPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['challenge-board-page', challengeId] });
       setIsEditing(false);
-      toast.success('보드가 저장되었습니다');
+      toast.success('가이드가 저장되었습니다');
     },
     onError: (err: any) => toast.error(err?.response?.data?.message || '저장에 실패했습니다'),
   });
@@ -359,7 +359,7 @@ export const ChallengeBoardPage = () => {
         <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <FiArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-bold text-gray-900 flex-1">챌린지 보드</h1>
+        <h1 className="text-lg font-bold text-gray-900 flex-1">챌린지 가이드</h1>
         {isLeader && !isEditing && (
           <button onClick={() => setIsEditing(true)} className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-700 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors">
             <FiEdit2 className="w-4 h-4" />편집
@@ -381,16 +381,16 @@ export const ChallengeBoardPage = () => {
 
       {isLeader && (
         <div className="md:hidden px-4 py-2 bg-amber-50 border-b border-amber-100">
-          <p className="text-xs text-amber-700">✏️ 보드 편집은 태블릿 이상 화면에서 가능합니다</p>
+          <p className="text-xs text-amber-700">✏️ 가이드 편집은 태블릿 이상 화면에서 가능합니다</p>
         </div>
       )}
 
       <div className="p-4 lg:p-6 lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
 
-        {/* ── 보드 섹션 ── */}
+        {/* ── 가이드 섹션 ── */}
         <section className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 lg:mb-0">
           <div className="p-5">
-            <h2 className="font-bold text-gray-900 mb-4">보드</h2>
+            <h2 className="font-bold text-gray-900 mb-4">가이드</h2>
 
             {isEditing ? (
               <div className="tiptap-editor">
@@ -460,7 +460,7 @@ export const ChallengeBoardPage = () => {
                 {legacyBlocks.length > 0 && <LegacyBlockViewer blocks={legacyBlocks} />}
                 {isEmpty && (
                   <p className="text-sm text-gray-400 text-center py-8">
-                    {isLeader ? '편집 버튼을 눌러 보드를 작성해보세요.' : '아직 보드가 작성되지 않았습니다.'}
+                    {isLeader ? '편집 버튼을 눌러 가이드를 작성해보세요.' : '아직 가이드가 작성되지 않았습니다.'}
                   </p>
                 )}
               </>

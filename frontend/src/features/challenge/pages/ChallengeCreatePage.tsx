@@ -457,7 +457,7 @@ function Step4({ form, onChange }: { form: FormState; onChange: (patch: Partial<
         <ul className="space-y-1 text-xs text-gray-500">
           <li>• 챌린지는 <strong>비공개(준비 중)</strong> 상태로 저장돼요</li>
           <li>• "모집 시작하기" 버튼으로 공개할 수 있어요</li>
-          <li>• 참여자 심사, 게시판 관리를 할 수 있어요</li>
+          <li>• 참여자 심사, 가이드 관리를 할 수 있어요</li>
           <li>• 챌린지 완료 후 리더 뱃지를 받을 수 있어요 🎖️</li>
         </ul>
       </div>
