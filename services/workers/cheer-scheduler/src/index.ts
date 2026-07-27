@@ -109,6 +109,29 @@ async function grantThankScoreToSender(cheer: Record<string, any>, nowDate: Date
   }
 }
 
+/** 챌린지 정체성 키워드 조회 — 인보케이션 내 캐시(같은 챌린지 반복 읽기 방지). 실패 시 빈 문자열. */
+const identityKeywordCache = new Map<string, string>();
+async function getIdentityKeyword(challengeId: string): Promise<string> {
+  if (!challengeId) return '';
+  const cached = identityKeywordCache.get(challengeId);
+  if (cached !== undefined) return cached;
+  let keyword = '';
+  try {
+    const res = await docClient.send(
+      new GetCommand({
+        TableName: tableName(CHALLENGES_TABLE),
+        Key: { pk: `CHAL#${challengeId}`, sk: 'META' },
+        ProjectionExpression: 'identityKeyword',
+      }),
+    );
+    if (typeof res.Item?.identityKeyword === 'string') keyword = res.Item.identityKeyword;
+  } catch {
+    // 조회 실패 시 키워드 없이 진행 (알림 폴백 문구)
+  }
+  identityKeywordCache.set(challengeId, keyword);
+  return keyword;
+}
+
 /** 미완료 수신자 → 발송 처리 (pending 조건부) 후 cheer.delivered 이벤트 발행 */
 async function markSentAndPublish(cheer: Record<string, any>, nowDate: Date): Promise<void> {
   await docClient.send(
@@ -128,6 +151,7 @@ async function markSentAndPublish(cheer: Record<string, any>, nowDate: Date): Pr
     }),
   );
 
+  const identityKeyword = await getIdentityKeyword(String(cheer.challengeId ?? ''));
   // 레거시 SNS push → 이벤트 발행 (notification-worker가 수신 알림 기록)
   await publishEvent('cheer.delivered', {
     cheerId: String(cheer.cheerId),
@@ -135,6 +159,7 @@ async function markSentAndPublish(cheer: Record<string, any>, nowDate: Date): Pr
     receiverId: String(cheer.receiverId),
     challengeId: String(cheer.challengeId ?? ''),
     ...(cheer.day != null ? { day: Number(cheer.day) } : {}),
+    ...(identityKeyword ? { identityKeyword } : {}),
   });
 }
 

@@ -396,8 +396,9 @@ function CheerDrawer({
               </div>
               {showCheerInfo && (
                 <p className="mt-2 text-xs text-gray-500 leading-relaxed bg-gray-50 rounded-lg p-3">
-                  응원은 같은 챌린지를 함께하는 참여자끼리 서로 힘을 북돋는 기능이에요.
-                  다른 참여자의 인증에 응원을 보내면 상대의 점수가 오르고, 나도 오늘 인증을 마치면 응원을 보낼 수 있어요.
+                  목표 시간보다 <b className="text-gray-600">먼저 완료</b>하면, 아직 완료하지 않은 참여자에게
+                  응원이 자동으로 전해져요. 내 응원을 받은 참여자가 완료하면 나는 <b className="text-gray-600">점수</b>를 얻고,
+                  내 월드가 더 아름답게 자라나요 🌱
                 </p>
               )}
             </div>

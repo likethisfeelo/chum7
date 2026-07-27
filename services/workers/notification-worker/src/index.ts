@@ -31,14 +31,19 @@ function routeNotification(
   detail: Record<string, unknown>,
 ): RoutedNotification | null {
   switch (type) {
-    case 'cheer.delivered':
+    case 'cheer.delivered': {
+      const identityKeyword =
+        typeof detail.identityKeyword === 'string' ? detail.identityKeyword.trim() : '';
       return {
         recipientId: String(detail.receiverId),
         category: 'cheer',
         type: 'cheer_received',
-        title: '응원이 도착했어요',
-        message: '응원이 도착했어요! 오늘의 실천을 시작해보세요 🎉',
+        title: '응원이 도착했어요 🎉',
+        message: identityKeyword
+          ? `목표 시간보다 먼저 완료한 동료가 응원을 보냈어요. 당신은 ${identityKeyword} 사람이에요 — 오늘도 완료해봐요!`
+          : '응원이 도착했어요! 오늘의 실천을 시작해보세요 🎉',
       };
+    }
     case 'comment.created':
       return {
         recipientId: String(detail.targetOwnerId),
