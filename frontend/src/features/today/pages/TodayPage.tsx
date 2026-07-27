@@ -322,6 +322,17 @@ function JellyGarden({ area, layer }: { area: WorldArea; layer?: WorldLayer }) {
         {jellies.map((c) => (
           <JellyCreature key={c.id} c={c} color={area.jelly} />
         ))}
+        {spirits.length === 0 && jellies.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+            <span className="mb-1.5 text-2xl">🌱</span>
+            <p className="font-me-title text-base text-gray-600">아직 조용한 정원이에요</p>
+            <p className="font-me-title mt-1 text-xs leading-relaxed text-gray-500">
+              인증하고 응원을 주고받으면
+              <br />
+              이곳에 작은 생명들이 하나씩 나타나요
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -343,6 +354,7 @@ function CheerDrawer({
 }) {
   const navigate = useNavigate();
   const [tab, setTab] = useState<'received' | 'sent'>('received');
+  const [showCheerInfo, setShowCheerInfo] = useState(false);
   const list = tab === 'received' ? received : sent;
 
   return (
@@ -370,7 +382,24 @@ function CheerDrawer({
             </div>
             {/* 헤더 */}
             <div className="px-5 pt-1 pb-3">
-              <h3 className="text-base font-bold text-gray-900">오늘의 응원</h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-base font-bold text-gray-900">오늘의 응원</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowCheerInfo((v) => !v)}
+                  aria-label="응원 안내"
+                  aria-expanded={showCheerInfo}
+                  className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 text-[10px] font-bold text-gray-400 hover:border-primary-400 hover:text-primary-500 transition-colors"
+                >
+                  ?
+                </button>
+              </div>
+              {showCheerInfo && (
+                <p className="mt-2 text-xs text-gray-500 leading-relaxed bg-gray-50 rounded-lg p-3">
+                  응원은 같은 챌린지를 함께하는 참여자끼리 서로 힘을 북돋는 기능이에요.
+                  다른 참여자의 인증에 응원을 보내면 상대의 점수가 오르고, 나도 오늘 인증을 마치면 응원을 보낼 수 있어요.
+                </p>
+              )}
             </div>
             {/* 탭 */}
             <div className="relative flex px-5 gap-5 border-b border-gray-100">
