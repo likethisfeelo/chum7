@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/authStore';
 import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
+import { ProfileOrb } from '@/shared/components/ProfileOrb';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
 import { ProgressDayCircles } from '@/features/challenge/components/ProgressDayCircles';
 import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
@@ -572,9 +573,9 @@ export const MEPage = () => {
             <button
               onClick={() => navigate('/personal-feed/me')}
               aria-label="프로필 피드 보기"
-              className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-xl hover:border-primary-300 transition-colors"
+              className="w-10 h-10 rounded-full overflow-hidden hover:opacity-90 transition-opacity"
             >
-              {user?.animalIcon || '🐰'}
+              <ProfileOrb size={40} />
             </button>
           </div>
         </div>
