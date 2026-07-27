@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion } from 'framer-motion';
-import { FiArrowLeft, FiUsers, FiTrendingUp, FiClock } from 'react-icons/fi';
+import { FiArrowLeft, FiUsers, FiTrendingUp, FiClock, FiHelpCircle } from 'react-icons/fi';
 import { Button } from '@/shared/components/Button';
 import { Loading } from '@/shared/components/Loading';
 import toast from 'react-hot-toast';
@@ -64,6 +64,7 @@ export const ChallengeDetailPage = () => {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [pendingFormState, setPendingFormState] = useState<WizardFormState | null>(null);
   const [paidOrderId, setPaidOrderId] = useState<string | null>(null);
+  const [showTargetTimeInfo, setShowTargetTimeInfo] = useState(false);
   const useNewJoinWizard = String(import.meta.env.VITE_USE_NEW_JOIN_WIZARD ?? 'true') === 'true';
   const user = useAuthStore((s) => s.user);
 
@@ -374,7 +375,22 @@ export const ChallengeDetailPage = () => {
               <p className="text-sm text-gray-600 flex items-center gap-1">
                 <FiClock className="w-4 h-4" />
                 목표 시간: {challenge.targetTime}
+                <button
+                  type="button"
+                  onClick={() => setShowTargetTimeInfo((v) => !v)}
+                  aria-label="목표 시간 안내"
+                  aria-expanded={showTargetTimeInfo}
+                  className="ml-0.5 text-gray-400 hover:text-primary-500 transition-colors"
+                >
+                  <FiHelpCircle className="w-4 h-4" />
+                </button>
               </p>
+              {showTargetTimeInfo && (
+                <p className="mt-2 text-xs text-gray-500 leading-relaxed bg-gray-50 rounded-lg p-3">
+                  목표 시간은 리더가 정한 <strong className="font-semibold text-gray-600">기본 기준 시간</strong>이에요.
+                  참여자는 매일 자신에게 맞는 목표 시간을 직접 정할 수 있고, 반드시 이 시간에 맞출 필요는 없어요.
+                </p>
+              )}
             </div>
           </div>
 
