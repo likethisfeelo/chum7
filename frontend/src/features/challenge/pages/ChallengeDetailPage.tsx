@@ -12,6 +12,7 @@ import { WizardFormState } from '@/features/challenge/components/join-wizard/typ
 import { useAuthStore } from '@/stores/authStore';
 import { challengeApi } from '@/features/challenge/api/challengeApi';
 import { SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
+import { getChallengeTypeLabel } from '@/features/challenge/utils/flowPolicy';
 import { PaymentSheet } from '@/features/commerce/components/PaymentSheet';
 import { isPaidChallenge } from '@/features/commerce/api/commerceApi';
 
@@ -37,6 +38,23 @@ const parseTargetTimeToFormState = (targetTime?: string): WizardFormState => {
     meridiem: hour >= 12 ? 'PM' : 'AM',
   };
 };
+
+// 인증(참여) 방식 라벨
+const VERIFICATION_LABEL: Record<string, string> = {
+  image: '📸 사진',
+  text: '📝 텍스트',
+  link: '🔗 링크',
+  video: '🎬 영상',
+};
+
+// ISO → KST 'M/D' (없으면 null)
+function formatKstShort(iso?: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const [, m, day] = d.toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }).split('-');
+  return `${Number(m)}/${Number(day)}`;
+}
 
 export const ChallengeDetailPage = () => {
   const { challengeId } = useParams();
@@ -183,6 +201,30 @@ export const ChallengeDetailPage = () => {
   const lifecycle = String(challenge.effectiveLifecycle || challenge.lifecycle || 'draft');
   const isCreator = challenge.createdBy === user?.userId;
   const requiresPayment = isPaidChallenge(challenge);
+
+  // 시작 후(진행/완료)에만 완료 통계가 의미 있음 — 모집중·준비중엔 숨긴다
+  const hasStarted = lifecycle === 'active' || lifecycle === 'completed';
+
+  // 챌린지 정보(유형·일정·참여 방식) — 실제 데이터로 구성
+  const scheduleParts: string[] = [];
+  const recStart = formatKstShort(challenge.recruitingStartAt);
+  const recEnd = formatKstShort(challenge.recruitingEndAt);
+  const startAt = formatKstShort(challenge.challengeStartAt);
+  if (recStart && recEnd) scheduleParts.push(`모집 ${recStart}~${recEnd}`);
+  if (startAt) scheduleParts.push(`${startAt} 시작`);
+  if (challenge.durationDays) scheduleParts.push(`${challenge.durationDays}일간`);
+  const scheduleText = scheduleParts.join(' · ') || '-';
+  const verificationTypes: string[] = Array.isArray(challenge.allowedVerificationTypes)
+    ? challenge.allowedVerificationTypes
+    : [];
+  const verificationText =
+    verificationTypes.map((t: string) => VERIFICATION_LABEL[t] ?? t).join(' · ') || '-';
+
+  // 가이드 미리보기 — system-prefill 자동생성분(유형/일정 placeholder)은 제외하고 리더 작성분만
+  const guideBlocks: any[] =
+    previewBoard && previewBoard.updatedBy !== 'system-prefill' && Array.isArray(previewBoard.blocks)
+      ? previewBoard.blocks
+      : [];
 
   // 유료 챌린지: join 전에 결제(주문 paid) 단계를 거친다 (커머스 v0)
   const startJoin = (formState: WizardFormState) => {
@@ -333,26 +375,33 @@ export const ChallengeDetailPage = () => {
           <p className="text-gray-700 leading-relaxed mb-6">{challenge.description}</p>
 
           {stats && (
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="text-center p-4 bg-gray-50 rounded-xl">
-                <FiUsers className="w-5 h-5 mx-auto mb-2 text-gray-600" />
-                <p className="text-2xl font-bold text-gray-900">{stats.totalParticipants}</p>
-                <p className="text-xs text-gray-600">참여자</p>
+            hasStarted ? (
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="text-center p-4 bg-gray-50 rounded-xl">
+                  <FiUsers className="w-5 h-5 mx-auto mb-2 text-gray-600" />
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalParticipants}</p>
+                  <p className="text-xs text-gray-600">참여자</p>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-xl">
+                  <FiTrendingUp className="w-5 h-5 mx-auto mb-2 text-green-600" />
+                  <p className="text-2xl font-bold text-green-600">{stats.completionRate}%</p>
+                  <p className="text-xs text-gray-600">완료율</p>
+                </div>
+                <div className="text-center p-4 bg-primary-50 rounded-xl">
+                  <span className="block text-2xl mb-1">⭐</span>
+                  <p className="text-2xl font-bold text-gray-900">{stats.averageScore}</p>
+                  <p className="text-xs text-gray-600">평균 점수</p>
+                </div>
               </div>
-              <div className="text-center p-4 bg-green-50 rounded-xl">
-                <FiTrendingUp className="w-5 h-5 mx-auto mb-2 text-green-600" />
-                <p className="text-2xl font-bold text-green-600">{stats.completionRate}%</p>
-                <p className="text-xs text-gray-600">완료율</p>
+            ) : (
+              <div className="flex items-center gap-2 mb-6 px-4 py-3 bg-gray-50 rounded-xl text-sm text-gray-600">
+                <FiUsers className="w-4 h-4" />
+                <span>참여자 <strong className="text-gray-900">{stats.totalParticipants}</strong>명</span>
               </div>
-              <div className="text-center p-4 bg-primary-50 rounded-xl">
-                <span className="block text-2xl mb-1">⭐</span>
-                <p className="text-2xl font-bold text-gray-900">{stats.averageScore}</p>
-                <p className="text-xs text-gray-600">평균 점수</p>
-              </div>
-            </div>
+            )
           )}
 
-          {stats?.dayCompletionRates && (
+          {hasStarted && stats?.dayCompletionRates && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-700 mb-3">Day별 완료율</p>
               {stats.dayCompletionRates.map((day: any) => (
@@ -371,18 +420,45 @@ export const ChallengeDetailPage = () => {
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.06 }}
+          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6"
+        >
+          <h3 className="text-lg font-bold text-gray-900 mb-4">챌린지 정보</h3>
+          <div className="space-y-3 text-sm">
+            <div className="flex gap-3">
+              <span className="w-16 flex-shrink-0 text-gray-400">유형</span>
+              <span className="text-gray-800 font-medium">
+                {getChallengeTypeLabel(challenge.challengeType)}
+              </span>
+            </div>
+            <div className="flex gap-3">
+              <span className="w-16 flex-shrink-0 text-gray-400">일정</span>
+              <span className="text-gray-800">{scheduleText}</span>
+            </div>
+            <div className="flex gap-3">
+              <span className="w-16 flex-shrink-0 text-gray-400">참여 방식</span>
+              <span className="text-gray-800">{verificationText}</span>
+            </div>
+          </div>
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.08 }}
           className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6"
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900">가이드 미리보기</h3>
-            <span className="text-xs px-2 py-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600">
-              {previewBoard?.blocks?.length || 0} blocks
-            </span>
+            {guideBlocks.length > 0 && (
+              <span className="text-xs px-2 py-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600">
+                {guideBlocks.length}개
+              </span>
+            )}
           </div>
 
           <div className="space-y-3">
-            {(previewBoard?.blocks || []).map((block: any) => {
+            {guideBlocks.map((block: any) => {
               if (block.type === 'image') {
                 return <img key={block.id} src={block.url} alt="preview" className="w-full rounded-xl border border-gray-100" />;
               }
@@ -399,7 +475,7 @@ export const ChallengeDetailPage = () => {
                 </p>
               );
             })}
-            {(!previewBoard?.blocks || previewBoard.blocks.length === 0) && (
+            {guideBlocks.length === 0 && (
               <p className="text-sm text-gray-500">가이드가 아직 작성되지 않았어요.</p>
             )}
           </div>
