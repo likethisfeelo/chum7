@@ -13,7 +13,7 @@ const NOW = new Date('2026-07-21T03:00:00.000Z');
 
 const challenge = (over: Record<string, unknown> = {}) => ({
   challengeId: 'c1',
-  category: 'habit',
+  category: 'discipline',
   lifecycle: 'recruiting',
   durationDays: 7,
   challengeStartAt: '2026-07-25T00:00:00.000Z',

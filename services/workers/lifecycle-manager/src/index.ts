@@ -33,7 +33,7 @@ import * as repo from './repo';
 
 /** 카테고리 8종 — gamification world-summary LAYER_ORDER와 동일 집합 (challenges gsi1 파티션 열거용) */
 const CATEGORIES = [
-  'health', 'mindfulness', 'habit', 'relationship', 'creativity', 'development', 'expand', 'impact',
+  'selflove', 'attitude', 'discipline', 'build', 'explore', 'create', 'expand', 'impact',
 ] as const;
 
 interface RunSummary {
@@ -218,7 +218,7 @@ async function processChallenge(challenge: ChallengeLike, now: Date, summary: Ru
     try {
       await repo.transitionChallenge({
         challengeId: challenge.challengeId,
-        category: String(challenge.category ?? 'habit'),
+        category: String(challenge.category ?? 'discipline'),
         from,
         to: step,
         nowIso,

@@ -12,7 +12,7 @@ import { TABLE, challengePk } from './shared';
 const SK_META = 'META';
 
 export const CHALLENGE_CATEGORIES = [
-  'health', 'habit', 'development', 'creativity', 'relationship', 'mindfulness', 'expand', 'impact',
+  'selflove', 'discipline', 'create', 'explore', 'build', 'attitude', 'expand', 'impact',
 ] as const;
 export type ChallengeCategory = (typeof CHALLENGE_CATEGORIES)[number];
 

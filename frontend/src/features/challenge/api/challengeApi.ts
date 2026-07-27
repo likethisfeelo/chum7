@@ -1,8 +1,8 @@
 import { apiClient } from '@/lib/api-client';
 
 export type ChallengeCategory =
-  | 'health' | 'habit' | 'development' | 'creativity'
-  | 'relationship' | 'mindfulness' | 'expand' | 'impact';
+  | 'selflove' | 'discipline' | 'create' | 'explore'
+  | 'build' | 'attitude' | 'expand' | 'impact';
 
 export type ChallengeType = 'leader_only' | 'personal_only' | 'leader_personal' | 'mixed';
 export type ChallengeLifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';

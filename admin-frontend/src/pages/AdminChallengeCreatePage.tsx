@@ -7,15 +7,15 @@ type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' |
 type ChallengeType = 'leader_only' | 'personal_only' | 'leader_personal';
 type VerificationType = 'image' | 'text' | 'link' | 'video';
 type RemedyType = 'anytime' | 'last_day' | 'disabled';
-type Category = 'health' | 'habit' | 'development' | 'creativity' | 'relationship' | 'mindfulness' | 'expand' | 'impact';
+type Category = 'selflove' | 'discipline' | 'create' | 'explore' | 'build' | 'attitude' | 'expand' | 'impact';
 
 const CATEGORIES: Array<{ value: Category; label: string }> = [
-  { value: 'health',       label: '💗 Selflove' },
-  { value: 'mindfulness',  label: '🔥 Attitude' },
-  { value: 'habit',        label: '⚡ Discipline' },
-  { value: 'creativity',   label: '🧭 Explore' },
-  { value: 'development',  label: '🎨 Create' },
-  { value: 'relationship', label: '🏗️ Build' },
+  { value: 'selflove',       label: '💗 Selflove' },
+  { value: 'attitude',  label: '🔥 Attitude' },
+  { value: 'discipline',        label: '⚡ Discipline' },
+  { value: 'explore',   label: '🧭 Explore' },
+  { value: 'create',  label: '🎨 Create' },
+  { value: 'build', label: '🏗️ Build' },
   { value: 'expand',       label: '🌱 Expand' },
   { value: 'impact',       label: '🚀 Impact' },
 ];
@@ -83,7 +83,7 @@ interface FormState {
 const INITIAL: FormState = {
   title: '',
   description: '',
-  category: 'habit',
+  category: 'discipline',
   targetTime: '07:00',
   identityKeyword: '',
   badgeIcon: '🏆',

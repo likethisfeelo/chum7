@@ -1,8 +1,8 @@
 import { apiClient } from '@/lib/api-client';
 
 export type LayerCategory =
-  | 'health' | 'mindfulness' | 'habit' | 'relationship'
-  | 'creativity' | 'development' | 'expand' | 'impact';
+  | 'selflove' | 'attitude' | 'discipline' | 'build'
+  | 'explore' | 'create' | 'expand' | 'impact';
 
 export interface WorldLayer {
   category: LayerCategory;

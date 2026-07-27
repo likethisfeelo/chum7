@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { CHALLENGE_CATEGORIES, SLUG_TO_COLOR, SLUG_TO_LABEL, SLUG_TO_HEX } from '@/features/challenge/constants/categories';
 
 // 마당 헤더에 노출할 카테고리 — 목업 기준 5개(Selflove/Attitude/Discipline/Create/Impact)
-const FEED_CATEGORY_SLUGS = ['health', 'mindfulness', 'habit', 'development', 'impact'] as const;
+const FEED_CATEGORY_SLUGS = ['selflove', 'attitude', 'discipline', 'create', 'impact'] as const;
 const FEED_CATEGORIES = FEED_CATEGORY_SLUGS
   .map((slug) => CHALLENGE_CATEGORIES.find((c) => c.slug === slug))
   .filter((c): c is (typeof CHALLENGE_CATEGORIES)[number] => Boolean(c));

@@ -1,12 +1,12 @@
 /** 관심영역(리더+카테고리) 표시 유틸 — 자동 구독 이름 생성. */
 
 const CATEGORY_LABEL: Record<string, string> = {
-  health: '건강',
-  habit: '습관',
-  development: '자기계발',
-  creativity: '창작',
-  relationship: '관계',
-  mindfulness: '마음챙김',
+  selflove: '건강',
+  discipline: '습관',
+  create: '자기계발',
+  explore: '창작',
+  build: '관계',
+  attitude: '마음챙김',
   expand: '확장',
   impact: '임팩트',
 };

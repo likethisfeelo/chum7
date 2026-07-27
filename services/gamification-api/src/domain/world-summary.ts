@@ -7,12 +7,12 @@
  */
 
 export const LAYER_ORDER = [
-  { category: 'health',       floor: 'B2', label: 'Selflove'   },
-  { category: 'mindfulness',  floor: 'B1', label: 'Attitude'   },
-  { category: 'habit',        floor: 'G1', label: 'Discipline' },
-  { category: 'relationship', floor: 'G2', label: 'Build'      },
-  { category: 'creativity',   floor: 'G3', label: 'Explore'    },
-  { category: 'development',  floor: 'G4', label: 'Create'     },
+  { category: 'selflove',       floor: 'B2', label: 'Selflove'   },
+  { category: 'attitude',  floor: 'B1', label: 'Attitude'   },
+  { category: 'discipline',        floor: 'G1', label: 'Discipline' },
+  { category: 'build', floor: 'G2', label: 'Build'      },
+  { category: 'explore',   floor: 'G3', label: 'Explore'    },
+  { category: 'create',  floor: 'G4', label: 'Create'     },
   { category: 'expand',       floor: 'G5', label: 'Expand'     },
   { category: 'impact',       floor: 'G6', label: 'Impact'     },
 ] as const;
