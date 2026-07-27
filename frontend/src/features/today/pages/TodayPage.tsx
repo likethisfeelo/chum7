@@ -23,10 +23,10 @@ interface WorldArea {
 
 const WORLD_AREAS: WorldArea[] = [
   { key: 'confidence', name: 'CONFIDENCE', slug: 'expand',      color: '#7BAA7A', jelly: '#BEDBBD' },
-  { key: 'attitude',   name: 'ATTITUDE',   slug: 'mindfulness', color: '#E39A69', jelly: '#F3CDB4' },
-  { key: 'selflove',   name: 'SELFLOVE',   slug: 'health',      color: '#D46A6A', jelly: '#EBB4B4' },
-  { key: 'discipline', name: 'DISCIPLINE', slug: 'habit',       color: '#D8B36A', jelly: '#ECD9B4' },
-  { key: 'create',     name: 'CREATE',     slug: 'creativity',  color: '#9D8CCF', jelly: '#CEC5E7' },
+  { key: 'attitude',   name: 'ATTITUDE',   slug: 'attitude', color: '#E39A69', jelly: '#F3CDB4' },
+  { key: 'selflove',   name: 'SELFLOVE',   slug: 'selflove',      color: '#D46A6A', jelly: '#EBB4B4' },
+  { key: 'discipline', name: 'DISCIPLINE', slug: 'discipline',       color: '#D8B36A', jelly: '#ECD9B4' },
+  { key: 'create',     name: 'CREATE',     slug: 'explore',  color: '#9D8CCF', jelly: '#CEC5E7' },
 ];
 const DEFAULT_AREA_INDEX = 2; // SELFLOVE
 
@@ -68,19 +68,19 @@ const WHEEL_ICON_PATHS: Record<string, JSX.Element> = {
       <path d="M12 12.2 C12 9 14.6 7.2 18 7.2 C18 10.4 15.4 12.2 12 12.2 Z" />
     </>
   ),
-  mindfulness: ( // 불꽃
+  attitude: ( // 불꽃
     <path d="M12 3 C12 3 6.8 8 6.8 13 A5.2 5.2 0 0 0 17.2 13 C17.2 9.8 15 8.6 14 6.2 C13 8 12 7.6 12 3 Z" />
   ),
-  health: ( // 하트 + 스파클
+  selflove: ( // 하트 + 스파클
     <>
       <path d="M12 20 C12 20 4.5 14 4.5 8.9 C4.5 6.3 6.5 4.4 9 4.4 C10.5 4.4 11.6 5.3 12 6.3 C12.4 5.3 13.5 4.4 15 4.4 C17.5 4.4 19.5 6.3 19.5 8.9 C19.5 14 12 20 12 20 Z" />
       <path d="M12 8.6 L12.7 10.5 L14.6 11.2 L12.7 11.9 L12 13.8 L11.3 11.9 L9.4 11.2 L11.3 10.5 Z" fill="currentColor" stroke="none" />
     </>
   ),
-  habit: ( // 번개
+  discipline: ( // 번개
     <path d="M13 3 L6 13.2 H11 L10.4 21 L18 10.4 H12.6 L13 3 Z" />
   ),
-  creativity: ( // 나침반 별
+  explore: ( // 나침반 별
     <>
       <circle cx="12" cy="12" r="8.4" />
       <path d="M12 6 L13.5 10.5 L18 12 L13.5 13.5 L12 18 L10.5 13.5 L6 12 L10.5 10.5 Z" />

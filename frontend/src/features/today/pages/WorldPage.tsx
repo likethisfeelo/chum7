@@ -12,12 +12,12 @@ const LAYER_THEME: Record<string, {
   jelly: string;    // hex — thanks 젤리 색
   emoji: string;
 }> = {
-  health:       { bg: 'from-rose-950 to-rose-900',      bright: 'from-rose-700 to-rose-500',      accent: '#fb7185', jelly: '#fda4af', emoji: '💗' },
-  mindfulness:  { bg: 'from-amber-950 to-amber-900',    bright: 'from-amber-600 to-amber-400',    accent: '#fbbf24', jelly: '#fde68a', emoji: '🔥' },
-  habit:        { bg: 'from-yellow-950 to-orange-900',  bright: 'from-yellow-600 to-orange-500',  accent: '#facc15', jelly: '#fef08a', emoji: '⚡' },
-  relationship: { bg: 'from-indigo-950 to-indigo-900',  bright: 'from-indigo-600 to-blue-500',    accent: '#818cf8', jelly: '#c7d2fe', emoji: '🏗️' },
-  creativity:   { bg: 'from-teal-950 to-teal-900',      bright: 'from-teal-600 to-cyan-500',      accent: '#2dd4bf', jelly: '#99f6e4', emoji: '🧭' },
-  development:  { bg: 'from-blue-950 to-blue-900',      bright: 'from-blue-600 to-indigo-500',    accent: '#60a5fa', jelly: '#bfdbfe', emoji: '🎨' },
+  selflove:       { bg: 'from-rose-950 to-rose-900',      bright: 'from-rose-700 to-rose-500',      accent: '#fb7185', jelly: '#fda4af', emoji: '💗' },
+  attitude:  { bg: 'from-amber-950 to-amber-900',    bright: 'from-amber-600 to-amber-400',    accent: '#fbbf24', jelly: '#fde68a', emoji: '🔥' },
+  discipline:        { bg: 'from-yellow-950 to-orange-900',  bright: 'from-yellow-600 to-orange-500',  accent: '#facc15', jelly: '#fef08a', emoji: '⚡' },
+  build: { bg: 'from-indigo-950 to-indigo-900',  bright: 'from-indigo-600 to-blue-500',    accent: '#818cf8', jelly: '#c7d2fe', emoji: '🏗️' },
+  explore:   { bg: 'from-teal-950 to-teal-900',      bright: 'from-teal-600 to-cyan-500',      accent: '#2dd4bf', jelly: '#99f6e4', emoji: '🧭' },
+  create:  { bg: 'from-blue-950 to-blue-900',      bright: 'from-blue-600 to-indigo-500',    accent: '#60a5fa', jelly: '#bfdbfe', emoji: '🎨' },
   expand:       { bg: 'from-purple-950 to-purple-900',  bright: 'from-purple-600 to-violet-500',  accent: '#a78bfa', jelly: '#ddd6fe', emoji: '🌱' },
   impact:       { bg: 'from-emerald-950 to-green-900',  bright: 'from-emerald-600 to-green-500',  accent: '#34d399', jelly: '#a7f3d0', emoji: '🚀' },
 };

@@ -14,6 +14,7 @@ import { BottomSheet } from "@/shared/components/BottomSheet";
 import { BoardGuideSection } from "@/features/challenge-board/components/BoardGuideSection";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import { challengeApi } from "@/features/challenge/api/challengeApi";
+import { SLUG_TO_LABEL } from "@/features/challenge/constants/categories";
 import { ChallengeChatPanel } from "@/features/challenge-chat/components/ChallengeChatPanel";
 import {
   getRemedyType,
@@ -662,7 +663,7 @@ export const ChallengeFeedPage = () => {
                 <h2 className="text-xl font-bold text-gray-900">{challengeData?.title || "챌린지"}</h2>
                 {challengeData?.category && (
                   <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full mt-1 bg-gray-100 text-gray-600">
-                    {challengeData.category}
+                    {SLUG_TO_LABEL[challengeData.category] ?? challengeData.category}
                   </span>
                 )}
               </div>

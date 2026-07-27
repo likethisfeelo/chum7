@@ -3,12 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 
 const CATEGORIES = [
-  { slug: 'health',        label: '💗 Selflove' },
-  { slug: 'mindfulness',   label: '🔥 Attitude' },
-  { slug: 'habit',         label: '⚡ Discipline' },
-  { slug: 'creativity',    label: '🧭 Explore' },
-  { slug: 'development',   label: '🎨 Create' },
-  { slug: 'relationship',  label: '🏗️ Build' },
+  { slug: 'selflove',        label: '💗 Selflove' },
+  { slug: 'attitude',   label: '🔥 Attitude' },
+  { slug: 'discipline',         label: '⚡ Discipline' },
+  { slug: 'explore',    label: '🧭 Explore' },
+  { slug: 'create',   label: '🎨 Create' },
+  { slug: 'build',  label: '🏗️ Build' },
   { slug: 'expand',        label: '🌱 Expand' },
   { slug: 'impact',        label: '🚀 Impact' },
 ] as const;
@@ -28,7 +28,7 @@ type Banner = {
 const EMPTY_FORM = { imageUrl: '', tagline: '', description: '' };
 
 export const AdminCategoryBannersPage = () => {
-  const [selectedSlug, setSelectedSlug] = useState<CategorySlug>('health');
+  const [selectedSlug, setSelectedSlug] = useState<CategorySlug>('selflove');
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');

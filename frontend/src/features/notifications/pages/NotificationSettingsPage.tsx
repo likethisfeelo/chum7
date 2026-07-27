@@ -14,7 +14,7 @@ const CATEGORIES = [
   { key: 'category_feed_social', label: '피드 소셜', description: '팔로우 요청, 수락, 초대 링크 사용' },
   { key: 'category_feed_badge', label: '피드 뱃지', description: '뱃지 획득, 리더 뱃지 갱신' },
   { key: 'category_bulletin', label: '게시판', description: '게시판 댓글 알림' },
-  { key: 'category_challenge_board', label: '챌린지 보드', description: '챌린지 보드 댓글 알림' },
+  { key: 'category_challenge_board', label: '챌린지 가이드', description: '챌린지 가이드 댓글 알림' },
   { key: 'category_plaza', label: '광장', description: '광장 댓글 알림' },
 ] as const;
 

@@ -13,7 +13,7 @@ const TABLE = 'CONTENT_TABLE';
 export const bannerPk = (slug: string) => `BANNER#${slug}`;
 
 export const VALID_BANNER_SLUGS = [
-  'health', 'mindfulness', 'habit', 'creativity', 'development', 'relationship', 'expand', 'impact',
+  'selflove', 'attitude', 'discipline', 'explore', 'create', 'build', 'expand', 'impact',
 ] as const;
 
 /** slug의 배너 전체 (활성/비활성) — 최신 bannerId 우선 (레거시 ScanIndexForward false 승계) */

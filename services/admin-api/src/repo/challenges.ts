@@ -13,7 +13,7 @@ export const TABLE = 'CHALLENGES_TABLE';
 const SK_META = 'META';
 
 export const CHALLENGE_CATEGORIES = [
-  'health', 'habit', 'development', 'creativity', 'relationship', 'mindfulness', 'expand', 'impact',
+  'selflove', 'discipline', 'create', 'explore', 'build', 'attitude', 'expand', 'impact',
 ] as const;
 
 export const CHALLENGE_LIFECYCLES = [

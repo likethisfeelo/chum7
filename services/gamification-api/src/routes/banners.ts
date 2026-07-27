@@ -6,8 +6,8 @@ export const bannersRoutes = new Hono<AppEnv>();
 
 /** 레거시 category-banners/list와 동일한 카테고리 slug 목록·순서 */
 const CATEGORY_SLUGS = [
-  'health', 'mindfulness', 'habit', 'creativity',
-  'development', 'relationship', 'expand', 'impact',
+  'selflove', 'attitude', 'discipline', 'explore',
+  'create', 'build', 'expand', 'impact',
 ] as const;
 
 interface BannerView {

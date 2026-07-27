@@ -8,6 +8,7 @@ import { characterApi } from '@/features/character/api/characterApi';
 import { personalFeedApi, FeedAchievements } from '@/features/personal-feed/api/personalFeedApi';
 import { fetchFriendRequests } from '@/features/friends/api/friendsApi';
 import { apiClient } from '@/lib/api-client';
+import { SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
 import { resolveChallengeBucket, getChallengeDisplayMeta } from '@/features/challenge/utils/challengeLifecycle';
 import { OrderHistorySection } from '@/features/commerce/components/OrderHistorySection';
 import { CouponWalletSection } from '@/features/commerce/components/CouponWalletSection';
@@ -283,7 +284,7 @@ function ChallengesTab() {
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-gray-800 text-sm line-clamp-1">{title}</p>
                     {category && (
-                      <p className="text-xs text-gray-400 mt-0.5">{category}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{SLUG_TO_LABEL[category] ?? category}</p>
                     )}
                   </div>
                   <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${bMeta.bg} ${bMeta.color}`}>

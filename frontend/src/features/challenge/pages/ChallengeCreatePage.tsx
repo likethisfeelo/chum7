@@ -457,7 +457,7 @@ function Step4({ form, onChange }: { form: FormState; onChange: (patch: Partial<
         <ul className="space-y-1 text-xs text-gray-500">
           <li>• 챌린지는 <strong>비공개(준비 중)</strong> 상태로 저장돼요</li>
           <li>• "모집 시작하기" 버튼으로 공개할 수 있어요</li>
-          <li>• 참여자 심사, 게시판 관리를 할 수 있어요</li>
+          <li>• 참여자 심사, 가이드 관리를 할 수 있어요</li>
           <li>• 챌린지 완료 후 리더 뱃지를 받을 수 있어요 🎖️</li>
         </ul>
       </div>
@@ -473,7 +473,6 @@ export function ChallengeCreatePage() {
     ...INITIAL_FORM,
     ...getDefaultDates(),
   }));
-  const [createdId, setCreatedId] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const onChange = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
@@ -501,16 +500,8 @@ export function ChallengeCreatePage() {
       };
       return challengeApi.createChallenge(params);
     },
-    onSuccess: (data) => {
-      setCreatedId(data.challengeId);
-      setShowSuccessModal(true);
-    },
-  });
-
-  const publishMutation = useMutation({
-    mutationFn: () => challengeApi.publishChallenge(createdId!),
     onSuccess: () => {
-      navigate(`/challenges/${createdId}`, { replace: true });
+      setShowSuccessModal(true);
     },
   });
 
@@ -575,26 +566,20 @@ export function ChallengeCreatePage() {
             <div className="text-center">
               <p className="text-3xl mb-2">🎉</p>
               <p className="text-lg font-bold text-gray-900">챌린지가 만들어졌어요!</p>
-              <p className="text-sm text-gray-500 mt-1">준비가 됐다면 모집을 시작해보세요</p>
+              <p className="text-sm text-gray-500 mt-1">준비중 목록에서 확인할 수 있어요</p>
             </div>
             <button
-              onClick={() => publishMutation.mutate()}
-              disabled={publishMutation.isPending}
-              className="w-full py-3.5 rounded-2xl bg-primary-500 text-white font-semibold text-sm hover:bg-primary-600 disabled:opacity-50 transition-colors"
+              onClick={() => navigate('/me?tab=pending', { replace: true })}
+              className="w-full py-3.5 rounded-2xl bg-primary-500 text-white font-semibold text-sm hover:bg-primary-600 transition-colors"
             >
-              {publishMutation.isPending ? '공개 중...' : '지금 모집 시작하기'}
+              챌린지 확인하기
             </button>
             <button
-              onClick={() => navigate('/me', { replace: true })}
+              onClick={() => navigate('/me?tab=active', { replace: true })}
               className="w-full py-3.5 rounded-2xl bg-gray-100 text-gray-700 font-semibold text-sm hover:bg-gray-200 transition-colors"
             >
-              나중에 공개하기
+              나중에 하기
             </button>
-            {publishMutation.isError && (
-              <p className="text-center text-xs text-red-500">
-                {(publishMutation.error as any)?.response?.data?.message ?? '공개에 실패했어요'}
-              </p>
-            )}
           </div>
         </div>
       )}

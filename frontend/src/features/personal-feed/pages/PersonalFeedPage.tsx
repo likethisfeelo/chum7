@@ -14,6 +14,7 @@ import {
   PersonalPost,
   SavedPostItem,
 } from '../api/personalFeedApi';
+import { SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
 
 type FeedTab = 'verifications' | 'challenges' | 'achievements' | 'posts';
 
@@ -336,7 +337,7 @@ function ChallengeHistoryCard({ item }: { item: ChallengeFeedItem }) {
           <div className="min-w-0">
             <p className="font-semibold text-gray-800 text-sm line-clamp-1">{item.title}</p>
             {item.category && (
-              <p className="text-xs text-gray-400 mt-0.5">{item.category}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{SLUG_TO_LABEL[item.category] ?? item.category}</p>
             )}
           </div>
         </div>

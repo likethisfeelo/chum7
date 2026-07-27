@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 export const CHALLENGE_CATEGORY_ENUM = z.enum([
-  'health', 'habit', 'development', 'creativity', 'relationship', 'mindfulness', 'expand', 'impact',
+  'selflove', 'discipline', 'create', 'explore', 'build', 'attitude', 'expand', 'impact',
 ]);
 
 const VERIFICATION_TYPE_ENUM = z.enum(['image', 'text', 'link', 'video']);
