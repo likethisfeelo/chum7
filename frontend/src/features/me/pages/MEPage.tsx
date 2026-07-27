@@ -266,12 +266,14 @@ function MyCreatedChallengesSection() {
               >
                 상세 보기
               </button>
-              <button
-                onClick={() => navigate(`/challenges/${c.challengeId}/edit`)}
-                className="px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 transition-colors"
-              >
-                수정하기
-              </button>
+              {['draft', 'recruiting'].includes(c.lifecycle) && (
+                <button
+                  onClick={() => navigate(`/challenges/${c.challengeId}/edit`)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 transition-colors"
+                >
+                  수정하기
+                </button>
+              )}
               <button
                 onClick={() => navigate(`/challenge-feed/${c.challengeId}`)}
                 className="px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 transition-colors"

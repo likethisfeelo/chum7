@@ -270,83 +270,89 @@ export const ChallengeDetailPage = () => {
       </div>
 
       {isCreator && (
-        <div className="bg-primary-50 border-b border-primary-100 px-4 py-3 flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-primary-700 font-semibold">✏️ 내가 만든 챌린지</span>
+        <div className="bg-primary-50 border-b border-primary-100 px-4 py-3">
+          {/* 1줄: 라벨 + 상태 변경 버튼(약간 크게) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-primary-700 font-semibold">✏️ 내가 만든 챌린지</span>
 
-          {/* draft → recruiting */}
-          {lifecycle === 'draft' && (
-            <button
-              onClick={() => publishMutation.mutate()}
-              disabled={publishMutation.isPending}
-              className="text-xs bg-primary-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-primary-600 disabled:opacity-50 transition-colors"
-            >
-              {publishMutation.isPending ? '공개 중...' : '모집 시작하기'}
-            </button>
-          )}
+            {/* draft → recruiting */}
+            {lifecycle === 'draft' && (
+              <button
+                onClick={() => publishMutation.mutate()}
+                disabled={publishMutation.isPending}
+                className="text-sm bg-primary-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-primary-600 disabled:opacity-50 transition-colors"
+              >
+                {publishMutation.isPending ? '공개 중...' : '모집 시작하기'}
+              </button>
+            )}
 
-          {/* recruiting → preparing (수동 모집 마감) */}
-          {lifecycle === 'recruiting' && (
-            <button
-              onClick={() => {
-                if (window.confirm('모집을 지금 마감할까요? 이후 신규 참여 신청이 불가하며, 예약된 마감 시각이 남아 있어도 무시됩니다.')) {
-                  advanceLifecycleMutation.mutate('close_recruiting');
-                }
-              }}
-              disabled={advanceLifecycleMutation.isPending}
-              className="text-xs bg-rose-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-rose-600 disabled:opacity-50 transition-colors"
-            >
-              {advanceLifecycleMutation.isPending ? '처리 중...' : '모집 마감하기'}
-            </button>
-          )}
+            {/* recruiting → preparing (수동 모집 마감) */}
+            {lifecycle === 'recruiting' && (
+              <button
+                onClick={() => {
+                  if (window.confirm('모집을 지금 마감할까요? 이후 신규 참여 신청이 불가하며, 예약된 마감 시각이 남아 있어도 무시됩니다.')) {
+                    advanceLifecycleMutation.mutate('close_recruiting');
+                  }
+                }}
+                disabled={advanceLifecycleMutation.isPending}
+                className="text-sm bg-rose-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-rose-600 disabled:opacity-50 transition-colors"
+              >
+                {advanceLifecycleMutation.isPending ? '처리 중...' : '모집 마감하기'}
+              </button>
+            )}
 
-          {/* preparing → active (챌린지 시작 확인) */}
-          {lifecycle === 'preparing' && (
-            <button
-              onClick={() => {
-                if (window.confirm('챌린지를 지금 시작할까요? 오늘이 Day 1이 되고 예약된 시작 시각은 무시됩니다. 승인된 참여자는 즉시 활성화되고, 승인 대기 중인 신청은 자동 거절됩니다.')) {
-                  advanceLifecycleMutation.mutate('confirm_start');
-                }
-              }}
-              disabled={advanceLifecycleMutation.isPending}
-              className="text-xs bg-emerald-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-emerald-600 disabled:opacity-50 transition-colors"
-            >
-              {advanceLifecycleMutation.isPending ? '처리 중...' : '챌린지 시작하기'}
-            </button>
-          )}
+            {/* preparing → active (챌린지 시작 확인) */}
+            {lifecycle === 'preparing' && (
+              <button
+                onClick={() => {
+                  if (window.confirm('챌린지를 지금 시작할까요? 오늘이 Day 1이 되고 예약된 시작 시각은 무시됩니다. 승인된 참여자는 즉시 활성화되고, 승인 대기 중인 신청은 자동 거절됩니다.')) {
+                    advanceLifecycleMutation.mutate('confirm_start');
+                  }
+                }}
+                disabled={advanceLifecycleMutation.isPending}
+                className="text-sm bg-emerald-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+              >
+                {advanceLifecycleMutation.isPending ? '처리 중...' : '챌린지 시작하기'}
+              </button>
+            )}
+          </div>
 
-          {/* 참여자 심사 */}
-          {['recruiting', 'preparing'].includes(lifecycle) && (stats?.pendingParticipants ?? 0) > 0 && (
-            <button
-              onClick={() => navigate(`/challenges/${challengeId}/join-requests`)}
-              className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-amber-600 transition-colors"
-            >
-              참여자 심사 ({stats?.pendingParticipants}명)
-            </button>
-          )}
+          {/* 2줄: 나머지 버튼 */}
+          <div className="flex gap-2 flex-wrap mt-2">
+            {/* 참여자 심사 */}
+            {['recruiting', 'preparing'].includes(lifecycle) && (stats?.pendingParticipants ?? 0) > 0 && (
+              <button
+                onClick={() => navigate(`/challenges/${challengeId}/join-requests`)}
+                className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-full font-medium hover:bg-amber-600 transition-colors"
+              >
+                참여자 심사 ({stats?.pendingParticipants}명)
+              </button>
+            )}
 
-          {/* 수정 버튼 (draft, recruiting 상태만) */}
-          {['draft', 'recruiting'].includes(lifecycle) && (
+            {/* 수정 버튼 (draft, recruiting 상태만 — 진행 중엔 숨김) */}
+            {['draft', 'recruiting'].includes(lifecycle) && (
+              <button
+                onClick={() => navigate(`/challenges/${challengeId}/edit`)}
+                className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
+              >
+                수정하기
+              </button>
+            )}
+
             <button
-              onClick={() => navigate(`/challenges/${challengeId}/edit`)}
+              onClick={() => navigate(`/challenge-board/${challengeId}`)}
               className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
             >
-              수정하기
+              가이드
             </button>
-          )}
 
-          <button
-            onClick={() => navigate(`/challenge-board/${challengeId}`)}
-            className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
-          >
-            가이드
-          </button>
-
-          <button
-            onClick={() => navigate(`/challenge-feed/${challengeId}`)}
-            className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
-          >
-            챌린지 피드
-          </button>
+            <button
+              onClick={() => navigate(`/challenge-feed/${challengeId}`)}
+              className="text-xs bg-white border border-primary-200 text-primary-700 px-3 py-1.5 rounded-full font-medium hover:bg-primary-50 transition-colors"
+            >
+              챌린지 피드
+            </button>
+          </div>
         </div>
       )}
 
