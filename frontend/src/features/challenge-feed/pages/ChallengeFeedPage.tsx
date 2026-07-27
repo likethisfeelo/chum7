@@ -579,44 +579,42 @@ export const ChallengeFeedPage = () => {
     <div className="min-h-screen">
       <div className="mx-auto min-h-screen w-full max-w-3xl lg:max-w-6xl pb-20">
 
-        {/* 헤더 */}
-        <div className="sticky top-0 glass-header px-6 py-4 flex items-center gap-4 z-10">
-          <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+        {/* 헤더 — 챌린지 이름 + (리더)피드/운영 탭 + 중도 포기 */}
+        <div className="sticky top-0 glass-header px-4 lg:px-6 py-4 flex items-center gap-3 z-10">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0">
             <FiArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-lg font-bold text-gray-900 flex-1">챌린지 피드</h1>
-          {canGiveUp && (
-            <button
-              type="button"
-              onClick={() => setShowGiveUpConfirm(true)}
-              className="text-xs text-gray-400 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors"
-            >
-              중도 포기
-            </button>
-          )}
-        </div>
-
-        {/* 리더 전용: 피드 / 운영 탭 (PRODUCT_SPEC 4.12-A) */}
-        {isCreator && (
-          <div className="px-4 lg:px-6 pt-4">
-            <div className="flex gap-1 p-1 glass-card rounded-xl max-w-xs">
+          <h1 className="text-lg font-bold text-gray-900 flex-1 min-w-0 truncate">
+            {challengeData?.title || "챌린지"}
+          </h1>
+          {isCreator && (
+            <div className="flex gap-0.5 p-0.5 bg-gray-100 rounded-lg flex-shrink-0">
               <button
                 type="button"
                 onClick={() => setMainTab("feed")}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${mainTab === "feed" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${mainTab === "feed" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
               >
                 피드
               </button>
               <button
                 type="button"
                 onClick={() => setMainTab("ops")}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${mainTab === "ops" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${mainTab === "ops" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
               >
                 👑 운영
               </button>
             </div>
-          </div>
-        )}
+          )}
+          {canGiveUp && (
+            <button
+              type="button"
+              onClick={() => setShowGiveUpConfirm(true)}
+              className="text-xs text-gray-400 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors flex-shrink-0"
+            >
+              중도 포기
+            </button>
+          )}
+        </div>
 
         {/* 중도 포기 확인 모달 */}
         {showGiveUpConfirm && (
@@ -659,27 +657,32 @@ export const ChallengeFeedPage = () => {
           {/* ── Left Sidebar ── */}
           <div className="space-y-4 lg:sticky lg:top-20">
 
-          {/* 1) 챌린지 제목 + 설명 */}
+          {/* 1) 카테고리 + 설명(좌) · 참여자/완료율 미니 카드(우) */}
           <section className="glass-card rounded-2xl p-5">
-            <div className="flex items-start gap-3 mb-2">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">{challengeData?.title || "챌린지"}</h2>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 {challengeData?.category && (
-                  <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full mt-1 bg-gray-100 text-gray-600">
+                  <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
                     {SLUG_TO_LABEL[challengeData.category] ?? challengeData.category}
                   </span>
                 )}
+                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                  {challengeData?.description || "챌린지 소개를 불러오지 못했습니다."}
+                </p>
               </div>
-            </div>
-            <p className="text-sm text-gray-600">{challengeData?.description || "챌린지 소개를 불러오지 못했습니다."}</p>
-            <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-2 gap-2 text-center">
-              <div>
-                <p className="text-xs text-gray-400">참여자</p>
-                <p className="text-base font-bold text-gray-800">{challengeData?.stats?.totalParticipants || challengeData?.participantCount || 0}명</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">완료율</p>
-                <p className="text-base font-bold text-gray-800">{challengeData?.stats?.completionRate || 0}%</p>
+              <div className="flex gap-2 flex-shrink-0">
+                <div className="w-16 h-16 rounded-xl bg-gray-50 border border-gray-100 flex flex-col items-center justify-center">
+                  <p className="text-lg font-bold text-gray-800 leading-none">
+                    {challengeData?.stats?.totalParticipants || challengeData?.participantCount || 0}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-1">참여자</p>
+                </div>
+                <div className="w-16 h-16 rounded-xl bg-gray-50 border border-gray-100 flex flex-col items-center justify-center">
+                  <p className="text-lg font-bold text-gray-800 leading-none">
+                    {challengeData?.stats?.completionRate || 0}%
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-1">완료율</p>
+                </div>
               </div>
             </div>
           </section>
