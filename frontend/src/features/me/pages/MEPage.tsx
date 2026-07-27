@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { challengeApi, CreatedChallenge, ChallengeLifecycle } from '@/features/challenge/api/challengeApi';
@@ -316,9 +316,14 @@ function MyCreatedChallengesSection() {
 
 export const MEPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<METab>('active');
+  // 초기 탭은 URL ?tab= 로 지정 가능 (챌린지 생성 후 준비중/진행중 딥링크). 기본 진행중.
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<METab>(
+    tabParam === 'pending' || tabParam === 'completed' || tabParam === 'active' ? tabParam : 'active',
+  );
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-challenges'],
