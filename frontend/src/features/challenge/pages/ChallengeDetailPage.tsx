@@ -11,6 +11,7 @@ import { JoinWizardBottomSheet } from '@/features/challenge/components/JoinWizar
 import { WizardFormState } from '@/features/challenge/components/join-wizard/types';
 import { useAuthStore } from '@/stores/authStore';
 import { challengeApi } from '@/features/challenge/api/challengeApi';
+import { SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
 import { PaymentSheet } from '@/features/commerce/components/PaymentSheet';
 import { isPaidChallenge } from '@/features/commerce/api/commerceApi';
 
@@ -312,7 +313,7 @@ export const ChallengeDetailPage = () => {
             </div>
             <div className="flex-1">
               <span className="inline-block px-3 py-1 bg-primary-100 text-primary-700 text-xs font-medium rounded-full mb-2">
-                {challenge.category}
+                {SLUG_TO_LABEL[challenge.category] ?? challenge.category}
               </span>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">{challenge.title}</h2>
               <p className="text-sm text-gray-600 flex items-center gap-1">
