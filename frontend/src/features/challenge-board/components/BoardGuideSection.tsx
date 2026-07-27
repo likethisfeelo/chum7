@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -78,10 +78,19 @@ export const BoardGuideSection = ({ challengeId }: { challengeId: string }) => {
   }, [boardHasContent, boardBlocks, previewData]);
 
   const hasContent = blocks.length > 0;
-  const previewText = isLoading
-    ? '안내를 불러오는 중...'
-    : extractBoardPreviewText(blocks) ??
-      (hasContent ? '이미지·영상 안내가 등록되어 있어요.' : '아직 챌린지 가이드가 등록되지 않았습니다.');
+  const realText = isLoading ? null : extractBoardPreviewText(blocks);
+  const imageBlocks = useMemo(
+    () => (blocks as any[]).filter((b) => b?.type === 'image' && b?.url),
+    [blocks],
+  );
+
+  // 접힌 프리뷰 텍스트가 3줄을 넘어 잘렸는지 감지 → '전체보기에서 확인하세요' 노출
+  const textRef = useRef<HTMLParagraphElement>(null);
+  const [isTruncated, setIsTruncated] = useState(false);
+  useEffect(() => {
+    const el = textRef.current;
+    setIsTruncated(el ? el.scrollHeight > el.clientHeight + 1 : false);
+  }, [realText, expanded]);
 
   const togglePinned = () => {
     setPinned((prev) => {
@@ -153,8 +162,55 @@ export const BoardGuideSection = ({ challengeId }: { challengeId: string }) => {
             </svg>
           </div>
         </div>
-        {/* 접힌 상태 요약 (펼치면 본문이 이어지므로 숨김) */}
-        {!expanded && <p className="text-sm text-gray-700 line-clamp-3">{previewText}</p>}
+        {/* 접힌 상태 요약 — 텍스트 3줄(+전체보기 안내) · 이미지 4열 축소 썸네일(클릭 시 전체보기) */}
+        {!expanded &&
+          (isLoading ? (
+            <p className="text-sm text-gray-400">안내를 불러오는 중...</p>
+          ) : !hasContent ? (
+            <p className="text-sm text-gray-500">아직 챌린지 가이드가 등록되지 않았습니다.</p>
+          ) : (
+            <div>
+              {realText && (
+                <p ref={textRef} className="text-sm text-gray-700 line-clamp-3">
+                  {realText}
+                </p>
+              )}
+              {(isTruncated || imageBlocks.length > 0) && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/challenge-board/${challengeId}`);
+                  }}
+                  className="mt-1 text-xs font-semibold text-primary-600 hover:text-primary-800 transition-colors"
+                >
+                  전체보기에서 확인하세요 →
+                </button>
+              )}
+              {imageBlocks.length > 0 && (
+                <div className="grid grid-cols-4 gap-1.5 mt-2">
+                  {imageBlocks.slice(0, 4).map((b: any, i: number) => (
+                    <button
+                      key={b.id ?? i}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/challenge-board/${challengeId}`);
+                      }}
+                      className="relative aspect-square rounded-lg overflow-hidden bg-gray-100"
+                    >
+                      <img src={b.url} alt="" className="w-full h-full object-cover" />
+                      {i === 3 && imageBlocks.length > 4 && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-sm font-bold">
+                          +{imageBlocks.length - 4}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
       </div>
 
       {/* 확장 영역 — grid-rows 트랜지션으로 부드러운 높이 애니메이션 */}
