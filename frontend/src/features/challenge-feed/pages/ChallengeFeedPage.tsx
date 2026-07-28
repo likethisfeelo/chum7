@@ -554,6 +554,9 @@ export const ChallengeFeedPage = () => {
     return false;
   })();
   const isLeader = challengeData?.leaderId === user?.userId;
+  // 종료(완료/보관) 여부 — '시작 전(not active)'과 구분해야 안내 문구가 올바르다
+  const lifecycleNow = challengeData?.effectiveLifecycle || challengeData?.lifecycle;
+  const challengeEnded = lifecycleNow === "completed" || lifecycleNow === "archived";
   // 리더 운영 탭 노출 조건 — 챌린지 생성자 본인 (PRODUCT_SPEC §4.12-A)
   const isCreator = Boolean(challengeData?.createdBy) && challengeData?.createdBy === user?.userId;
   const isGaveUp = userChallenge?.phase === "gave_up" || userChallenge?.status === "gave_up";
@@ -567,7 +570,8 @@ export const ChallengeFeedPage = () => {
 
   // 퀘스트 진행 현황 계산
   const durationDays = challengeData?.durationDays || userChallenge?.durationDays || userChallenge?.challenge?.durationDays || 7;
-  const todayDay = userChallenge ? computeTodayChallengeDay(userChallenge) : 1;
+  // 시작 전에는 '오늘' 개념이 없다 — todayDay=-1 로 두어 완료/오늘 하이라이트가 뜨지 않게 한다
+  const todayDay = userChallenge && isActive ? computeTodayChallengeDay(userChallenge) : -1;
   const progressList: any[] = userChallenge?.progress || [];
 
   const isTodayAllDone = isMixedChallengeType
@@ -1158,8 +1162,8 @@ export const ChallengeFeedPage = () => {
               </section>
             )}
 
-          {/* 인증 완료 메시지 */}
-          {isTodayAllDone && !hasInvalidMyVideo && (
+          {/* 인증 완료 메시지 — 챌린지 시작 후에만 */}
+          {isActive && isTodayAllDone && !hasInvalidMyVideo && (
             <section className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
               <h3 className="font-bold text-emerald-800">✅ 오늘 인증 완료!</h3>
               <p className="text-sm text-emerald-700 mt-1">이제 피드에서 리액션과 댓글로 서로 힘을 나눠줄 수 있어요.</p>
@@ -1314,7 +1318,8 @@ export const ChallengeFeedPage = () => {
                           verificationId={item.verificationId}
                           challengeId={challengeId!}
                           canComment={isActive && Boolean(userChallenge) && !isGaveUp}
-                          challengeEnded={!isActive}
+                          challengeEnded={challengeEnded}
+                          notStartedYet={!isActive && !challengeEnded}
                         />
                       </div>
                     </div>
