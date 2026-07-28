@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ProfileOrb } from '@/shared/components/ProfileOrb';
+import { InstallAppButton } from '@/shared/components/InstallAppButton';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
 import { ProgressDayCircles } from '@/features/challenge/components/ProgressDayCircles';
 import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
@@ -563,6 +564,7 @@ export const MEPage = () => {
             <p className="text-sm text-gray-500 mt-2">오늘도 하나씩 이어가볼까요?</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <InstallAppButton />
             <button
               onClick={() => navigate('/personal-feed/notifications')}
               aria-label="알림"

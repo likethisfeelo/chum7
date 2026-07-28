@@ -3,7 +3,11 @@ import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import App from './app/App';
+import { initInstallPrompt } from './shared/pwa/installPrompt';
 import './styles/index.css';
+
+// PWA 설치 프롬프트(beforeinstallprompt)를 앱 시작 시점부터 붙잡아 둔다.
+initInstallPrompt();
 
 const queryClient = new QueryClient({
   defaultOptions: {

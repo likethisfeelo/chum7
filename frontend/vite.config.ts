@@ -27,14 +27,17 @@ export default defineConfig(({ mode }) => ({
         display: "standalone",
         icons: [
           {
-            src: "icons/icon-192.png",
-            sizes: "192x192",
-            type: "image/png",
-          },
-          {
             src: "icons/icon-512.png",
             sizes: "512x512",
             type: "image/png",
+            purpose: "any",
+          },
+          // 192 슬롯도 동일 파일로 채운다(별도 리사이즈 없이 브라우저가 축소).
+          {
+            src: "icons/icon-512.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
           },
         ],
       },
