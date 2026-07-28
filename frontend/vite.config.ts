@@ -19,8 +19,8 @@ export default defineConfig(({ mode }) => ({
       },
       manifestFilename: "manifest.json",
       manifest: {
-        name: "CHME - Challenge Earth with ME",
-        short_name: "CHME",
+        name: "CHUM7",
+        short_name: "CHUM7",
         description: "7일간의 짧고 강렬한 챌린지 플랫폼",
         theme_color: "#FF9B71",
         background_color: "#FFFFFF",

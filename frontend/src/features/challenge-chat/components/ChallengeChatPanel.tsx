@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { FiChevronDown, FiChevronUp, FiSend } from "react-icons/fi";
+import { FiChevronDown, FiChevronUp, FiSend, FiAlertCircle } from "react-icons/fi";
 import { useChallengeChat } from "../hooks/useChallengeChat";
 
 /**
@@ -10,6 +10,8 @@ import { useChallengeChat } from "../hooks/useChallengeChat";
 export function ChallengeChatPanel({ challengeId }: { challengeId: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  // 채팅 이용 주의사항 — 입장 시 기본 노출, 접기/펼치기 가능
+  const [showNotice, setShowNotice] = useState(true);
   const { messages, status, myDisplayName, myIsLeader, send } = useChallengeChat(
     challengeId,
     isOpen,
@@ -94,6 +96,32 @@ export function ChallengeChatPanel({ challengeId }: { challengeId: string }) {
             {myDisplayName ? ` · 나: ${myDisplayName}` : ""}
             {myIsLeader ? " 👑" : ""}
           </p>
+
+          {/* 채팅 이용 주의사항 — 상태줄 바로 아래, 클릭 시 펼침/접힘 */}
+          <div className="mb-2">
+            <button
+              type="button"
+              onClick={() => setShowNotice((v) => !v)}
+              aria-expanded={showNotice}
+              className="flex w-full items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-100"
+            >
+              <FiAlertCircle size={13} className="flex-shrink-0" />
+              채팅 이용 주의사항
+              {showNotice ? (
+                <FiChevronUp size={13} className="ml-auto" />
+              ) : (
+                <FiChevronDown size={13} className="ml-auto" />
+              )}
+            </button>
+            {showNotice && (
+              <ul className="mt-1.5 space-y-1 rounded-lg border border-amber-100 bg-amber-50/40 px-3 py-2.5 text-[11px] leading-relaxed text-gray-600">
+                <li>• 챌린지가 <b className="font-semibold text-gray-700">시작되면 채팅방은 사라져요.</b></li>
+                <li>• 챌린지에 대해 궁금한 점을 묻고, 함께할 분들과 다정하게 인사 나눠요.</li>
+                <li>• 익명으로 진행되니 <b className="font-semibold text-gray-700">개인정보 등 민감한 내용은 공유·질문을 자제</b>해주세요.</li>
+                <li>• 개인적이거나 민감한 이야기는 <b className="font-semibold text-gray-700">‘리더 DM’</b>으로 챌린지 리더에게 전해주세요.</li>
+              </ul>
+            )}
+          </div>
 
           {/* 메시지 목록 */}
           <div
