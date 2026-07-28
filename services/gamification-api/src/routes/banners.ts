@@ -4,8 +4,9 @@ import { getActiveBanner } from '../repo/banners';
 
 export const bannersRoutes = new Hono<AppEnv>();
 
-/** 레거시 category-banners/list와 동일한 카테고리 slug 목록·순서 */
+/** 카테고리 slug 목록·순서 — 'all'(전체) 포함 (모집중 탐색 첫 페이지 배너) */
 const CATEGORY_SLUGS = [
+  'all',
   'selflove', 'attitude', 'discipline', 'explore',
   'create', 'build', 'expand', 'impact',
 ] as const;

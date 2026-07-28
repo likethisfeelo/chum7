@@ -90,6 +90,20 @@ export const bannerUpsertSchema = z.object({
   description: z.string().min(1).max(300).optional(),
 });
 
+/** 배너 이미지 업로드 presigned PUT 바디 (user-api postUploadUrlSchema 미러 — 이미지 전용) */
+export const bannerUploadUrlSchema = z.object({
+  contentType: z
+    .string()
+    .regex(/^image\/(jpeg|jpg|png|webp|gif)$/)
+    .default('image/jpeg'),
+  fileSize: z
+    .number()
+    .int()
+    .positive()
+    .max(10 * 1024 * 1024)
+    .optional(),
+});
+
 /** 레거시 admin/cheer/dead-letter/requeue-batch 바디 */
 export const requeueBatchSchema = z.object({
   cheerIds: z.array(z.unknown()),
