@@ -83,7 +83,7 @@ export const RegisterPage = () => {
             <p className="text-gray-600">
               {isVerificationStep
                 ? '이메일로 받은 6자리 인증 코드를 입력해주세요'
-                : 'CHME와 함께 7일을 시작하세요'}
+                : 'chum7과 함께 7일을 시작하세요'}
             </p>
           </div>
 

@@ -57,8 +57,8 @@ export const LoginPage = () => {
             <div className="w-20 h-20 bg-gradient-to-br from-primary-400 to-primary-600 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-lg">
               <span className="text-white font-bold text-2xl">ME</span>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-1">CHME</h1>
-            <p className="text-gray-500 text-sm">Challenge Earth with ME</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-1">chum7</h1>
+            <p className="text-gray-500 text-sm">Challengers with me within 7 days</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
