@@ -22,6 +22,7 @@ import {
   resolveVerificationType,
 } from '../domain/verification-rules';
 import { getChallenge } from '../repo/challenges';
+import { effectiveLifecycleOf } from '../domain/challenge-state';
 import { findMyParticipationByUcId, listChallengeParticipations, updateParticipationFields } from '../repo/participations';
 import { putVerification, verificationKeys } from '../repo/verifications';
 import { listQuests } from '../repo/quests';
@@ -77,6 +78,16 @@ verificationRoutes.post('/', async (c) => {
   }
 
   const challenge = (await getChallenge(challengeId)) ?? {};
+
+  // 시작 전(draft/recruiting/preparing) 챌린지에는 인증을 남길 수 없다 — 시작 후에만 허용.
+  // (표시 지연 흡수용 effectiveLifecycle 기준. 챌린지 미로딩 시 가드 생략)
+  if (challenge.lifecycle) {
+    const eff = effectiveLifecycleOf(challenge, new Date());
+    if (eff === 'draft' || eff === 'recruiting' || eff === 'preparing') {
+      return fail(c, 409, 'CHALLENGE_NOT_STARTED', '챌린지가 시작된 후에 인증을 남길 수 있어요.');
+    }
+  }
+
   const allowedTypes = resolveAllowedTypes(challenge.allowedVerificationTypes);
   const challengeTargetTime24: string | null =
     typeof challenge.targetTime === 'string' && /^\d{2}:\d{2}$/.test(challenge.targetTime.trim())

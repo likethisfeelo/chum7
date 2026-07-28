@@ -1135,8 +1135,9 @@ export const ChallengeFeedPage = () => {
           {/* 채팅방 — 준비중 챌린지 참여자 전용 (오늘의 인증 바로 위) */}
           {challengeId && canChat && <ChallengeChatPanel challengeId={challengeId} />}
 
-          {/* 퀘스트 없을 때 일반 인증 폼 */}
-          {(!questsData || questsData.length === 0 || (challengeType === "leader_only" && leaderQuests.length === 0)) &&
+          {/* 퀘스트 없을 때 일반 인증 폼 — 챌린지 시작 후에만 노출 */}
+          {isActive &&
+            (!questsData || questsData.length === 0 || (challengeType === "leader_only" && leaderQuests.length === 0)) &&
             (!iDidTodayVerification || hasInvalidMyVideo) &&
             userChallenge &&
             !isGaveUp && (

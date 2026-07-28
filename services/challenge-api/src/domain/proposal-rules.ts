@@ -39,6 +39,14 @@ export function canReviewProposal(status: unknown): boolean {
 }
 
 /**
+ * 재반려 가능 상태 — 이미 승인(자동승인 포함)된 제안만 리더가 다시 반려할 수 있다.
+ * 반려 시 해당 참여자의 개인 퀘스트 인증 게시물을 삭제한다(호출부 처리).
+ */
+export function canRerejectProposal(status: unknown): boolean {
+  return status === 'approved';
+}
+
+/**
  * 제안 자동승인 여부 — 기본 자동승인.
  * 챌린지가 `personalQuestAutoApprove === false` 로 명시적 수동검토(리더 검토 후 승인)를
  * 켠 경우에만 pending. 미설정(undefined)은 자동승인 — "기본 자동승인" 정책.

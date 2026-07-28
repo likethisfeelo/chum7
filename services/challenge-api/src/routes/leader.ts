@@ -18,14 +18,23 @@ import {
 import { normalizeProgress } from '../domain/progress';
 import { createDayCompletionRules } from '../domain/verification-rules';
 import { getChallenge } from '../repo/challenges';
-import { listChallengeParticipations } from '../repo/participations';
+import {
+  getParticipation,
+  listChallengeParticipations,
+  updateParticipationFields,
+} from '../repo/participations';
 import { countPendingSubmissions, listQuests } from '../repo/quests';
+import {
+  deleteVerification,
+  listUserChallengeVerifications,
+} from '../repo/verifications';
 import {
   findProposalById,
   listChallengeProposals,
   updateProposalReview,
+  updateProposalReReject,
 } from '../repo/quest-proposals';
-import { canReviewProposal, proposalReviewOutcome } from '../domain/proposal-rules';
+import { canRerejectProposal, canReviewProposal, proposalReviewOutcome } from '../domain/proposal-rules';
 import { proposalReviewSchema } from '../schemas';
 import { stripKeys } from '../repo/shared';
 
@@ -220,4 +229,73 @@ leaderRoutes.put('/quest-proposals/:proposalId/review', async (c) => {
   if (!applied) return fail(c, 409, 'ALREADY_REVIEWED', '이미 처리된 제안서입니다');
 
   return ok(c, { proposalId, status: outcome.status }, outcome.message);
+});
+
+// 개인 퀘스트 재반려 (리더 — 이미 승인/자동승인된 제안을 다시 반려).
+// 반려 시 해당 참여자의 개인 퀘스트(questType='personal') 인증 게시물을 삭제하고
+// 진행 기록의 개인 퀘스트 마커를 정리한다. (누적 점수 등 게이미피케이션 반영은 별도 도메인)
+leaderRoutes.put('/quest-proposals/:proposalId/re-reject', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const proposalId = c.req.param('proposalId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+
+  const input = proposalReviewSchema.parse(await c.req.json().catch(() => ({})));
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  const proposal = await findProposalById(challengeId, proposalId);
+  if (!proposal) return fail(c, 404, 'PROPOSAL_NOT_FOUND', '제안서를 찾을 수 없습니다');
+  if (!canRerejectProposal(proposal.status)) {
+    return fail(c, 409, 'NOT_APPROVED', `이미 승인된 제안만 다시 반려할 수 있습니다 (status: ${proposal.status})`);
+  }
+
+  const applied = await updateProposalReReject({
+    challengeId,
+    sk: String(proposal.sk),
+    reason: input.reason ?? null,
+    reviewerId: c.get('authUser')!.userId,
+    nowIso,
+  });
+  if (!applied) return fail(c, 409, 'NOT_APPROVED', '이미 처리된 제안서입니다');
+
+  // 개인 퀘스트 인증 게시물 삭제 + 진행 기록 개인 퀘스트 마커 정리 (실패해도 반려 자체는 성공 처리)
+  const participantId = String(proposal.userId);
+  let deletedCount = 0;
+  try {
+    const verifications = await listUserChallengeVerifications(challengeId, participantId);
+    const personal = verifications.filter((v) => v.questType === 'personal');
+    for (const v of personal) {
+      await deleteVerification({ pk: String(v.pk), sk: String(v.sk) });
+      deletedCount += 1;
+    }
+
+    if (personal.length > 0) {
+      const participation = await getParticipation(challengeId, participantId);
+      if (participation) {
+        const progress = normalizeProgress(participation.progress);
+        let changed = false;
+        const cleaned = progress.map((entry: any) => {
+          if (!entry.personalVerificationId && entry.personalQuestDone !== true) return entry;
+          changed = true;
+          const next: any = { ...entry, personalQuestDone: false };
+          delete next.personalVerificationId;
+          // 개인 퀘스트로 완료됐던 날은 미완료(partial)로 강등 — 반려로 개인 인증이 사라졌으므로
+          if (isCompletedProgressStatus(entry.status)) next.status = 'partial';
+          return next;
+        });
+        if (changed) {
+          await updateParticipationFields(challengeId, participantId, { progress: cleaned, updatedAt: nowIso });
+        }
+      }
+    }
+  } catch (err: any) {
+    console.error('re-reject verification cleanup error (non-fatal):', err?.message);
+  }
+
+  return ok(
+    c,
+    { proposalId, status: 'rejected', deletedVerifications: deletedCount },
+    '개인 퀘스트를 반려하고 관련 인증 게시물을 삭제했어요.',
+  );
 });

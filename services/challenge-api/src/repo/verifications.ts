@@ -5,7 +5,7 @@
  *  공개 인증: gsi2pk=`VFPUB#<YYYY-MM-DD>`(KST), gsi2sk=`<createdAt>` — 마당 변환·공개 피드·world-summary가 소비.
  * 레거시 VERIFICATIONS_TABLE(PK verificationId + userId-index/isPublic-createdAt-index) 대응.
  */
-import { PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DeleteCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 import { certDateFromIso, DEFAULT_TIMEZONE } from '../domain/day-sync';
 import { TABLE, challengePk } from './shared';
@@ -93,6 +93,35 @@ export async function listPublicVerificationsByDate(
     }),
   );
   return { items: res.Items ?? [], lastKey: res.LastEvaluatedKey };
+}
+
+/** 특정 참여자의 챌린지 내 인증 전체 — pk 파티션 + sk `VF#<userId>#` prefix Query (리더 정리용) */
+export async function listUserChallengeVerifications(
+  challengeId: string,
+  userId: string,
+): Promise<Record<string, any>[]> {
+  const items: Record<string, any>[] = [];
+  let lastKey: Record<string, any> | undefined;
+  do {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: tableName(TABLE),
+        KeyConditionExpression: 'pk = :pk AND begins_with(sk, :sk)',
+        ExpressionAttributeValues: { ':pk': challengePk(challengeId), ':sk': `VF#${userId}#` },
+        ExclusiveStartKey: lastKey,
+      }),
+    );
+    items.push(...(res.Items ?? []));
+    lastKey = res.LastEvaluatedKey;
+  } while (lastKey);
+  return items;
+}
+
+/** 인증 삭제 — 테이블 키(pk/sk)로 직접 삭제 (리더 개인 퀘스트 반려 시 인증 게시물 정리) */
+export async function deleteVerification(keys: { pk: string; sk: string }): Promise<void> {
+  await docClient.send(
+    new DeleteCommand({ TableName: tableName(TABLE), Key: { pk: keys.pk, sk: keys.sk } }),
+  );
 }
 
 /** verificationId로 본인 인증 조회 — 본인 gsi1 파티션 Query + 필터 (소유권 내장) */

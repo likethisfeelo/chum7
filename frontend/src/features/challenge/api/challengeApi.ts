@@ -133,4 +133,17 @@ export const challengeApi = {
     );
     return res.data.data;
   },
+
+  // 이미 승인(자동승인 포함)된 개인 퀘스트를 리더가 다시 반려 — 관련 인증 게시물 삭제됨
+  reRejectQuestProposal: async (
+    challengeId: string,
+    proposalId: string,
+    params: { reason?: string } = {},
+  ): Promise<{ proposalId: string; status: 'rejected'; deletedVerifications: number }> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/quest-proposals/${proposalId}/re-reject`,
+      { decision: 'reject', ...params },
+    );
+    return res.data.data;
+  },
 };

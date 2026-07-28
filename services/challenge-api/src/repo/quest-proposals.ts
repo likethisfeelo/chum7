@@ -112,6 +112,42 @@ export async function updateProposalReview(input: ProposalReviewUpdateInput): Pr
   }
 }
 
+/**
+ * 리더 재반려 — approved 조건부로 rejected 전환 (중복/경쟁 방지). 조건 실패 시 false.
+ * 이미 승인(자동승인 포함)된 개인 퀘스트 제안을 리더가 다시 반려할 때 사용.
+ */
+export async function updateProposalReReject(input: {
+  challengeId: string;
+  sk: string;
+  reason: string | null;
+  reviewerId: string;
+  nowIso: string;
+}): Promise<boolean> {
+  try {
+    await docClient.send(
+      new UpdateCommand({
+        TableName: tableName(TABLE),
+        Key: { pk: challengePk(input.challengeId), sk: input.sk },
+        UpdateExpression:
+          'SET #st = :rejected, leaderFeedback = :fb, reviewedBy = :reviewer, reviewedAt = :now, updatedAt = :now',
+        ConditionExpression: '#st = :approved',
+        ExpressionAttributeNames: { '#st': 'status' },
+        ExpressionAttributeValues: {
+          ':rejected': 'rejected',
+          ':approved': 'approved',
+          ':fb': input.reason,
+          ':reviewer': input.reviewerId,
+          ':now': input.nowIso,
+        },
+      }),
+    );
+    return true;
+  } catch (error) {
+    if ((error as { name?: string }).name === 'ConditionalCheckFailedException') return false;
+    throw error;
+  }
+}
+
 /** 재제출(내용 교체 + pending 복귀) — 존재 조건부 부분 갱신 */
 export async function updateProposalFields(
   challengeId: string,
