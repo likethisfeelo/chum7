@@ -12,11 +12,15 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { extractBoardPreviewText } from '@/features/challenge-board/components/BoardBlocksViewer';
 import {
   CHALLENGE_CATEGORIES,
+  ALL_CATEGORY,
   SLUG_TO_LABEL,
   SLUG_TO_COLOR,
   SLUG_TO_HEX,
   DEFAULT_BANNERS,
 } from '../constants/categories';
+
+// 모집중 탐색용 목록 — '전체'를 맨 앞(첫 페이지 기본값)에 두고 나머지 카테고리를 이어붙인다.
+const BROWSE_CATEGORIES = [ALL_CATEGORY, ...CHALLENGE_CATEGORIES];
 
 type CategoryBanner = {
   slug: string;
@@ -375,7 +379,8 @@ export const ChallengesPage = () => {
     }
   });
 
-  const currentCategory = CHALLENGE_CATEGORIES[currentIndex];
+  const currentCategory = BROWSE_CATEGORIES[currentIndex];
+  const isAll = currentCategory.slug === 'all';
 
   const { data: bannersData } = useQuery({
     queryKey: ['category-banners'],
@@ -394,7 +399,9 @@ export const ChallengesPage = () => {
       const query =
         lifecycleTab === 'active'
           ? 'lifecycle=active&limit=50'
-          : `category=${currentCategory.slug}&lifecycle=recruiting`;
+          : isAll
+            ? 'lifecycle=recruiting&limit=50'
+            : `category=${currentCategory.slug}&lifecycle=recruiting`;
       const response = await apiClient.get(`/public/challenges?${query}`);
       return response.data.data;
     },
@@ -404,9 +411,10 @@ export const ChallengesPage = () => {
   const { data: recruitingData, isLoading: recruitingLoading } = useQuery({
     queryKey: ['challenges-recruiting', currentCategory.slug],
     queryFn: async () => {
-      const response = await apiClient.get(
-        `/public/challenges?category=${currentCategory.slug}&lifecycle=recruiting`,
-      );
+      const query = isAll
+        ? 'lifecycle=recruiting&limit=50'
+        : `category=${currentCategory.slug}&lifecycle=recruiting`;
+      const response = await apiClient.get(`/public/challenges?${query}`);
       return response.data.data;
     },
   });
@@ -414,9 +422,10 @@ export const ChallengesPage = () => {
   const { data: activeData, isLoading: activeLoading } = useQuery({
     queryKey: ['challenges-active', currentCategory.slug],
     queryFn: async () => {
-      const response = await apiClient.get(
-        `/public/challenges?category=${currentCategory.slug}&lifecycle=active`,
-      );
+      const query = isAll
+        ? 'lifecycle=active&limit=50'
+        : `category=${currentCategory.slug}&lifecycle=active`;
+      const response = await apiClient.get(`/public/challenges?${query}`);
       return response.data.data;
     },
   });
@@ -447,7 +456,7 @@ export const ChallengesPage = () => {
   };
 
   const handleDragEnd = (_: any, info: { offset: { x: number } }) => {
-    if (info.offset.x < -50 && currentIndex < CHALLENGE_CATEGORIES.length - 1) {
+    if (info.offset.x < -50 && currentIndex < BROWSE_CATEGORIES.length - 1) {
       goTo(currentIndex + 1);
     } else if (info.offset.x > 50 && currentIndex > 0) {
       goTo(currentIndex - 1);
@@ -595,7 +604,7 @@ export const ChallengesPage = () => {
 
         {/* Desktop: category pill tabs */}
         <div className="hidden lg:flex gap-2 mt-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-          {CHALLENGE_CATEGORIES.map((cat, i) => (
+          {BROWSE_CATEGORIES.map((cat, i) => (
             <button
               key={cat.slug}
               onClick={() => goTo(i)}
@@ -673,7 +682,7 @@ export const ChallengesPage = () => {
                     {currentCategory.label}
                   </span>
                   <div className="flex gap-1.5 justify-center">
-                    {CHALLENGE_CATEGORIES.map((cat, i) => (
+                    {BROWSE_CATEGORIES.map((cat, i) => (
                       <button
                         key={cat.slug}
                         onClick={() => goTo(i)}
@@ -688,8 +697,8 @@ export const ChallengesPage = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => goTo(Math.min(CHALLENGE_CATEGORIES.length - 1, currentIndex + 1))}
-                  disabled={currentIndex === CHALLENGE_CATEGORIES.length - 1}
+                  onClick={() => goTo(Math.min(BROWSE_CATEGORIES.length - 1, currentIndex + 1))}
+                  disabled={currentIndex === BROWSE_CATEGORIES.length - 1}
                   className="text-white disabled:opacity-20 hover:text-white/80 transition-colors text-xl font-light w-6 flex-shrink-0"
                   aria-label="next category"
                 >

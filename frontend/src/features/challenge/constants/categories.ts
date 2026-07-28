@@ -11,6 +11,14 @@ export const CHALLENGE_CATEGORIES = [
 
 export type CategorySlug = (typeof CHALLENGE_CATEGORIES)[number]['slug'];
 
+// '전체' — 모집중 탐색용 가상 카테고리 (실제 카테고리 아님, 생성/검증에는 미사용).
+export const ALL_CATEGORY = {
+  slug: 'all',
+  label: '전체',
+  color: 'bg-gray-100 text-gray-600',
+  emoji: '✨',
+} as const;
+
 export const SLUG_TO_LABEL: Record<string, string> = Object.fromEntries(
   CHALLENGE_CATEGORIES.map((c) => [c.slug, c.label]),
 );
@@ -25,6 +33,7 @@ export const SLUG_TO_EMOJI: Record<string, string> = Object.fromEntries(
 
 // 타이틀/텍스트 색상용 hex (카테고리별)
 export const SLUG_TO_HEX: Record<string, string> = {
+  all: '#6E7687',
   selflove: '#D46A6A',
   attitude: '#E0A05A',
   discipline: '#D8B36A',
@@ -36,6 +45,7 @@ export const SLUG_TO_HEX: Record<string, string> = {
 };
 
 export const DEFAULT_BANNERS: Record<string, { tagline: string; description: string }> = {
+  all:            { tagline: 'Find your challenge',          description: '지금 모집 중인 모든 챌린지를 한눈에' },
   selflove:       { tagline: 'Love yourself first',          description: '나를 가장 먼저 돌보는 작은 습관들' },
   attitude:  { tagline: 'Your mindset is everything',   description: '태도가 결과를 만든다' },
   discipline:        { tagline: 'Show up. Every. Single. Day.',  description: '매일 조금씩, 결국엔 멀리' },
