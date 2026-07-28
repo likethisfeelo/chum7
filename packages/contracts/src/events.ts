@@ -88,6 +88,22 @@ export const domainEventSchemas = {
     day: z.number().int(),
     plazaConverted: z.boolean(),
   }),
+  // 리더가 이미 승인된 개인 퀘스트 제안을 재반려 — 참여자에게 사유·결과 안내
+  'proposal.rerejected': z.object({
+    challengeId: z.string(),
+    userId: z.string(),
+    proposalId: z.string(),
+    reason: z.string(),
+    // 시작 전 재제출 없을 때의 처리: 'block'(참여 제한) | 'keep_original'(기존 제출본 유지)
+    fallback: z.enum(['block', 'keep_original']),
+  }),
+  // 시작 시점 재제출 미이행 처리 결과 — 참여자 안내
+  'proposal.enforced': z.object({
+    challengeId: z.string(),
+    userId: z.string(),
+    proposalId: z.string(),
+    outcome: z.enum(['blocked', 'restored']),
+  }),
   'order.paid': z.object({
     orderId: z.string(),
     userId: z.string(),

@@ -70,6 +70,10 @@ verificationRoutes.post('/', async (c) => {
   if (!userChallenge) {
     return fail(c, 404, 'USER_CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다');
   }
+  // 개인 퀘스트 재반려 후 재제출 미이행으로 참여가 제한된 경우 인증 불가
+  if (userChallenge.status === 'blocked' || userChallenge.phase === 'blocked') {
+    return fail(c, 403, 'PARTICIPATION_BLOCKED', '개인 퀘스트가 승인되지 않아 이 챌린지 참여가 제한되었습니다.');
+  }
   const challengeId: string | null = typeof userChallenge.challengeId === 'string' && userChallenge.challengeId.trim()
     ? userChallenge.challengeId.trim()
     : null;

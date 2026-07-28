@@ -73,6 +73,57 @@ async function activateParticipants(challenge: ChallengeLike, nowIso: string): P
   await repo.decrementPendingParticipants(challenge.challengeId, rejectedCount, nowIso);
 }
 
+/**
+ * 시작 시점 재반려 제안 처리 — 리더가 재반려(rejectFallback 지정)했으나 재제출로 승인되지 않은
+ * 개인 퀘스트 제안에 대해 리더가 정한 fallback 적용:
+ *   keep_original → 원래 승인 내용으로 자동 재승인 (마커 정리)
+ *   block         → 해당 참여자 참여 제한(status/phase='blocked') — 인증 불가
+ * (재제출로 승인/대기 상태가 됐거나 마커가 정리된 제안은 대상에서 제외)
+ */
+async function enforceRejectedProposals(challenge: ChallengeLike, nowIso: string): Promise<void> {
+  let proposals: Record<string, any>[];
+  try {
+    proposals = await repo.listChallengeProposals(challenge.challengeId);
+  } catch (err: any) {
+    console.error(JSON.stringify({ level: 'error', message: 'enforce: list proposals failed', challengeId: challenge.challengeId, error: err?.message }));
+    return;
+  }
+  for (const p of proposals) {
+    if (p.status !== 'rejected' || !p.rejectFallback) continue;
+    const userId = String(p.userId ?? '');
+    const proposalId = String(p.proposalId ?? '');
+    if (!userId) continue;
+    try {
+      if (p.rejectFallback === 'keep_original') {
+        await repo.updateProposal(challenge.challengeId, String(p.sk), {
+          status: 'approved',
+          title: p.originalTitle ?? p.title ?? '',
+          description: p.originalDescription ?? p.description ?? '',
+          leaderFeedback: null,
+          rejectFallback: null,
+          originalTitle: null,
+          originalDescription: null,
+          reviewedBy: 'auto-restore',
+          reviewedAt: nowIso,
+          updatedAt: nowIso,
+        });
+        await publishEvent('proposal.enforced', { challengeId: challenge.challengeId, userId, proposalId, outcome: 'restored' });
+      } else if (p.rejectFallback === 'block') {
+        await repo.updateParticipation(challenge.challengeId, userId, {
+          status: 'blocked',
+          phase: 'blocked',
+          joinStatus: 'rejected',
+          blockedReason: 'personal_quest_unresolved',
+          updatedAt: nowIso,
+        });
+        await publishEvent('proposal.enforced', { challengeId: challenge.challengeId, userId, proposalId, outcome: 'blocked' });
+      }
+    } catch (err: any) {
+      console.error(JSON.stringify({ level: 'error', message: 'enforce proposal failed', challengeId: challenge.challengeId, userId, error: err?.message }));
+    }
+  }
+}
+
 /** 완주자 1명의 캐릭터 슬롯 채우기 (레거시 fillCharacterSlot — gamification 테이블판) */
 async function fillCharacterSlot(userId: string, challengeId: string, nowIso: string): Promise<void> {
   const state = await repo.getCharacterState(userId);
@@ -235,7 +286,10 @@ async function processChallenge(challenge: ChallengeLike, now: Date, summary: Ru
     console.log(JSON.stringify({ level: 'info', message: 'challenge transitioned', challengeId: challenge.challengeId, from, to: step }));
     summary.transitioned += 1;
 
-    if (step === 'active') await activateParticipants(challenge, nowIso);
+    if (step === 'active') {
+      await activateParticipants(challenge, nowIso);
+      await enforceRejectedProposals(challenge, nowIso);
+    }
     if (step === 'completed') await completeChallenge(challenge, now, summary);
     if (step === 'recruiting') {
       // 예약 오픈으로 모집 시작 — 관심영역 구독자 알림 팬아웃 신호 (통지, 실패 무시)

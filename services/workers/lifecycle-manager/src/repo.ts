@@ -170,6 +170,54 @@ export async function updateParticipation(
   );
 }
 
+// ── challenges: 개인 퀘스트 제안(QPROP#) ───────────────────────────────
+
+/** 챌린지의 개인 퀘스트 제안 전체 — pk 파티션 QPROP# prefix Query (challenge-api repo와 동일 키) */
+export async function listChallengeProposals(challengeId: string): Promise<Record<string, any>[]> {
+  const items: Record<string, any>[] = [];
+  let lastKey: Record<string, any> | undefined;
+  do {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: tableName(CHALLENGES_TABLE),
+        KeyConditionExpression: 'pk = :pk AND begins_with(sk, :q)',
+        ExpressionAttributeValues: { ':pk': challengePk(challengeId), ':q': 'QPROP#' },
+        ExclusiveStartKey: lastKey,
+      }),
+    );
+    items.push(...(res.Items ?? []));
+    lastKey = res.LastEvaluatedKey;
+  } while (lastKey);
+  return items;
+}
+
+/** 제안 레코드 부분 갱신 (예약어 대응 dynamic SET — sk 직접 지정) */
+export async function updateProposal(
+  challengeId: string,
+  sk: string,
+  attrs: Record<string, unknown>,
+): Promise<void> {
+  const names: Record<string, string> = {};
+  const values: Record<string, unknown> = {};
+  const sets: string[] = [];
+  let i = 0;
+  for (const [key, value] of Object.entries(attrs)) {
+    i += 1;
+    names[`#p${i}`] = key;
+    values[`:p${i}`] = value;
+    sets.push(`#p${i} = :p${i}`);
+  }
+  await docClient.send(
+    new UpdateCommand({
+      TableName: tableName(CHALLENGES_TABLE),
+      Key: { pk: challengePk(challengeId), sk },
+      UpdateExpression: `SET ${sets.join(', ')}`,
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
+    }),
+  );
+}
+
 // ── gamification: 뱃지·캐릭터 (크로스 도메인 W — 이전 가이드 §4) ─────────
 
 /**
