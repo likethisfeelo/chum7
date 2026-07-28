@@ -159,6 +159,7 @@ function BriefingSection({ challengeId }: { challengeId: string }) {
 }
 
 function ParticipantsSection({ challengeId }: { challengeId: string }) {
+  const navigate = useNavigate();
   const { data, isLoading, isError } = useQuery<LeaderParticipantsData>({
     queryKey: ['leader-participants', challengeId],
     queryFn: async () => {
@@ -241,6 +242,13 @@ function ParticipantsSection({ challengeId }: { challengeId: string }) {
                   <span>Day {p.currentDay}</span>
                   <span>연속 {p.consecutiveDays}일</span>
                   {p.usedRemedyCount > 0 && <span>보완 {p.usedRemedyCount}회</span>}
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/dm/${challengeId}/${p.userId}`)}
+                    className="ml-auto rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                  >
+                    💬 DM
+                  </button>
                 </div>
               </div>
             );

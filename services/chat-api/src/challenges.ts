@@ -51,3 +51,47 @@ export async function getChatEligibility(
   const isLeader = leaderId !== '' && leaderId === userId;
   return { eligible: joined && preparing, status, lifecycle, isLeader };
 }
+
+/**
+ * 리더 DM 입장 자격 — 방은 (challengeId, participantId) 1:1.
+ * 입장 가능: ① 챌린지 리더  ② 그 참여자 본인(=participantId)이며 유효 참여자.
+ * (그룹 채팅과 달리 lifecycle 제한 없음 — 언제든 대화 가능)
+ */
+export async function getDmEligibility(
+  challengeId: string,
+  userId: string,
+  participantId: string,
+): Promise<{ eligible: boolean; isLeader: boolean }> {
+  const table = process.env.CHALLENGES_TABLE;
+  if (!table) throw new Error('Missing table env: CHALLENGES_TABLE');
+
+  const metaRes = await docClient.send(
+    new GetCommand({
+      TableName: table,
+      Key: { pk: `CHAL#${challengeId}`, sk: 'META' },
+      ProjectionExpression: 'leaderId, createdBy',
+    }),
+  );
+  const meta = metaRes.Item;
+  if (!meta) return { eligible: false, isLeader: false };
+  const leaderId = String(meta.leaderId || meta.createdBy || '');
+  const isLeader = leaderId !== '' && leaderId === userId;
+
+  if (isLeader) return { eligible: true, isLeader: true };
+
+  // 참여자 측: 본인만 자기 DM 방에 입장 가능
+  if (!participantId || userId !== participantId) return { eligible: false, isLeader: false };
+  const partRes = await docClient.send(
+    new GetCommand({
+      TableName: table,
+      Key: { pk: `CHAL#${challengeId}`, sk: `UC#${userId}` },
+      ProjectionExpression: '#s, phase',
+      ExpressionAttributeNames: { '#s': 'status' },
+    }),
+  );
+  const part = partRes.Item;
+  if (!part) return { eligible: false, isLeader: false };
+  const status = typeof part.status === 'string' ? part.status : undefined;
+  const joined = !(status && EXCLUDED_STATUSES.has(status)) && part.phase !== 'gave_up';
+  return { eligible: joined, isLeader: false };
+}

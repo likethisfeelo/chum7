@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
- * 챌린지 단체 채팅 WebSocket 훅.
- * - 연결 URL: `${VITE_WS_URL}?token=<idToken>&challengeId=<id>` (브라우저 WS는 헤더 불가 → 쿼리스트링)
- * - 접속 직후 {action:'history'} 전송 → 서버가 {type:'ready', displayName, messages} 응답
- * - 전송: {action:'sendMessage', text} → 서버가 방 전체에 {type:'message', message} 브로드캐스트
- * - 끊기면 지수 백오프 재연결(enabled 동안). 언마운트/challengeId 변경 시 정리.
+ * WebSocket 채팅 훅 — 챌린지 단체 채팅 + 1:1 리더 DM 겸용.
+ * 연결 쿼리: 그룹=`challengeId=<id>`, DM=`dm=<challengeId>:<participantId>`.
+ * DM은 읽음/안읽음(peerLastReadAt) + markRead() 지원.
  */
 export interface ChatMessage {
   messageId: string;
@@ -20,11 +18,13 @@ export type ChatStatus = "connecting" | "open" | "closed" | "error";
 const WS_URL = import.meta.env.VITE_WS_URL as string | undefined;
 const MAX_BACKOFF_MS = 15_000;
 
-export function useChallengeChat(challengeId: string | undefined, enabled: boolean) {
+export function useChatSocket(query: string | null, enabled: boolean) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<ChatStatus>("closed");
   const [myDisplayName, setMyDisplayName] = useState<string | null>(null);
   const [myIsLeader, setMyIsLeader] = useState(false);
+  const [isDm, setIsDm] = useState(false);
+  const [peerLastReadAt, setPeerLastReadAt] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -38,7 +38,7 @@ export function useChallengeChat(challengeId: string | undefined, enabled: boole
   }, []);
 
   const connect = useCallback(() => {
-    if (!enabled || !challengeId) return;
+    if (!enabled || !query) return;
     if (!WS_URL) {
       setStatus("error");
       return;
@@ -51,10 +51,7 @@ export function useChallengeChat(challengeId: string | undefined, enabled: boole
 
     closedByUsRef.current = false;
     setStatus("connecting");
-    const url = `${WS_URL}?token=${encodeURIComponent(token)}&challengeId=${encodeURIComponent(
-      challengeId,
-    )}`;
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}&${query}`);
     ws.binaryType = "arraybuffer";
     wsRef.current = ws;
 
@@ -70,45 +67,41 @@ export function useChallengeChat(challengeId: string | undefined, enabled: boole
         if (payload?.type === "ready") {
           setMyDisplayName(payload.displayName ?? null);
           setMyIsLeader(Boolean(payload.isLeader));
+          setIsDm(Boolean(payload.isDm));
+          setPeerLastReadAt(payload.peerLastReadAt ?? null);
           setMessages(Array.isArray(payload.messages) ? payload.messages : []);
         } else if (payload?.type === "message" && payload.message) {
           appendMessage(payload.message as ChatMessage);
+        } else if (payload?.type === "read" && typeof payload.at === "string") {
+          setPeerLastReadAt((prev) => (!prev || payload.at > prev ? payload.at : prev));
         }
       } catch {
-        // 무시 — 알 수 없는 프레임
+        // 무시
       }
     };
 
     ws.onmessage = (event) => {
       const data = event.data;
-      // API Gateway WebSocket 은 postToConnection 페이로드를 바이너리(Blob/ArrayBuffer)
-      // 프레임으로 전달할 수 있어 문자열로 정규화한 뒤 파싱한다.
-      if (typeof data === "string") {
-        handlePayload(data);
-      } else if (data instanceof ArrayBuffer) {
-        handlePayload(new TextDecoder().decode(data));
-      } else if (typeof Blob !== "undefined" && data instanceof Blob) {
+      if (typeof data === "string") handlePayload(data);
+      else if (data instanceof ArrayBuffer) handlePayload(new TextDecoder().decode(data));
+      else if (typeof Blob !== "undefined" && data instanceof Blob)
         data.text().then(handlePayload).catch(() => undefined);
-      }
     };
 
-    ws.onerror = () => {
-      setStatus("error");
-    };
+    ws.onerror = () => setStatus("error");
 
     ws.onclose = () => {
       wsRef.current = null;
       setStatus("closed");
       if (closedByUsRef.current || !enabled) return;
-      // 지수 백오프 재연결
       const delay = Math.min(1000 * 2 ** attemptsRef.current, MAX_BACKOFF_MS);
       attemptsRef.current += 1;
       reconnectRef.current = setTimeout(connect, delay);
     };
-  }, [enabled, challengeId, appendMessage]);
+  }, [enabled, query, appendMessage]);
 
   useEffect(() => {
-    if (!enabled || !challengeId) return;
+    if (!enabled || !query) return;
     connect();
     return () => {
       closedByUsRef.current = true;
@@ -118,10 +111,12 @@ export function useChallengeChat(challengeId: string | undefined, enabled: boole
       setMessages([]);
       setMyDisplayName(null);
       setMyIsLeader(false);
+      setIsDm(false);
+      setPeerLastReadAt(null);
       setStatus("closed");
       attemptsRef.current = 0;
     };
-  }, [enabled, challengeId, connect]);
+  }, [enabled, query, connect]);
 
   const send = useCallback((text: string) => {
     const trimmed = text.trim();
@@ -131,5 +126,15 @@ export function useChallengeChat(challengeId: string | undefined, enabled: boole
     return true;
   }, []);
 
-  return { messages, status, myDisplayName, myIsLeader, send };
+  const markRead = useCallback(() => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ action: "read" }));
+  }, []);
+
+  return { messages, status, myDisplayName, myIsLeader, isDm, peerLastReadAt, send, markRead };
+}
+
+/** 챌린지 단체 채팅 — 기존 패널용 얇은 래퍼. */
+export function useChallengeChat(challengeId: string | undefined, enabled: boolean) {
+  return useChatSocket(challengeId ? `challengeId=${encodeURIComponent(challengeId)}` : null, enabled);
 }

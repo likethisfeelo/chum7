@@ -1,28 +1,27 @@
 /**
- * chat 테이블 — 챌린지 단체 채팅. WebSocket 연결 레지스트리 + 임시 메시지 로그.
- * 키 설계 (GSI 없이 메인 테이블 Query 만으로 브로드캐스트·최근조회 성립):
- *  방 멤버십  pk=`ROOM#<challengeId>` sk=`CONN#<connectionId>`   (브로드캐스트 대상 목록)
- *  연결 역참조 pk=`CONN#<connectionId>` sk=`META`                ($disconnect 시 방 조회)
- *  메시지     pk=`MSG#<challengeId>`  sk=`<createdAt>#<connectionId>` (최근 N개 조회)
- * 모든 아이템에 TTL 속성 `ttl`(epoch seconds) — 연결 2h, 메시지 24h 후 자동 삭제(임시성).
+ * chat 테이블 — 챌린지 단체 채팅 + 1:1 리더 DM. WebSocket 연결 레지스트리 + 메시지 로그 + 읽음.
+ * roomKey: 그룹=challengeId, DM=`dm#<challengeId>#<participantId>`.
+ *  방 멤버십  pk=`ROOM#<roomKey>` sk=`CONN#<connectionId>`   (브로드캐스트 대상)
+ *  연결 역참조 pk=`CONN#<connectionId>` sk=`META`             ($disconnect·send 시 방 조회)
+ *  메시지     pk=`MSG#<roomKey>`  sk=`<createdAt>#<connectionId>` (최근 N개)
+ *  읽음(DM)   pk=`READ#<roomKey>`  sk=`USER#<userId>`          (lastReadAt)
+ * 연결 TTL 2h. 메시지 TTL: 그룹 24h(임시)·DM 90d(보존).
  */
-import {
-  DeleteCommand,
-  PutCommand,
-  QueryCommand,
-} from '@aws-sdk/lib-dynamodb';
+import { DeleteCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 
 const TABLE = 'CHAT_TABLE';
 
-const CONNECTION_TTL_SECONDS = 2 * 60 * 60; // 2h — API GW WebSocket 최대 연결 수명
-const MESSAGE_TTL_SECONDS = 24 * 60 * 60; // 24h — 임시 보존(새로고침 시 최근 대화 복원)
+const CONNECTION_TTL_SECONDS = 2 * 60 * 60;
+export const GROUP_MESSAGE_TTL_SECONDS = 24 * 60 * 60;
+export const DM_MESSAGE_TTL_SECONDS = 90 * 24 * 60 * 60;
 const RECENT_LIMIT = 50;
 
-const roomPk = (challengeId: string) => `ROOM#${challengeId}`;
+const roomPk = (roomKey: string) => `ROOM#${roomKey}`;
 const connSk = (connectionId: string) => `CONN#${connectionId}`;
 const connPk = (connectionId: string) => `CONN#${connectionId}`;
-const msgPk = (challengeId: string) => `MSG#${challengeId}`;
+const msgPk = (roomKey: string) => `MSG#${roomKey}`;
+const readPk = (roomKey: string) => `READ#${roomKey}`;
 
 function epochSeconds(nowMs: number): number {
   return Math.floor(nowMs / 1000);
@@ -43,9 +42,9 @@ export interface ChatMessage {
   isLeader: boolean;
 }
 
-/** $connect — 방 멤버십 + 연결 역참조 두 아이템을 함께 기록. */
+/** $connect — 방 멤버십 + 연결 역참조 두 아이템 기록. */
 export async function saveConnection(
-  challengeId: string,
+  roomKey: string,
   conn: Connection,
   nowMs: number,
 ): Promise<void> {
@@ -55,7 +54,7 @@ export async function saveConnection(
       new PutCommand({
         TableName: tableName(TABLE),
         Item: {
-          pk: roomPk(challengeId),
+          pk: roomPk(roomKey),
           sk: connSk(conn.connectionId),
           connectionId: conn.connectionId,
           userId: conn.userId,
@@ -71,7 +70,7 @@ export async function saveConnection(
         Item: {
           pk: connPk(conn.connectionId),
           sk: 'META',
-          challengeId,
+          roomKey,
           userId: conn.userId,
           displayName: conn.displayName,
           isLeader: conn.isLeader,
@@ -83,13 +82,13 @@ export async function saveConnection(
 }
 
 export interface ConnectionMeta {
-  challengeId: string;
+  roomKey: string;
   userId: string;
   displayName: string;
   isLeader: boolean;
 }
 
-/** 연결 역참조 조회 — sendMessage/history 에서 방·활동명 확인용. */
+/** 연결 역참조 조회. */
 export async function getConnectionMeta(
   connectionId: string,
 ): Promise<ConnectionMeta | undefined> {
@@ -103,23 +102,23 @@ export async function getConnectionMeta(
   const meta = res.Items?.[0];
   if (!meta) return undefined;
   return {
-    challengeId: meta.challengeId,
+    roomKey: meta.roomKey,
     userId: meta.userId,
     displayName: meta.displayName,
     isLeader: Boolean(meta.isLeader),
   };
 }
 
-/** $disconnect — 연결 역참조로 방을 찾아 두 아이템 모두 제거. */
+/** $disconnect — 연결 역참조로 방을 찾아 두 아이템 제거. */
 export async function removeConnection(connectionId: string): Promise<void> {
   const meta = await getConnectionMeta(connectionId);
-  await deleteConnectionItems(connectionId, meta?.challengeId);
+  await deleteConnectionItems(connectionId, meta?.roomKey);
 }
 
-/** 브로드캐스트 중 stale(410) 연결 정리 — challengeId 를 이미 알고 있을 때. */
+/** stale(410) 연결 정리 — roomKey 를 알고 있을 때 두 아이템 모두 제거. */
 export async function deleteConnectionItems(
   connectionId: string,
-  challengeId?: string,
+  roomKey?: string,
 ): Promise<void> {
   const deletes: Promise<unknown>[] = [
     docClient.send(
@@ -129,12 +128,12 @@ export async function deleteConnectionItems(
       }),
     ),
   ];
-  if (challengeId) {
+  if (roomKey) {
     deletes.push(
       docClient.send(
         new DeleteCommand({
           TableName: tableName(TABLE),
-          Key: { pk: roomPk(challengeId), sk: connSk(connectionId) },
+          Key: { pk: roomPk(roomKey), sk: connSk(connectionId) },
         }),
       ),
     );
@@ -143,7 +142,7 @@ export async function deleteConnectionItems(
 }
 
 /** 방 참여 연결 전체 — 브로드캐스트 대상. */
-export async function listRoomConnections(challengeId: string): Promise<Connection[]> {
+export async function listRoomConnections(roomKey: string): Promise<Connection[]> {
   const conns: Connection[] = [];
   let lastKey: Record<string, any> | undefined;
   do {
@@ -151,7 +150,7 @@ export async function listRoomConnections(challengeId: string): Promise<Connecti
       new QueryCommand({
         TableName: tableName(TABLE),
         KeyConditionExpression: 'pk = :pk AND begins_with(sk, :c)',
-        ExpressionAttributeValues: { ':pk': roomPk(challengeId), ':c': 'CONN#' },
+        ExpressionAttributeValues: { ':pk': roomPk(roomKey), ':c': 'CONN#' },
         ExclusiveStartKey: lastKey,
       }),
     );
@@ -168,38 +167,39 @@ export async function listRoomConnections(challengeId: string): Promise<Connecti
   return conns;
 }
 
-/** 메시지 저장(TTL 24h). */
+/** 메시지 저장 (ttlSeconds: 그룹 24h · DM 90d). */
 export async function saveMessage(
-  challengeId: string,
+  roomKey: string,
   connectionId: string,
   message: ChatMessage,
   nowMs: number,
+  ttlSeconds: number,
 ): Promise<void> {
   await docClient.send(
     new PutCommand({
       TableName: tableName(TABLE),
       Item: {
-        pk: msgPk(challengeId),
+        pk: msgPk(roomKey),
         sk: `${message.createdAt}#${connectionId}`,
         messageId: message.messageId,
         displayName: message.displayName,
         text: message.text,
         createdAt: message.createdAt,
         isLeader: message.isLeader,
-        ttl: epochSeconds(nowMs) + MESSAGE_TTL_SECONDS,
+        ttl: epochSeconds(nowMs) + ttlSeconds,
       },
     }),
   );
 }
 
-/** 최근 메시지(오래된→최신 순으로 반환). */
-export async function listRecentMessages(challengeId: string): Promise<ChatMessage[]> {
+/** 최근 메시지(오래된→최신). */
+export async function listRecentMessages(roomKey: string): Promise<ChatMessage[]> {
   const res = await docClient.send(
     new QueryCommand({
       TableName: tableName(TABLE),
       KeyConditionExpression: 'pk = :pk',
-      ExpressionAttributeValues: { ':pk': msgPk(challengeId) },
-      ScanIndexForward: false, // 최신순으로 Limit
+      ExpressionAttributeValues: { ':pk': msgPk(roomKey) },
+      ScanIndexForward: false,
       Limit: RECENT_LIMIT,
     }),
   );
@@ -212,5 +212,40 @@ export async function listRecentMessages(challengeId: string): Promise<ChatMessa
       createdAt: item.createdAt,
       isLeader: Boolean(item.isLeader),
     }))
-    .reverse(); // 화면 표시용 오래된→최신
+    .reverse();
+}
+
+/** DM 읽음 표시 — 사용자의 lastReadAt 갱신. */
+export async function setLastRead(roomKey: string, userId: string, at: string): Promise<void> {
+  await docClient.send(
+    new PutCommand({
+      TableName: tableName(TABLE),
+      Item: {
+        pk: readPk(roomKey),
+        sk: `USER#${userId}`,
+        userId,
+        lastReadAt: at,
+        ttl: epochSeconds(Date.parse(at) || Date.now()) + DM_MESSAGE_TTL_SECONDS,
+      },
+    }),
+  );
+}
+
+/** 상대(나 이외 사용자)의 lastReadAt 중 최신값 — 보낸 메시지 '읽음' 판정용. */
+export async function getPeerLastReadAt(roomKey: string, myUserId: string): Promise<string | null> {
+  const res = await docClient.send(
+    new QueryCommand({
+      TableName: tableName(TABLE),
+      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :u)',
+      ExpressionAttributeValues: { ':pk': readPk(roomKey), ':u': 'USER#' },
+    }),
+  );
+  let peer: string | null = null;
+  for (const item of res.Items ?? []) {
+    if (item.userId === myUserId) continue;
+    if (typeof item.lastReadAt === 'string' && (!peer || item.lastReadAt > peer)) {
+      peer = item.lastReadAt;
+    }
+  }
+  return peer;
 }
