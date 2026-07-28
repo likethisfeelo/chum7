@@ -15,6 +15,7 @@ import { SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
 import { getChallengeTypeLabel } from '@/features/challenge/utils/flowPolicy';
 import { PaymentSheet } from '@/features/commerce/components/PaymentSheet';
 import { isPaidChallenge } from '@/features/commerce/api/commerceApi';
+import { BoardBlocksViewer, hasBoardContent } from '@/features/challenge-board/components/BoardBlocksViewer';
 
 const parseTargetTimeToFormState = (targetTime?: string): WizardFormState => {
   const fallback: WizardFormState = {
@@ -84,6 +85,16 @@ export const ChallengeDetailPage = () => {
     },
   });
 
+
+  // 가이드 본문은 리더가 저장하는 '본 보드'(/s/board) — 비어 있으면 프리뷰 보드로 폴백
+  const { data: guideBoard } = useQuery({
+    queryKey: ['guide-board', challengeId],
+    enabled: Boolean(challengeId),
+    queryFn: async () => {
+      const response = await apiClient.get(`/s/board/${challengeId}`);
+      return response.data;
+    },
+  });
 
   const { data: previewBoard } = useQuery({
     queryKey: ['preview-board', challengeId],
@@ -221,11 +232,17 @@ export const ChallengeDetailPage = () => {
   const verificationText =
     verificationTypes.map((t: string) => VERIFICATION_LABEL[t] ?? t).join(' · ') || '-';
 
-  // 가이드 미리보기 — system-prefill 자동생성분(유형/일정 placeholder)은 제외하고 리더 작성분만
-  const guideBlocks: any[] =
-    previewBoard && previewBoard.updatedBy !== 'system-prefill' && Array.isArray(previewBoard.blocks)
+  // 가이드 미리보기 — 리더가 저장한 본 보드(/s/board) 우선, 비어 있으면 프리뷰 보드로 폴백
+  // (system-prefill 자동생성분 유형/일정 placeholder는 제외). 콘텐츠 유무는 rich-text 포함 판정.
+  const boardBlocks: any[] = Array.isArray(guideBoard?.blocks) ? guideBoard.blocks : [];
+  const guideBlocks: any[] = hasBoardContent(boardBlocks)
+    ? boardBlocks
+    : previewBoard &&
+        previewBoard.updatedBy !== 'system-prefill' &&
+        hasBoardContent(previewBoard.blocks)
       ? previewBoard.blocks
       : [];
+  const hasGuide = hasBoardContent(guideBlocks);
 
   // 유료 챌린지: join 전에 결제(주문 paid) 단계를 거친다 (커머스 v0)
   const startJoin = (formState: WizardFormState) => {
@@ -472,49 +489,35 @@ export const ChallengeDetailPage = () => {
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900">가이드 미리보기</h3>
-            {guideBlocks.length > 0 && (
-              <span className="text-xs px-2 py-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600">
-                {guideBlocks.length}개
-              </span>
+            {hasGuide && isCreator && (
+              <button
+                onClick={() => navigate(`/challenge-board/${challengeId}`)}
+                className="text-xs font-semibold text-primary-600 hover:text-primary-800 transition-colors"
+              >
+                수정하기 →
+              </button>
             )}
           </div>
 
           <div className="space-y-3">
-            {guideBlocks.map((block: any) => {
-              if (block.type === 'image') {
-                return <img key={block.id} src={block.url} alt="preview" className="w-full rounded-xl border border-gray-100" />;
-              }
-              if (block.type === 'link') {
-                return (
-                  <a key={block.id} href={block.url} target="_blank" rel="noreferrer" className="block text-sm text-blue-600 underline break-all">
-                    {block.label || block.url}
-                  </a>
-                );
-              }
-              return (
-                <p key={block.id} className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                  {block.content}
+            {hasGuide ? (
+              <BoardBlocksViewer blocks={guideBlocks} />
+            ) : isCreator ? (
+              <div className="text-center py-3">
+                <p className="text-sm text-gray-500 mb-3">
+                  아직 가이드를 작성하지 않았어요.
+                  <br />
+                  참여자에게 챌린지 진행 방법을 안내해보세요.
                 </p>
-              );
-            })}
-            {guideBlocks.length === 0 && (
-              isCreator ? (
-                <div className="text-center py-3">
-                  <p className="text-sm text-gray-500 mb-3">
-                    아직 가이드를 작성하지 않았어요.
-                    <br />
-                    참여자에게 챌린지 진행 방법을 안내해보세요.
-                  </p>
-                  <button
-                    onClick={() => navigate(`/challenge-board/${challengeId}`)}
-                    className="text-sm bg-primary-500 text-white px-4 py-2 rounded-full font-medium hover:bg-primary-600 transition-colors"
-                  >
-                    가이드 작성하기 →
-                  </button>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500">가이드가 아직 작성되지 않았어요.</p>
-              )
+                <button
+                  onClick={() => navigate(`/challenge-board/${challengeId}`)}
+                  className="text-sm bg-primary-500 text-white px-4 py-2 rounded-full font-medium hover:bg-primary-600 transition-colors"
+                >
+                  가이드 작성하기 →
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">가이드가 아직 작성되지 않았어요.</p>
             )}
           </div>
         </motion.section>
