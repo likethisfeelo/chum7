@@ -28,7 +28,7 @@ export async function sendTo(
   endpoint: string,
   connectionId: string,
   payload: unknown,
-  challengeId?: string,
+  roomKey?: string,
 ): Promise<void> {
   try {
     await client(endpoint).send(
@@ -40,7 +40,7 @@ export async function sendTo(
   } catch (err) {
     const status = (err as { $metadata?: { httpStatusCode?: number }; name?: string });
     if (status?.$metadata?.httpStatusCode === 410 || status?.name === 'GoneException') {
-      await deleteConnectionItems(connectionId, challengeId).catch(() => undefined);
+      await deleteConnectionItems(connectionId, roomKey).catch(() => undefined);
       return;
     }
     throw err;
@@ -50,13 +50,13 @@ export async function sendTo(
 /** 방 전체 브로드캐스트 — 각 연결 병렬 전송, 실패는 개별 흡수(한 연결 오류가 전체를 막지 않음). */
 export async function broadcast(
   endpoint: string,
-  challengeId: string,
+  roomKey: string,
   connections: Connection[],
   payload: unknown,
 ): Promise<void> {
   await Promise.all(
     connections.map((conn) =>
-      sendTo(endpoint, conn.connectionId, payload, challengeId).catch(() => undefined),
+      sendTo(endpoint, conn.connectionId, payload, roomKey).catch(() => undefined),
     ),
   );
 }

@@ -426,18 +426,9 @@ export const ChallengeFeedPage = () => {
       const response = await apiClient.post(`/s/board/${challengeId}/leader-dm`, { leaderId });
       return response.data;
     },
-    onSuccess: async (res: any) => {
-      const threadId = res?.threadId || res?.data?.threadId;
-      const deepLink = res?.deepLink || res?.data?.deepLink;
-      if (threadId && navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(String(threadId));
-      }
-      if (typeof deepLink === "string" && deepLink.startsWith("/messages/")) {
-        toast.success("리더 DM 연결 완료");
-        navigate(deepLink);
-        return;
-      }
-      toast.success(threadId ? "리더 DM 연결 완료 (threadId 복사됨)" : "리더 DM 연결 완료");
+    onSuccess: () => {
+      // DM 방은 (challengeId, 내 userId) — 참여자 본인 방으로 이동. 리더는 상대 참여자 방으로 열림.
+      if (challengeId && user?.userId) navigate(`/dm/${challengeId}/${user.userId}`);
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message || "리더 DM 연결에 실패했습니다");

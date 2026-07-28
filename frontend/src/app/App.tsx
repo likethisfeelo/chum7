@@ -16,6 +16,7 @@ import { ChallengeDetailPage } from '@/features/challenge/pages/ChallengeDetailP
 import { ChallengeCreatePage } from '@/features/challenge/pages/ChallengeCreatePage';
 import { ChallengeEditPage } from '@/features/challenge/pages/ChallengeEditPage';
 import { ChallengeFeedPage } from '@/features/challenge-feed/pages/ChallengeFeedPage';
+import { DmPage } from '@/features/challenge-chat/pages/DmPage';
 import { ChallengeBoardPage } from '@/features/challenge-board/pages/ChallengeBoardPage';
 import { MEPage } from '@/features/me/pages/MEPage';
 import { MyPage } from '@/features/me/pages/MyPage';
@@ -165,6 +166,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ChallengeBoardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dm/:challengeId/:participantId"
+          element={
+            <ProtectedRoute>
+              <DmPage />
             </ProtectedRoute>
           }
         />

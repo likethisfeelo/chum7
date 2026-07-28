@@ -1,27 +1,33 @@
 /**
- * chat-api — 챌린지 단체 채팅 WebSocket 핸들러 (API Gateway WebSocket API).
- * 라우트: $connect(참여자 검증) · $disconnect(정리) · sendMessage(브로드캐스트) · $default(history).
- * routeSelectionExpression = `$request.body.action` → 클라이언트는 {action, ...} 전송.
- * 신원: 마당/인증글과 동일한 일일 반익명 활동명(createDailyAnonymousId) 재사용.
- * 테이블: chat(env CHAT_TABLE) 연결·메시지 + challenges(읽기전용) 참여자 검증.
+ * chat-api — WebSocket 핸들러. 챌린지 단체 채팅 + 1:1 리더 DM(읽음/안읽음).
+ * 라우트: $connect · $disconnect · sendMessage · $default(history/read).
+ * 방 구분: 그룹=challengeId, DM=`dm#<challengeId>#<participantId>` (쿼리 `?dm=<challengeId>:<participantId>`).
+ * 신원: 리더='챌린지 리더', 참여자=일일 반익명(createDailyAnonymousId).
  */
 import { randomUUID } from 'node:crypto';
 import { createDailyAnonymousId } from '@chum7/core';
 import { verifyToken } from './auth';
-import { getChatEligibility } from './challenges';
+import { getChatEligibility, getDmEligibility } from './challenges';
 import { loadAnonSalt } from './anon-salt';
 import {
+  DM_MESSAGE_TTL_SECONDS,
+  GROUP_MESSAGE_TTL_SECONDS,
   getConnectionMeta,
+  getPeerLastReadAt,
   listRecentMessages,
   listRoomConnections,
   removeConnection,
   saveConnection,
   saveMessage,
+  setLastRead,
   type ChatMessage,
 } from './repo/chat';
 import { broadcast, callbackEndpoint, sendTo } from './broadcast';
 
 const MAX_TEXT_LENGTH = 1000;
+const dmRoomKey = (challengeId: string, participantId: string) =>
+  `dm#${challengeId}#${participantId}`;
+const isDmRoom = (roomKey: string) => roomKey.startsWith('dm#');
 
 interface WsEvent {
   requestContext: {
@@ -66,16 +72,15 @@ export const handler = async (event: WsEvent): Promise<WsResult> => {
         message: (err as Error).message,
       }),
     );
-    // $connect 실패는 연결 거부(비200), 그 외는 200(소켓 유지)
     return routeKey === '$connect' ? { statusCode: 500, body: 'ERROR' } : okResult;
   }
 };
 
 async function onConnect(event: WsEvent): Promise<WsResult> {
   const { connectionId } = event.requestContext;
-  const token = event.queryStringParameters?.token;
-  const challengeId = event.queryStringParameters?.challengeId;
-  if (!token || !challengeId) return { statusCode: 400, body: 'MISSING_PARAMS' };
+  const qs = event.queryStringParameters ?? {};
+  const token = qs.token;
+  if (!token) return { statusCode: 400, body: 'MISSING_PARAMS' };
 
   let userId: string;
   try {
@@ -84,13 +89,33 @@ async function onConnect(event: WsEvent): Promise<WsResult> {
     return { statusCode: 401, body: 'UNAUTHORIZED' };
   }
 
+  const salt = () => loadAnonSalt();
+
+  // ── 1:1 리더 DM (?dm=<challengeId>:<participantId>) ──
+  if (qs.dm) {
+    const [challengeId, participantId] = String(qs.dm).split(':');
+    if (!challengeId || !participantId) return { statusCode: 400, body: 'MISSING_PARAMS' };
+    const { eligible, isLeader } = await getDmEligibility(challengeId, userId, participantId);
+    if (!eligible) return { statusCode: 403, body: 'FORBIDDEN' };
+    const displayName = isLeader
+      ? '챌린지 리더'
+      : createDailyAnonymousId(challengeId, userId, await salt());
+    await saveConnection(
+      dmRoomKey(challengeId, participantId),
+      { connectionId, userId, displayName, isLeader },
+      Date.now(),
+    );
+    return okResult;
+  }
+
+  // ── 챌린지 단체 채팅 (?challengeId=) ──
+  const challengeId = qs.challengeId;
+  if (!challengeId) return { statusCode: 400, body: 'MISSING_PARAMS' };
   const { eligible, isLeader } = await getChatEligibility(challengeId, userId);
   if (!eligible) return { statusCode: 403, body: 'FORBIDDEN' };
-
-  // 리더는 익명명 대신 '챌린지 리더'로 표시 (challenge-feed 댓글과 동일 컨벤션)
   const displayName = isLeader
     ? '챌린지 리더'
-    : createDailyAnonymousId(challengeId, userId, await loadAnonSalt());
+    : createDailyAnonymousId(challengeId, userId, await salt());
   await saveConnection(
     challengeId,
     { connectionId, userId, displayName, isLeader },
@@ -102,7 +127,7 @@ async function onConnect(event: WsEvent): Promise<WsResult> {
 async function onSendMessage(event: WsEvent): Promise<WsResult> {
   const { connectionId, domainName, stage } = event.requestContext;
   const meta = await getConnectionMeta(connectionId);
-  if (!meta) return okResult; // 등록되지 않은 연결 — 무시
+  if (!meta) return okResult;
 
   const text = parseText(event.body);
   if (!text) return okResult;
@@ -115,32 +140,74 @@ async function onSendMessage(event: WsEvent): Promise<WsResult> {
     createdAt: new Date(now).toISOString(),
     isLeader: meta.isLeader,
   };
-  await saveMessage(meta.challengeId, connectionId, message, now);
+  const ttl = isDmRoom(meta.roomKey) ? DM_MESSAGE_TTL_SECONDS : GROUP_MESSAGE_TTL_SECONDS;
+  await saveMessage(meta.roomKey, connectionId, message, now, ttl);
 
   const endpoint = callbackEndpoint(domainName, stage);
-  const connections = await listRoomConnections(meta.challengeId);
-  await broadcast(endpoint, meta.challengeId, connections, { type: 'message', message });
+  const connections = await listRoomConnections(meta.roomKey);
+  await broadcast(endpoint, meta.roomKey, connections, { type: 'message', message });
   return okResult;
 }
 
-/** $default — 클라이언트가 접속 직후 보내는 {action:'history'} 처리(그 외 액션은 무시). */
+/** $default — {action:'history'}(접속 직후) / {action:'read'}(DM 읽음). */
 async function onDefault(event: WsEvent): Promise<WsResult> {
   const { connectionId, domainName, stage } = event.requestContext;
   const action = parseAction(event.body);
-  if (action !== 'history') return okResult;
-
   const meta = await getConnectionMeta(connectionId);
   if (!meta) return okResult;
-
-  const messages = await listRecentMessages(meta.challengeId);
   const endpoint = callbackEndpoint(domainName, stage);
-  await sendTo(
-    endpoint,
-    connectionId,
-    { type: 'ready', displayName: meta.displayName, isLeader: meta.isLeader, messages },
-    meta.challengeId,
-  );
+  const dm = isDmRoom(meta.roomKey);
+
+  if (action === 'history') {
+    const messages = await listRecentMessages(meta.roomKey);
+    let peerLastReadAt: string | null = null;
+    if (dm) {
+      const nowIso = new Date().toISOString();
+      await setLastRead(meta.roomKey, meta.userId, nowIso);
+      peerLastReadAt = await getPeerLastReadAt(meta.roomKey, meta.userId);
+      await broadcastRead(endpoint, meta.roomKey, meta.userId, nowIso);
+    }
+    await sendTo(
+      endpoint,
+      connectionId,
+      {
+        type: 'ready',
+        displayName: meta.displayName,
+        isLeader: meta.isLeader,
+        isDm: dm,
+        peerLastReadAt,
+        messages,
+      },
+      meta.roomKey,
+    );
+    return okResult;
+  }
+
+  if (action === 'read' && dm) {
+    const nowIso = new Date().toISOString();
+    await setLastRead(meta.roomKey, meta.userId, nowIso);
+    await broadcastRead(endpoint, meta.roomKey, meta.userId, nowIso);
+    return okResult;
+  }
+
   return okResult;
+}
+
+/** 상대(나 이외)에게 읽음 통지 — 보낸 메시지 '읽음' 표시용. */
+async function broadcastRead(
+  endpoint: string,
+  roomKey: string,
+  readerUserId: string,
+  at: string,
+): Promise<void> {
+  const connections = await listRoomConnections(roomKey);
+  await Promise.all(
+    connections
+      .filter((c) => c.userId !== readerUserId)
+      .map((c) =>
+        sendTo(endpoint, c.connectionId, { type: 'read', at }, roomKey).catch(() => undefined),
+      ),
+  );
 }
 
 function parseBody(body?: string | null): Record<string, unknown> {
