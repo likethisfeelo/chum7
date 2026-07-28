@@ -454,16 +454,32 @@ export const ChallengeFeedPage = () => {
     },
   });
 
+  // 리더의 인증 게시물 반려 (그날 인증만 반려 — 피드/마당에서 숨김, 본인 기록엔 유지, 점수 되돌림)
+  const [rejectingVfId, setRejectingVfId] = useState<string | null>(null);
+  const [rejectVfReason, setRejectVfReason] = useState("");
+  const rejectVerificationMutation = useMutation({
+    mutationFn: (vars: { verificationId: string; reason?: string }) =>
+      challengeApi.rejectVerification(challengeId!, vars.verificationId, { reason: vars.reason }),
+    onSuccess: () => {
+      toast.success("인증을 반려했어요. 피드에서 숨겨지고 본인 기록에는 남아요.");
+      setRejectingVfId(null);
+      setRejectVfReason("");
+      queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
+      queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || "반려에 실패했어요"),
+  });
+
   const challengeVerifications = useMemo(() => verificationData || [], [verificationData]);
   const myChallengeVerifications = useMemo(() => myVerificationData || [], [myVerificationData]);
 
-  // 인증피드 탭별 필터
+  // 인증피드 탭별 필터 — 리더가 반려한 인증(rejectedByLeader)은 피드에서 제외
   const leaderFeedVerifications = useMemo(
-    () => challengeVerifications.filter((v: any) => !v.questType || v.questType === "leader"),
+    () => challengeVerifications.filter((v: any) => !v.rejectedByLeader && (!v.questType || v.questType === "leader")),
     [challengeVerifications],
   );
   const personalFeedVerifications = useMemo(
-    () => challengeVerifications.filter((v: any) => v.questType === "personal"),
+    () => challengeVerifications.filter((v: any) => !v.rejectedByLeader && v.questType === "personal"),
     [challengeVerifications],
   );
   const currentFeedVerifications = feedTab === "leader" ? leaderFeedVerifications : personalFeedVerifications;
@@ -1322,6 +1338,52 @@ export const ChallengeFeedPage = () => {
                           notStartedYet={!isActive && !challengeEnded}
                         />
                       </div>
+
+                      {/* 리더 전용 — 인증 게시물 반려 (본인 게시물 제외) */}
+                      {isCreator && !item.isMine && (
+                        <div className="mt-2 pt-2 border-t border-white/40">
+                          {rejectingVfId === item.verificationId ? (
+                            <div className="space-y-2">
+                              <p className="text-[11px] text-rose-600 bg-rose-50 rounded-lg px-2 py-1.5">
+                                이 인증을 반려하면 <b>피드·마당에서 숨겨지고</b> 해당 날짜 완료·점수가 해제돼요.
+                                (참여자 본인 기록에는 남아요.)
+                              </p>
+                              <input
+                                value={rejectVfReason}
+                                onChange={(e) => setRejectVfReason(e.target.value)}
+                                placeholder="반려 사유(선택)"
+                                maxLength={500}
+                                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-rose-300"
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  disabled={rejectVerificationMutation.isPending}
+                                  onClick={() => rejectVerificationMutation.mutate({ verificationId: item.verificationId, reason: rejectVfReason.trim() || undefined })}
+                                  className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 text-white disabled:opacity-50"
+                                >
+                                  반려 확정
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setRejectingVfId(null); setRejectVfReason(""); }}
+                                  className="flex-1 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white"
+                                >
+                                  취소
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => { setRejectingVfId(item.verificationId); setRejectVfReason(""); }}
+                              className="text-[11px] font-medium text-rose-500 hover:text-rose-700 transition-colors"
+                            >
+                              🚩 이 인증 반려
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </article>
                 ))

@@ -292,18 +292,15 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
     onError: (err: any) => toast.error(err?.response?.data?.message || '처리에 실패했어요'),
   });
 
-  // 이미 승인된 제안 재반려 — 관련 개인 퀘스트 인증 게시물 삭제
+  // 이미 승인된 '제안' 재반려 — 참여자가 재제출하게 함 (개별 인증 게시물은 피드에서 각각 반려)
   const reRejectMutation = useMutation({
     mutationFn: (vars: { proposalId: string; reason?: string }) =>
       challengeApi.reRejectQuestProposal(challengeId, vars.proposalId, { reason: vars.reason }),
-    onSuccess: (res: any) => {
-      const n = res?.deletedVerifications ?? 0;
-      toast.success(n > 0 ? `반려했어요 · 인증 게시물 ${n}건 삭제` : '반려했어요');
+    onSuccess: () => {
+      toast.success('제안을 반려했어요');
       setRejectingId(null);
       setReason('');
       queryClient.invalidateQueries({ queryKey: ['leader-quest-proposals', challengeId] });
-      queryClient.invalidateQueries({ queryKey: ['challenge-feed-verifications', challengeId] });
-      queryClient.invalidateQueries({ queryKey: ['challenge-feed-my-verifications', challengeId] });
     },
     onError: (err: any) => toast.error(err?.response?.data?.message || '처리에 실패했어요'),
   });
@@ -375,8 +372,8 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
                       <div className="space-y-2">
                         {isApproved && (
                           <p className="text-[11px] text-rose-600 bg-rose-50 rounded-lg px-2 py-1.5">
-                            ⚠️ 이미 승인된 퀘스트를 반려하면 이 참여자의 <b>개인 퀘스트 인증 게시물이 삭제</b>되고,
-                            해당 날짜의 완료 표시가 해제돼요.
+                            ⚠️ 이미 승인된 <b>퀘스트 제안</b>을 반려하면 참여자가 다시 제출해야 해요.
+                            (이미 올라온 인증 게시물은 피드에서 각각 <b>반려</b>로 처리하세요.)
                           </p>
                         )}
                         <input
@@ -397,7 +394,7 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
                             }
                             className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 text-white disabled:opacity-50"
                           >
-                            {isApproved ? '반려하고 인증 삭제' : '반려 확정'}
+                            {isApproved ? '제안 반려' : '반려 확정'}
                           </button>
                           <button
                             type="button"
@@ -427,13 +424,13 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
                         </button>
                       </div>
                     ) : (
-                      // 이미 승인됨 — 재반려 진입
+                      // 이미 승인됨 — 제안 반려 진입 (참여자 재제출)
                       <button
                         type="button"
                         onClick={() => { setRejectingId(p.proposalId); setReason(''); }}
                         className="w-full py-1.5 text-xs font-medium rounded-lg border border-rose-200 text-rose-600 bg-white"
                       >
-                        반려하기 (인증 게시물 삭제)
+                        제안 반려하기
                       </button>
                     )}
                   </div>

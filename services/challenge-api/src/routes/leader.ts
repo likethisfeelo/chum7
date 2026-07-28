@@ -6,7 +6,7 @@
  */
 import { Hono } from 'hono';
 import type { AppEnv, ApiContext } from '@chum7/api-kit';
-import { ok, fail } from '@chum7/api-kit';
+import { ok, fail, publishEvent } from '@chum7/api-kit';
 import { calendarDay } from '@chum7/core';
 import {
   certDateFromIso,
@@ -25,8 +25,8 @@ import {
 } from '../repo/participations';
 import { countPendingSubmissions, listQuests } from '../repo/quests';
 import {
-  deleteVerification,
-  listUserChallengeVerifications,
+  findChallengeVerificationById,
+  updateVerificationFields,
 } from '../repo/verifications';
 import {
   findProposalById,
@@ -231,9 +231,9 @@ leaderRoutes.put('/quest-proposals/:proposalId/review', async (c) => {
   return ok(c, { proposalId, status: outcome.status }, outcome.message);
 });
 
-// 개인 퀘스트 재반려 (리더 — 이미 승인/자동승인된 제안을 다시 반려).
-// 반려 시 해당 참여자의 개인 퀘스트(questType='personal') 인증 게시물을 삭제하고
-// 진행 기록의 개인 퀘스트 마커를 정리한다. (누적 점수 등 게이미피케이션 반영은 별도 도메인)
+// 개인 퀘스트 제안 재반려 (리더 — 이미 승인/자동승인된 '제안(퀘스트 정의)'을 다시 반려).
+// 제안 상태만 rejected 로 되돌려 참여자가 재제출하게 한다. 개별 인증 게시물은 건드리지 않는다
+// (게시물 단위 반려는 아래 /verifications/:id/reject 사용).
 leaderRoutes.put('/quest-proposals/:proposalId/re-reject', async (c) => {
   const challengeId = c.req.param('challengeId')!;
   const proposalId = c.req.param('proposalId')!;
@@ -241,8 +241,7 @@ leaderRoutes.put('/quest-proposals/:proposalId/re-reject', async (c) => {
   if (guard.error) return guard.error;
 
   const input = proposalReviewSchema.parse(await c.req.json().catch(() => ({})));
-  const now = new Date();
-  const nowIso = now.toISOString();
+  const nowIso = new Date().toISOString();
 
   const proposal = await findProposalById(challengeId, proposalId);
   if (!proposal) return fail(c, 404, 'PROPOSAL_NOT_FOUND', '제안서를 찾을 수 없습니다');
@@ -259,43 +258,101 @@ leaderRoutes.put('/quest-proposals/:proposalId/re-reject', async (c) => {
   });
   if (!applied) return fail(c, 409, 'NOT_APPROVED', '이미 처리된 제안서입니다');
 
-  // 개인 퀘스트 인증 게시물 삭제 + 진행 기록 개인 퀘스트 마커 정리 (실패해도 반려 자체는 성공 처리)
-  const participantId = String(proposal.userId);
-  let deletedCount = 0;
-  try {
-    const verifications = await listUserChallengeVerifications(challengeId, participantId);
-    const personal = verifications.filter((v) => v.questType === 'personal');
-    for (const v of personal) {
-      await deleteVerification({ pk: String(v.pk), sk: String(v.sk) });
-      deletedCount += 1;
-    }
+  return ok(c, { proposalId, status: 'rejected' }, '개인 퀘스트 제안을 반려했어요. 참여자가 다시 제출할 수 있어요.');
+});
 
-    if (personal.length > 0) {
-      const participation = await getParticipation(challengeId, participantId);
-      if (participation) {
-        const progress = normalizeProgress(participation.progress);
-        let changed = false;
-        const cleaned = progress.map((entry: any) => {
-          if (!entry.personalVerificationId && entry.personalQuestDone !== true) return entry;
-          changed = true;
-          const next: any = { ...entry, personalQuestDone: false };
-          delete next.personalVerificationId;
-          // 개인 퀘스트로 완료됐던 날은 미완료(partial)로 강등 — 반려로 개인 인증이 사라졌으므로
-          if (isCompletedProgressStatus(entry.status)) next.status = 'partial';
-          return next;
-        });
-        if (changed) {
-          await updateParticipationFields(challengeId, participantId, { progress: cleaned, updatedAt: nowIso });
-        }
+// 인증 게시물(1건) 반려 (리더 — 특정 인증을 그날 단위로 반려).
+//  - 챌린지/공개 피드·마당에서 숨김: isPublic='false' + gsi2 키 제거(공개 인덱스 이탈) + 점수 0
+//  - 본인 기록(gsi1 VFUSER#)은 그대로 유지 → 개인 피드/기록에는 남음
+//  - 해당 날짜의 완료/점수 되돌리고 참여자 집계(score·consecutiveDays) 재계산
+//  - 마당(plaza) 변환분 정리는 verification.rejected 이벤트로 위임
+leaderRoutes.put('/verifications/:verificationId/reject', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const verificationId = c.req.param('verificationId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const challenge = guard.challenge!;
+
+  const body = await c.req.json().catch(() => ({}));
+  const reason = typeof body?.reason === 'string' ? body.reason.slice(0, 500) : null;
+  const nowIso = new Date().toISOString();
+
+  const vf = await findChallengeVerificationById(challengeId, verificationId);
+  if (!vf) return fail(c, 404, 'VERIFICATION_NOT_FOUND', '인증을 찾을 수 없습니다');
+  if (vf.rejectedByLeader === true) return fail(c, 409, 'ALREADY_REJECTED', '이미 반려된 인증입니다');
+
+  const participantId = String(vf.userId);
+  const day = Number(vf.day);
+  const questType = String(vf.questType ?? '');
+
+  // 1) 인증 아이템 — 공개 피드/마당에서 제거(gsi2 삭제) + 비공개 + 점수 0 + 반려 표시. gsi1(기록)은 유지.
+  await updateVerificationFields(
+    { pk: String(vf.pk), sk: String(vf.sk) },
+    {
+      isPublic: 'false',
+      isPersonalOnly: true,
+      rejectedByLeader: true,
+      rejectedAt: nowIso,
+      rejectedBy: c.get('authUser')!.userId,
+      rejectReason: reason,
+      score: 0,
+      scoreEarned: 0,
+      updatedAt: nowIso,
+    },
+    ['gsi2pk', 'gsi2sk'],
+  );
+
+  // 2) 진행 기록 — 해당 day 완료/점수 되돌리기 + 참여자 집계 재계산 (실패해도 반려는 성공 처리)
+  try {
+    const participation = await getParticipation(challengeId, participantId);
+    if (participation) {
+      const progress = normalizeProgress(participation.progress);
+      const durationDays = resolveDurationDays(challenge.durationDays, progress);
+      const updated = progress.map((entry: any) => {
+        if (Number(entry.day) !== day) return entry;
+        const next: any = { ...entry };
+        if (questType === 'personal') { next.personalQuestDone = false; delete next.personalVerificationId; }
+        else if (questType === 'leader') { next.leaderQuestDone = false; delete next.leaderVerificationId; }
+        if (next.verificationId === verificationId) delete next.verificationId;
+        if (isCompletedProgressStatus(entry.status)) { next.status = 'partial'; next.score = 0; }
+        return next;
+      });
+      const totalScore = updated
+        .filter((p: any) => p.status === 'success')
+        .reduce((s: number, p: any) => s + (Number(p.score) || 0), 0);
+      let consecutive = 0;
+      for (let d = 1; d <= durationDays; d += 1) {
+        const e = updated.find((p: any) => Number(p.day) === d);
+        if (e && e.status === 'success') consecutive += 1;
+        else break;
       }
+      await updateParticipationFields(challengeId, participantId, {
+        progress: updated,
+        score: totalScore,
+        consecutiveDays: consecutive,
+        updatedAt: nowIso,
+      });
     }
   } catch (err: any) {
-    console.error('re-reject verification cleanup error (non-fatal):', err?.message);
+    console.error('reject verification: progress recompute error (non-fatal):', err?.message);
+  }
+
+  // 3) 마당(plaza) 변환분 정리 — 소비자가 POST#courtyard-<verificationId> 비활성화 (이벤트 위임)
+  try {
+    await publishEvent('verification.rejected', {
+      verificationId,
+      challengeId,
+      userId: participantId,
+      day,
+      plazaConverted: Boolean(vf.plazaConvertedAt),
+    });
+  } catch (err: any) {
+    console.error('reject verification: publish event error (non-fatal):', err?.message);
   }
 
   return ok(
     c,
-    { proposalId, status: 'rejected', deletedVerifications: deletedCount },
-    '개인 퀘스트를 반려하고 관련 인증 게시물을 삭제했어요.',
+    { verificationId, rejected: true },
+    '인증을 반려했어요. 챌린지·공개 피드에서 숨겨지고 본인 기록에는 남습니다.',
   );
 });

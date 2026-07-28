@@ -183,6 +183,12 @@ export class WorkersStack extends cdk.Stack {
       schedule: events.Schedule.rate(cdk.Duration.hours(1)),
       targets: [new eventsTargets.LambdaFunction(plazaConverter)],
     });
+    // 인증 반려 → 마당 변환분 비활성화 (같은 워커의 이벤트 구동 경로)
+    new events.Rule(this, 'VerificationRejectedToPlaza', {
+      ruleName: `${config.prefix}-verification-rejected-plaza`,
+      eventPattern: { detailType: ['verification.rejected'] },
+      targets: [new eventsTargets.LambdaFunction(plazaConverter)],
+    });
 
     // --- settlement-worker: challenge.completed → 반환 대기 큐 + 정산서 v0 ---
     const settlementWorker = new NodejsFunction(this, 'SettlementWorker', {
