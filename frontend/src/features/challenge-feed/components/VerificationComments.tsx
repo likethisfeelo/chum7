@@ -23,12 +23,14 @@ export function VerificationComments({
   challengeId,
   canComment,
   challengeEnded,
+  notStartedYet = false,
   authorMode = "participant",
 }: {
   verificationId: string;
   challengeId: string;
   canComment: boolean;
   challengeEnded: boolean;
+  notStartedYet?: boolean;
   authorMode?: "participant" | "leader";
 }) {
   const queryClient = useQueryClient();
@@ -114,7 +116,9 @@ export function VerificationComments({
           {isLoading ? (
             <p className="text-xs text-gray-400 py-1">불러오는 중...</p>
           ) : comments.length === 0 ? (
-            <p className="text-xs text-gray-400 py-1 text-center">아직 댓글이 없어요. 첫 댓글을 남겨보세요!</p>
+            <p className="text-xs text-gray-400 py-1 text-center">
+              {canComment ? "아직 댓글이 없어요. 첫 댓글을 남겨보세요!" : "아직 댓글이 없어요."}
+            </p>
           ) : (
             <div className="space-y-2.5">
               {comments.map((c) => {
@@ -214,7 +218,9 @@ export function VerificationComments({
             <p className="text-[11px] text-gray-400 text-center py-1 bg-gray-50/50 rounded-lg">
               {challengeEnded
                 ? "챌린지가 종료되어 댓글을 작성할 수 없어요"
-                : "참여자만 댓글을 작성할 수 있어요"}
+                : notStartedYet
+                  ? "챌린지가 시작되면 댓글을 남길 수 있어요"
+                  : "참여자만 댓글을 작성할 수 있어요"}
             </p>
           )}
         </div>

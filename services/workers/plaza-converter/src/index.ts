@@ -108,7 +108,37 @@ async function markVerificationConverted(
   );
 }
 
+/** 마당 게시물 비활성화 — 리더가 원본 인증을 반려했을 때 POST#courtyard-<vid> 숨김 (isActive=false) */
+async function deactivatePlazaPost(verificationId: string): Promise<boolean> {
+  try {
+    await docClient.send(
+      new UpdateCommand({
+        TableName: tableName(SOCIAL_TABLE),
+        Key: { pk: `POST#courtyard-${verificationId}`, sk: 'META' },
+        UpdateExpression: 'SET isActive = :false, deactivatedAt = :now',
+        ConditionExpression: 'attribute_exists(pk)',
+        ExpressionAttributeValues: { ':false': false, ':now': new Date().toISOString() },
+      }),
+    );
+    return true;
+  } catch (err: any) {
+    // 아직 마당으로 변환되지 않았으면 대상 없음(정상) — 조건 실패는 무시
+    if (err?.name === 'ConditionalCheckFailedException') return false;
+    throw err;
+  }
+}
+
 export const handler = async (event: EventBridgeEvent<string, unknown>) => {
+  // 이벤트 구동: 인증 반려 → 마당 변환분 비활성화 (스케줄 변환과 별개 경로)
+  if (event['detail-type'] === 'verification.rejected') {
+    const detail = (event.detail ?? {}) as { verificationId?: string };
+    const verificationId = String(detail.verificationId ?? '');
+    if (!verificationId) return { statusCode: 400, body: 'missing verificationId' };
+    const deactivated = await deactivatePlazaPost(verificationId);
+    console.log(JSON.stringify({ level: 'info', message: 'plaza post deactivate (verification.rejected)', verificationId, deactivated }));
+    return { statusCode: 200, body: JSON.stringify({ verificationId, deactivated }) };
+  }
+
   const now = new Date();
   const convertedAt = now.toISOString();
   const window = conversionWindow(now, resolveLookbackHours());

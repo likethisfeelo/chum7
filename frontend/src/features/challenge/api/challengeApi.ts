@@ -133,4 +133,30 @@ export const challengeApi = {
     );
     return res.data.data;
   },
+
+  // 이미 승인(자동승인 포함)된 개인 퀘스트 '제안'을 리더가 다시 반려 (참여자 재제출). 게시물은 건드리지 않음
+  reRejectQuestProposal: async (
+    challengeId: string,
+    proposalId: string,
+    params: { reason?: string } = {},
+  ): Promise<{ proposalId: string; status: 'rejected' }> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/quest-proposals/${proposalId}/re-reject`,
+      { decision: 'reject', ...params },
+    );
+    return res.data.data;
+  },
+
+  // 인증 게시물 1건 반려 — 그날 인증만 반려(피드/마당에서 숨김, 본인 기록엔 남김, 점수 되돌림)
+  rejectVerification: async (
+    challengeId: string,
+    verificationId: string,
+    params: { reason?: string } = {},
+  ): Promise<{ verificationId: string; rejected: true }> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/verifications/${verificationId}/reject`,
+      params,
+    );
+    return res.data.data;
+  },
 };

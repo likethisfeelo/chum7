@@ -80,6 +80,14 @@ export const domainEventSchemas = {
     isDayComplete: z.boolean(),
     isPublic: z.boolean(),
   }),
+  // 리더가 인증 게시물 1건 반려 — 마당(plaza) 변환분 비활성화 소비자용
+  'verification.rejected': z.object({
+    verificationId: z.string(),
+    challengeId: z.string(),
+    userId: z.string(),
+    day: z.number().int(),
+    plazaConverted: z.boolean(),
+  }),
   'order.paid': z.object({
     orderId: z.string(),
     userId: z.string(),

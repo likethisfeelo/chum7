@@ -118,10 +118,14 @@ export async function findMyVerificationById(
   return undefined;
 }
 
-/** 인증 부분 갱신 — 테이블 키(pk/sk)로 직접 갱신. gsi2 공개 키 추가 지원 (visibility 전환). */
+/**
+ * 인증 부분 갱신 — 테이블 키(pk/sk)로 직접 갱신. gsi2 공개 키 추가 지원 (visibility 전환).
+ * removeAttrs 로 속성 제거(REMOVE)도 지원 — 리더 반려 시 gsi2pk/gsi2sk 제거(공개 피드 이탈)에 사용.
+ */
 export async function updateVerificationFields(
   keys: { pk: string; sk: string },
   attrs: Record<string, unknown>,
+  removeAttrs: string[] = [],
 ): Promise<void> {
   const names: Record<string, string> = {};
   const values: Record<string, unknown> = {};
@@ -133,13 +137,51 @@ export async function updateVerificationFields(
     values[`:v${i}`] = value;
     sets.push(`#v${i} = :v${i}`);
   }
+  const removes: string[] = [];
+  removeAttrs.forEach((key, idx) => {
+    const nk = `#r${idx}`;
+    names[nk] = key;
+    removes.push(nk);
+  });
+
+  const clauses: string[] = [];
+  if (sets.length) clauses.push(`SET ${sets.join(', ')}`);
+  if (removes.length) clauses.push(`REMOVE ${removes.join(', ')}`);
+  if (clauses.length === 0) return;
+
   await docClient.send(
     new UpdateCommand({
       TableName: tableName(TABLE),
       Key: { pk: keys.pk, sk: keys.sk },
-      UpdateExpression: `SET ${sets.join(', ')}`,
+      UpdateExpression: clauses.join(' '),
       ExpressionAttributeNames: names,
-      ExpressionAttributeValues: values,
+      ...(Object.keys(values).length ? { ExpressionAttributeValues: values } : {}),
     }),
   );
+}
+
+/** verificationId로 챌린지 내 인증 1건 조회 — pk 파티션 + VF# prefix Query + 필터 (리더 반려용) */
+export async function findChallengeVerificationById(
+  challengeId: string,
+  verificationId: string,
+): Promise<Record<string, any> | undefined> {
+  let lastKey: Record<string, any> | undefined;
+  do {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: tableName(TABLE),
+        KeyConditionExpression: 'pk = :pk AND begins_with(sk, :sk)',
+        FilterExpression: 'verificationId = :vid',
+        ExpressionAttributeValues: {
+          ':pk': challengePk(challengeId),
+          ':sk': 'VF#',
+          ':vid': verificationId,
+        },
+        ExclusiveStartKey: lastKey,
+      }),
+    );
+    if (res.Items && res.Items.length > 0) return res.Items[0];
+    lastKey = res.LastEvaluatedKey;
+  } while (lastKey);
+  return undefined;
 }

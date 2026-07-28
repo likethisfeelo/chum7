@@ -333,7 +333,9 @@ export const ChallengeFeedPage = () => {
     searchParams.get("tab") === "ops" ? "ops" : "feed",
   );
   const [activeQuestTab, setActiveQuestTab] = useState<"leader" | "personal">("leader");
-  const [feedTab, setFeedTab] = useState<"leader" | "personal">("leader");
+  // 인증 피드 — 리더/개인 퀘스트 섹션을 각각 펼치고 접는다(아코디언, 독립 토글)
+  const [openLeaderFeed, setOpenLeaderFeed] = useState(true);
+  const [openPersonalFeed, setOpenPersonalFeed] = useState(true);
   const [expandedLeaderQuestId, setExpandedLeaderQuestId] = useState<string | null>(null);
   const [todaySubmittedQuestIds, setTodaySubmittedQuestIds] = useState<Set<string>>(new Set());
   const [isProposalFormOpen, setIsProposalFormOpen] = useState(false);
@@ -454,19 +456,34 @@ export const ChallengeFeedPage = () => {
     },
   });
 
+  // 리더의 인증 게시물 반려 (그날 인증만 반려 — 피드/마당에서 숨김, 본인 기록엔 유지, 점수 되돌림)
+  const [rejectingVfId, setRejectingVfId] = useState<string | null>(null);
+  const [rejectVfReason, setRejectVfReason] = useState("");
+  const rejectVerificationMutation = useMutation({
+    mutationFn: (vars: { verificationId: string; reason?: string }) =>
+      challengeApi.rejectVerification(challengeId!, vars.verificationId, { reason: vars.reason }),
+    onSuccess: () => {
+      toast.success("인증을 반려했어요. 피드에서 숨겨지고 본인 기록에는 남아요.");
+      setRejectingVfId(null);
+      setRejectVfReason("");
+      queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
+      queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || "반려에 실패했어요"),
+  });
+
   const challengeVerifications = useMemo(() => verificationData || [], [verificationData]);
   const myChallengeVerifications = useMemo(() => myVerificationData || [], [myVerificationData]);
 
-  // 인증피드 탭별 필터
+  // 인증피드 탭별 필터 — 리더가 반려한 인증(rejectedByLeader)은 피드에서 제외
   const leaderFeedVerifications = useMemo(
-    () => challengeVerifications.filter((v: any) => !v.questType || v.questType === "leader"),
+    () => challengeVerifications.filter((v: any) => !v.rejectedByLeader && (!v.questType || v.questType === "leader")),
     [challengeVerifications],
   );
   const personalFeedVerifications = useMemo(
-    () => challengeVerifications.filter((v: any) => v.questType === "personal"),
+    () => challengeVerifications.filter((v: any) => !v.rejectedByLeader && v.questType === "personal"),
     [challengeVerifications],
   );
-  const currentFeedVerifications = feedTab === "leader" ? leaderFeedVerifications : personalFeedVerifications;
 
   const todayCompletedCount = useMemo(
     () => challengeVerifications.filter((item: any) => isSameKstDate(item.performedAt || item.createdAt)).length,
@@ -544,6 +561,9 @@ export const ChallengeFeedPage = () => {
 
   const challengeType = challengeData?.challengeType || "leader_personal";
   const isMixedChallengeType = challengeType === "leader_personal" || challengeType === "mixed";
+  // 인증 피드 섹션 노출 — 개인 전용이면 리더 탭 숨김, 리더 전용이면 개인 탭 숨김
+  const showLeaderFeed = challengeType !== "personal_only";
+  const showPersonalFeed = challengeType !== "leader_only";
   const isActive = (() => {
     // 표시용 상태는 effectiveLifecycle 우선 (워커 전이 지연 흡수 — docs/time-policy.md R4)
     const lc = challengeData?.effectiveLifecycle || challengeData?.lifecycle;
@@ -554,6 +574,9 @@ export const ChallengeFeedPage = () => {
     return false;
   })();
   const isLeader = challengeData?.leaderId === user?.userId;
+  // 종료(완료/보관) 여부 — '시작 전(not active)'과 구분해야 안내 문구가 올바르다
+  const lifecycleNow = challengeData?.effectiveLifecycle || challengeData?.lifecycle;
+  const challengeEnded = lifecycleNow === "completed" || lifecycleNow === "archived";
   // 리더 운영 탭 노출 조건 — 챌린지 생성자 본인 (PRODUCT_SPEC §4.12-A)
   const isCreator = Boolean(challengeData?.createdBy) && challengeData?.createdBy === user?.userId;
   const isGaveUp = userChallenge?.phase === "gave_up" || userChallenge?.status === "gave_up";
@@ -567,7 +590,8 @@ export const ChallengeFeedPage = () => {
 
   // 퀘스트 진행 현황 계산
   const durationDays = challengeData?.durationDays || userChallenge?.durationDays || userChallenge?.challenge?.durationDays || 7;
-  const todayDay = userChallenge ? computeTodayChallengeDay(userChallenge) : 1;
+  // 시작 전에는 '오늘' 개념이 없다 — todayDay=-1 로 두어 완료/오늘 하이라이트가 뜨지 않게 한다
+  const todayDay = userChallenge && isActive ? computeTodayChallengeDay(userChallenge) : -1;
   const progressList: any[] = userChallenge?.progress || [];
 
   const isTodayAllDone = isMixedChallengeType
@@ -575,6 +599,223 @@ export const ChallengeFeedPage = () => {
     : leaderQuests.length > 0
       ? allLeaderQuestsDoneToday
       : iDidTodayVerification;
+
+  // 인증 카드 1장 렌더 (리더/개인 피드 아코디언에서 공통 사용)
+  const renderVerificationCard = (item: any) => (
+    <article key={item.verificationId} className="glass-card rounded-2xl">
+      {/* 4:5 이미지 — 오버레이 배지 포함 (overflow-hidden을 이미지 div에만 적용) */}
+      {item.verificationType === "image" && item.imageUrl && (
+        <div className="aspect-[4/5] overflow-hidden relative rounded-t-2xl">
+          <img
+            src={resolveMediaUrl(item.imageUrl)}
+            alt="verification"
+            loading="lazy"
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+          <div className="absolute top-3 left-3 flex items-center gap-1 bg-black/50 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
+            <span>📸</span>
+            <span>Day {item.day || "-"}</span>
+          </div>
+          {item.score > 0 && (
+            <div className="absolute top-3 right-3 bg-primary-500/90 backdrop-blur-sm text-white text-[11px] font-bold px-2.5 py-1 rounded-full">
+              +{item.score}pt
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 영상 */}
+      {item.verificationType === "video" && item.videoUrl && (
+        <FeedVideo src={resolveMediaUrl(item.videoUrl)} />
+      )}
+
+      <div className="p-4">
+        {/* 유저 정보 헤더 */}
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center text-xs font-bold text-primary-700 flex-shrink-0">
+              {item.displayName?.[0]?.toUpperCase() ?? "?"}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-800 truncate">
+                {item.displayName || "참여자"}
+              </p>
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <span className="text-[11px] font-semibold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-md border border-primary-100">
+                  Day {item.day || "-"}
+                </span>
+                {item.questTitle && (
+                  <span className="text-[11px] text-gray-500 truncate max-w-[140px]">{item.questTitle}</span>
+                )}
+              </div>
+            </div>
+          </div>
+          {/* 이미지 타입이 아닐 때 점수 */}
+          {item.verificationType !== "image" && item.score > 0 && (
+            <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2.5 py-1 rounded-full border border-primary-100 flex-shrink-0">
+              +{item.score}pt
+            </span>
+          )}
+        </div>
+
+        {/* 인증 내용 */}
+        {item.todayNote && (
+          <p className="text-sm text-gray-700 leading-relaxed line-clamp-4">{item.todayNote}</p>
+        )}
+
+        {/* 링크 */}
+        {item.verificationType === "link" && item.linkUrl && (
+          <div className="mt-2">
+            <LinkPreviewCard url={item.linkUrl} />
+          </div>
+        )}
+
+        {/* 영상 검증 오류/대기 */}
+        {item.verificationType === "video" && item.mediaValidationStatus === "invalid" && (
+          <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 space-y-2">
+            <p>영상 검증에서 문제가 발견되었습니다. 다시 업로드 해주세요.</p>
+            {item.isMine && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenVideoPickerSignal((prev) => prev + 1);
+                  toast("영상 다시 인증을 시작합니다.", { icon: "📹" });
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="px-3 py-1 rounded-lg border border-red-300 bg-white text-red-700 font-medium"
+              >
+                영상 다시 인증하기
+              </button>
+            )}
+          </div>
+        )}
+        {item.verificationType === "video" && item.mediaValidationStatus === "pending" && (
+          <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
+            영상 메타데이터 검증 진행중입니다.
+          </p>
+        )}
+
+        {/* 하단: 타입 + 날짜 */}
+        <div className="flex items-center justify-between mt-3 pt-2 border-t border-white/50">
+          <span className="text-[11px] text-gray-400">
+            {item.verificationType === "image" ? "📸 사진" : item.verificationType === "video" ? "🎬 영상" : item.verificationType === "link" ? "🔗 링크" : "📝 텍스트"}
+          </span>
+          {item.createdAt && (
+            <span className="text-[11px] text-gray-400">
+              {new Date(item.createdAt).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
+            </span>
+          )}
+        </div>
+
+        {/* 이모지 반응 */}
+        <div className="mt-3 pt-3 border-t border-white/40">
+          <VerificationReactions
+            verificationId={item.verificationId}
+            challengeId={challengeId!}
+            canInteract={isActive && Boolean(userChallenge)}
+          />
+        </div>
+
+        {/* 댓글 */}
+        <div className="mt-2">
+          {/* 피드 댓글은 리더 포함 항상 익명(일일 활동명). 리더 신원 댓글은 운영탭에서 */}
+          <VerificationComments
+            verificationId={item.verificationId}
+            challengeId={challengeId!}
+            canComment={isActive && Boolean(userChallenge) && !isGaveUp}
+            challengeEnded={challengeEnded}
+            notStartedYet={!isActive && !challengeEnded}
+          />
+        </div>
+
+        {/* 리더 전용 — 인증 게시물 반려 (본인 게시물 제외) */}
+        {isCreator && !item.isMine && (
+          <div className="mt-2 pt-2 border-t border-white/40">
+            {rejectingVfId === item.verificationId ? (
+              <div className="space-y-2">
+                <p className="text-[11px] text-rose-600 bg-rose-50 rounded-lg px-2 py-1.5">
+                  이 인증을 반려하면 <b>피드·마당에서 숨겨지고</b> 해당 날짜 완료·점수가 해제돼요.
+                  (참여자 본인 기록에는 남아요.)
+                </p>
+                <input
+                  value={rejectVfReason}
+                  onChange={(e) => setRejectVfReason(e.target.value)}
+                  placeholder="반려 사유(선택)"
+                  maxLength={500}
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-rose-300"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={rejectVerificationMutation.isPending}
+                    onClick={() => rejectVerificationMutation.mutate({ verificationId: item.verificationId, reason: rejectVfReason.trim() || undefined })}
+                    className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 text-white disabled:opacity-50"
+                  >
+                    반려 확정
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setRejectingVfId(null); setRejectVfReason(""); }}
+                    className="flex-1 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white"
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setRejectingVfId(item.verificationId); setRejectVfReason(""); }}
+                className="text-[11px] font-medium text-rose-500 hover:text-rose-700 transition-colors"
+              >
+                🚩 이 인증 반려
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </article>
+  );
+
+  // 인증 피드 아코디언 섹션 (탭하면 펼침/접힘)
+  const renderFeedSection = (
+    kind: "leader" | "personal",
+    list: any[],
+    open: boolean,
+    toggle: () => void,
+  ) => (
+    <div className="rounded-xl border border-gray-100 overflow-hidden bg-white/40">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between px-3.5 py-3 hover:bg-white/60 transition-colors"
+      >
+        <span className="text-sm font-semibold text-gray-800">
+          {kind === "leader" ? "🎯 리더퀘스트" : "🌱 개인퀘스트"}
+          {list.length > 0 && <span className="ml-1.5 text-xs text-gray-400">{list.length}</span>}
+        </span>
+        <svg
+          width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          className={`text-gray-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-4">
+          {list.length === 0 ? (
+            <p className="text-sm text-gray-500 py-6 text-center">
+              {kind === "leader" ? "아직 올라온 리더퀘스트 인증이 없습니다." : "아직 올라온 개인퀘스트 인증이 없습니다."}
+            </p>
+          ) : (
+            list.map(renderVerificationCard)
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="min-h-screen">
@@ -1135,8 +1376,9 @@ export const ChallengeFeedPage = () => {
           {/* 채팅방 — 준비중 챌린지 참여자 전용 (오늘의 인증 바로 위) */}
           {challengeId && canChat && <ChallengeChatPanel challengeId={challengeId} />}
 
-          {/* 퀘스트 없을 때 일반 인증 폼 */}
-          {(!questsData || questsData.length === 0 || (challengeType === "leader_only" && leaderQuests.length === 0)) &&
+          {/* 퀘스트 없을 때 일반 인증 폼 — 챌린지 시작 후에만 노출 */}
+          {isActive &&
+            (!questsData || questsData.length === 0 || (challengeType === "leader_only" && leaderQuests.length === 0)) &&
             (!iDidTodayVerification || hasInvalidMyVideo) &&
             userChallenge &&
             !isGaveUp && (
@@ -1157,169 +1399,20 @@ export const ChallengeFeedPage = () => {
               </section>
             )}
 
-          {/* 인증 완료 메시지 */}
-          {isTodayAllDone && !hasInvalidMyVideo && (
+          {/* 인증 완료 메시지 — 챌린지 시작 후에만 */}
+          {isActive && isTodayAllDone && !hasInvalidMyVideo && (
             <section className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
               <h3 className="font-bold text-emerald-800">✅ 오늘 인증 완료!</h3>
               <p className="text-sm text-emerald-700 mt-1">이제 피드에서 리액션과 댓글로 서로 힘을 나눠줄 수 있어요.</p>
             </section>
           )}
 
-          {/* 5) 인증 피드 — 리더퀘스트 / 개인퀘스트 탭 */}
+          {/* 5) 인증 피드 — 챌린지 유형에 맞는 섹션만, 각 섹션 펼침/접힘(아코디언) */}
           <section className="glass-card rounded-2xl p-5">
             <h3 className="font-bold text-gray-900 mb-3">인증 피드</h3>
-            <div className="flex gap-1 mb-4 p-1 glass-card rounded-xl">
-              <button
-                type="button"
-                onClick={() => setFeedTab("leader")}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${feedTab === "leader" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
-              >
-                🎯 리더퀘스트 {leaderFeedVerifications.length > 0 && <span className="ml-1 text-xs text-gray-400">{leaderFeedVerifications.length}</span>}
-              </button>
-              <button
-                type="button"
-                onClick={() => setFeedTab("personal")}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${feedTab === "personal" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
-              >
-                🌱 개인퀘스트 {personalFeedVerifications.length > 0 && <span className="ml-1 text-xs text-gray-400">{personalFeedVerifications.length}</span>}
-              </button>
-            </div>
-            <div className="space-y-4">
-              {currentFeedVerifications.length === 0 ? (
-                <p className="text-sm text-gray-500 py-8 text-center">
-                  {feedTab === "leader" ? "아직 올라온 리더퀘스트 인증이 없습니다." : "아직 올라온 개인퀘스트 인증이 없습니다."}
-                </p>
-              ) : (
-                currentFeedVerifications.map((item: any) => (
-                  <article key={item.verificationId} className="glass-card rounded-2xl">
-                    {/* 4:5 이미지 — 오버레이 배지 포함 (overflow-hidden을 이미지 div에만 적용) */}
-                    {item.verificationType === "image" && item.imageUrl && (
-                      <div className="aspect-[4/5] overflow-hidden relative rounded-t-2xl">
-                        <img
-                          src={resolveMediaUrl(item.imageUrl)}
-                          alt="verification"
-                          loading="lazy"
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-                        <div className="absolute top-3 left-3 flex items-center gap-1 bg-black/50 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
-                          <span>📸</span>
-                          <span>Day {item.day || "-"}</span>
-                        </div>
-                        {item.score > 0 && (
-                          <div className="absolute top-3 right-3 bg-primary-500/90 backdrop-blur-sm text-white text-[11px] font-bold px-2.5 py-1 rounded-full">
-                            +{item.score}pt
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* 영상 */}
-                    {item.verificationType === "video" && item.videoUrl && (
-                      <FeedVideo src={resolveMediaUrl(item.videoUrl)} />
-                    )}
-
-                    <div className="p-4">
-                      {/* 유저 정보 헤더 */}
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center text-xs font-bold text-primary-700 flex-shrink-0">
-                            {item.displayName?.[0]?.toUpperCase() ?? "?"}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-800 truncate">
-                              {item.displayName || "참여자"}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                              <span className="text-[11px] font-semibold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-md border border-primary-100">
-                                Day {item.day || "-"}
-                              </span>
-                              {item.questTitle && (
-                                <span className="text-[11px] text-gray-500 truncate max-w-[140px]">{item.questTitle}</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        {/* 이미지 타입이 아닐 때 점수 */}
-                        {item.verificationType !== "image" && item.score > 0 && (
-                          <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2.5 py-1 rounded-full border border-primary-100 flex-shrink-0">
-                            +{item.score}pt
-                          </span>
-                        )}
-                      </div>
-
-                      {/* 인증 내용 */}
-                      {item.todayNote && (
-                        <p className="text-sm text-gray-700 leading-relaxed line-clamp-4">{item.todayNote}</p>
-                      )}
-
-                      {/* 링크 */}
-                      {item.verificationType === "link" && item.linkUrl && (
-                        <div className="mt-2">
-                          <LinkPreviewCard url={item.linkUrl} />
-                        </div>
-                      )}
-
-                      {/* 영상 검증 오류/대기 */}
-                      {item.verificationType === "video" && item.mediaValidationStatus === "invalid" && (
-                        <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 space-y-2">
-                          <p>영상 검증에서 문제가 발견되었습니다. 다시 업로드 해주세요.</p>
-                          {item.isMine && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenVideoPickerSignal((prev) => prev + 1);
-                                toast("영상 다시 인증을 시작합니다.", { icon: "📹" });
-                                window.scrollTo({ top: 0, behavior: "smooth" });
-                              }}
-                              className="px-3 py-1 rounded-lg border border-red-300 bg-white text-red-700 font-medium"
-                            >
-                              영상 다시 인증하기
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      {item.verificationType === "video" && item.mediaValidationStatus === "pending" && (
-                        <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
-                          영상 메타데이터 검증 진행중입니다.
-                        </p>
-                      )}
-
-                      {/* 하단: 타입 + 날짜 */}
-                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-white/50">
-                        <span className="text-[11px] text-gray-400">
-                          {item.verificationType === "image" ? "📸 사진" : item.verificationType === "video" ? "🎬 영상" : item.verificationType === "link" ? "🔗 링크" : "📝 텍스트"}
-                        </span>
-                        {item.createdAt && (
-                          <span className="text-[11px] text-gray-400">
-                            {new Date(item.createdAt).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* 이모지 반응 */}
-                      <div className="mt-3 pt-3 border-t border-white/40">
-                        <VerificationReactions
-                          verificationId={item.verificationId}
-                          challengeId={challengeId!}
-                          canInteract={isActive && Boolean(userChallenge)}
-                        />
-                      </div>
-
-                      {/* 댓글 */}
-                      <div className="mt-2">
-                        {/* 피드 댓글은 리더 포함 항상 익명(일일 활동명). 리더 신원 댓글은 운영탭에서 */}
-                        <VerificationComments
-                          verificationId={item.verificationId}
-                          challengeId={challengeId!}
-                          canComment={isActive && Boolean(userChallenge) && !isGaveUp}
-                          challengeEnded={!isActive}
-                        />
-                      </div>
-                    </div>
-                  </article>
-                ))
-              )}
+            <div className="space-y-3">
+              {showLeaderFeed && renderFeedSection("leader", leaderFeedVerifications, openLeaderFeed, () => setOpenLeaderFeed((v) => !v))}
+              {showPersonalFeed && renderFeedSection("personal", personalFeedVerifications, openPersonalFeed, () => setOpenPersonalFeed((v) => !v))}
             </div>
           </section>
 

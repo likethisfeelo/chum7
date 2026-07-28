@@ -292,6 +292,19 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
     onError: (err: any) => toast.error(err?.response?.data?.message || '처리에 실패했어요'),
   });
 
+  // 이미 승인된 '제안' 재반려 — 참여자가 재제출하게 함 (개별 인증 게시물은 피드에서 각각 반려)
+  const reRejectMutation = useMutation({
+    mutationFn: (vars: { proposalId: string; reason?: string }) =>
+      challengeApi.reRejectQuestProposal(challengeId, vars.proposalId, { reason: vars.reason }),
+    onSuccess: () => {
+      toast.success('제안을 반려했어요');
+      setRejectingId(null);
+      setReason('');
+      queryClient.invalidateQueries({ queryKey: ['leader-quest-proposals', challengeId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '처리에 실패했어요'),
+  });
+
   const proposals = data?.proposals ?? [];
 
   return (
@@ -328,6 +341,8 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
             const meta = PROPOSAL_STATUS_META[p.status] ?? { label: p.status, cls: 'bg-gray-100 text-gray-500' };
             const isRejecting = rejectingId === p.proposalId;
             const isPending = p.status === 'pending';
+            const isApproved = p.status === 'approved';
+            const busy = reviewMutation.isPending || reRejectMutation.isPending;
             return (
               <div key={p.proposalId} className="rounded-xl bg-white/60 border border-gray-100 p-3">
                 <div className="flex items-start gap-2">
@@ -351,10 +366,16 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
                   </div>
                 </div>
 
-                {isPending && (
+                {(isPending || isApproved) && (
                   <div className="mt-2 pt-2 border-t border-gray-100">
                     {isRejecting ? (
                       <div className="space-y-2">
+                        {isApproved && (
+                          <p className="text-[11px] text-rose-600 bg-rose-50 rounded-lg px-2 py-1.5">
+                            ⚠️ 이미 승인된 <b>퀘스트 제안</b>을 반려하면 참여자가 다시 제출해야 해요.
+                            (이미 올라온 인증 게시물은 피드에서 각각 <b>반려</b>로 처리하세요.)
+                          </p>
+                        )}
                         <input
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
@@ -365,11 +386,15 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            disabled={reviewMutation.isPending}
-                            onClick={() => reviewMutation.mutate({ proposalId: p.proposalId, decision: 'reject', reason: reason.trim() || undefined })}
+                            disabled={busy}
+                            onClick={() =>
+                              isApproved
+                                ? reRejectMutation.mutate({ proposalId: p.proposalId, reason: reason.trim() || undefined })
+                                : reviewMutation.mutate({ proposalId: p.proposalId, decision: 'reject', reason: reason.trim() || undefined })
+                            }
                             className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 text-white disabled:opacity-50"
                           >
-                            반려 확정
+                            {isApproved ? '제안 반려' : '반려 확정'}
                           </button>
                           <button
                             type="button"
@@ -380,11 +405,11 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
                           </button>
                         </div>
                       </div>
-                    ) : (
+                    ) : isPending ? (
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          disabled={reviewMutation.isPending}
+                          disabled={busy}
                           onClick={() => reviewMutation.mutate({ proposalId: p.proposalId, decision: 'approve' })}
                           className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white disabled:opacity-50"
                         >
@@ -398,6 +423,15 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
                           반려
                         </button>
                       </div>
+                    ) : (
+                      // 이미 승인됨 — 제안 반려 진입 (참여자 재제출)
+                      <button
+                        type="button"
+                        onClick={() => { setRejectingId(p.proposalId); setReason(''); }}
+                        className="w-full py-1.5 text-xs font-medium rounded-lg border border-rose-200 text-rose-600 bg-white"
+                      >
+                        제안 반려하기
+                      </button>
                     )}
                   </div>
                 )}
