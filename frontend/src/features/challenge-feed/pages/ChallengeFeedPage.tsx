@@ -344,6 +344,17 @@ export const ChallengeFeedPage = () => {
   });
   const [showGiveUpConfirm, setShowGiveUpConfirm] = useState(false);
   const [giveUpStep, setGiveUpStep] = useState(1);
+  const [showCheerSheet, setShowCheerSheet] = useState(false);
+  const [cheerSheetTab, setCheerSheetTab] = useState<"received" | "sent">("received");
+
+  const { data: cheerRecords = [] } = useQuery({
+    queryKey: ["my-cheers", cheerSheetTab],
+    enabled: showCheerSheet,
+    queryFn: async () => {
+      const res = await apiClient.get(`/ch/cheers/my?type=${cheerSheetTab}&limit=30`);
+      return res.data?.data?.cheers ?? [];
+    },
+  });
   const [openVideoPickerSignal, setOpenVideoPickerSignal] = useState(0);
   const handleVerificationSuccess = (_data: any) => {
     queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
@@ -671,6 +682,73 @@ export const ChallengeFeedPage = () => {
           );
         })()}
 
+        {/* 응원 기록 바텀시트 (🕯️) */}
+        {showCheerSheet && (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+            onClick={() => setShowCheerSheet(false)}
+          >
+            <div
+              className="flex max-h-[70vh] w-full max-w-md flex-col rounded-t-3xl bg-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="h-1 w-10 rounded-full bg-gray-300" />
+              </div>
+              <div className="flex items-center gap-1.5 px-5 pt-1 pb-2">
+                <span className="text-lg">🕯️</span>
+                <h3 className="text-base font-bold text-gray-900">응원 기록</h3>
+              </div>
+              <div className="flex gap-5 border-b border-gray-100 px-5">
+                {(["received", "sent"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setCheerSheetTab(t)}
+                    className={`relative pb-2 text-sm ${cheerSheetTab === t ? "font-semibold text-gray-900" : "text-gray-400"}`}
+                  >
+                    {t === "received" ? "받은 응원" : "보낸 응원"}
+                    {cheerSheetTab === t && <div className="absolute inset-x-0 -bottom-px h-0.5 bg-gray-900" />}
+                  </button>
+                ))}
+              </div>
+              <div className="flex-1 space-y-2 overflow-y-auto px-5 py-3">
+                {cheerRecords.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-gray-400">
+                    {cheerSheetTab === "received" ? "아직 받은 응원이 없어요" : "아직 보낸 응원이 없어요"}
+                  </p>
+                ) : (
+                  cheerRecords.map((cheer: any, i: number) => (
+                    <div key={cheer.cheerId ?? i} className="rounded-xl bg-gray-50 px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-800">
+                          {cheer.senderAlias || cheer.receiverAlias || "익명의 응원자"}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {cheer.createdAt ? String(cheer.createdAt).slice(5, 10) : ""}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-600">
+                        {cheer.message ||
+                          (cheer.delta ? `${cheer.delta}분 일찍 인증하고 응원을 보냈어요 💪` : "응원을 보냈어요 💪")}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="border-t border-gray-100 p-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCheerSheet(false)}
+                  className="w-full rounded-xl bg-gray-100 py-2.5 text-sm font-medium text-gray-700"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isCreator && mainTab === "ops" ? (
           <div className="p-4 lg:p-6 mx-auto w-full max-w-2xl">
             <LeaderOpsTab challengeId={challengeId} />
@@ -800,7 +878,7 @@ export const ChallengeFeedPage = () => {
                 </div>
               </div>
               <div className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium ${canCheerNow ? "bg-primary-50 text-primary-700" : "bg-gray-50 text-gray-500"}`}>
-                {canCheerNow ? "오늘 인증 완료! 다른 참여자에게 응원을 보낼 수 있어요." : "오늘 인증 후 응원 기능이 열립니다."}
+                {canCheerNow ? "피드에서 다른 참여자들의 인증 게시물에 리액션과 댓글로 서로 힘을 나눠주세요." : "오늘 인증 후 응원 기능이 열립니다."}
               </div>
             </section>
           )}
@@ -1092,7 +1170,7 @@ export const ChallengeFeedPage = () => {
           {isTodayAllDone && !hasInvalidMyVideo && (
             <section className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
               <h3 className="font-bold text-emerald-800">✅ 오늘 인증 완료!</h3>
-              <p className="text-sm text-emerald-700 mt-1">이제 다른 참여자에게 응원을 보낼 수 있어요.</p>
+              <p className="text-sm text-emerald-700 mt-1">이제 피드에서 리액션과 댓글로 서로 힘을 나눠줄 수 있어요.</p>
             </section>
           )}
 
@@ -1294,23 +1372,57 @@ export const ChallengeFeedPage = () => {
             </section>
           )}
 
-          {/* 8) 오늘 인증완료 / 전체 참여자 — mobile only */}
-          <section className="lg:hidden grid grid-cols-2 gap-2">
-            <div className="glass-card rounded-2xl p-4">
-              <p className="text-xs text-gray-500">오늘 인증 완료</p>
-              <p className="mt-1 text-xl font-bold text-gray-900">{todayCompletedCount}명</p>
-              <p className="text-xs text-gray-500">KST 기준</p>
-            </div>
-            <div className="glass-card rounded-2xl p-4">
-              <p className="text-xs text-gray-500">전체 참여자</p>
-              <p className="mt-1 text-xl font-bold text-gray-900">
-                {challengeData?.stats?.totalParticipants || challengeData?.participantCount || 0}명
-              </p>
-              <p className="text-xs text-gray-500">챌린지 누적</p>
+          {/* 8) 통합 스탯 5칸(오늘 인증/전체 참여자/총 인증/연속/🕯️응원기록) — mobile only */}
+          <section className="lg:hidden glass-card rounded-2xl p-3">
+            <div className="grid grid-cols-5 gap-1 text-center">
+              <div className="py-1.5">
+                <p className="text-base font-bold text-gray-900 leading-none">{todayCompletedCount}</p>
+                <p className="mt-1 text-[10px] text-gray-400">오늘 인증</p>
+              </div>
+              <div className="py-1.5">
+                <p className="text-base font-bold text-gray-900 leading-none">
+                  {challengeData?.stats?.totalParticipants || challengeData?.participantCount || 0}
+                </p>
+                <p className="mt-1 text-[10px] text-gray-400">전체 참여자</p>
+              </div>
+              <div className="py-1.5">
+                <p className="text-base font-bold text-gray-900 leading-none">{myTotalCount}</p>
+                <p className="mt-1 text-[10px] text-gray-400">총 인증</p>
+              </div>
+              <div className="py-1.5">
+                <p className="text-base font-bold text-gray-900 leading-none">
+                  {userChallenge?.consecutiveDays ?? 0}
+                </p>
+                <p className="mt-1 text-[10px] text-gray-400">연속</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCheerSheet(true)}
+                aria-label="응원 기록"
+                className="flex flex-col items-center justify-center rounded-lg py-1.5 hover:bg-gray-50 transition-colors"
+              >
+                <span className="text-lg leading-none">🕯️</span>
+                <p className="mt-1 text-[10px] text-gray-400">응원 기록</p>
+              </button>
             </div>
           </section>
 
-          {/* 9) 보완인증 */}
+          {/* 리액션·댓글 안내 배너 — mobile only */}
+          <div className="lg:hidden rounded-xl bg-primary-50 px-4 py-3 text-sm font-medium text-primary-700">
+            피드에서 다른 참여자들의 인증 게시물에 리액션과 댓글로 서로 힘을 나눠주세요.
+          </div>
+
+          {/* 리더 DM */}
+          <button
+            type="button"
+            onClick={() => leaderDmMutation.mutate()}
+            disabled={leaderDmMutation.isPending}
+            className="w-full py-3 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 font-semibold disabled:opacity-50"
+          >
+            {leaderDmMutation.isPending ? "DM 연결중..." : "리더 DM"}
+          </button>
+
+          {/* 9) 보완 인증 — 맨 아래 */}
           {(() => {
             if (!userChallenge) return null;
             if (isGaveUp) return null;
@@ -1339,40 +1451,6 @@ export const ChallengeFeedPage = () => {
               </section>
             );
           })()}
-
-          {/* 10) 내 응원/기록 현황 — mobile only */}
-          {userChallenge && (
-            <section className="lg:hidden glass-card rounded-2xl p-5">
-              <h3 className="font-bold text-gray-900 mb-3">내 응원 / 기록</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="glass-card rounded-xl p-3">
-                  <p className="text-xs text-gray-500">총 인증 횟수</p>
-                  <p className="text-lg font-bold text-gray-900 mt-0.5">{myTotalCount}회</p>
-                </div>
-                <div className="glass-card rounded-xl p-3">
-                  <p className="text-xs text-gray-500">연속 인증</p>
-                  <p className="text-lg font-bold text-gray-900 mt-0.5">
-                    {userChallenge?.consecutiveDays ?? 0}일
-                  </p>
-                </div>
-              </div>
-              <div className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium ${canCheerNow ? "bg-primary-50 text-primary-700" : "bg-gray-50 text-gray-500"}`}>
-                {canCheerNow
-                  ? "오늘 인증 완료! 피드에서 다른 참여자에게 응원을 보낼 수 있어요."
-                  : "오늘 인증 후 응원 기능이 열립니다."}
-              </div>
-            </section>
-          )}
-
-          {/* 리더 DM */}
-          <button
-            type="button"
-            onClick={() => leaderDmMutation.mutate()}
-            disabled={leaderDmMutation.isPending}
-            className="w-full py-3 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 font-semibold disabled:opacity-50"
-          >
-            {leaderDmMutation.isPending ? "DM 연결중..." : "리더 DM"}
-          </button>
 
           </div>{/* ── End Right Main ── */}
           </div>{/* ── End Grid ── */}
