@@ -69,12 +69,17 @@ questProposalRoutes.post('/:challengeId/quest-proposals', async (c) => {
     : '개인 퀘스트 제안이 제출됐어요. 리더 승인 후 인증할 수 있어요';
 
   if (isUpdate && latest) {
-    // 재제출 — 최신 내용으로 교체, 상태는 자동승인 여부에 따름, 피드백 초기화
+    // 재제출 — 최신 내용으로 교체, 상태는 자동승인 여부에 따름, 피드백 및 재반려 마커 초기화
+    // (재반려 fallback/스냅샷을 지워야 시작 시점 enforcement 대상에서 제외됨)
     await updateProposalFields(challengeId, latest.sk as string, {
       title: input.title,
       description: input.description ?? '',
       status: nextStatus,
       leaderFeedback: null,
+      rejectFallback: null,
+      originalTitle: null,
+      originalDescription: null,
+      reReviewedAt: null,
       reviewedBy,
       reviewedAt,
       updatedAt: now,

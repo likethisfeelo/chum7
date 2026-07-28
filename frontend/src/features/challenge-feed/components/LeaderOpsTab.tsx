@@ -271,6 +271,8 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
   const [tab, setTab] = useState<'pending' | 'all'>('pending');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  // 승인된 제안 재반려 시, 재제출 미이행 처리(fallback) 선택
+  const [fallback, setFallback] = useState<'block' | 'keep_original'>('block');
 
   const { data, isLoading, isError } = useQuery<{ proposals: QuestProposal[]; total: number }>({
     queryKey: ['leader-quest-proposals', challengeId, tab],
@@ -294,8 +296,8 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
 
   // 이미 승인된 '제안' 재반려 — 참여자가 재제출하게 함 (개별 인증 게시물은 피드에서 각각 반려)
   const reRejectMutation = useMutation({
-    mutationFn: (vars: { proposalId: string; reason?: string }) =>
-      challengeApi.reRejectQuestProposal(challengeId, vars.proposalId, { reason: vars.reason }),
+    mutationFn: (vars: { proposalId: string; reason?: string; fallback: 'block' | 'keep_original' }) =>
+      challengeApi.reRejectQuestProposal(challengeId, vars.proposalId, { reason: vars.reason, fallback: vars.fallback }),
     onSuccess: () => {
       toast.success('제안을 반려했어요');
       setRejectingId(null);
@@ -372,24 +374,38 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
                       <div className="space-y-2">
                         {isApproved && (
                           <p className="text-[11px] text-rose-600 bg-rose-50 rounded-lg px-2 py-1.5">
-                            ⚠️ 이미 승인된 <b>퀘스트 제안</b>을 반려하면 참여자가 다시 제출해야 해요.
+                            ⚠️ 이미 승인된 <b>퀘스트 제안</b>을 반려하면 참여자에게 사유가 전달되고 다시 제출하도록 안내돼요.
                             (이미 올라온 인증 게시물은 피드에서 각각 <b>반려</b>로 처리하세요.)
                           </p>
                         )}
                         <input
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
-                          placeholder="반려 사유(선택)"
+                          placeholder={isApproved ? '반려 사유 (참여자에게 전달, 선택)' : '반려 사유(선택)'}
                           maxLength={500}
                           className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-rose-300"
                         />
+                        {isApproved && (
+                          <div className="rounded-lg border border-gray-200 p-2 space-y-1.5">
+                            <p className="text-[11px] font-semibold text-gray-600">시작 전까지 재제출하지 않으면?</p>
+                            <label className="flex items-start gap-2 cursor-pointer">
+                              <input type="radio" name={`fb-${p.proposalId}`} checked={fallback === 'block'} onChange={() => setFallback('block')} className="mt-0.5" />
+                              <span className="text-[11px] text-gray-700"><b>참여 제한</b> — 개인 퀘스트 미승인으로 이 챌린지 참여 불가</span>
+                            </label>
+                            <label className="flex items-start gap-2 cursor-pointer">
+                              <input type="radio" name={`fb-${p.proposalId}`} checked={fallback === 'keep_original'} onChange={() => setFallback('keep_original')} className="mt-0.5" />
+                              <span className="text-[11px] text-gray-700"><b>기존 제출본 유지</b> — 원래 승인본으로 자동 재승인</span>
+                            </label>
+                            <p className="text-[10px] text-gray-400">※ 재제출하면 두 경우 모두 시작 전 자동 재승인돼요.</p>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <button
                             type="button"
                             disabled={busy}
                             onClick={() =>
                               isApproved
-                                ? reRejectMutation.mutate({ proposalId: p.proposalId, reason: reason.trim() || undefined })
+                                ? reRejectMutation.mutate({ proposalId: p.proposalId, reason: reason.trim() || undefined, fallback })
                                 : reviewMutation.mutate({ proposalId: p.proposalId, decision: 'reject', reason: reason.trim() || undefined })
                             }
                             className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 text-white disabled:opacity-50"

@@ -169,6 +169,17 @@ export const proposalReviewSchema = z.object({
 });
 export type ProposalReviewInput = z.infer<typeof proposalReviewSchema>;
 
+/**
+ * 승인된 개인 퀘스트 제안 재반려 — 사유(≤500) + 재제출 미이행 시 처리(fallback) 선택.
+ *  block         : 재제출 안 하면 참여 제한
+ *  keep_original : 재제출 안 하면 기존(원래 승인) 제출본으로 자동 재승인
+ */
+export const proposalReRejectSchema = z.object({
+  reason: z.string().max(500).optional(),
+  fallback: z.enum(['block', 'keep_original']),
+});
+export type ProposalReRejectInput = z.infer<typeof proposalReRejectSchema>;
+
 // ── 퀘스트 제출 (레거시 quest/submit) ───────────────────────────────────────
 
 export const submitQuestSchema = z.object({

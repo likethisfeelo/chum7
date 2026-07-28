@@ -35,7 +35,7 @@ import {
   updateProposalReReject,
 } from '../repo/quest-proposals';
 import { canRerejectProposal, canReviewProposal, proposalReviewOutcome } from '../domain/proposal-rules';
-import { proposalReviewSchema } from '../schemas';
+import { proposalReviewSchema, proposalReRejectSchema } from '../schemas';
 import { stripKeys } from '../repo/shared';
 
 export const leaderRoutes = new Hono<AppEnv>();
@@ -240,7 +240,7 @@ leaderRoutes.put('/quest-proposals/:proposalId/re-reject', async (c) => {
   const guard = await requireLeaderChallenge(c, challengeId);
   if (guard.error) return guard.error;
 
-  const input = proposalReviewSchema.parse(await c.req.json().catch(() => ({})));
+  const input = proposalReRejectSchema.parse(await c.req.json().catch(() => ({})));
   const nowIso = new Date().toISOString();
 
   const proposal = await findProposalById(challengeId, proposalId);
@@ -253,12 +253,33 @@ leaderRoutes.put('/quest-proposals/:proposalId/re-reject', async (c) => {
     challengeId,
     sk: String(proposal.sk),
     reason: input.reason ?? null,
+    fallback: input.fallback,
+    // 재제출 미이행 시 복원용 — 현재(승인) 내용 스냅샷
+    originalTitle: typeof proposal.title === 'string' ? proposal.title : null,
+    originalDescription: typeof proposal.description === 'string' ? proposal.description : null,
     reviewerId: c.get('authUser')!.userId,
     nowIso,
   });
   if (!applied) return fail(c, 409, 'NOT_APPROVED', '이미 처리된 제안서입니다');
 
-  return ok(c, { proposalId, status: 'rejected' }, '개인 퀘스트 제안을 반려했어요. 참여자가 다시 제출할 수 있어요.');
+  // 참여자에게 사유·결과 안내 (재제출 유도)
+  try {
+    await publishEvent('proposal.rerejected', {
+      challengeId,
+      userId: String(proposal.userId),
+      proposalId,
+      reason: input.reason ?? '',
+      fallback: input.fallback,
+    });
+  } catch (err: any) {
+    console.error('re-reject: publish event error (non-fatal):', err?.message);
+  }
+
+  return ok(
+    c,
+    { proposalId, status: 'rejected', fallback: input.fallback },
+    '개인 퀘스트 제안을 반려했어요. 참여자가 시작 전까지 다시 제출할 수 있어요.',
+  );
 });
 
 // 인증 게시물(1건) 반려 (리더 — 특정 인증을 그날 단위로 반려).

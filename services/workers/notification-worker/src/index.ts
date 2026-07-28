@@ -140,6 +140,31 @@ function routeNotification(
         title: '배송 상태 변경',
         message: '리워드 배송 상태가 변경되었어요',
       };
+    case 'proposal.rerejected': {
+      const reason = typeof detail.reason === 'string' && detail.reason.trim() ? detail.reason.trim() : '';
+      const consequence =
+        detail.fallback === 'block'
+          ? '시작 전까지 다시 제출하지 않으면 이 챌린지 참여가 제한돼요.'
+          : '시작 전까지 다시 제출하지 않으면 기존 제출본으로 진행돼요.';
+      return {
+        recipientId: String(detail.userId),
+        category: 'challenge',
+        type: 'personal_quest_rerejected',
+        title: '개인 퀘스트가 반려됐어요',
+        message: `${reason ? `사유: ${reason} · ` : ''}시작 전까지 다시 제출하면 자동 승인돼요. ${consequence}`,
+      };
+    }
+    case 'proposal.enforced':
+      return {
+        recipientId: String(detail.userId),
+        category: 'challenge',
+        type: 'personal_quest_enforced',
+        title: detail.outcome === 'blocked' ? '챌린지 참여가 제한됐어요' : '개인 퀘스트가 재승인됐어요',
+        message:
+          detail.outcome === 'blocked'
+            ? '개인 퀘스트를 다시 제출하지 않아 이 챌린지 참여가 제한됐어요.'
+            : '개인 퀘스트를 다시 제출하지 않아 기존 제출본으로 진행돼요.',
+      };
     default:
       return null; // challenge.completed 등은 다중 수신자 — Phase 4에서 확장
   }

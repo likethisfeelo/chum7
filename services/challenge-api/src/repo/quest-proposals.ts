@@ -120,6 +120,10 @@ export async function updateProposalReReject(input: {
   challengeId: string;
   sk: string;
   reason: string | null;
+  fallback: 'block' | 'keep_original';
+  /** 재제출 미이행 시 복원용 — 반려 시점의 승인 내용 스냅샷 */
+  originalTitle: string | null;
+  originalDescription: string | null;
   reviewerId: string;
   nowIso: string;
 }): Promise<boolean> {
@@ -129,13 +133,18 @@ export async function updateProposalReReject(input: {
         TableName: tableName(TABLE),
         Key: { pk: challengePk(input.challengeId), sk: input.sk },
         UpdateExpression:
-          'SET #st = :rejected, leaderFeedback = :fb, reviewedBy = :reviewer, reviewedAt = :now, updatedAt = :now',
+          'SET #st = :rejected, leaderFeedback = :fb, rejectFallback = :fallback, ' +
+          'originalTitle = :ot, originalDescription = :od, reReviewedAt = :now, ' +
+          'reviewedBy = :reviewer, reviewedAt = :now, updatedAt = :now',
         ConditionExpression: '#st = :approved',
         ExpressionAttributeNames: { '#st': 'status' },
         ExpressionAttributeValues: {
           ':rejected': 'rejected',
           ':approved': 'approved',
           ':fb': input.reason,
+          ':fallback': input.fallback,
+          ':ot': input.originalTitle,
+          ':od': input.originalDescription,
           ':reviewer': input.reviewerId,
           ':now': input.nowIso,
         },

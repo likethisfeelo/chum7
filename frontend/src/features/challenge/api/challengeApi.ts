@@ -134,15 +134,16 @@ export const challengeApi = {
     return res.data.data;
   },
 
-  // 이미 승인(자동승인 포함)된 개인 퀘스트 '제안'을 리더가 다시 반려 (참여자 재제출). 게시물은 건드리지 않음
+  // 이미 승인(자동승인 포함)된 개인 퀘스트 '제안'을 리더가 다시 반려 (참여자 재제출).
+  // fallback = 시작 전 재제출 미이행 시 처리: 'block'(참여 제한) | 'keep_original'(기존 제출본 유지)
   reRejectQuestProposal: async (
     challengeId: string,
     proposalId: string,
-    params: { reason?: string } = {},
-  ): Promise<{ proposalId: string; status: 'rejected' }> => {
+    params: { reason?: string; fallback: 'block' | 'keep_original' },
+  ): Promise<{ proposalId: string; status: 'rejected'; fallback: 'block' | 'keep_original' }> => {
     const res = await apiClient.put(
       `/c/${challengeId}/leader/quest-proposals/${proposalId}/re-reject`,
-      { decision: 'reject', ...params },
+      params,
     );
     return res.data.data;
   },
