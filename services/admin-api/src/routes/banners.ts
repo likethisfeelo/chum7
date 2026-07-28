@@ -7,7 +7,7 @@ import { Hono } from 'hono';
 import { randomUUID } from 'node:crypto';
 import type { AppEnv } from '@chum7/api-kit';
 import { fail, ok } from '@chum7/api-kit';
-import { bannerUpsertSchema } from '../schemas';
+import { bannerUpsertSchema, bannerUploadUrlSchema } from '../schemas';
 import {
   VALID_BANNER_SLUGS,
   activateBannerTransaction,
@@ -16,12 +16,35 @@ import {
   putBanner,
   bannerPk,
 } from '../repo/banners';
+import { buildBannerImageKey, presignBannerImagePut, UPLOAD_URL_EXPIRES_SEC } from '../repo/media';
 import { recordAudit } from '../repo/audit';
 import { stripKeys } from '../repo/shared';
 
 export const bannerRoutes = new Hono<AppEnv>();
 
 const isValidSlug = (slug: string) => (VALID_BANNER_SLUGS as readonly string[]).includes(slug);
+
+// ── 배너 이미지 업로드용 presigned PUT (신규 — 서버 저장 지원) ──
+// 정적 경로이므로 POST /:slug 보다 먼저 등록해 param 라우트와의 충돌을 방지한다.
+bannerRoutes.post('/upload-url', async (c) => {
+  const { userId } = c.get('authUser')!;
+  if (!process.env.UPLOADS_BUCKET) {
+    return fail(c, 500, 'UPLOADS_BUCKET_NOT_CONFIGURED', '업로드 설정이 올바르지 않습니다');
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = bannerUploadUrlSchema.safeParse(body);
+  if (!parsed.success) {
+    return fail(c, 400, 'VALIDATION_ERROR', '입력값이 올바르지 않습니다', { details: parsed.error.flatten() });
+  }
+
+  const key = buildBannerImageKey(parsed.data.contentType);
+  const uploadUrl = await presignBannerImagePut(userId, key, parsed.data.contentType);
+
+  const stage = process.env.STAGE || 'dev';
+  const cloudfrontDomain = stage === 'prod' ? 'https://www.chum7.com' : 'https://test.chum7.com';
+
+  return ok(c, { uploadUrl, key, fileUrl: `${cloudfrontDomain}/${key}`, expiresIn: UPLOAD_URL_EXPIRES_SEC });
+});
 
 // ── 배너 목록 (레거시 GET /admin/category-banners/{slug}) ──
 bannerRoutes.get('/:slug', async (c) => {

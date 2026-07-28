@@ -226,6 +226,7 @@ export class ApiStack extends cdk.Stack {
         CHEER_TABLE: stateful.tables.cheer.tableName,
         CONTENT_TABLE: stateful.tables.content.tableName,
         OPS_TABLE: stateful.tables.ops.tableName,
+        UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
       },
     });
     stateful.tables.users.grantReadData(adminApi);
@@ -233,6 +234,7 @@ export class ApiStack extends cdk.Stack {
     stateful.tables.cheer.grantReadWriteData(adminApi); // DLQ 재처리
     stateful.tables.content.grantReadWriteData(adminApi); // 배너 관리
     stateful.tables.ops.grantReadWriteData(adminApi); // 감사 로그
+    stateful.uploadsBucket.grantPut(adminApi); // 배너 이미지 presigned PUT
     eventBus.grantPutEventsTo(adminApi);
 
     // --- chat-api: 챌린지 단체 채팅 WebSocket API (HTTP API와 별개 엔드포인트) ---

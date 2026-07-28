@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 
 const CATEGORIES = [
+  { slug: 'all',            label: '✨ 전체 (All)' },
   { slug: 'selflove',        label: '💗 Selflove' },
   { slug: 'attitude',   label: '🔥 Attitude' },
   { slug: 'discipline',         label: '⚡ Discipline' },
@@ -28,10 +29,11 @@ type Banner = {
 const EMPTY_FORM = { imageUrl: '', tagline: '', description: '' };
 
 export const AdminCategoryBannersPage = () => {
-  const [selectedSlug, setSelectedSlug] = useState<CategorySlug>('selflove');
+  const [selectedSlug, setSelectedSlug] = useState<CategorySlug>('all');
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   const qc = useQueryClient();
 
@@ -72,6 +74,40 @@ export const AdminCategoryBannersPage = () => {
       setTimeout(() => setSuccessMsg(''), 3000);
     },
   });
+
+  // 파일 선택 → presigned PUT 로 S3 업로드 → imageUrl 에 CloudFront URL 반영
+  const handleFileUpload = async (file: File) => {
+    if (!/^image\/(jpeg|jpg|png|webp|gif)$/.test(file.type)) {
+      setFormError('JPG·PNG·WEBP·GIF 이미지만 업로드할 수 있어요.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setFormError('이미지는 10MB 이하만 업로드할 수 있어요.');
+      return;
+    }
+    setUploading(true);
+    setFormError('');
+    try {
+      const presign = await apiClient.post('/adm/category-banners/upload-url', {
+        contentType: file.type,
+        fileSize: file.size,
+      });
+      const { uploadUrl, fileUrl } = presign.data.data as { uploadUrl: string; fileUrl: string };
+      const put = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!put.ok) throw new Error('upload failed');
+      setForm((f) => ({ ...f, imageUrl: fileUrl }));
+      setSuccessMsg('이미지가 업로드되었습니다. 아래에서 내용을 확인 후 등록하세요.');
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch {
+      setFormError('이미지 업로드에 실패했습니다.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,7 +213,33 @@ export const AdminCategoryBannersPage = () => {
           <h2 className="text-base font-semibold text-gray-800 mb-3">새 배너 등록</h2>
           <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">이미지 URL</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">배너 이미지 업로드</label>
+              <label
+                className={`flex flex-col items-center justify-center w-full border-2 border-dashed rounded-lg py-4 text-sm cursor-pointer transition-colors ${
+                  uploading
+                    ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-wait'
+                    : 'border-gray-300 text-gray-500 hover:border-gray-400 hover:bg-gray-50'
+                }`}
+              >
+                <span className="text-lg mb-0.5">🖼️</span>
+                {uploading ? '업로드 중…' : '클릭해서 이미지 선택 (JPG·PNG·WEBP·GIF, 최대 10MB)'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  disabled={uploading}
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileUpload(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              <p className="text-[11px] text-gray-400 mt-1">업로드하면 서버(S3)에 저장되고 아래 URL이 자동으로 채워져요.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">이미지 URL <span className="text-gray-400">(직접 입력도 가능)</span></label>
               <input
                 type="url"
                 value={form.imageUrl}
