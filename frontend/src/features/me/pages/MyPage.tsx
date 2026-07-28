@@ -14,6 +14,7 @@ import { OrderHistorySection } from '@/features/commerce/components/OrderHistory
 import { CouponWalletSection } from '@/features/commerce/components/CouponWalletSection';
 import { SavedPlazaTab } from '@/features/me/components/SavedPlazaTab';
 import { InterestAreaTab } from '@/features/me/components/InterestAreaTab';
+import { ProfileOrb } from '@/shared/components/ProfileOrb';
 
 type MyTab = 'character' | 'challenges' | 'saved' | 'interest' | 'badges' | 'orders';
 
@@ -499,54 +500,51 @@ export function MyPage() {
 
   return (
     <div className="min-h-screen">
-      {/* 헤더 */}
-      <div className="bg-gradient-to-br from-primary-500 to-primary-700 pt-12 pb-6 px-6">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-white font-bold text-lg">마이</h1>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/friends')}
-              className="relative text-white/70 hover:text-white text-sm px-3 py-1 rounded-full border border-white/20 hover:border-white/40 transition-colors"
-            >
-              친구
-              {friendRequestCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold">
-                  {friendRequestCount > 9 ? '9+' : friendRequestCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => navigate('/personal-feed/notifications')}
-              className="text-white/70 hover:text-white text-sm px-3 py-1 rounded-full border border-white/20 hover:border-white/40 transition-colors"
-            >
-              알림
-            </button>
-            <button
-              onClick={() => navigate('/personal-feed/settings')}
-              className="text-white/70 hover:text-white text-sm px-3 py-1 rounded-full border border-white/20 hover:border-white/40 transition-colors"
-            >
-              설정
-            </button>
-          </div>
+      {/* 헤더 — 배경/타이틀 없이 컴팩트하게 */}
+      <div className="pt-6 pb-3 px-6">
+        <div className="flex items-center justify-end gap-2 mb-3">
+          <button
+            onClick={() => navigate('/friends')}
+            className="relative text-gray-500 hover:text-gray-800 text-sm px-3 py-1 rounded-full border border-gray-200 hover:border-gray-300 transition-colors"
+          >
+            친구
+            {friendRequestCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold">
+                {friendRequestCount > 9 ? '9+' : friendRequestCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => navigate('/personal-feed/notifications')}
+            className="text-gray-500 hover:text-gray-800 text-sm px-3 py-1 rounded-full border border-gray-200 hover:border-gray-300 transition-colors"
+          >
+            알림
+          </button>
+          <button
+            onClick={() => navigate('/personal-feed/settings')}
+            className="text-gray-500 hover:text-gray-800 text-sm px-3 py-1 rounded-full border border-gray-200 hover:border-gray-300 transition-colors"
+          >
+            설정
+          </button>
         </div>
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-3xl flex-shrink-0">
-            {user?.animalIcon ?? '🐰'}
+          <div className="flex-shrink-0">
+            <ProfileOrb size={56} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <h2 className="text-white font-bold text-xl truncate">{user?.name ?? '나'}</h2>
+              <h2 className="text-gray-900 font-bold text-xl truncate">{user?.name ?? '나'}</h2>
               {topLeaderBadge && (
                 <span className="text-lg flex-shrink-0" title={LEADER_BADGE_META[topLeaderBadge.badgeId]?.name}>
                   {LEADER_BADGE_META[topLeaderBadge.badgeId]?.icon ?? '👑'}
                 </span>
               )}
             </div>
-            <p className="text-white/60 text-xs mt-0.5">Lv.{user?.level ?? 1}</p>
+            <p className="text-gray-400 text-xs mt-0.5">Lv.{user?.level ?? 1}</p>
           </div>
           <button
             onClick={() => navigate('/personal-feed/me')}
-            className="text-white/70 hover:text-white text-xs px-3 py-1.5 rounded-full border border-white/20 hover:border-white/40 transition-colors flex-shrink-0"
+            className="text-gray-500 hover:text-gray-800 text-xs px-3 py-1.5 rounded-full border border-gray-200 hover:border-gray-300 transition-colors flex-shrink-0"
           >
             프로필피드 →
           </button>
