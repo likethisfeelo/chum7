@@ -937,10 +937,10 @@ export const MEPage = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => navigate(`/quests?challengeId=${challenge.challengeId}`)}
+                          onClick={() => navigate(`/challenge-board/${challenge.challengeId || challenge.challenge?.challengeId}`)}
                           className="px-3 py-1.5 text-xs rounded-lg bg-amber-600 text-white"
                         >
-                          퀘스트 보드
+                          챌린지 가이드
                         </button>
                         <button
                           type="button"
