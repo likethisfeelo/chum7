@@ -73,9 +73,13 @@ export const SideNav = () => {
           className="text-2xl font-extrabold tracking-tight"
           style={{ color: 'var(--color-primary, #C07A74)' }}
         >
-          CHME
+          chum7
         </span>
-        <p className="text-xs text-gray-400 mt-0.5">Challenge Earth with ME</p>
+        <p className="text-xs text-gray-400 mt-0.5 leading-snug">
+          Challengers with me
+          <br />
+          within 7 days
+        </p>
       </div>
 
       {/* 네비게이션 아이템 */}
@@ -156,7 +160,7 @@ export const SideNav = () => {
         className="px-4 pt-4"
         style={{ borderTop: '1px solid rgba(0, 0, 0, 0.06)' }}
       >
-        <p className="text-xs text-gray-400 text-center">© 2025 CHME</p>
+        <p className="text-xs text-gray-400 text-center">© 2025 chum7</p>
       </div>
     </nav>
   );

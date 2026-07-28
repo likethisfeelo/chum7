@@ -24,7 +24,7 @@ export const LandingPage = () => {
     <div className="min-h-screen bg-white overflow-x-hidden">
       {/* 헤더 */}
       <header className="fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-sm z-10 px-6 py-4 flex items-center justify-between max-w-md mx-auto">
-        <h1 className="text-2xl font-bold text-primary-600">CHME</h1>
+        <h1 className="text-2xl font-bold text-primary-600">chum7</h1>
         <button
           onClick={() => navigate('/login')}
           className="px-4 py-2 text-sm font-semibold text-primary-600 border border-primary-300 rounded-full hover:bg-primary-50 transition-colors"
