@@ -385,10 +385,10 @@ export const ChallengeBoardPage = () => {
         </div>
       )}
 
-      <div className="p-4 lg:p-6 lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
+      <div className="p-4 lg:p-6 max-w-3xl mx-auto space-y-4 lg:space-y-6">
 
         {/* ── 가이드 섹션 ── */}
-        <section className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 lg:mb-0">
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm">
           <div className="p-5">
             <h2 className="font-bold text-gray-900 mb-4">가이드</h2>
 
@@ -468,8 +468,8 @@ export const ChallengeBoardPage = () => {
           </div>
         </section>
 
-        {/* ── 댓글 섹션 ── */}
-        <section className="lg:col-span-1 bg-white rounded-2xl border border-gray-100 shadow-sm lg:sticky lg:top-20">
+        {/* ── 댓글 섹션 — 가이드 아래로 배치 ── */}
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm">
           <div className="p-5">
             <h3 className="font-bold text-gray-900 mb-4">
               댓글
