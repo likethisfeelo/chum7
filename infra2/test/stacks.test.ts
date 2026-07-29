@@ -38,8 +38,27 @@ describe('infra2 stacks', () => {
     }
   });
 
-  it('StatefulStack — 시크릿 셸 4종 (PG/본인확인/VAPID/익명솔트)', () => {
-    dev.stateful.resourceCountIs('AWS::SecretsManager::Secret', 4);
+  it('StatefulStack — 시크릿 셸 6종 (PG/본인확인/VAPID/익명솔트/OAuth Google·Kakao)', () => {
+    dev.stateful.resourceCountIs('AWS::SecretsManager::Secret', 6);
+    for (const suffix of ['oauth-google', 'oauth-kakao']) {
+      dev.stateful.hasResourceProperties('AWS::SecretsManager::Secret', {
+        Name: `chme2-dev/${suffix}`,
+      });
+    }
+  });
+
+  it('StatefulStack — 소셜 로그인 배관: Hosted UI 도메인 + OAuth 클라이언트(IdP는 플래그 off라 미생성)', () => {
+    // 도메인 프리픽스로 Hosted UI 도메인 생성
+    dev.stateful.hasResourceProperties('AWS::Cognito::UserPoolDomain', {
+      Domain: 'chme2-dev-auth',
+    });
+    // 클라이언트에 authorization code 흐름 활성화
+    dev.stateful.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+      AllowedOAuthFlows: ['code'],
+      CallbackURLs: Match.arrayWith(['http://localhost:5173/auth/callback']),
+    });
+    // google/kakao 플래그가 off(dev 기본)이므로 IdP는 아직 생성되지 않는다
+    dev.stateful.resourceCountIs('AWS::Cognito::UserPoolIdentityProvider', 0);
   });
 
   it('prod — 모든 테이블과 Cognito가 RETAIN (데이터 보호)', () => {

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { SocialLoginButtons } from '@/features/auth/components/SocialLoginButtons';
 import toast from 'react-hot-toast';
 
 type RegisterFormData = {
@@ -166,6 +167,8 @@ export const RegisterPage = () => {
               {!registerMutation.isPending && !confirmMutation.isPending && (isVerificationStep ? '이메일 인증 완료' : '회원가입')}
             </motion.button>
           </form>
+
+          <SocialLoginButtons />
 
           <div className="mt-6 text-center">
             <Link to="/login" className="text-primary-600 font-medium hover:text-primary-700">

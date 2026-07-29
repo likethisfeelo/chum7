@@ -102,6 +102,9 @@ export class ApiStack extends cdk.Stack {
         // 친구 기능(v2) — 순차 출시 스위치 + 자격 임계값(각 방향)
         FRIENDS_ENABLED: String(config.friendsEnabled ?? false),
         FRIEND_ELIGIBILITY_THRESHOLD: String(config.friendEligibilityThreshold ?? 100),
+        // 소셜 로그인 — 프론트가 GET /auth/social/config 로 읽어 팝업 authorize URL을 구성
+        COGNITO_HOSTED_UI_DOMAIN: stateful.hostedUiBaseUrl ?? '',
+        SOCIAL_LOGIN_PROVIDERS: stateful.socialProviders.join(','),
       },
     });
     stateful.vapidSecret.grantRead(this.userApi); // GET /public/push/key

@@ -30,6 +30,26 @@ import { getProfile, newUserProfile, putProfile } from './users-repo';
  */
 export const authRoutes = new Hono<AppEnv>();
 
+/**
+ * GET /auth/social/config — 프론트가 소셜 로그인 팝업의 authorize URL을 구성하는 데 필요한
+ * 공개 값(Hosted UI 도메인·clientId·활성 제공자). 시크릿은 노출하지 않는다.
+ * providers가 비어 있으면 프론트는 소셜 버튼을 숨긴다(롤아웃 전 안전).
+ */
+authRoutes.get('/social/config', (c) => {
+  const hostedUiDomain = process.env.COGNITO_HOSTED_UI_DOMAIN || '';
+  const providers = (process.env.SOCIAL_LOGIN_PROVIDERS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return ok(c, {
+    enabled: Boolean(hostedUiDomain) && providers.length > 0,
+    hostedUiDomain,
+    clientId: process.env.USER_POOL_CLIENT_ID || '',
+    providers,
+    scopes: ['openid', 'email', 'profile'],
+  });
+});
+
 authRoutes.post('/register', async (c) => {
   const body = await c.req.json().catch(() => ({}));
 

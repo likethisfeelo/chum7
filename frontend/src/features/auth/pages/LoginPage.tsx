@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/authStore';
+import { SocialLoginButtons } from '@/features/auth/components/SocialLoginButtons';
 import toast from 'react-hot-toast';
 
 export const LoginPage = () => {
@@ -95,6 +96,8 @@ export const LoginPage = () => {
               {loginMutation.isPending ? '로그인 중...' : '로그인'}
             </motion.button>
           </form>
+
+          <SocialLoginButtons />
 
           <div className="mt-6 text-center space-y-2">
             <Link to="/forgot-password" className="block text-sm text-primary-600 hover:text-primary-700">비밀번호를 잊으셨나요?</Link>
