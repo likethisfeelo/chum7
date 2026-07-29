@@ -14,9 +14,10 @@
  * 실행 예:
  *   node scripts/cleanup-challenge-verifications.mjs --stage prod --challenge <ID>                    # dry-run
  *   node scripts/cleanup-challenge-verifications.mjs --stage prod --challenge <ID> --apply --yes-prod # 실제 삭제
- *   옵션: --user <userId>   특정 참여자의 인증만 대상(미지정 시 챌린지 전체)
- *         --keep-progress   participation progress 초기화 생략(인증/마당만 삭제)
- *         --region <r>      기본 ap-northeast-2 (또는 AWS_REGION)
+ *   옵션: --user <userId>          특정 참여자의 인증/진행기록만 대상(미지정 시 챌린지 전체)
+ *         --verification-id <vid>  이미 인증(VF#)을 지운 뒤 마당(POST#courtyard-<vid>)만 정리할 때 직접 지정
+ *         --keep-progress          participation progress 초기화 생략(인증/마당만 삭제)
+ *         --region <r>             기본 ap-northeast-2 (또는 AWS_REGION)
  */
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
@@ -36,6 +37,8 @@ const opt = (name, fallback) => {
 const stage = opt('stage');
 const challengeId = opt('challenge');
 const onlyUser = opt('user');
+// 이미 인증(VF#)을 지운 뒤 마당(POST#courtyard-<vid>)만 정리할 때 verificationId 직접 지정
+const explicitVid = opt('verification-id');
 const apply = has('apply');
 const yesProd = has('yes-prod');
 const keepProgress = has('keep-progress');
@@ -90,6 +93,8 @@ async function main() {
     console.log(`  - ${v.sk}  (day ${v.day}, ${v.verificationType}, questType=${v.questType ?? '-'}, vid=${v.verificationId})`);
   }
   const vids = verifications.map((v) => String(v.verificationId)).filter(Boolean);
+  // 인증을 이미 지운 경우: verificationId 직접 지정분도 마당 정리 대상에 포함
+  if (explicitVid && !vids.includes(explicitVid)) vids.push(explicitVid);
 
   // 2) 참여(UC#) 중 progress 비어있지 않은 항목
   const participations = keepProgress

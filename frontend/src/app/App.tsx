@@ -11,6 +11,7 @@ import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { RegisterPage } from '@/features/auth/pages/RegisterPage';
 import { EmailVerificationPage } from '@/features/auth/pages/EmailVerificationPage';
 import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
+import { AuthCallbackPage } from '@/features/auth/pages/AuthCallbackPage';
 import { ChallengesPage } from '@/features/challenge/pages/ChallengesPage';
 import { ChallengeDetailPage } from '@/features/challenge/pages/ChallengeDetailPage';
 import { ChallengeCreatePage } from '@/features/challenge/pages/ChallengeCreatePage';
@@ -117,6 +118,8 @@ export default function App() {
             </PublicOnlyRoute>
           }
         />
+        {/* 소셜 로그인 팝업 복귀 지점 — 리다이렉트 래퍼 없이(팝업 내부에서만 동작) */}
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
         {/* 보호된 라우트 (로그인 필요) */}
         <Route

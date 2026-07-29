@@ -34,6 +34,24 @@ export interface StageConfig {
   friendsEnabled?: boolean;
   /** 친구 자격 임계값 — 각 방향 상호작용 수(초기 100, 조정 가능) */
   friendEligibilityThreshold?: number;
+  /**
+   * 소셜 로그인(Google/Kakao) — Cognito Hosted UI 팝업 방식.
+   * 미설정이면 소셜 로그인 비활성(이메일/비밀번호만). google/kakao 개별 플래그는
+   * 각 콘솔 앱 등록 + `npm run ops:set-oauth`로 시크릿 주입을 마친 뒤 켠다.
+   * (플래그가 off면 해당 IdP 자체를 생성하지 않아, 시크릿 없이도 안전하게 배포된다.)
+   */
+  socialLogin?: {
+    /** Hosted UI 도메인 프리픽스 → <prefix>.auth.<region>.amazoncognito.com (리전 내 전역 유니크) */
+    domainPrefix: string;
+    /** OAuth 콜백 URL (프론트 /auth/callback). 팝업이 이 URL로 복귀 — Cognito에 정확히 일치해야 함 */
+    callbackUrls: string[];
+    /** 로그아웃 복귀 URL */
+    logoutUrls: string[];
+    /** Google IdP 활성화 (콘솔 등록 + 시크릿 주입 후 true) */
+    google?: boolean;
+    /** Kakao IdP(OIDC) 활성화 (콘솔 등록 + 시크릿 주입 후 true) */
+    kakao?: boolean;
+  };
 }
 
 const dev: StageConfig = {
@@ -44,6 +62,16 @@ const dev: StageConfig = {
   domain: undefined,
   cors: { allowOrigins: ['*'] },
   platformFeeRate: 0.05,
+  // 소셜 로그인 배관은 항상 생성(도메인+OAuth 클라이언트+시크릿 셸).
+  // IdP는 google/kakao 플래그가 켜져야 생성됨 — 콘솔 등록+시크릿 주입 전까지 off 유지.
+  // dev 배포 URL(CloudFront 기본 도메인)로 테스트하려면 그 origin의 /auth/callback을 callbackUrls에 추가한다.
+  socialLogin: {
+    domainPrefix: 'chme2-dev-auth',
+    callbackUrls: ['http://localhost:5173/auth/callback'],
+    logoutUrls: ['http://localhost:5173/login'],
+    google: false,
+    kakao: false,
+  },
 };
 
 const prod: StageConfig = {
@@ -59,6 +87,13 @@ const prod: StageConfig = {
   },
   cors: { allowOrigins: ['https://www.chum7.com', 'https://admin.chum7.com'] },
   platformFeeRate: 0.05,
+  socialLogin: {
+    domainPrefix: 'chme2-prod-auth',
+    callbackUrls: ['https://www.chum7.com/auth/callback'],
+    logoutUrls: ['https://www.chum7.com/login'],
+    google: false,
+    kakao: false,
+  },
 };
 
 export function resolveStageConfig(stage: string): StageConfig {

@@ -58,6 +58,10 @@ export class StatefulStack extends cdk.Stack {
   readonly identitySecret: secretsmanager.Secret;
   readonly vapidSecret: secretsmanager.Secret;
   readonly anonSaltSecret: secretsmanager.Secret;
+  /** 소셜 로그인 시 Hosted UI 베이스 URL (예: https://chme2-dev-auth.auth.ap-northeast-2.amazoncognito.com). 미설정 시 undefined */
+  readonly hostedUiBaseUrl?: string;
+  /** 활성 소셜 IdP 목록 (프론트 노출용). 예: ['google','kakao'] */
+  readonly socialProviders: string[] = [];
 
   constructor(scope: Construct, id: string, props: StatefulStackProps) {
     super(scope, id, props);
@@ -104,12 +108,97 @@ export class StatefulStack extends cdk.Stack {
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
       removalPolicy, // prod RETAIN — 기존 시스템의 DESTROY 결함 수정 (REDESIGN_PLAN §2.2)
     });
+    // --- 소셜 로그인(Google/Kakao) IdP + Hosted UI (Cognito Hosted UI 팝업 방식) ---
+    // 시크릿 셸은 항상 생성(값은 `npm run ops:set-oauth`로 1회 주입). 코드/리포에 값 없음.
+    // IdP는 config.socialLogin.google/kakao 플래그가 켜질 때만 생성 — 시크릿 주입 전엔 안전.
+    const social = config.socialLogin;
+    const oauthGoogleSecret = new secretsmanager.Secret(this, 'OauthGoogleSecret', {
+      secretName: `${config.prefix}/oauth-google`,
+      description: 'Google OAuth 클라이언트 {"clientId","clientSecret"} — 소셜 로그인',
+      removalPolicy,
+    });
+    const oauthKakaoSecret = new secretsmanager.Secret(this, 'OauthKakaoSecret', {
+      secretName: `${config.prefix}/oauth-kakao`,
+      description: 'Kakao OIDC {"clientId","clientSecret"} — REST API 키/시크릿, 소셜 로그인',
+      removalPolicy,
+    });
+
+    let googleIdp: cognito.CfnUserPoolIdentityProvider | undefined;
+    let kakaoIdp: cognito.CfnUserPoolIdentityProvider | undefined;
+    if (social) {
+      const domain = this.userPool.addDomain('HostedUiDomain', {
+        cognitoDomain: { domainPrefix: social.domainPrefix },
+      });
+      this.hostedUiBaseUrl = domain.baseUrl();
+
+      if (social.google) {
+        // 시크릿 값은 CloudFormation 동적 참조({{resolve:secretsmanager:...}})로 배포 시 주입.
+        // 시크릿을 갱신하면 재배포 시 반영된다.
+        googleIdp = new cognito.CfnUserPoolIdentityProvider(this, 'GoogleIdp', {
+          userPoolId: this.userPool.userPoolId,
+          providerName: 'Google',
+          providerType: 'Google',
+          providerDetails: {
+            client_id: oauthGoogleSecret.secretValueFromJson('clientId').unsafeUnwrap(),
+            client_secret: oauthGoogleSecret.secretValueFromJson('clientSecret').unsafeUnwrap(),
+            authorize_scopes: 'openid email profile',
+          },
+          attributeMapping: { email: 'email', name: 'name' },
+        });
+        this.socialProviders.push('google');
+      }
+      if (social.kakao) {
+        // Kakao는 OIDC 지원(issuer kauth.kakao.com) → Cognito가 .well-known으로 엔드포인트 자동 발견.
+        kakaoIdp = new cognito.CfnUserPoolIdentityProvider(this, 'KakaoIdp', {
+          userPoolId: this.userPool.userPoolId,
+          providerName: 'Kakao',
+          providerType: 'OIDC',
+          providerDetails: {
+            client_id: oauthKakaoSecret.secretValueFromJson('clientId').unsafeUnwrap(),
+            client_secret: oauthKakaoSecret.secretValueFromJson('clientSecret').unsafeUnwrap(),
+            attributes_request_method: 'GET',
+            oidc_issuer: 'https://kauth.kakao.com',
+            authorize_scopes: 'openid account_email profile_nickname',
+          },
+          attributeMapping: { email: 'email', name: 'nickname' },
+        });
+        this.socialProviders.push('kakao');
+      }
+    }
+
+    const supportedIdps: cognito.UserPoolClientIdentityProvider[] = [
+      cognito.UserPoolClientIdentityProvider.COGNITO,
+    ];
+    if (social?.google) supportedIdps.push(cognito.UserPoolClientIdentityProvider.GOOGLE);
+    if (social?.kakao) supportedIdps.push(cognito.UserPoolClientIdentityProvider.custom('Kakao'));
+
     this.userPoolClient = this.userPool.addClient('WebClient', {
       userPoolClientName: `${config.prefix}-web`,
+      // 이메일/비밀번호 로그인은 그대로 유지 + (소셜 설정 시) OAuth authorization code 흐름 추가
       authFlows: { userPassword: true },
       accessTokenValidity: cdk.Duration.hours(1),
       refreshTokenValidity: cdk.Duration.days(30),
+      ...(social
+        ? {
+            oAuth: {
+              flows: { authorizationCodeGrant: true },
+              // openid → idToken 발급(aud=clientId로 API Gateway JWT 인증 통과), email/profile → 속성
+              scopes: [
+                cognito.OAuthScope.OPENID,
+                cognito.OAuthScope.EMAIL,
+                cognito.OAuthScope.PROFILE,
+              ],
+              callbackUrls: social.callbackUrls,
+              logoutUrls: social.logoutUrls,
+            },
+            supportedIdentityProviders: supportedIdps,
+          }
+        : {}),
     });
+    // 클라이언트가 IdP를 참조하므로 생성 순서 보장
+    if (googleIdp) this.userPoolClient.node.addDependency(googleIdp);
+    if (kakaoIdp) this.userPoolClient.node.addDependency(kakaoIdp);
+
     for (const group of ['admins', 'operators', 'creators']) {
       new cognito.CfnUserPoolGroup(this, `${pascal(group)}Group`, {
         userPoolId: this.userPool.userPoolId,
@@ -177,6 +266,10 @@ export class StatefulStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'UserPoolId', { value: this.userPool.userPoolId });
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: this.userPoolClient.userPoolClientId });
+    if (this.hostedUiBaseUrl) {
+      // 콘솔(Google/Kakao)에 등록할 Redirect URI = <base>/oauth2/idpresponse
+      new cdk.CfnOutput(this, 'HostedUiBaseUrl', { value: this.hostedUiBaseUrl });
+    }
     new cdk.CfnOutput(this, 'UploadsBucketName', { value: this.uploadsBucket.bucketName });
   }
 }

@@ -95,71 +95,75 @@ function VerificationReactions({
   const activeReactions = reactions.filter((r) => r.count > 0);
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {/* 기존 반응 pills */}
-      {activeReactions.map((r) => (
-        <button
-          key={r.emoji}
-          onClick={() => canInteract && toggleMutation.mutate(r.emoji)}
-          disabled={!canInteract || toggleMutation.isPending}
-          title={!canInteract ? "챌린지 기간에만 반응할 수 있어요" : undefined}
-          className={[
-            "flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all select-none",
-            r.myReacted
-              ? "bg-primary-100 border border-primary-300 text-primary-700"
-              : "bg-white/60 border border-gray-200 text-gray-600",
-            canInteract ? "hover:scale-105 active:scale-95" : "cursor-default opacity-70",
-          ].join(" ")}
-        >
-          <span className="text-sm leading-none">{r.emoji}</span>
-          <span>{r.count}</span>
-        </button>
-      ))}
+    <div ref={pickerRef}>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {/* 기존 반응 pills */}
+        {activeReactions.map((r) => (
+          <button
+            key={r.emoji}
+            onClick={() => canInteract && toggleMutation.mutate(r.emoji)}
+            disabled={!canInteract || toggleMutation.isPending}
+            title={!canInteract ? "챌린지 기간에만 반응할 수 있어요" : undefined}
+            className={[
+              "flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all select-none",
+              r.myReacted
+                ? "bg-primary-100 border border-primary-300 text-primary-700"
+                : "bg-white/60 border border-gray-200 text-gray-600",
+              canInteract ? "hover:scale-105 active:scale-95" : "cursor-default opacity-70",
+            ].join(" ")}
+          >
+            <span className="text-sm leading-none">{r.emoji}</span>
+            <span>{r.count}</span>
+          </button>
+        ))}
 
-      {/* + 반응 추가 버튼 */}
-      {canInteract && (
-        <div className="relative" ref={pickerRef}>
+        {/* + 반응 추가 토글 (열리면 활성 표시) */}
+        {canInteract && (
           <button
             onClick={() => setShowPicker((v) => !v)}
-            className="flex items-center gap-1 px-2 py-1 rounded-full text-xs text-gray-500 bg-white/50 border border-dashed border-gray-300 hover:bg-white/80 transition-all"
+            aria-expanded={showPicker}
+            className={[
+              "flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-all",
+              showPicker
+                ? "bg-primary-100 border border-primary-300 text-primary-700"
+                : "text-gray-500 bg-white/50 border border-dashed border-gray-300 hover:bg-white/80",
+            ].join(" ")}
           >
             <span className="text-base leading-none">😊</span>
             <span>+</span>
           </button>
+        )}
 
-          {showPicker && (
-            <div className="absolute bottom-full left-0 mb-2 z-30 glass-panel rounded-2xl p-3 shadow-xl border border-white/60">
-              <p className="text-[10px] text-gray-400 mb-2 font-medium">반응 선택</p>
-              <div className="grid grid-cols-5 gap-1">
-                {REACTION_EMOJIS.map(({ emoji, label }) => {
-                  const existing = reactions.find((r) => r.emoji === emoji);
-                  return (
-                    <button
-                      key={emoji}
-                      onClick={() => {
-                        toggleMutation.mutate(emoji);
-                        setShowPicker(false);
-                      }}
-                      title={label}
-                      className={[
-                        "w-10 h-10 flex flex-col items-center justify-center rounded-xl text-xl transition-all",
-                        "hover:scale-110 active:scale-95",
-                        existing?.myReacted ? "bg-primary-100 ring-1 ring-primary-300" : "hover:bg-gray-100/80",
-                      ].join(" ")}
-                    >
-                      {emoji}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+        {/* 비활성 상태 안내 */}
+        {!canInteract && activeReactions.length === 0 && (
+          <span className="text-[11px] text-gray-400">반응 없음</span>
+        )}
+      </div>
+
+      {/* 이모지 선택 — 인라인 확장(플로팅 오버레이 아님: 카드 내용과 겹침·투명 뒤비침·잘림 방지) */}
+      {canInteract && showPicker && (
+        <div className="mt-2 flex flex-wrap gap-1 rounded-2xl border border-gray-200 bg-white p-2 shadow-sm">
+          {REACTION_EMOJIS.map(({ emoji, label }) => {
+            const existing = reactions.find((r) => r.emoji === emoji);
+            return (
+              <button
+                key={emoji}
+                onClick={() => {
+                  toggleMutation.mutate(emoji);
+                  setShowPicker(false);
+                }}
+                title={label}
+                className={[
+                  "w-9 h-9 flex items-center justify-center rounded-xl text-xl transition-all",
+                  "hover:scale-110 active:scale-95",
+                  existing?.myReacted ? "bg-primary-100 ring-1 ring-primary-300" : "hover:bg-gray-100/80",
+                ].join(" ")}
+              >
+                {emoji}
+              </button>
+            );
+          })}
         </div>
-      )}
-
-      {/* 비활성 상태 안내 */}
-      {!canInteract && activeReactions.length === 0 && (
-        <span className="text-[11px] text-gray-400">반응 없음</span>
       )}
     </div>
   );

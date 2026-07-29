@@ -14,6 +14,7 @@
     "deploy": "node scripts/deploy.mjs",
     "ops:set-vapid": "node scripts/ops/set-vapid.mjs",
     "ops:set-anon-salt": "node scripts/ops/set-anon-salt.mjs",
+    "ops:set-oauth": "node scripts/ops/set-oauth.mjs",
     "backfill:challenge-layer-policy": "node scripts/backfill-challenge-layer-policy.mjs"
   },
   "devDependencies": {
