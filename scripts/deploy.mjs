@@ -87,10 +87,13 @@ function stackSection(diffText, stackName) {
   return out.join('\n');
 }
 const statefulSection = stackSection(`${diff.stdout}\n${diff.stderr}`, `chme2-${stage}-stateful`);
+// 위험 = "리소스 레벨" 삭제/치환만. 속성 diff의 배열 원소 삭제(예: OAuth 스코프 목록에서
+// "phone" 제거 → `[-]   "phone",`)는 위험이 아니다. 과거엔 bare `[-]` 를 잡아 이런
+// 무해한 속성 변경까지 오탐했다. 리소스 삭제는 `[-] AWS::...` 형태(타입이 뒤따름)로만,
+// 치환은 cdk가 붙이는 명시 문구로만 판정한다.
 const statefulDanger =
-  /(\[-\]|may be replaced|requires replacement|will be destroyed|\[~\][^\n]*replace)/i.test(
-    statefulSection,
-  );
+  /^\s*\[-\]\s+AWS::/m.test(statefulSection) || // 리소스 삭제
+  /(may be replaced|requires replacement|will be destroyed)/i.test(statefulSection); // 치환
 if (stage === 'prod' && statefulDanger && !flag('allow-stateful-replace')) {
   console.error(
     '\n❌ prod Stateful 리소스 삭제/치환이 감지되었습니다. 의도된 변경이면 --allow-stateful-replace로 재실행하세요.',
