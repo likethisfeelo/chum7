@@ -95,6 +95,29 @@ export async function listPublicVerificationsByDate(
   return { items: res.Items ?? [], lastKey: res.LastEvaluatedKey };
 }
 
+/**
+ * 챌린지 전체 인증 목록 — 테이블 pk 파티션(`CHAL#<id>`) + `VF#` prefix Query.
+ * 날짜 파티션(gsi2 VFPUB#<date>)이 '하루치'만 담는 것과 달리, 이 함수는 챌린지 기간 전체의
+ * 모든 인증(전 참여자·전 day)을 반환한다 — 챌린지 스코프 공개 피드/운영탭이 기간 전체를 보여주기 위함.
+ * sk 정렬은 userId 기준이라 시간순이 아니므로, 호출부에서 createdAt로 재정렬한다.
+ */
+export async function listChallengeVerifications(
+  challengeId: string,
+  limit: number,
+  startKey?: Record<string, any>,
+): Promise<ListMineResult> {
+  const res = await docClient.send(
+    new QueryCommand({
+      TableName: tableName(TABLE),
+      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :sk)',
+      ExpressionAttributeValues: { ':pk': challengePk(challengeId), ':sk': 'VF#' },
+      Limit: limit,
+      ExclusiveStartKey: startKey,
+    }),
+  );
+  return { items: res.Items ?? [], lastKey: res.LastEvaluatedKey };
+}
+
 /** verificationId로 본인 인증 조회 — 본인 gsi1 파티션 Query + 필터 (소유권 내장) */
 export async function findMyVerificationById(
   userId: string,

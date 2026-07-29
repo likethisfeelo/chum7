@@ -18,6 +18,7 @@ import { extractImageS3Key, isLikelySignedAssetUrl } from '../domain/media-key';
 import { findMyParticipationByUcId, getParticipation } from '../repo/participations';
 import {
   findMyVerificationById,
+  listChallengeVerifications,
   listMyVerifications,
   listPublicVerificationsByDate,
   updateVerificationFields,
@@ -146,8 +147,34 @@ verificationReadRoutes.get('/', async (c) => {
   let items: VerificationItem[] = [];
   let nextToken: string | null = null;
 
-  if (isPublic) {
-    // 공개 피드 — gsi2 VFPUB#<KST 오늘> Query (레거시 isPublic-createdAt-index 대응)
+  if (isPublic && challengeIdFilter) {
+    // 챌린지 스코프 공개 피드 — 챌린지 파티션(CHAL#) 전체를 드레인해 '기간 전체' 인증을 보여준다.
+    //  (날짜 파티션 VFPUB#<date>는 하루치만 담아 당일 게시물만 노출되던 버그 수정)
+    //  sk는 시간순이 아니므로 createdAt 기준으로 최신순 재정렬한다.
+    let cursor: Record<string, any> | undefined = startKey;
+    const merged: VerificationItem[] = [];
+    // 안전 상한: 최대 40페이지(page당 200) — 대형 챌린지도 사실상 전량 조회, 무한루프 방지.
+    let truncated = false;
+    for (let i = 0; i < 40; i += 1) {
+      const result = await listChallengeVerifications(challengeIdFilter, 200, cursor);
+      for (const v of result.items) {
+        if (!isPublicVerification(v)) continue;
+        if (!matchesExtraFilter(v, isExtra)) continue;
+        merged.push(v);
+      }
+      cursor = result.lastKey;
+      if (!cursor) break;
+      if (i === 39) truncated = true;
+    }
+    if (truncated) {
+      console.warn(`challenge feed drain truncated (challengeId=${challengeIdFilter}, drained=${merged.length})`);
+    }
+    merged.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+    // 챌린지 스코프는 기간 전체 노출이 목적이므로 limit로 자르지 않고 전량 반환한다.
+    items = merged;
+    nextToken = null;
+  } else if (isPublic) {
+    // 글로벌 공개 피드(마당·오늘) — gsi2 VFPUB#<KST 오늘> Query (레거시 isPublic-createdAt-index 대응)
     const date = query.date || certDateFromIso(new Date().toISOString(), DEFAULT_TIMEZONE);
     let cursor: Record<string, any> | undefined = startKey;
     const merged: VerificationItem[] = [];
@@ -156,7 +183,6 @@ verificationReadRoutes.get('/', async (c) => {
       const filtered = result.items.filter((v) => {
         if (!isPublicVerification(v)) return false;
         if (!matchesExtraFilter(v, isExtra)) return false;
-        if (challengeIdFilter && v.challengeId !== challengeIdFilter) return false;
         return true;
       });
       merged.push(...filtered);
