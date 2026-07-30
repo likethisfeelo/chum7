@@ -711,9 +711,9 @@ export const MEPage = () => {
                             <button
                               type="button"
                               onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
-                              className="flex-shrink-0 px-3 py-2 bg-primary-500 text-white text-xs font-semibold rounded-xl hover:bg-primary-600 transition-colors"
+                              className="flex-shrink-0 px-3 py-2 bg-primary-500 text-white text-xs font-semibold rounded-xl hover:bg-primary-600 transition-colors whitespace-nowrap"
                             >
-                              인증하기
+                              챌린지 피드 가기
                             </button>
                           </motion.div>
                           );

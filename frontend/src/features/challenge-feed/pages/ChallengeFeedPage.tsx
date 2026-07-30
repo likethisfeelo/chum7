@@ -833,6 +833,20 @@ export const ChallengeFeedPage = () => {
           <h1 className="text-lg font-bold text-gray-900 flex-1 min-w-0 truncate">
             {challengeData?.title || "챌린지"}
           </h1>
+          {/* 리더 DM — 참여자가 리더에게 1:1 문의 (상단 이동) */}
+          {userChallenge && (
+            <button
+              type="button"
+              onClick={() => leaderDmMutation.mutate()}
+              disabled={leaderDmMutation.isPending}
+              aria-label="리더 DM"
+              title="리더에게 DM 보내기"
+              className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 transition-colors disabled:opacity-50"
+            >
+              <span className="leading-none">💬</span>
+              <span className="hidden sm:inline">{leaderDmMutation.isPending ? "연결중..." : "리더 DM"}</span>
+            </button>
+          )}
           {isCreator && (
             <div className="flex gap-0.5 p-0.5 bg-gray-100 rounded-lg flex-shrink-0">
               <button
@@ -1499,16 +1513,6 @@ export const ChallengeFeedPage = () => {
           <div className="lg:hidden rounded-xl bg-primary-50 px-4 py-3 text-sm font-medium text-primary-700">
             피드에서 다른 참여자들의 인증 게시물에 리액션과 댓글로 서로 힘을 나눠주세요.
           </div>
-
-          {/* 리더 DM */}
-          <button
-            type="button"
-            onClick={() => leaderDmMutation.mutate()}
-            disabled={leaderDmMutation.isPending}
-            className="w-full py-3 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 font-semibold disabled:opacity-50"
-          >
-            {leaderDmMutation.isPending ? "DM 연결중..." : "리더 DM"}
-          </button>
 
           {/* 9) 보완 인증 — 맨 아래 */}
           {(() => {
