@@ -50,6 +50,10 @@ export interface CreateChallengeParams {
   participateAsCreator: boolean;
   /** 개인 퀘스트 제안 자동승인 (기본 true). false 시 리더 검토 후 승인 */
   personalQuestAutoApprove?: boolean;
+  /** 완주 보상 — 실물 상품 지급(선택) */
+  rewardPhysical?: { name: string } | null;
+  /** 완주 보상 — 온라인 상품(기프티콘 등) 지급(선택) */
+  rewardOnline?: { name: string } | null;
 }
 
 export interface InterestStatus {

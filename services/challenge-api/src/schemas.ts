@@ -12,6 +12,10 @@ export const createChallengeSchema = z.object({
   badgeIcon: z.string().min(1).max(10),
   badgeName: z.string().min(1).max(50),
 
+  // 완주 보상 — 배지는 기본 지급, 아래 둘은 있을 때만(선택). name=상품명/설명.
+  rewardPhysical: z.object({ name: z.string().min(1).max(60) }).nullable().optional(),
+  rewardOnline: z.object({ name: z.string().min(1).max(60) }).nullable().optional(),
+
   recruitingStartAt: z.string().datetime(),
   recruitingEndAt: z.string().datetime(),
   challengeStartAt: z.string().datetime(),
@@ -48,6 +52,8 @@ export const updateChallengeSchema = z.object({
   recruitingEndAt: z.string().datetime().optional(),
   challengeStartAt: z.string().datetime().optional(),
   maxParticipants: z.number().int().min(1).max(1000).nullable().optional(),
+  rewardPhysical: z.object({ name: z.string().min(1).max(60) }).nullable().optional(),
+  rewardOnline: z.object({ name: z.string().min(1).max(60) }).nullable().optional(),
 });
 
 // ── 참여 (레거시 challenge/join) ────────────────────────────────────────────

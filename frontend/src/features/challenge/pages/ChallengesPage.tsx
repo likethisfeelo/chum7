@@ -35,6 +35,9 @@ type Challenge = {
   description: string;
   category: string;
   badgeIcon?: string;
+  badgeName?: string;
+  rewardPhysical?: { name: string } | null;
+  rewardOnline?: { name: string } | null;
   stats?: {
     totalParticipants?: number;
     completionRate?: number;
@@ -43,6 +46,11 @@ type Challenge = {
   challengeStartAt?: string;
   recruitingEndAt?: string;
 };
+
+/** 완주 보상(실물/온라인 상품) 보유 여부 — 배지는 기본이라 제외 */
+function hasCompletionReward(c: Challenge): boolean {
+  return Boolean(c.rewardPhysical?.name || c.rewardOnline?.name);
+}
 
 type LifecycleTab = 'recruiting' | 'active';
 
@@ -231,8 +239,30 @@ const ChallengeCard = ({
     className="glass-card rounded-2xl p-5 cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-primary-100/40 active:scale-[0.98]"
   >
     <div className="flex items-start gap-4">
-      <div className="w-14 h-14 bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
-        {challenge.badgeIcon || categoryEmoji}
+      {/* 보상 아이콘 세로 스택 — 배지(축소) + 실물📦 + 온라인🎁 (최대 3개) */}
+      <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+        <div
+          title={challenge.badgeName ? `배지: ${challenge.badgeName}` : '완주 배지'}
+          className="w-10 h-10 bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl flex items-center justify-center text-lg"
+        >
+          {challenge.badgeIcon || categoryEmoji}
+        </div>
+        {challenge.rewardPhysical?.name && (
+          <div
+            title={`실물 보상: ${challenge.rewardPhysical.name}`}
+            className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-sm"
+          >
+            📦
+          </div>
+        )}
+        {challenge.rewardOnline?.name && (
+          <div
+            title={`온라인 보상: ${challenge.rewardOnline.name}`}
+            className="w-8 h-8 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center text-sm"
+          >
+            🎁
+          </div>
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <span
@@ -366,6 +396,8 @@ export const ChallengesPage = () => {
   const [lifecycleTab, setLifecycleTab] = useState<LifecycleTab>('recruiting');
   // 모바일 STATUS 메뉴 펼침 여부 (마당 카테고리와 동일 패턴)
   const [statusOpen, setStatusOpen] = useState(false);
+  // 모바일 필터 — 완주보상(실물/온라인 상품)이 있는 챌린지만 보기
+  const [rewardOnly, setRewardOnly] = useState(false);
   const [hoveredChallenge, setHoveredChallenge] = useState<Challenge | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -441,7 +473,11 @@ export const ChallengesPage = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const mobileChallenges: Challenge[] = mobileData?.challenges || [];
+  const mobileChallengesRaw: Challenge[] = mobileData?.challenges || [];
+  const mobileChallenges: Challenge[] = rewardOnly
+    ? mobileChallengesRaw.filter(hasCompletionReward)
+    : mobileChallengesRaw;
+  const mobileRewardCount = mobileChallengesRaw.filter(hasCompletionReward).length;
   const recruitingChallenges: Challenge[] = recruitingData?.challenges || [];
   const activeChallenges: Challenge[] = activeData?.challenges || [];
 
@@ -733,10 +769,26 @@ export const ChallengesPage = () => {
 
         {/* ── Mobile: single lifecycle tab (col-span-3) ─────── */}
         <div className={`pb-6 lg:hidden lg:col-span-3 ${lifecycleTab === 'active' ? 'pt-4' : ''}`}>
-          <div className="mb-2">
+          <div className="mb-2 flex items-center justify-between gap-2">
             <span className="text-sm text-gray-400">
               {lifecycleTab === 'recruiting' ? '모집 중인 챌린지' : '진행 중인 챌린지'}
             </span>
+            {/* 완주보상 필터 — 실물/온라인 상품 지급 챌린지만 */}
+            <button
+              type="button"
+              onClick={() => setRewardOnly((v) => !v)}
+              aria-pressed={rewardOnly}
+              className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                rewardOnly
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              🎁 완주보상
+              {mobileRewardCount > 0 && (
+                <span className={rewardOnly ? 'text-white/80' : 'text-gray-400'}>{mobileRewardCount}</span>
+              )}
+            </button>
           </div>
           <div className="space-y-3 md:grid md:grid-cols-2 md:space-y-0 md:gap-3">
             {mobileLoading ? (
