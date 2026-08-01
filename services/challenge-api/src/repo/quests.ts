@@ -7,11 +7,26 @@
  * 레거시 2-테이블 패턴(questSubmissions + activeQuestSubmissions)을 단일 테이블 내
  * 이력 아이템 + ACTIVE 마커(조건부 put으로 user+quest당 활성 제출 1건 보장)로 재구성.
  */
-import { GetCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 import { TABLE, challengePk } from './shared';
 
 const questSk = (questId: string) => `QUEST#${questId}`;
+
+/**
+ * 퀘스트 생성 — pk=`CHAL#<challengeId>`, sk=`QUEST#<questId>`.
+ * 리더 운영탭에서 공통 리더퀘스트 등록 시 사용 (admin-api putQuest 대응, 챌린지 스코프 게이트는 라우트에서).
+ * questId 중복 방지를 위해 sk 미존재 조건부 put.
+ */
+export async function putQuest(challengeId: string, quest: Record<string, any>): Promise<void> {
+  await docClient.send(
+    new PutCommand({
+      TableName: tableName(TABLE),
+      Item: { ...quest, pk: challengePk(challengeId), sk: questSk(quest.questId) },
+      ConditionExpression: 'attribute_not_exists(sk)',
+    }),
+  );
+}
 const activeSubSk = (questId: string, userId: string) => `QSUB#${questId}#${userId}#ACTIVE`;
 const historySubSk = (questId: string, userId: string, ts: string) => `QSUB#${questId}#${userId}#${ts}`;
 

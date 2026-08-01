@@ -69,6 +69,9 @@ challengeRoutes.post('/', async (c) => {
     identityKeyword: input.identityKeyword,
     badgeIcon: input.badgeIcon,
     badgeName: input.badgeName,
+    // 완주 보상 — 배지 외 실물/온라인(기프티콘) 상품 지급(선택)
+    rewardPhysical: input.rewardPhysical ?? null,
+    rewardOnline: input.rewardOnline ?? null,
 
     // 항상 draft로 시작 — 생성자가 수동으로 공개
     lifecycle: 'draft',

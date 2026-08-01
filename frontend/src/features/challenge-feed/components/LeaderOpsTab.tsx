@@ -259,6 +259,168 @@ function ParticipantsSection({ challengeId }: { challengeId: string }) {
   );
 }
 
+const VERIFICATION_TYPE_OPTIONS: Array<{ key: 'image' | 'video' | 'link' | 'text'; label: string }> = [
+  { key: 'image', label: '📸 사진' },
+  { key: 'video', label: '🎬 영상' },
+  { key: 'link', label: '🔗 링크' },
+  { key: 'text', label: '📝 텍스트' },
+];
+
+// 공통 리더퀘스트 등록 — 리더가 전체 참여자 공통 퀘스트를 운영탭에서 추가.
+function LeaderQuestCreateSection({ challengeId }: { challengeId: string }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [types, setTypes] = useState<Set<'image' | 'video' | 'link' | 'text'>>(
+    new Set(['image', 'text', 'link', 'video']),
+  );
+  const [approvalRequired, setApprovalRequired] = useState(false);
+  const [targetTime, setTargetTime] = useState('');
+
+  const reset = () => {
+    setTitle('');
+    setDescription('');
+    setTypes(new Set(['image', 'text', 'link', 'video']));
+    setApprovalRequired(false);
+    setTargetTime('');
+  };
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      challengeApi.createLeaderQuest(challengeId, {
+        title: title.trim(),
+        description: description.trim(),
+        allowedVerificationTypes: Array.from(types),
+        approvalRequired,
+        targetTime: targetTime || undefined,
+      }),
+    onSuccess: () => {
+      toast.success('공통 리더퀘스트가 등록됐어요 🎯');
+      reset();
+      setOpen(false);
+      // 피드/보드의 퀘스트 목록 갱신
+      queryClient.invalidateQueries({ queryKey: ['challenge-quests', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['leader-briefing', challengeId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '등록에 실패했어요'),
+  });
+
+  const toggleType = (key: 'image' | 'video' | 'link' | 'text') => {
+    setTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        if (next.size > 1) next.delete(key); // 최소 1개 유지
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const canSubmit = title.trim().length > 0 && description.trim().length > 0 && types.size > 0;
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between"
+      >
+        <h3 className="font-bold text-gray-900">🎯 공통 리더퀘스트 등록</h3>
+        <svg
+          width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          className={`text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      <p className="text-[11px] text-gray-400 mt-1">전체 참여자가 공통으로 수행하는 리더퀘스트를 추가합니다.</p>
+
+      {open && (
+        <div className="mt-4 space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-gray-600">퀘스트 제목</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={100}
+              placeholder="예: 아침 물 한 잔 마시기"
+              className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary-300"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-600">설명 · 인증 가이드</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={1000}
+              rows={3}
+              placeholder="참여자에게 보여줄 퀘스트 설명과 인증 방법을 적어주세요."
+              className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary-300 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-600">허용 인증 방식</label>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {VERIFICATION_TYPE_OPTIONS.map((opt) => {
+                const active = types.has(opt.key);
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => toggleType(opt.key)}
+                    className={[
+                      'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                      active
+                        ? 'bg-primary-50 border-primary-300 text-primary-700'
+                        : 'bg-white border-gray-200 text-gray-500',
+                    ].join(' ')}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <label className="text-xs font-semibold text-gray-600">목표 시각 (선택)</label>
+              <input
+                type="time"
+                value={targetTime}
+                onChange={(e) => setTargetTime(e.target.value)}
+                className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary-300"
+              />
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer pt-5">
+              <input
+                type="checkbox"
+                checked={approvalRequired}
+                onChange={(e) => setApprovalRequired(e.target.checked)}
+              />
+              <span className="text-xs text-gray-700">리더 승인 후 인정</span>
+            </label>
+          </div>
+
+          <button
+            type="button"
+            disabled={!canSubmit || createMutation.isPending}
+            onClick={() => createMutation.mutate()}
+            className="w-full py-2.5 rounded-xl bg-primary-600 text-white font-semibold text-sm disabled:opacity-50"
+          >
+            {createMutation.isPending ? '등록 중...' : '리더퀘스트 등록'}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 const PROPOSAL_STATUS_META: Record<string, { label: string; cls: string }> = {
   pending: { label: '검토중', cls: 'bg-amber-100 text-amber-700' },
   approved: { label: '승인됨', cls: 'bg-emerald-100 text-emerald-700' },
@@ -561,6 +723,7 @@ export function LeaderOpsTab({ challengeId }: { challengeId: string }) {
     <div className="space-y-4">
       <ChallengeControlCard challengeId={challengeId} />
       <BriefingSection challengeId={challengeId} />
+      <LeaderQuestCreateSection challengeId={challengeId} />
       <ParticipantsSection challengeId={challengeId} />
       <ProposalReviewSection challengeId={challengeId} />
       <OpsPostsSection challengeId={challengeId} />

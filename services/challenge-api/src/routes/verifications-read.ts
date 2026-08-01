@@ -23,6 +23,7 @@ import {
   listPublicVerificationsByDate,
   updateVerificationFields,
 } from '../repo/verifications';
+import { listQuests } from '../repo/quests';
 import { parseNextToken, stripKeys, toNextToken } from '../repo/shared';
 
 export const verificationReadRoutes = new Hono<AppEnv>();
@@ -65,6 +66,8 @@ interface ViewerCtx {
   salt: string | null;
   /** 조회자 userId — 본인 인증 판별(isMine)용 */
   viewerUserId: string;
+  /** questId → 퀘스트 제목/설명 (챌린지 스코프 조회에서만 채워짐). 게시물에 퀘스트 제목 노출용. */
+  questMap?: Map<string, { title: string | null; description: string | null }>;
 }
 
 /** 작성일 기준 일일 활동명 — createdAt 스냅샷으로 결정적 계산(조회일 무관) */
@@ -103,6 +106,11 @@ async function normalizeVerification(v: VerificationItem, ctx: ViewerCtx) {
     day: v.day,
     verificationType,
     questType: v.questType || null,
+    // 퀘스트 제목/설명 — 게시물에 어떤 퀘스트 인증인지 표시(설명은 프론트 '더보기'). 챌린지 스코프에서만 해석됨.
+    questTitle: v.questId && ctx.questMap ? ctx.questMap.get(v.questId)?.title ?? null : null,
+    questDescription: v.questId && ctx.questMap ? ctx.questMap.get(v.questId)?.description ?? null : null,
+    // 해시태그 — 챌린지 피드 본문 아래 노출
+    hashtag: typeof v.hashtag === 'string' && v.hashtag.trim() ? v.hashtag.trim() : null,
     todayNote: v.todayNote,
     imageUrl: verificationType === 'image' ? mediaUrl : null,
     videoUrl: verificationType === 'video' ? mediaUrl : null,
@@ -209,7 +217,27 @@ verificationReadRoutes.get('/', async (c) => {
   } catch {
     salt = null; // 솔트 미설정 시 '익명' 폴백 (개별 항목 계산에서 처리)
   }
-  const ctx: ViewerCtx = { salt, viewerUserId: userId };
+
+  // 챌린지 스코프 조회면 퀘스트 제목/설명 맵 구성 (게시물에 퀘스트 제목 노출). 조회 실패는 비치명적.
+  let questMap: Map<string, { title: string | null; description: string | null }> | undefined;
+  if (challengeIdFilter) {
+    try {
+      const quests = await listQuests(challengeIdFilter);
+      questMap = new Map(
+        quests.map((q) => [
+          q.questId as string,
+          {
+            title: typeof q.title === 'string' ? q.title : null,
+            description: typeof q.description === 'string' ? q.description : null,
+          },
+        ]),
+      );
+    } catch (err: any) {
+      console.warn('listQuests for feed questMap failed (non-fatal):', err?.message);
+    }
+  }
+
+  const ctx: ViewerCtx = { salt, viewerUserId: userId, questMap };
 
   return ok(c, {
     verifications: await Promise.all(items.map((v) => normalizeVerification(v, ctx))),

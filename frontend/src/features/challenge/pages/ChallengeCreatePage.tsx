@@ -15,6 +15,11 @@ interface FormState {
   identityKeyword: string;
   badgeIcon: string;
   badgeName: string;
+  // 완주 보상 — 배지는 기본, 실물/온라인 상품은 선택
+  hasPhysicalReward: boolean;
+  physicalRewardName: string;
+  hasOnlineReward: boolean;
+  onlineRewardName: string;
   targetTime: string;
   allowedVerificationTypes: Array<'image' | 'text' | 'link' | 'video'>;
 
@@ -39,6 +44,10 @@ const INITIAL_FORM: FormState = {
   identityKeyword: '',
   badgeIcon: '🏆',
   badgeName: '',
+  hasPhysicalReward: false,
+  physicalRewardName: '',
+  hasOnlineReward: false,
+  onlineRewardName: '',
   targetTime: '07:00',
   allowedVerificationTypes: ['image', 'text'],
   recruitingStartAt: '',
@@ -225,6 +234,56 @@ function Step2({ form, onChange }: { form: FormState; onChange: (patch: Partial<
             maxLength={50}
             className="mt-1 w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-400"
           />
+        </div>
+      </div>
+
+      {/* 완주 보상 — 배지는 기본 지급, 실물/온라인 상품은 선택 */}
+      <div>
+        <label className="text-sm font-semibold text-gray-700">완주 보상</label>
+        <p className="text-[11px] text-gray-400 mt-0.5">배지는 기본 지급돼요. 상품을 지급한다면 추가로 선택하세요.</p>
+        <div className="mt-2 space-y-2">
+          {/* 실물 상품 */}
+          <div className="rounded-xl border border-gray-200 p-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.hasPhysicalReward}
+                onChange={(e) => onChange({ hasPhysicalReward: e.target.checked })}
+              />
+              <span className="text-sm text-gray-800">📦 실물 상품 지급</span>
+            </label>
+            {form.hasPhysicalReward && (
+              <input
+                type="text"
+                value={form.physicalRewardName}
+                onChange={(e) => onChange({ physicalRewardName: e.target.value })}
+                placeholder="예: 텀블러, 굿즈 세트"
+                maxLength={60}
+                className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400"
+              />
+            )}
+          </div>
+          {/* 온라인 상품(기프티콘) */}
+          <div className="rounded-xl border border-gray-200 p-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.hasOnlineReward}
+                onChange={(e) => onChange({ hasOnlineReward: e.target.checked })}
+              />
+              <span className="text-sm text-gray-800">🎁 온라인 상품(기프티콘 등) 지급</span>
+            </label>
+            {form.hasOnlineReward && (
+              <input
+                type="text"
+                value={form.onlineRewardName}
+                onChange={(e) => onChange({ onlineRewardName: e.target.value })}
+                placeholder="예: 카페 기프티콘 5천원권"
+                maxLength={60}
+                className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400"
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -497,6 +556,14 @@ export function ChallengeCreatePage() {
         allowedVerificationTypes: form.allowedVerificationTypes,
         participateAsCreator: form.participateAsCreator,
         personalQuestAutoApprove: form.personalQuestAutoApprove,
+        rewardPhysical:
+          form.hasPhysicalReward && form.physicalRewardName.trim()
+            ? { name: form.physicalRewardName.trim() }
+            : null,
+        rewardOnline:
+          form.hasOnlineReward && form.onlineRewardName.trim()
+            ? { name: form.onlineRewardName.trim() }
+            : null,
       };
       return challengeApi.createChallenge(params);
     },

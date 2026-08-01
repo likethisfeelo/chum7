@@ -12,6 +12,10 @@ export const createChallengeSchema = z.object({
   badgeIcon: z.string().min(1).max(10),
   badgeName: z.string().min(1).max(50),
 
+  // 완주 보상 — 배지는 기본 지급, 아래 둘은 있을 때만(선택). name=상품명/설명.
+  rewardPhysical: z.object({ name: z.string().min(1).max(60) }).nullable().optional(),
+  rewardOnline: z.object({ name: z.string().min(1).max(60) }).nullable().optional(),
+
   recruitingStartAt: z.string().datetime(),
   recruitingEndAt: z.string().datetime(),
   challengeStartAt: z.string().datetime(),
@@ -48,6 +52,8 @@ export const updateChallengeSchema = z.object({
   recruitingEndAt: z.string().datetime().optional(),
   challengeStartAt: z.string().datetime().optional(),
   maxParticipants: z.number().int().min(1).max(1000).nullable().optional(),
+  rewardPhysical: z.object({ name: z.string().min(1).max(60) }).nullable().optional(),
+  rewardOnline: z.object({ name: z.string().min(1).max(60) }).nullable().optional(),
 });
 
 // ── 참여 (레거시 challenge/join) ────────────────────────────────────────────
@@ -179,6 +185,21 @@ export const proposalReRejectSchema = z.object({
   fallback: z.enum(['block', 'keep_original']),
 });
 export type ProposalReRejectInput = z.infer<typeof proposalReRejectSchema>;
+
+// ── 리더 공통 퀘스트(리더퀘스트) 등록 — 챌린지 리더 전용, 운영탭 ────────────
+// challengeId는 경로 파라미터에서 취득. admin createQuestSchema의 리더용 간이 버전
+// (questScope='leader' 고정, 노출순서·시작시각 등은 서버 기본값). approvalRequired
+// true면 리더/어드민 승인 후 점수 지급, false면 자동 승인.
+export const createLeaderQuestSchema = z.object({
+  title: z.string().min(1).max(100),
+  description: z.string().min(1).max(1000),
+  allowedVerificationTypes: z.array(z.enum(['image', 'video', 'link', 'text'])).min(1).optional(),
+  verificationGuide: z.string().min(1).max(500).optional(),
+  approvalRequired: z.boolean().default(false),
+  rewardPoints: z.number().int().min(0).max(1000).default(1),
+  targetTime: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).optional(),
+});
+export type CreateLeaderQuestInput = z.infer<typeof createLeaderQuestSchema>;
 
 // ── 퀘스트 제출 (레거시 quest/submit) ───────────────────────────────────────
 
