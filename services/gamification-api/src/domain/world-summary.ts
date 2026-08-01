@@ -88,3 +88,70 @@ export function aggregateWorldSummary(items: PublicVerificationLike[]): WorldSum
 
   return { layers, totals };
 }
+
+// ── 개인 여정 누적 집계 (참여 레코드 기반, 인증 필요) ──────────────────────────
+
+function toNum(v: unknown, fallback = 0): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+export interface UserWorldInput {
+  /** 유저 참여 레코드 (challengeId + score/cheerScore/thankScore) */
+  participations: Array<Record<string, unknown>>;
+  /** challengeId → 카테고리 */
+  categoryByChallenge: Record<string, string | null>;
+  /** 유저 당일 인증 (challengeCategory/category + score) */
+  todayVerifications: Array<Record<string, unknown>>;
+}
+
+/**
+ * 유저의 참여 레코드를 카테고리(8층)별로 누적해 개인 여정 요약을 만든다.
+ * - questScore: 참여 score(퀘스트 완료 누적) 합, 층당 100 상한 (레거시 표시 규칙 승계)
+ * - cheerScore/thankScore: 참여 누적 합 (score-rules 적립분)
+ * - todayQuestDelta: 당일 완료 인증(score=1) 카테고리별 수
+ */
+export function aggregateUserWorld(input: UserWorldInput): WorldSummary {
+  const quest: Record<string, number> = {};
+  const cheer: Record<string, number> = {};
+  const thank: Record<string, number> = {};
+  const today: Record<string, number> = {};
+
+  for (const p of input.participations) {
+    const cid = typeof p.challengeId === 'string' ? p.challengeId : '';
+    const cat = cid ? input.categoryByChallenge[cid] : null;
+    if (!cat) continue;
+    quest[cat] = (quest[cat] ?? 0) + toNum(p.score);
+    cheer[cat] = (cheer[cat] ?? 0) + toNum(p.cheerScore);
+    thank[cat] = (thank[cat] ?? 0) + toNum(p.thankScore);
+  }
+
+  for (const v of input.todayVerifications) {
+    if (toNum(v.score, 1) !== 1) continue;
+    const cat =
+      (typeof v.challengeCategory === 'string' && v.challengeCategory) ||
+      (typeof v.category === 'string' ? v.category : '');
+    if (!cat) continue;
+    today[cat] = (today[cat] ?? 0) + 1;
+  }
+
+  const layers: WorldLayer[] = LAYER_ORDER.map((l) => ({
+    category: l.category,
+    floor: l.floor,
+    label: l.label,
+    questScore: Math.min(100, quest[l.category] ?? 0),
+    cheerScore: cheer[l.category] ?? 0,
+    thankScore: thank[l.category] ?? 0,
+    todayQuestDelta: today[l.category] ?? 0,
+  }));
+
+  const totals = layers.reduce(
+    (acc, l) => ({
+      questScore: acc.questScore + l.questScore,
+      cheerScore: acc.cheerScore + l.cheerScore,
+      thankScore: acc.thankScore + l.thankScore,
+    }),
+    { questScore: 0, cheerScore: 0, thankScore: 0 },
+  );
+
+  return { layers, totals };
+}
