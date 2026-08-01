@@ -4,6 +4,7 @@
  *  GET participants : 참여자 목록 (진행률 포함)
  * 리마인드 발송·메시지 템플릿·시즌 복제는 v2 — PORTING.md TODO 기록.
  */
+import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import type { AppEnv, ApiContext } from '@chum7/api-kit';
 import { ok, fail, publishEvent } from '@chum7/api-kit';
@@ -23,7 +24,7 @@ import {
   listChallengeParticipations,
   updateParticipationFields,
 } from '../repo/participations';
-import { countPendingSubmissions, listQuests } from '../repo/quests';
+import { countPendingSubmissions, listQuests, putQuest } from '../repo/quests';
 import {
   findChallengeVerificationById,
   updateVerificationFields,
@@ -35,7 +36,7 @@ import {
   updateProposalReReject,
 } from '../repo/quest-proposals';
 import { canRerejectProposal, canReviewProposal, proposalReviewOutcome } from '../domain/proposal-rules';
-import { proposalReviewSchema, proposalReRejectSchema } from '../schemas';
+import { createLeaderQuestSchema, proposalReviewSchema, proposalReRejectSchema } from '../schemas';
 import { stripKeys } from '../repo/shared';
 
 export const leaderRoutes = new Hono<AppEnv>();
@@ -184,6 +185,72 @@ leaderRoutes.get('/participants', async (c) => {
       gaveUp: enriched.filter((p) => p.status === 'gave_up').length,
     },
   });
+});
+
+// 공통 리더퀘스트 등록 (리더 — 전체 참여자 공통 퀘스트를 운영탭에서 추가)
+leaderRoutes.post('/quests', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const challenge = guard.challenge!;
+  const { userId } = c.get('authUser')!;
+
+  const input = createLeaderQuestSchema.parse(await c.req.json().catch(() => ({})));
+
+  // 챌린지 허용 인증 방식과 교차 검증 (admin 생성 규칙 승계)
+  const challengeAllowedTypes: string[] = Array.isArray(challenge.allowedVerificationTypes)
+    ? challenge.allowedVerificationTypes
+    : ['image', 'video', 'link', 'text'];
+  const questAllowedTypes = input.allowedVerificationTypes ?? challengeAllowedTypes;
+  if (!questAllowedTypes.every((t) => challengeAllowedTypes.includes(t))) {
+    return fail(c, 400, 'INVALID_VERIFICATION_TYPES',
+      `이 챌린지에서 허용되지 않는 인증 방식입니다. 허용: ${challengeAllowedTypes.join(', ')}`);
+  }
+
+  // 노출 순서 — 기존 리더(비개인) 퀘스트 수를 뒤에 붙인다 (조회 실패는 0으로 폴백)
+  let leaderCount = 0;
+  try {
+    const existing = await listQuests(challengeId);
+    leaderCount = existing.filter((q) => q.questScope !== 'personal').length;
+  } catch (err: any) {
+    console.warn('listQuests for displayOrder failed (non-fatal):', err?.message);
+  }
+
+  const questId = randomUUID();
+  const now = new Date().toISOString();
+  const quest = {
+    questId,
+    title: input.title,
+    description: input.description,
+    challengeId,
+    allowedVerificationTypes: questAllowedTypes,
+    verificationType: questAllowedTypes[0],
+    verificationGuide: input.verificationGuide?.trim() || input.description,
+    verificationConfig: {},
+    rewardPoints: input.rewardPoints,
+    rewardBadgeId: null,
+    startAt: now,
+    endAt: null,
+    approvalRequired: input.approvalRequired,
+    displayOrder: leaderCount,
+    exposureOrder: leaderCount,
+    questLayer: 'A',
+    questScope: 'leader',
+    requireOnJoinInput: false,
+    startDay: null,
+    endDay: null,
+    revealAt: null,
+    ...(input.targetTime ? { targetTime: input.targetTime } : {}),
+    status: 'active',
+    submissionCount: 0,
+    approvedCount: 0,
+    createdAt: now,
+    updatedAt: now,
+    createdBy: userId,
+  };
+
+  await putQuest(challengeId, quest);
+  return ok(c, quest, '공통 리더퀘스트가 등록됐어요', 201);
 });
 
 // 개인 퀘스트 제안 심사 목록 (리더 — 기본 pending, status=all 지원)

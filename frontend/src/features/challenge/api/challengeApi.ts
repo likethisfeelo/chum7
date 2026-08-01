@@ -148,6 +148,23 @@ export const challengeApi = {
     return res.data.data;
   },
 
+  // ── 공통 리더퀘스트 등록 (challenge-api /c/:id/leader/quests) ──────────────
+  createLeaderQuest: async (
+    challengeId: string,
+    params: {
+      title: string;
+      description: string;
+      allowedVerificationTypes?: Array<'image' | 'text' | 'link' | 'video'>;
+      verificationGuide?: string;
+      approvalRequired?: boolean;
+      rewardPoints?: number;
+      targetTime?: string; // "HH:MM"
+    },
+  ): Promise<{ questId: string; title: string }> => {
+    const res = await apiClient.post(`/c/${challengeId}/leader/quests`, params);
+    return res.data.data;
+  },
+
   // 인증 게시물 1건 반려 — 그날 인증만 반려(피드/마당에서 숨김, 본인 기록엔 남김, 점수 되돌림)
   rejectVerification: async (
     challengeId: string,
