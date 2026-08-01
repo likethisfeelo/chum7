@@ -87,6 +87,44 @@ export async function listChallengeParticipations(challengeId: string): Promise<
   return items;
 }
 
+/**
+ * 응원/감사 점수 누적 증분 — 참여 UC# 아이템에 ADD (레거시 USER_CHALLENGES cheerScore/thankScore ADD 승계).
+ * 인증 제출 시 조기완료·전원완료·수신자완료 분기에서 발신자/수신자 점수를 적립한다.
+ * 참여 레코드가 없으면(비정상) 조용히 스킵.
+ */
+export async function addParticipationScores(
+  challengeId: string,
+  userId: string,
+  deltas: { cheerScore?: number; thankScore?: number },
+  nowIso: string,
+): Promise<void> {
+  const adds: string[] = [];
+  const values: Record<string, unknown> = { ':now': nowIso };
+  if (deltas.cheerScore) {
+    adds.push('cheerScore :cs');
+    values[':cs'] = deltas.cheerScore;
+  }
+  if (deltas.thankScore) {
+    adds.push('thankScore :ts');
+    values[':ts'] = deltas.thankScore;
+  }
+  if (adds.length === 0) return;
+  try {
+    await docClient.send(
+      new UpdateCommand({
+        TableName: tableName(TABLE),
+        Key: { pk: challengePk(challengeId), sk: ucSk(userId) },
+        UpdateExpression: `ADD ${adds.join(', ')} SET updatedAt = :now`,
+        ConditionExpression: 'attribute_exists(pk)',
+        ExpressionAttributeValues: values,
+      }),
+    );
+  } catch (err: any) {
+    if (err?.name === 'ConditionalCheckFailedException') return; // 참여 없음 — 점수 적립만 생략
+    throw err;
+  }
+}
+
 /** 참여 레코드 부분 갱신 (reserved word 대응 dynamic SET) */
 export async function updateParticipationFields(
   challengeId: string,

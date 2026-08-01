@@ -23,7 +23,8 @@ import {
 } from '../domain/verification-rules';
 import { getChallenge } from '../repo/challenges';
 import { effectiveLifecycleOf } from '../domain/challenge-state';
-import { findMyParticipationByUcId, listChallengeParticipations, updateParticipationFields } from '../repo/participations';
+import { addParticipationScores, findMyParticipationByUcId, listChallengeParticipations, updateParticipationFields } from '../repo/participations';
+import { computeScoreDeltas } from '../domain/score-rules';
 import { putVerification, verificationKeys } from '../repo/verifications';
 import { listQuests } from '../repo/quests';
 
@@ -338,24 +339,53 @@ verificationRoutes.post('/', async (c) => {
     updatedAt: nowIso,
   });
 
-  // cheerOpportunity: 미완료 인원 집계는 같은 테이블(UC#)에서 계산.
-  // 응원 생성/응원권/점수 적립은 cheer-api 소유 → cheerTicketGranted 항상 false (PORTING.md gap)
+  // ── 응원/감사 점수 적립 + cheerOpportunity (레거시 cheer-thank 이식, docs/cheer-thank-system.md) ──
+  // 응원 레코드 없이 "완료 순서"만으로 cheerScore/thankScore를 결정적으로 재현한다.
+  // day가 이번 제출로 "처음" 완료됐을 때만 1회 적립 (재산정 방지 — 멱등성).
+  const wasAlreadyComplete = existingDayEntry
+    ? ['success', 'completed', 'remedy'].includes(String(existingDayEntry.status))
+    : false;
   let cheerOpportunity: Record<string, unknown> = { hasIncompletePeople: false, incompleteCount: 0 };
-  if (isEarlyCompletion) {
-    try {
-      const members = await listChallengeParticipations(challengeId);
-      const incompleteMembers = members.filter((member) => {
-        if (member.userId === userId || member.status !== 'active') return false;
-        const mp = normalizeProgress(member.progress);
-        const todayEntry = mp.find((p) => Number(p.day) === input.day);
-        return !rules.isDayComplete(todayEntry);
-      });
-      cheerOpportunity = incompleteMembers.length > 0
-        ? { hasIncompletePeople: true, incompleteCount: incompleteMembers.length, cheerTicketGranted: false }
-        : { hasIncompletePeople: false, incompleteCount: 0 };
-    } catch (err) {
-      console.error('cheerOpportunity aggregation error (non-fatal):', err);
+  try {
+    const members = await listChallengeParticipations(challengeId);
+    const activeMembers = members.filter((m) => m.status === 'active');
+    const isEarlyEntry = (e: any) =>
+      Boolean(e && ['success', 'completed', 'remedy'].includes(String(e.status)) && Number(e.delta) > 0);
+
+    const activeUserIds = activeMembers.map((m) => String(m.userId));
+    if (!activeUserIds.includes(userId)) activeUserIds.push(userId);
+
+    const completedUserIds = new Set<string>([userId]); // 방금 완료
+    const earlyCompletedUserIds = new Set<string>();
+    if (isEarlyCompletion) earlyCompletedUserIds.add(userId);
+    for (const m of activeMembers) {
+      if (String(m.userId) === userId) continue;
+      const entry = normalizeProgress(m.progress).find((p) => Number(p.day) === input.day);
+      if (rules.isDayComplete(entry)) completedUserIds.add(String(m.userId));
+      if (isEarlyEntry(entry)) earlyCompletedUserIds.add(String(m.userId));
     }
+
+    const incompleteCount = activeUserIds.filter((u) => u !== userId && !completedUserIds.has(u)).length;
+    cheerOpportunity = incompleteCount > 0
+      ? { hasIncompletePeople: true, incompleteCount, cheerTicketGranted: isEarlyCompletion }
+      : { hasIncompletePeople: false, incompleteCount: 0 };
+
+    if (!wasAlreadyComplete) {
+      const deltas = computeScoreDeltas({
+        completerId: userId,
+        creatorId: typeof challenge.createdBy === 'string' ? challenge.createdBy : null,
+        activeUserIds,
+        completedUserIds,
+        earlyCompletedUserIds,
+      });
+      await Promise.all(
+        deltas.map((d) =>
+          addParticipationScores(challengeId, d.userId, { cheerScore: d.cheerScore, thankScore: d.thankScore }, nowIso),
+        ),
+      );
+    }
+  } catch (err) {
+    console.error('cheer/thank scoring aggregation error (non-fatal):', err);
   }
 
   await publishEvent('verification.submitted', {
