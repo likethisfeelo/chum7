@@ -170,6 +170,46 @@ function VerificationReactions({
 }
 
 
+// 게시물 하단 퀘스트 정보 — 제목은 항상, 설명은 '더보기'로 펼침 (리더/개인 퀘스트 인증 구분 이모지)
+function QuestInfoBlock({
+  title,
+  description,
+  questType,
+}: {
+  title?: string | null;
+  description?: string | null;
+  questType?: string | null;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (!title) return null;
+  const icon = questType === "personal" ? "🌱" : "🎯";
+  const label = questType === "personal" ? "개인 퀘스트" : "리더 퀘스트";
+  return (
+    <div className="mt-3 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+      <p className="text-[11px] text-gray-400">{label}</p>
+      <p className="text-sm font-semibold text-gray-800 leading-snug">
+        {icon} {title}
+      </p>
+      {description && (
+        <>
+          {expanded && (
+            <p className="mt-1 text-xs text-gray-600 leading-relaxed whitespace-pre-wrap break-words">
+              {description}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="mt-1 text-[11px] font-medium text-primary-600 hover:text-primary-700"
+          >
+            {expanded ? "접기" : "더보기"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 const FeedVideo = ({ src }: { src: string }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -649,9 +689,6 @@ export const ChallengeFeedPage = () => {
                 <span className="text-[11px] font-semibold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-md border border-primary-100">
                   Day {item.day || "-"}
                 </span>
-                {item.questTitle && (
-                  <span className="text-[11px] text-gray-500 truncate max-w-[140px]">{item.questTitle}</span>
-                )}
               </div>
             </div>
           </div>
@@ -667,6 +704,18 @@ export const ChallengeFeedPage = () => {
         {item.todayNote && (
           <p className="text-sm text-gray-700 leading-relaxed line-clamp-4">{item.todayNote}</p>
         )}
+
+        {/* 해시태그 — 본문 아래 노출 */}
+        {item.hashtag && (
+          <div className="mt-2">
+            <span className="inline-block text-xs font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full border border-primary-100">
+              #{item.hashtag}
+            </span>
+          </div>
+        )}
+
+        {/* 퀘스트 정보 — 제목 + 더보기(설명) */}
+        <QuestInfoBlock title={item.questTitle} description={item.questDescription} questType={item.questType} />
 
         {/* 링크 */}
         {item.verificationType === "link" && item.linkUrl && (

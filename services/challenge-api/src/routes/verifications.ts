@@ -225,6 +225,7 @@ verificationRoutes.post('/', async (c) => {
     originalDay: null,
     reflectionNote: null,
     questType: resolvedQuestType,
+    questId: input.questId ?? null,
     isExtra,
     primaryVerificationId: isExtra ? dayProgress?.verificationId || null : null,
     isPersonalOnly,
