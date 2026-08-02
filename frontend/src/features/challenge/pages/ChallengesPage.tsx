@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { extractBoardPreviewText } from '@/features/challenge-board/components/BoardBlocksViewer';
+import { BoldRecruitList } from '../components/BoldRecruitList';
 import {
   CHALLENGE_CATEGORIES,
   ALL_CATEGORY,
@@ -790,32 +791,20 @@ export const ChallengesPage = () => {
               )}
             </button>
           </div>
-          <div className="space-y-3 md:grid md:grid-cols-2 md:space-y-0 md:gap-3">
-            {mobileLoading ? (
-              <Loading />
-            ) : mobileChallenges.length === 0 ? (
-              <EmptyState
-                icon="🎯"
-                title="챌린지가 없어요"
-                description="다른 카테고리를 탐색해보세요"
-              />
-            ) : (
-              mobileChallenges.map((challenge, index) => (
-                <ChallengeCard
-                  key={challenge.challengeId}
-                  challenge={challenge}
-                  index={index}
-                  lifecycle={lifecycleTab}
-                  categoryEmoji={currentCategory.emoji}
-                  onNavigate={(id) => navigate(`/challenges/${id}`)}
-                  onHover={handleHover}
-                  onLeave={handleLeave}
-                  onInterest={handleInterest}
-                  isInterested={interestedIds.has(challenge.challengeId)}
-                />
-              ))
-            )}
-          </div>
+          {mobileLoading ? (
+            <Loading />
+          ) : mobileChallenges.length === 0 ? (
+            <EmptyState
+              icon="🎯"
+              title="챌린지가 없어요"
+              description="다른 카테고리를 탐색해보세요"
+            />
+          ) : (
+            <BoldRecruitList
+              challenges={mobileChallenges}
+              onNavigate={(id) => navigate(`/challenges/${id}`)}
+            />
+          )}
         </div>
 
         {/* ── Desktop col 1: 모집중 ───────────────────────────── */}
