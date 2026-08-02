@@ -72,6 +72,8 @@ challengeRoutes.post('/', async (c) => {
     // 완주 보상 — 배지 외 실물/온라인(기프티콘) 상품 지급(선택)
     rewardPhysical: input.rewardPhysical ?? null,
     rewardOnline: input.rewardOnline ?? null,
+    // 대표 이미지(배너 카드) — 없으면 프론트에서 카테고리 컬러로 폴백
+    coverImageUrl: input.coverImageUrl ?? null,
 
     // 항상 draft로 시작 — 생성자가 수동으로 공개
     lifecycle: 'draft',

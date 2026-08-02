@@ -12,6 +12,7 @@ import { WizardFormState } from '@/features/challenge/components/join-wizard/typ
 import { useAuthStore } from '@/stores/authStore';
 import { challengeApi } from '@/features/challenge/api/challengeApi';
 import { SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
+import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import { getChallengeTypeLabel } from '@/features/challenge/utils/flowPolicy';
 import { PaymentSheet } from '@/features/commerce/components/PaymentSheet';
 import { isPaidChallenge } from '@/features/commerce/api/commerceApi';
@@ -375,6 +376,21 @@ export const ChallengeDetailPage = () => {
       )}
 
       <div className="p-6">
+        {/* 대표 이미지 배너 (있을 때만) */}
+        {challenge.coverImageUrl && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl overflow-hidden mb-6 shadow-sm border border-gray-100"
+          >
+            <img
+              src={resolveMediaUrl(challenge.coverImageUrl)}
+              alt={challenge.title}
+              className="w-full h-52 object-cover"
+            />
+          </motion.div>
+        )}
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

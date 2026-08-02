@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { challengeApi, CreateChallengeParams, ChallengeCategory, ChallengeType } from '../api/challengeApi';
 import { CHALLENGE_CATEGORIES } from '../constants/categories';
+import { CoverImagePicker } from '../components/CoverImagePicker';
 
 // ─── 폼 상태 타입 ────────────────────────────────────────────────────
 interface FormState {
@@ -12,6 +13,7 @@ interface FormState {
   description: string;
 
   // Step 2
+  coverImageUrl: string | null;
   identityKeyword: string;
   badgeIcon: string;
   badgeName: string;
@@ -41,6 +43,7 @@ const INITIAL_FORM: FormState = {
   category: '',
   title: '',
   description: '',
+  coverImageUrl: null,
   identityKeyword: '',
   badgeIcon: '🏆',
   badgeName: '',
@@ -191,6 +194,17 @@ function Step2({ form, onChange }: { form: FormState; onChange: (patch: Partial<
       <div>
         <h2 className="text-lg font-bold text-gray-900 mb-1">정체성을 정의해요</h2>
         <p className="text-sm text-gray-500">참여자들이 이 챌린지를 통해 어떤 사람이 되는지 표현해주세요</p>
+      </div>
+
+      {/* 대표 이미지 (배너 카드용, 선택) */}
+      <div>
+        <label className="text-sm font-semibold text-gray-700">대표 이미지</label>
+        <div className="mt-2">
+          <CoverImagePicker
+            value={form.coverImageUrl}
+            onChange={(url) => onChange({ coverImageUrl: url })}
+          />
+        </div>
       </div>
 
       {/* 정체성 키워드 */}
@@ -564,6 +578,7 @@ export function ChallengeCreatePage() {
           form.hasOnlineReward && form.onlineRewardName.trim()
             ? { name: form.onlineRewardName.trim() }
             : null,
+        coverImageUrl: form.coverImageUrl,
       };
       return challengeApi.createChallenge(params);
     },

@@ -37,6 +37,7 @@ type Challenge = {
   category: string;
   badgeIcon?: string;
   badgeName?: string;
+  coverImageUrl?: string | null;
   rewardPhysical?: { name: string } | null;
   rewardOnline?: { name: string } | null;
   stats?: {

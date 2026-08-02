@@ -54,6 +54,8 @@ export interface CreateChallengeParams {
   rewardPhysical?: { name: string } | null;
   /** 완주 보상 — 온라인 상품(기프티콘 등) 지급(선택) */
   rewardOnline?: { name: string } | null;
+  /** 대표 이미지(배너 카드) URL — 없으면 카테고리 컬러 카드 */
+  coverImageUrl?: string | null;
 }
 
 export interface InterestStatus {
@@ -86,6 +88,24 @@ export const challengeApi = {
 
   publishChallenge: async (challengeId: string): Promise<void> => {
     await apiClient.patch(`/c/challenges/${challengeId}/publish`);
+  },
+
+  // 대표 이미지 업로드 — presigned PUT (verifications upload-url 재사용). 반환: CloudFront fileUrl
+  uploadCoverImage: async (file: File): Promise<string> => {
+    const res = await apiClient.post('/c/verifications/upload-url', {
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      mediaKind: 'image',
+    });
+    const { uploadUrl, fileUrl } = res.data.data as { uploadUrl: string; fileUrl: string };
+    const put = await fetch(uploadUrl, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type },
+    });
+    if (!put.ok) throw new Error('UPLOAD_FAILED');
+    return fileUrl;
   },
 
   // ── 관심 챌린지 (challenge-api PORTING.md §7-c) ─────────────────────
