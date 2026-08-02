@@ -88,6 +88,10 @@ myChallengeRoutes.get('/challenges/my', async (c) => {
         targetTime: challenge.targetTime,
         badgeIcon: challenge.badgeIcon,
         badgeName: challenge.badgeName,
+        // 종료 리캡용 — 정체성 헤드라인·비주얼·종료시각(자동팝업 최근성 게이트)
+        identityKeyword: challenge.identityKeyword ?? null,
+        coverImageUrl: challenge.coverImageUrl ?? null,
+        challengeEndAt: challenge.challengeEndAt ?? challenge.endDate ?? null,
         challengeType: challenge.challengeType,
         personalQuestEnabled: challenge.personalQuestEnabled,
         personalQuestAutoApprove: challenge.personalQuestAutoApprove,
