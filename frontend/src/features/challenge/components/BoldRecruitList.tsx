@@ -4,10 +4,10 @@ import { FiX } from 'react-icons/fi';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import { SLUG_TO_HEX, SLUG_TO_EMOJI, SLUG_TO_LABEL } from '../constants/categories';
 
-// 종이 찢김(torn paper) 느낌의 오른쪽 가장자리 — 좌측 종이 패널에 적용
-const TORN_EDGE =
-  'polygon(0 0, 90% 0, 85% 7%, 92% 15%, 84% 24%, 91% 33%, 83% 43%, 92% 52%, 84% 62%, 91% 71%, 83% 81%, 90% 90%, 88% 100%, 0 100%)';
+// 종이 패널 색 + 사진으로 자연스럽게 녹아드는 사선 그라데이션(좌 종이 → 우 투명)
 const PAPER = '#F4F0E7';
+const PAPER_FADE = 'rgba(244,240,231,0)';
+const PAPER_GRADIENT = `linear-gradient(100deg, ${PAPER} 0%, ${PAPER} 60%, ${PAPER_FADE} 86%)`;
 
 // 레퍼런스(Charmi) 스타일의 컬러풀 대형 모집 카드 + 스크롤 무브 인터랙션 + 탭 시 전체화면 상세 확장.
 // 색/이모지는 카테고리 상수 재사용(SLUG_TO_HEX/SLUG_TO_EMOJI).
@@ -59,7 +59,7 @@ function BoldRecruitCard({
   const emoji = SLUG_TO_EMOJI[challenge.category] ?? '✨';
   const cover = challenge.coverImageUrl ? resolveMediaUrl(challenge.coverImageUrl) : null;
 
-  // ── 대표 이미지 있음: 종이 찢김 스타일(좌측 종이 패널 + 우측 사진) ──
+  // ── 대표 이미지 있음: 종이가 사진으로 사선 그라데이션으로 녹아드는 스타일 ──
   if (cover) {
     return (
       <motion.button
@@ -67,18 +67,18 @@ function BoldRecruitCard({
         type="button"
         layoutId={`recruit-card-${challenge.challengeId}`}
         onClick={() => onOpen(challenge)}
-        style={{ scale }}
+        style={{ scale, backgroundColor: PAPER }}
         whileTap={{ scale: 0.97 }}
         className="relative w-full text-left rounded-[28px] overflow-hidden min-h-[180px] shadow-lg shadow-black/5"
       >
-        {/* 우측 사진 */}
-        <div className="absolute inset-y-0 right-0 w-[56%]">
+        {/* 배경 사진(카드 전체) */}
+        <div className="absolute inset-0">
           <img src={cover} alt="" className="w-full h-full object-cover" />
         </div>
-        {/* 좌측 종이 패널 (찢김 가장자리) */}
-        <div className="absolute inset-y-0 left-0 w-[60%]" style={{ backgroundColor: PAPER, clipPath: TORN_EDGE }} />
+        {/* 종이 → 사진 사선 그라데이션 (자연스러운 페이드) */}
+        <div className="absolute inset-0" style={{ background: PAPER_GRADIENT }} />
         {/* 텍스트 */}
-        <div className="relative z-10 p-5 w-[58%]">
+        <div className="relative z-10 p-5 w-[72%]">
           <span className="inline-block text-[10px] font-semibold text-gray-500 bg-black/5 rounded-full px-2 py-0.5 mb-1.5">
             {SLUG_TO_LABEL[challenge.category] ?? challenge.category}
           </span>
