@@ -8,7 +8,7 @@ import { SLUG_TO_HEX, SLUG_TO_EMOJI, SLUG_TO_LABEL } from '../constants/categori
 // 이미지 영역 전체에 길게 깔아 경계선이 안 보이도록 완만하게 페이드.
 const PAPER = '#F4F0E7';
 const PAPER_FADE = 'rgba(244,240,231,0)';
-const SEAM_GRADIENT = `linear-gradient(95deg, ${PAPER} 0%, ${PAPER} 16%, ${PAPER_FADE} 64%)`;
+const SEAM_GRADIENT = `linear-gradient(95deg, ${PAPER} 0%, ${PAPER} 46%, ${PAPER_FADE} 80%)`;
 
 // 레퍼런스(Charmi) 스타일의 컬러풀 대형 모집 카드 + 스크롤 무브 인터랙션 + 탭 시 전체화면 상세 확장.
 // 색/이모지는 카테고리 상수 재사용(SLUG_TO_HEX/SLUG_TO_EMOJI).
@@ -75,9 +75,9 @@ function BoldRecruitCard({
         {/* 우측 이미지 — 여백 없이 꽉 채움. 세로는 아래 정렬(위만 잘림), 가로는 가운데 기준 크롭 */}
         <div className="absolute inset-y-0 right-0 w-[62%] overflow-hidden">
           <img src={cover} alt="" className="w-full h-full object-cover object-bottom" />
-          {/* 종이 → 사진 seam 페이드 (이미지 영역 전체에 길게 걸쳐 경계선 제거) */}
-          <div className="absolute inset-0 z-[1]" style={{ background: SEAM_GRADIENT }} />
         </div>
+        {/* seam 그라데이션 — 카드 전체에 덮어 이미지 컨테이너 경계선까지 파묻어 자연스럽게 페이드 */}
+        <div className="absolute inset-0 z-[1] pointer-events-none" style={{ background: SEAM_GRADIENT }} />
         {/* 텍스트 */}
         <div className="relative z-10 p-5 w-[56%]">
           <span className="inline-block text-[10px] font-semibold text-gray-500 bg-black/5 rounded-full px-2 py-0.5 mb-1.5">
