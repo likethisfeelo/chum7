@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -441,6 +441,25 @@ export const ChallengesPage = () => {
     },
   });
 
+  // 내가 참여신청한 챌린지 id 집합 — 목록에서 '참여신청완료' 표시용
+  const { data: myJoinedData } = useQuery({
+    queryKey: ['my-challenges-joined-ids'],
+    queryFn: async () => {
+      const response = await apiClient.get('/c/challenges/my?status=all');
+      return (response.data?.data?.challenges ?? []) as any[];
+    },
+    staleTime: 30 * 1000,
+  });
+  const joinedIds = useMemo(
+    () =>
+      new Set<string>(
+        (myJoinedData ?? [])
+          .map((c: any) => String(c.challengeId ?? c.challenge?.challengeId ?? ''))
+          .filter(Boolean),
+      ),
+    [myJoinedData],
+  );
+
   // Desktop: dual lifecycle queries
   const { data: recruitingData, isLoading: recruitingLoading } = useQuery({
     queryKey: ['challenges-recruiting', currentCategory.slug],
@@ -804,6 +823,7 @@ export const ChallengesPage = () => {
             <BoldRecruitList
               challenges={mobileChallenges}
               onNavigate={(id) => navigate(`/challenges/${id}`)}
+              joinedIds={joinedIds}
             />
           )}
         </div>
