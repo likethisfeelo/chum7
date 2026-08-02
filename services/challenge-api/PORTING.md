@@ -164,3 +164,17 @@
   **미이식**: revise(수정 횟수 상한 revision_pending/expired), personalQuestAutoApprove 자동 승인 +
   퀘스트 아이템 자동 생성, allowedVerificationTypes 제안 필드, 리더 알림(sendNotification — contracts
   이벤트 타입 부재, §3 gap 패턴과 동일). 심사는 admin-api /adm/quest-proposals (같은 `QPROP#` 키 공유).
+
+## 응원·감사 점수 + 자동응원 (레거시 cheer-thank 이식, docs/cheer-thank-system.md)
+
+- **점수 적립**: 인증 day 최초 완료 시 `domain/score-rules.ts`로 cheerScore/thankScore를 "완료 순서"만으로
+  결정적 재현 → 참여 UC# 자기 테이블에 `addParticipationScores` ADD (`routes/verifications.ts`). 멱등:
+  `wasAlreadyComplete` 가드 + isExtra 조기 return.
+- **자동응원 레코드**: 조기완료 시 미완료 팀원에게 cheer 레코드 생성(`domain/auto-cheer.ts` +
+  `repo/cheer-records.ts`, CHEER_TABLE 쓰기). 형태는 cheer-api `domain/cheer-create.ts`와 동형(중복 —
+  변경 시 동기화). 즉시분은 `cheer.delivered` 발행(→ notification-worker 푸시), 예약분은 `SCHED#pending`
+  으로 저장되어 **기존 cheer-scheduler**가 발송·수신자완료 시 발신자 thankScore를 처리.
+- **크로스 도메인 쓰기 예외**: challenge-api → CHEER_TABLE(자동응원 생성). cheer-scheduler →
+  CHALLENGES thankScore ADD와 대칭인 문서화된 예외 (infra2 api-stack grantWriteData).
+- **개인 여정 누적**: cheerScore/thankScore/score는 참여 레코드에 누적되며, gamification-api
+  `GET /g/world/summary`가 카테고리(8층)별로 집계한다 (별도 저장소 없음).
