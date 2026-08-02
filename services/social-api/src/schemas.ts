@@ -35,6 +35,49 @@ export const plazaReactSchema = z.object({
   verificationId: z.string().optional().nullable(),
 });
 
+// ── 마당(plaza) 운영자 게시 ────────────────────────────────────────────
+
+/** 유효 카테고리 슬러그 (challenge-api CHALLENGE_CATEGORIES / interest-area 라벨맵과 동일 8종) */
+export const PLAZA_ADMIN_CATEGORIES = [
+  'selflove',
+  'discipline',
+  'create',
+  'explore',
+  'build',
+  'attitude',
+  'expand',
+  'impact',
+] as const;
+
+/** 운영자 게시물 이미지 presigned PUT 요청 */
+export const plazaAdminUploadUrlSchema = z.object({
+  contentType: z
+    .string()
+    .regex(/^image\/(jpeg|jpg|png|webp|gif)$/, 'INVALID_CONTENT_TYPE')
+    .default('image/jpeg'),
+  fileSize: z
+    .number()
+    .int()
+    .positive()
+    .max(10 * 1024 * 1024)
+    .optional(),
+});
+
+/** 운영자 마당 게시물 작성 — courtyard 카드로 노출 + isOfficial 배지. 본문 필수, 이미지 선택. */
+export const createAdminPlazaPostSchema = z.object({
+  content: z.string().min(1).max(2000),
+  title: z.string().max(100).optional().nullable(),
+  imageUrl: z.string().url().optional().nullable(),
+  imageUrls: z.array(z.string().url()).max(10).optional().nullable(),
+  challengeCategory: z.enum(PLAZA_ADMIN_CATEGORIES).optional().nullable(),
+  hashtag: z
+    .string()
+    .max(30)
+    .regex(/^#?[가-힣a-zA-Z0-9_-]*$/, 'HASHTAG_INVALID_CHARS')
+    .optional()
+    .nullable(),
+});
+
 // ── 챌린지보드 ─────────────────────────────────────────────────────────
 
 /** blocks 상세 검증은 domain/blocks.validateBlocks (레거시 규칙 그대로) */

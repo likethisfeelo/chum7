@@ -49,6 +49,19 @@ export async function getPost(plazaPostId: string): Promise<Record<string, any> 
   return res.Item ?? null;
 }
 
+/** 게시물 노출 토글 — isActive=false 로 내리면 피드/상세에서 제외 (운영자 게시물 회수용) */
+export async function setPostActive(plazaPostId: string, isActive: boolean): Promise<void> {
+  await docClient.send(
+    new UpdateCommand({
+      TableName: tableName(TABLE),
+      Key: { pk: postPk(plazaPostId), sk: 'META' },
+      UpdateExpression: 'SET isActive = :active',
+      ConditionExpression: 'attribute_exists(pk)',
+      ExpressionAttributeValues: { ':active': isActive },
+    }),
+  );
+}
+
 export interface FeedPageResult {
   items: Record<string, any>[];
   lastKey?: Record<string, any>;

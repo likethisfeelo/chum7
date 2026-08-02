@@ -6,6 +6,7 @@
 import { handle } from 'hono/aws-lambda';
 import { createApi, ok, requireAuth } from '@chum7/api-kit';
 import { plazaPublicRoutes, plazaRoutes } from './routes/plaza';
+import { plazaAdminRoutes } from './routes/plaza-admin';
 import { boardPublicRoutes, boardRoutes } from './routes/board';
 import { challengeFeedRoutes } from './routes/challenge-feed';
 import { bulletinRoutes } from './routes/bulletin';
@@ -24,6 +25,7 @@ app.route('/public/hashtags', hashtagPublicRoutes);
 app.use('/s/*', requireAuth());
 
 app.route('/s/plaza', plazaRoutes);
+app.route('/s/plaza-admin', plazaAdminRoutes); // 운영자 마당 직접 게시 (그룹 게이트는 라우터 내부)
 app.route('/s/board', boardRoutes);
 app.route('/s/challenge-feed', challengeFeedRoutes);
 app.route('/s/bulletin', bulletinRoutes);

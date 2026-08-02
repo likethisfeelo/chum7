@@ -104,8 +104,13 @@ export function PlazaPostCard({ post, initialSaved, onUserHashtagClick, ...rest 
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -5, transition: { duration: 0.18, ease: 'easeOut' } }}
-      className="rounded-2xl transition-shadow duration-300 hover:shadow-xl hover:shadow-black/[0.06]"
+      className="relative rounded-2xl transition-shadow duration-300 hover:shadow-xl hover:shadow-black/[0.06]"
     >
+      {post.isOfficial && (
+        <span className="absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+          📣 {post.officialLabel || '운영자'}
+        </span>
+      )}
       {post.postType === 'recruitment' && <RecruitmentCard {...cardProps} />}
       {post.postType === 'progress_update' && <ProgressUpdateCard {...cardProps} />}
       {(post.postType === 'courtyard' || post.postType === 'badge_review') && (

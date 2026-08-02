@@ -38,6 +38,10 @@ export interface PlazaPost {
 
   hashtag?: string;
 
+  // 운영자(ADMIN) 직접 게시물 — 마당 카드에 '운영자' 배지 표시
+  isOfficial?: boolean;
+  officialLabel?: string;
+
   leaderId?: string;
   leaderName?: string;
   leaderMessage?: string;

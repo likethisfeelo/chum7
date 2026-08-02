@@ -188,6 +188,7 @@ export class ApiStack extends cdk.Stack {
     });
     stateful.tables.social.grantReadWriteData(socialApi);
     stateful.uploadsBucket.grantRead(socialApi); // 미디어 URL 재서명
+    stateful.uploadsBucket.grantPut(socialApi); // 운영자 마당 게시물 이미지 presigned PUT
     stateful.anonSaltSecret.grantRead(socialApi); // 익명 ID 솔트 로드
     stateful.tables.challenges.grantReadData(socialApi); // 리더 검증 GetItem 전용
     eventBus.grantPutEventsTo(socialApi);
