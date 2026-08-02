@@ -71,6 +71,7 @@ describe('buildPlazaPostItem (social-api PORTING.md §4 아이템 계약)', () =
       challengeCategory: 'selflove',
       currentDay: 3,
       imageUrl: 'https://img/1.jpg',
+      imageUrls: ['https://img/1.jpg'],
       content: '오늘도 뛰었다',
       leaderId: null,
       leaderName: null,

@@ -81,7 +81,14 @@ function verificationDisplayName(v: VerificationItem, salt: string | null): stri
 }
 
 async function normalizeVerification(v: VerificationItem, ctx: ViewerCtx) {
-  const imageUrl = await toRenderableMediaUrl(v.imageUrl || null);
+  // 다중 이미지(슬라이드) — 저장된 imageUrls 우선, 없으면 단일 imageUrl. 각 URL 렌더 가능하게 서명.
+  const rawImages: string[] = Array.isArray(v.imageUrls) && v.imageUrls.length
+    ? v.imageUrls.filter((u: unknown): u is string => typeof u === 'string' && Boolean(u))
+    : (v.imageUrl ? [String(v.imageUrl)] : []);
+  const imageUrlsSigned = (await Promise.all(rawImages.map((u) => toRenderableMediaUrl(u)))).filter(
+    (u): u is string => Boolean(u),
+  );
+  const imageUrl = imageUrlsSigned[0] ?? (await toRenderableMediaUrl(v.imageUrl || null));
   const videoUrl = await toRenderableMediaUrl(v.videoUrl || null);
 
   const linkUrlRaw = typeof v.linkUrl === 'string' ? v.linkUrl.trim() : '';
@@ -113,6 +120,8 @@ async function normalizeVerification(v: VerificationItem, ctx: ViewerCtx) {
     hashtag: typeof v.hashtag === 'string' && v.hashtag.trim() ? v.hashtag.trim() : null,
     todayNote: v.todayNote,
     imageUrl: verificationType === 'image' ? mediaUrl : null,
+    // 슬라이드용 다중 이미지 (image 타입일 때만). 단일도 배열로 제공.
+    imageUrls: verificationType === 'image' ? imageUrlsSigned : [],
     videoUrl: verificationType === 'video' ? mediaUrl : null,
     mediaUrl,
     linkUrl: linkUrlRaw || null,

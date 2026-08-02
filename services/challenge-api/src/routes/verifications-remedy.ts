@@ -100,16 +100,19 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
   }
 
   const allowedTypes = resolveAllowedTypes(challenge.allowedVerificationTypes);
-  const verificationType = resolveVerificationType(input);
+  // 다중 이미지 정규화 (최대 10)
+  const imageUrls = input.imageUrls?.length ? input.imageUrls.slice(0, 10) : (input.imageUrl ? [input.imageUrl] : []);
+  const primaryImage = imageUrls[0] ?? null;
+  const verificationType = resolveVerificationType({ ...input, imageUrl: input.imageUrl || primaryImage || undefined });
   if (!allowedTypes.includes(verificationType)) {
     return fail(c, 400, 'UNSUPPORTED_VERIFICATION_TYPE',
       `해당 챌린지에서는 ${verificationType} 인증이 허용되지 않습니다. 허용: ${allowedTypes.join(', ')}`);
   }
 
-  if (verificationType === 'image' && !input.imageUrl) {
-    return fail(c, 400, 'MISSING_CONTENT', '이미지 URL이 필요합니다');
+  if (verificationType === 'image' && !primaryImage) {
+    return fail(c, 400, 'MISSING_CONTENT', '이미지가 필요합니다');
   }
-  if (verificationType === 'video' && !input.videoUrl && !input.imageUrl) {
+  if (verificationType === 'video' && !input.videoUrl && !primaryImage) {
     return fail(c, 400, 'MISSING_CONTENT', '영상 URL이 필요합니다');
   }
   if (verificationType === 'link' && !input.linkUrl) {
@@ -145,7 +148,8 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
     day: effectiveCurrentDay,
     type: 'remedy',
     verificationType,
-    imageUrl: input.imageUrl || null,
+    imageUrl: primaryImage,
+    imageUrls: imageUrls.length ? imageUrls : null,
     videoUrl: input.videoUrl || null,
     linkUrl: input.linkUrl || null,
     todayNote: input.todayNote || null,
