@@ -23,6 +23,13 @@ function metricLabel(c: BoldChallenge): string {
   return c.durationDays ? `${c.durationDays}일간` : '매일';
 }
 
+function formatStartLabel(iso?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+}
+
 function hasCompletionReward(c: BoldChallenge): boolean {
   return Boolean(c.rewardPhysical?.name || c.rewardOnline?.name);
 }
@@ -175,12 +182,18 @@ function ChallengeQuickView({
           transition={{ delay: 0.12 }}
           className="relative z-10 mt-6 flex-1 rounded-t-[32px] bg-white px-6 pt-6 pb-28"
         >
-          {challenge.description && (
-            <p className="text-gray-700 text-[15px] leading-relaxed whitespace-pre-wrap">
-              {challenge.description}
+          {/* 일정 — 시작일/기간 (참여 전 확인용, 보상 위) */}
+          <div className="flex items-center gap-2.5 rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3">
+            <span className="text-lg">📅</span>
+            <p className="text-sm font-semibold text-gray-800">
+              {formatStartLabel(challenge.challengeStartAt)
+                ? `${formatStartLabel(challenge.challengeStartAt)}부터 `
+                : ''}
+              {challenge.durationDays ? `${challenge.durationDays}일간` : '매일'} 진행
             </p>
-          )}
+          </div>
 
+          {/* 완주 보상 */}
           {(challenge.rewardPhysical?.name || challenge.rewardOnline?.name || challenge.badgeName) && (
             <div className="mt-6">
               <h3 className="text-sm font-bold text-gray-900 mb-2">완주 보상</h3>
@@ -204,6 +217,16 @@ function ChallengeQuickView({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* 챌린지 소개 — 맨 아래 */}
+          {challenge.description && (
+            <div className="mt-6">
+              <h3 className="text-sm font-bold text-gray-900 mb-2">챌린지 소개</h3>
+              <p className="text-gray-700 text-[15px] leading-relaxed whitespace-pre-wrap">
+                {challenge.description}
+              </p>
             </div>
           )}
         </motion.div>
