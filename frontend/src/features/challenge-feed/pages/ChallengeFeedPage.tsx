@@ -334,9 +334,21 @@ export const ChallengeFeedPage = () => {
     [myChallengesData, challengeId],
   );
 
+  // 종료된 챌린지 피드는 '참여했던 사람 + 생성자/리더'만 열람 가능 — 미참여자는 조회 자체를 막는다
+  //  (백엔드도 동일하게 403으로 차단하며, 여기서는 403 노출 대신 쿼리를 비활성화한다)
+  const feedLockedForNonMember = useMemo(() => {
+    const lc = challengeData?.effectiveLifecycle || challengeData?.lifecycle;
+    const ended = lc === "completed" || lc === "archived";
+    if (!ended) return false;
+    const isOwner =
+      (Boolean(challengeData?.createdBy) && challengeData?.createdBy === user?.userId) ||
+      challengeData?.leaderId === user?.userId;
+    return !(isOwner || Boolean(userChallenge));
+  }, [challengeData, userChallenge, user?.userId]);
+
   const { data: verificationData, isLoading: isVerificationsLoading } = useQuery({
     queryKey: ["challenge-feed-verifications", challengeId],
-    enabled: Boolean(challengeId),
+    enabled: Boolean(challengeId) && !feedLockedForNonMember,
     queryFn: async () => {
       const response = await apiClient.get(
         `/c/verifications?isPublic=true&limit=50&challengeId=${challengeId}`,
@@ -1479,12 +1491,28 @@ export const ChallengeFeedPage = () => {
           )}
 
           {/* 5) 인증 피드 — 챌린지 유형에 맞는 섹션만, 각 섹션 펼침/접힘(아코디언) */}
+          {/*    종료된 챌린지는 참여했던 사람 + 생성자/리더만 열람 가능 — 미참여자에게는 안내 카드 */}
           <section className="glass-card rounded-2xl p-5">
             <h3 className="font-bold text-gray-900 mb-3">인증 피드</h3>
-            <div className="space-y-3">
-              {showLeaderFeed && renderFeedSection("leader", leaderFeedVerifications, openLeaderFeed, () => setOpenLeaderFeed((v) => !v))}
-              {showPersonalFeed && renderFeedSection("personal", personalFeedVerifications, openPersonalFeed, () => setOpenPersonalFeed((v) => !v))}
-            </div>
+            {feedLockedForNonMember ? (
+              <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-8 text-center">
+                <p className="text-2xl mb-2">🔒</p>
+                <p className="text-sm font-semibold text-gray-700">종료된 챌린지예요.</p>
+                <p className="mt-1 text-sm text-gray-500">함께 참여했던 분들만 인증 피드를 다시 볼 수 있어요.</p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/challenges")}
+                  className="mt-4 text-sm font-semibold text-blue-600"
+                >
+                  다른 챌린지 찾기 →
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {showLeaderFeed && renderFeedSection("leader", leaderFeedVerifications, openLeaderFeed, () => setOpenLeaderFeed((v) => !v))}
+                {showPersonalFeed && renderFeedSection("personal", personalFeedVerifications, openPersonalFeed, () => setOpenPersonalFeed((v) => !v))}
+              </div>
+            )}
           </section>
 
           {/* 6) 리더퀘스트 보드 (2개 이상일 경우에만) */}
