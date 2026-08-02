@@ -15,6 +15,8 @@ export const createChallengeSchema = z.object({
   // 완주 보상 — 배지는 기본 지급, 아래 둘은 있을 때만(선택). name=상품명/설명.
   rewardPhysical: z.object({ name: z.string().min(1).max(60) }).nullable().optional(),
   rewardOnline: z.object({ name: z.string().min(1).max(60) }).nullable().optional(),
+  // 대표 이미지(배너 카드용) — 업로드된 CloudFront URL. 없으면 카테고리 컬러 카드로 폴백.
+  coverImageUrl: z.string().url().max(1000).nullable().optional(),
 
   recruitingStartAt: z.string().datetime(),
   recruitingEndAt: z.string().datetime(),
@@ -54,6 +56,7 @@ export const updateChallengeSchema = z.object({
   maxParticipants: z.number().int().min(1).max(1000).nullable().optional(),
   rewardPhysical: z.object({ name: z.string().min(1).max(60) }).nullable().optional(),
   rewardOnline: z.object({ name: z.string().min(1).max(60) }).nullable().optional(),
+  coverImageUrl: z.string().url().max(1000).nullable().optional(),
 });
 
 // ── 참여 (레거시 challenge/join) ────────────────────────────────────────────

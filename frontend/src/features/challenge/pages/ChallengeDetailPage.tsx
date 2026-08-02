@@ -12,6 +12,7 @@ import { WizardFormState } from '@/features/challenge/components/join-wizard/typ
 import { useAuthStore } from '@/stores/authStore';
 import { challengeApi } from '@/features/challenge/api/challengeApi';
 import { SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
+import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import { getChallengeTypeLabel } from '@/features/challenge/utils/flowPolicy';
 import { PaymentSheet } from '@/features/commerce/components/PaymentSheet';
 import { isPaidChallenge } from '@/features/commerce/api/commerceApi';
@@ -375,6 +376,21 @@ export const ChallengeDetailPage = () => {
       )}
 
       <div className="p-6">
+        {/* 대표 이미지 배너 (있을 때만) */}
+        {challenge.coverImageUrl && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl overflow-hidden mb-6 shadow-sm border border-gray-100"
+          >
+            <img
+              src={resolveMediaUrl(challenge.coverImageUrl)}
+              alt={challenge.title}
+              className="w-full h-52 object-cover"
+            />
+          </motion.div>
+        )}
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -410,8 +426,6 @@ export const ChallengeDetailPage = () => {
               )}
             </div>
           </div>
-
-          <p className="text-gray-700 leading-relaxed mb-6">{challenge.description}</p>
 
           {stats && (
             hasStarted ? (
@@ -572,6 +586,19 @@ export const ChallengeDetailPage = () => {
           )}
         </motion.div>
 
+        {/* 챌린지 자세히 설명 — 정보/가이드/보상 아래(맨 하단) */}
+        {challenge.description && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+            className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6"
+          >
+            <h3 className="text-lg font-bold text-gray-900 mb-3">챌린지 소개</h3>
+            <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{challenge.description}</p>
+          </motion.section>
+        )}
+
         <p className="text-sm text-gray-600 mb-3">
           상태: <span className="font-semibold">{lifecycle}</span> · {lifecycleHintMap[lifecycle] ?? '참여 가능 상태를 확인해주세요.'}
         </p>
@@ -603,7 +630,13 @@ export const ChallengeDetailPage = () => {
           {ctaLabelMap[lifecycle] ?? '챌린지 참여하기'}
         </Button>
 
-        <p className="text-xs text-gray-500 text-center mt-4">💡 오늘부터 7일간 진행됩니다</p>
+        <p className="text-xs text-gray-500 text-center mt-4">
+          💡 {hasStarted
+            ? `총 ${challenge.durationDays ?? 7}일간 진행돼요`
+            : startAt
+              ? `${startAt}부터 ${challenge.durationDays ?? 7}일간 진행돼요`
+              : `${challenge.durationDays ?? 7}일간 진행돼요`}
+        </p>
       </div>
 
       {useNewJoinWizard && (

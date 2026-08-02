@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { FiArrowLeft } from 'react-icons/fi';
 import { Loading } from '@/shared/components/Loading';
+import { CoverImagePicker } from '../components/CoverImagePicker';
 import toast from 'react-hot-toast';
 
 function toLocalDateTimeInputValue(isoStr?: string): string {
@@ -43,6 +44,7 @@ export const ChallengeEditPage = () => {
     recruitingEndAt: string;
     challengeStartAt: string;
     maxParticipants: string;
+    coverImageUrl: string | null;
     hasPhysicalReward: boolean;
     physicalRewardName: string;
     hasOnlineReward: boolean;
@@ -61,6 +63,7 @@ export const ChallengeEditPage = () => {
       recruitingEndAt: toLocalDateTimeInputValue(challenge.recruitingEndAt),
       challengeStartAt: toLocalDateTimeInputValue(challenge.challengeStartAt),
       maxParticipants: challenge.maxParticipants != null ? String(challenge.maxParticipants) : '',
+      coverImageUrl: challenge.coverImageUrl || null,
       hasPhysicalReward: Boolean(challenge.rewardPhysical?.name),
       physicalRewardName: challenge.rewardPhysical?.name || '',
       hasOnlineReward: Boolean(challenge.rewardOnline?.name),
@@ -81,6 +84,7 @@ export const ChallengeEditPage = () => {
       if (form.recruitingEndAt) payload.recruitingEndAt = localToISO(form.recruitingEndAt);
       if (form.challengeStartAt) payload.challengeStartAt = localToISO(form.challengeStartAt);
       payload.maxParticipants = form.maxParticipants ? parseInt(form.maxParticipants, 10) : null;
+      payload.coverImageUrl = form.coverImageUrl; // null이면 대표 이미지 해제
       // 완주 보상 — 체크 해제/공란이면 null 명시 전송해 해제 가능
       payload.rewardPhysical =
         form.hasPhysicalReward && form.physicalRewardName.trim()
@@ -133,6 +137,14 @@ export const ChallengeEditPage = () => {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-6 space-y-5">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">대표 이미지</label>
+          <CoverImagePicker
+            value={form.coverImageUrl}
+            onChange={(url) => setForm((f) => (f ? { ...f, coverImageUrl: url } : f))}
+          />
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">챌린지 제목 <span className="text-red-500">*</span></label>
           <input

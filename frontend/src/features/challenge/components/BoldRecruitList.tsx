@@ -1,7 +1,13 @@
 import { useRef, useState } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import { FiX } from 'react-icons/fi';
+import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import { SLUG_TO_HEX, SLUG_TO_EMOJI, SLUG_TO_LABEL } from '../constants/categories';
+
+// 종이 찢김(torn paper) 느낌의 오른쪽 가장자리 — 좌측 종이 패널에 적용
+const TORN_EDGE =
+  'polygon(0 0, 90% 0, 85% 7%, 92% 15%, 84% 24%, 91% 33%, 83% 43%, 92% 52%, 84% 62%, 91% 71%, 83% 81%, 90% 90%, 88% 100%, 0 100%)';
+const PAPER = '#F4F0E7';
 
 // 레퍼런스(Charmi) 스타일의 컬러풀 대형 모집 카드 + 스크롤 무브 인터랙션 + 탭 시 전체화면 상세 확장.
 // 색/이모지는 카테고리 상수 재사용(SLUG_TO_HEX/SLUG_TO_EMOJI).
@@ -12,6 +18,7 @@ export interface BoldChallenge {
   description?: string;
   category: string;
   badgeName?: string;
+  coverImageUrl?: string | null;
   durationDays?: number;
   challengeStartAt?: string;
   rewardPhysical?: { name: string } | null;
@@ -21,6 +28,13 @@ export interface BoldChallenge {
 
 function metricLabel(c: BoldChallenge): string {
   return c.durationDays ? `${c.durationDays}일간` : '매일';
+}
+
+function formatStartLabel(iso?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
 function hasCompletionReward(c: BoldChallenge): boolean {
@@ -43,7 +57,52 @@ function BoldRecruitCard({
 
   const hex = SLUG_TO_HEX[challenge.category] ?? '#6E7687';
   const emoji = SLUG_TO_EMOJI[challenge.category] ?? '✨';
+  const cover = challenge.coverImageUrl ? resolveMediaUrl(challenge.coverImageUrl) : null;
 
+  // ── 대표 이미지 있음: 종이 찢김 스타일(좌측 종이 패널 + 우측 사진) ──
+  if (cover) {
+    return (
+      <motion.button
+        ref={ref}
+        type="button"
+        layoutId={`recruit-card-${challenge.challengeId}`}
+        onClick={() => onOpen(challenge)}
+        style={{ scale }}
+        whileTap={{ scale: 0.97 }}
+        className="relative w-full text-left rounded-[28px] overflow-hidden min-h-[180px] shadow-lg shadow-black/5"
+      >
+        {/* 우측 사진 */}
+        <div className="absolute inset-y-0 right-0 w-[56%]">
+          <img src={cover} alt="" className="w-full h-full object-cover" />
+        </div>
+        {/* 좌측 종이 패널 (찢김 가장자리) */}
+        <div className="absolute inset-y-0 left-0 w-[60%]" style={{ backgroundColor: PAPER, clipPath: TORN_EDGE }} />
+        {/* 텍스트 */}
+        <div className="relative z-10 p-5 w-[58%]">
+          <span className="inline-block text-[10px] font-semibold text-gray-500 bg-black/5 rounded-full px-2 py-0.5 mb-1.5">
+            {SLUG_TO_LABEL[challenge.category] ?? challenge.category}
+          </span>
+          <h3 className="font-serif font-bold text-gray-900 text-xl leading-tight">{challenge.title}</h3>
+          {challenge.description && (
+            <p className="mt-1.5 text-gray-500 text-xs leading-snug line-clamp-2">{challenge.description}</p>
+          )}
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-gray-700 bg-black/5 rounded-full px-2 py-0.5">
+              {metricLabel(challenge)}
+            </span>
+            <span className="text-[11px] text-gray-600 bg-black/5 rounded-full px-2 py-0.5">
+              👥 {challenge.stats?.totalParticipants ?? 0}
+            </span>
+            {hasCompletionReward(challenge) && (
+              <span className="text-[11px] font-bold text-gray-800 bg-amber-100 rounded-full px-2 py-0.5">🎁 완주보상</span>
+            )}
+          </div>
+        </div>
+      </motion.button>
+    );
+  }
+
+  // ── 대표 이미지 없음: 카테고리 컬러 카드(캐릭터 이모지) ──
   return (
     <motion.button
       ref={ref}
@@ -108,6 +167,7 @@ function ChallengeQuickView({
 }) {
   const hex = SLUG_TO_HEX[challenge.category] ?? '#6E7687';
   const emoji = SLUG_TO_EMOJI[challenge.category] ?? '✨';
+  const cover = challenge.coverImageUrl ? resolveMediaUrl(challenge.coverImageUrl) : null;
 
   return (
     <motion.div
@@ -123,50 +183,78 @@ function ChallengeQuickView({
       <motion.div
         layoutId={`recruit-card-${challenge.challengeId}`}
         className="absolute inset-0 flex flex-col overflow-y-auto"
-        style={{ backgroundColor: hex }}
+        style={{ backgroundColor: cover ? PAPER : hex }}
       >
-        <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-black/25 pointer-events-none" />
+        {!cover && (
+          <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-black/25 pointer-events-none" />
+        )}
 
-        {/* 상단 바 */}
-        <div className="relative z-10 flex items-center justify-between px-5 pt-5">
-          <span className="text-white text-xs font-semibold bg-white/25 rounded-full px-3 py-1.5">
-            {SLUG_TO_LABEL[challenge.category] ?? challenge.category}
-          </span>
+        {/* 닫기 버튼 */}
+        <div className="absolute top-0 right-0 z-20 p-5">
           <button
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white"
+            className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white"
           >
             <FiX className="w-5 h-5" />
           </button>
         </div>
 
-        {/* 캐릭터 + 제목 */}
-        <div className="relative z-10 px-6 pt-6">
-          <motion.div
-            initial={{ scale: 0.6, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.15, type: 'spring', stiffness: 260, damping: 20 }}
-            className="text-[128px] leading-none drop-shadow-lg"
-          >
-            {emoji}
-          </motion.div>
-          <h2 className="mt-3 text-white font-extrabold text-3xl leading-tight drop-shadow">
-            {challenge.title}
-          </h2>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <span className="text-white text-sm font-semibold bg-white/25 rounded-full px-3 py-1.5">
-              ⏳ {metricLabel(challenge)}
-            </span>
-            <span className="text-white text-sm bg-white/25 rounded-full px-3 py-1.5">
-              👥 {challenge.stats?.totalParticipants ?? 0}명
-            </span>
-            <span className="text-white text-sm bg-white/25 rounded-full px-3 py-1.5">
-              ✅ {challenge.stats?.completionRate ?? 0}%
-            </span>
+        {cover ? (
+          // ── 대표 이미지 히어로: 상단 사진 + 제목 오버레이 ──
+          <div className="relative z-10">
+            <div className="relative h-72">
+              <img src={cover} alt="" className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+              <div className="absolute bottom-4 left-6 right-6">
+                <span className="text-white text-xs font-semibold bg-white/25 rounded-full px-3 py-1.5">
+                  {SLUG_TO_LABEL[challenge.category] ?? challenge.category}
+                </span>
+                <h2 className="mt-2 text-white font-extrabold text-3xl leading-tight drop-shadow">
+                  {challenge.title}
+                </h2>
+              </div>
+            </div>
+            <div className="px-6 pt-4 flex flex-wrap gap-2">
+              <span className="text-gray-700 text-sm font-semibold bg-black/5 rounded-full px-3 py-1.5">
+                ⏳ {metricLabel(challenge)}
+              </span>
+              <span className="text-gray-600 text-sm bg-black/5 rounded-full px-3 py-1.5">
+                👥 {challenge.stats?.totalParticipants ?? 0}명
+              </span>
+              <span className="text-gray-600 text-sm bg-black/5 rounded-full px-3 py-1.5">
+                ✅ {challenge.stats?.completionRate ?? 0}%
+              </span>
+            </div>
           </div>
-        </div>
+        ) : (
+          // ── 이미지 없음: 카테고리 컬러 + 캐릭터 이모지 ──
+          <div className="relative z-10 px-6 pt-16">
+            <motion.div
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.15, type: 'spring', stiffness: 260, damping: 20 }}
+              className="text-[128px] leading-none drop-shadow-lg"
+            >
+              {emoji}
+            </motion.div>
+            <h2 className="mt-3 text-white font-extrabold text-3xl leading-tight drop-shadow">
+              {challenge.title}
+            </h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="text-white text-sm font-semibold bg-white/25 rounded-full px-3 py-1.5">
+                ⏳ {metricLabel(challenge)}
+              </span>
+              <span className="text-white text-sm bg-white/25 rounded-full px-3 py-1.5">
+                👥 {challenge.stats?.totalParticipants ?? 0}명
+              </span>
+              <span className="text-white text-sm bg-white/25 rounded-full px-3 py-1.5">
+                ✅ {challenge.stats?.completionRate ?? 0}%
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* 본문 카드 */}
         <motion.div
@@ -175,12 +263,18 @@ function ChallengeQuickView({
           transition={{ delay: 0.12 }}
           className="relative z-10 mt-6 flex-1 rounded-t-[32px] bg-white px-6 pt-6 pb-28"
         >
-          {challenge.description && (
-            <p className="text-gray-700 text-[15px] leading-relaxed whitespace-pre-wrap">
-              {challenge.description}
+          {/* 일정 — 시작일/기간 (참여 전 확인용, 보상 위) */}
+          <div className="flex items-center gap-2.5 rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3">
+            <span className="text-lg">📅</span>
+            <p className="text-sm font-semibold text-gray-800">
+              {formatStartLabel(challenge.challengeStartAt)
+                ? `${formatStartLabel(challenge.challengeStartAt)}부터 `
+                : ''}
+              {challenge.durationDays ? `${challenge.durationDays}일간` : '매일'} 진행
             </p>
-          )}
+          </div>
 
+          {/* 완주 보상 */}
           {(challenge.rewardPhysical?.name || challenge.rewardOnline?.name || challenge.badgeName) && (
             <div className="mt-6">
               <h3 className="text-sm font-bold text-gray-900 mb-2">완주 보상</h3>
@@ -204,6 +298,16 @@ function ChallengeQuickView({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* 챌린지 소개 — 맨 아래 */}
+          {challenge.description && (
+            <div className="mt-6">
+              <h3 className="text-sm font-bold text-gray-900 mb-2">챌린지 소개</h3>
+              <p className="text-gray-700 text-[15px] leading-relaxed whitespace-pre-wrap">
+                {challenge.description}
+              </p>
             </div>
           )}
         </motion.div>
