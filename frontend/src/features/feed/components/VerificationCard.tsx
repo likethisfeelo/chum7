@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
+import { ImageCarousel } from '@/shared/components/ImageCarousel';
 import { CommentSection } from './CommentSection';
 import { RecommendationInline } from './RecommendationInline';
 import type { PlazaPost } from '@/features/feed/api/plazaApi';
@@ -96,25 +97,28 @@ export function VerificationCard({
 }: Props) {
   const navigate = useNavigate();
   const state = commentHook.getState(post.plazaPostId);
-  const hasMedia = Boolean(post.imageUrl);
-  const isVideo = hasMedia && isVideoUrl(post.imageUrl!);
+  const images = post.imageUrls?.length ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : []);
+  const hasMedia = images.length > 0;
+  const isVideo = hasMedia && images.length === 1 && isVideoUrl(images[0]!);
 
   return (
     <article className="rounded-2xl overflow-hidden glass-card">
 
-      {/* 미디어 — 4:5 비율, 엣지-투-엣지 */}
+      {/* 미디어 — 4:5 비율, 다중 이미지면 슬라이드 */}
       {hasMedia && (
         <div className="relative">
           {isVideo ? (
-            <FeedVideo src={resolveMediaUrl(post.imageUrl!)} />
+            <FeedVideo src={resolveMediaUrl(images[0]!)} />
+          ) : images.length > 1 ? (
+            <ImageCarousel images={images} aspect="aspect-[4/5]" showCounter={false} />
           ) : (
             <div className="aspect-[4/5] overflow-hidden">
-              <FeedImage src={resolveMediaUrl(post.imageUrl!)} />
+              <FeedImage src={resolveMediaUrl(images[0]!)} />
             </div>
           )}
           {/* 북마크 — 이미지 위 오버레이 */}
           {bookmarkButton && (
-            <div className="absolute top-3 right-3">
+            <div className="absolute top-3 right-3 z-10">
               {bookmarkButton}
             </div>
           )}
