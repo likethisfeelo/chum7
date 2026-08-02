@@ -16,6 +16,8 @@ import { certDateFromIso, DEFAULT_TIMEZONE, calculateEffectiveCurrentDay, isChal
 import { isValidTrimRange, resolveVerificationType } from '../domain/verification-rules';
 import { extractImageS3Key, isLikelySignedAssetUrl } from '../domain/media-key';
 import { findMyParticipationByUcId, getParticipation } from '../repo/participations';
+import { getChallenge } from '../repo/challenges';
+import { effectiveLifecycleOf } from '../domain/challenge-state';
 import {
   findMyVerificationById,
   listChallengeVerifications,
@@ -165,6 +167,22 @@ verificationReadRoutes.get('/', async (c) => {
   let nextToken: string | null = null;
 
   if (isPublic && challengeIdFilter) {
+    // 종료된 챌린지의 피드는 '참여했던 사람 + 생성자/리더'만 볼 수 있다.
+    //  (진행/모집 중에는 종전대로 개방 — effectiveLifecycle이 completed/archived일 때만 제한)
+    const challenge = await getChallenge(challengeIdFilter);
+    const eff = challenge ? effectiveLifecycleOf(challenge, new Date()) : null;
+    if (challenge && (eff === 'completed' || eff === 'archived')) {
+      const isOwner = challenge.createdBy === userId || challenge.leaderId === userId;
+      const joined = isOwner ? true : Boolean(await getParticipation(challengeIdFilter, userId));
+      if (!joined) {
+        return fail(
+          c,
+          403,
+          'CHALLENGE_ENDED_MEMBERS_ONLY',
+          '종료된 챌린지의 피드는 참여했던 분들만 볼 수 있어요',
+        );
+      }
+    }
     // 챌린지 스코프 공개 피드 — 챌린지 파티션(CHAL#) 전체를 드레인해 '기간 전체' 인증을 보여준다.
     //  (날짜 파티션 VFPUB#<date>는 하루치만 담아 당일 게시물만 노출되던 버그 수정)
     //  sk는 시간순이 아니므로 createdAt 기준으로 최신순 재정렬한다.
