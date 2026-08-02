@@ -43,6 +43,10 @@ export const ChallengeEditPage = () => {
     recruitingEndAt: string;
     challengeStartAt: string;
     maxParticipants: string;
+    hasPhysicalReward: boolean;
+    physicalRewardName: string;
+    hasOnlineReward: boolean;
+    onlineRewardName: string;
   } | null>(null);
 
   // challenge 로드 후 한 번만 초기화
@@ -57,6 +61,10 @@ export const ChallengeEditPage = () => {
       recruitingEndAt: toLocalDateTimeInputValue(challenge.recruitingEndAt),
       challengeStartAt: toLocalDateTimeInputValue(challenge.challengeStartAt),
       maxParticipants: challenge.maxParticipants != null ? String(challenge.maxParticipants) : '',
+      hasPhysicalReward: Boolean(challenge.rewardPhysical?.name),
+      physicalRewardName: challenge.rewardPhysical?.name || '',
+      hasOnlineReward: Boolean(challenge.rewardOnline?.name),
+      onlineRewardName: challenge.rewardOnline?.name || '',
     });
   }
 
@@ -73,6 +81,15 @@ export const ChallengeEditPage = () => {
       if (form.recruitingEndAt) payload.recruitingEndAt = localToISO(form.recruitingEndAt);
       if (form.challengeStartAt) payload.challengeStartAt = localToISO(form.challengeStartAt);
       payload.maxParticipants = form.maxParticipants ? parseInt(form.maxParticipants, 10) : null;
+      // 완주 보상 — 체크 해제/공란이면 null 명시 전송해 해제 가능
+      payload.rewardPhysical =
+        form.hasPhysicalReward && form.physicalRewardName.trim()
+          ? { name: form.physicalRewardName.trim() }
+          : null;
+      payload.rewardOnline =
+        form.hasOnlineReward && form.onlineRewardName.trim()
+          ? { name: form.onlineRewardName.trim() }
+          : null;
       return apiClient.patch(`/c/challenges/${challengeId}`, payload);
     },
     onSuccess: () => {
@@ -168,6 +185,52 @@ export const ChallengeEditPage = () => {
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
               maxLength={30}
             />
+          </div>
+        </div>
+
+        {/* 완주 보상 — 배지는 기본, 실물/온라인 상품은 선택 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">완주 보상</label>
+          <p className="text-[11px] text-gray-400 mb-2">배지는 기본 지급돼요. 상품을 지급한다면 추가로 선택하세요.</p>
+          <div className="space-y-2">
+            <div className="rounded-xl border border-gray-200 p-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.hasPhysicalReward}
+                  onChange={(e) => setForm((f) => (f ? { ...f, hasPhysicalReward: e.target.checked } : f))}
+                />
+                <span className="text-sm text-gray-800">📦 실물 상품 지급</span>
+              </label>
+              {form.hasPhysicalReward && (
+                <input
+                  value={form.physicalRewardName}
+                  onChange={set('physicalRewardName')}
+                  placeholder="예: 텀블러, 굿즈 세트"
+                  maxLength={60}
+                  className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              )}
+            </div>
+            <div className="rounded-xl border border-gray-200 p-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.hasOnlineReward}
+                  onChange={(e) => setForm((f) => (f ? { ...f, hasOnlineReward: e.target.checked } : f))}
+                />
+                <span className="text-sm text-gray-800">🎁 온라인 상품(기프티콘 등) 지급</span>
+              </label>
+              {form.hasOnlineReward && (
+                <input
+                  value={form.onlineRewardName}
+                  onChange={set('onlineRewardName')}
+                  placeholder="예: 카페 기프티콘 5천원권"
+                  maxLength={60}
+                  className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              )}
+            </div>
           </div>
         </div>
 

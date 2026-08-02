@@ -3,6 +3,7 @@ import { createApi, ok, requireAuth } from '@chum7/api-kit';
 import { charactersRoutes } from './routes/characters';
 import { badgesRoutes } from './routes/badges';
 import { todayRoutes } from './routes/today';
+import { worldRoutes } from './routes/world';
 import { bannersRoutes } from './routes/banners';
 import { publicUsersRoutes } from './routes/public-users';
 
@@ -18,5 +19,6 @@ app.route('/public/users', publicUsersRoutes);
 app.use('/g/*', requireAuth());
 app.route('/g/characters', charactersRoutes);
 app.route('/g/badges', badgesRoutes);
+app.route('/g/world', worldRoutes);
 
 export const handler = handle(app);

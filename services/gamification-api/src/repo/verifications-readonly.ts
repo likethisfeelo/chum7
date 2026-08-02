@@ -1,4 +1,4 @@
-import { QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 import type { PublicVerificationLike } from '../domain/world-summary';
 
@@ -100,4 +100,55 @@ export function listCreatedChallenges(userId: string): Promise<Record<string, un
     ProjectionExpression: 'challengeId, title, lifecycle, durationDays, createdAt, #stats',
     ExpressionAttributeNames: { '#stats': 'stats' },
   });
+}
+
+// ── 개인 여정(world) 누적 집계용 read-only ──
+
+/** 유저 참여 전체 — gsi1 UCUSER#<userId> (누적 questScore/cheerScore/thankScore + 카테고리 해석용 challengeId) */
+export function listUserParticipations(userId: string): Promise<Record<string, unknown>[]> {
+  return queryAll({
+    IndexName: 'gsi1',
+    pkValue: `UCUSER#${userId}`,
+    ProjectionExpression: 'challengeId, #sc, cheerScore, thankScore, #st',
+    ExpressionAttributeNames: { '#sc': 'score', '#st': 'status' },
+  });
+}
+
+/** 챌린지 카테고리 단건 조회 — CHAL#<id>/META (여정 층 분류용) */
+export async function getChallengeCategory(challengeId: string): Promise<string | null> {
+  const res = await docClient.send(
+    new GetCommand({
+      TableName: tableName(TABLE),
+      Key: { pk: `CHAL#${challengeId}`, sk: 'META' },
+      ProjectionExpression: '#cat',
+      ExpressionAttributeNames: { '#cat': 'category' },
+    }),
+  );
+  return typeof res.Item?.category === 'string' ? (res.Item.category as string) : null;
+}
+
+/** 유저 당일(KST) 인증 — gsi1 VFUSER#<userId> + certDate 필터 (todayQuestDelta용, 카테고리별 완료수) */
+export async function listUserTodayVerifications(
+  userId: string,
+  kstDate: string,
+): Promise<Record<string, unknown>[]> {
+  const items: Record<string, unknown>[] = [];
+  let lastKey: Record<string, unknown> | undefined;
+  do {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: tableName(TABLE),
+        IndexName: 'gsi1',
+        KeyConditionExpression: 'gsi1pk = :pk',
+        FilterExpression: 'certDate = :d',
+        ProjectionExpression: 'challengeCategory, #cat, #sc, certDate',
+        ExpressionAttributeNames: { '#cat': 'category', '#sc': 'score' },
+        ExpressionAttributeValues: { ':pk': `VFUSER#${userId}`, ':d': kstDate },
+        ExclusiveStartKey: lastKey,
+      }),
+    );
+    items.push(...((res.Items ?? []) as Record<string, unknown>[]));
+    lastKey = res.LastEvaluatedKey;
+  } while (lastKey);
+  return items;
 }

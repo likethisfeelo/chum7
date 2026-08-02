@@ -24,8 +24,10 @@ export interface WorldSummary {
 }
 
 export const worldApi = {
+  // 개인 여정(누적) 요약 — 인증 필요. 내 참여 레코드를 카테고리(8층)별로 누적.
+  // (구 /public/today/world-summary: 전체 공개·오늘 집계 — 유지되나 개인 화면은 아래 사용)
   getSummary: async (): Promise<WorldSummary> => {
-    const res = await apiClient.get('/public/today/world-summary');
+    const res = await apiClient.get('/g/world/summary');
     return res.data.data as WorldSummary;
   },
 };

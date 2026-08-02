@@ -528,13 +528,13 @@ export const ChallengeDetailPage = () => {
           transition={{ delay: 0.1 }}
           className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl p-6 border border-primary-200 mb-6"
         >
-          <h3 className="text-lg font-bold text-gray-900 mb-3">획득 뱃지</h3>
+          <h3 className="text-lg font-bold text-gray-900 mb-3">완주 보상</h3>
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-3xl shadow-sm">
               {challenge.badgeIcon || '🏆'}
             </div>
             <div>
-              <p className="font-bold text-gray-900">{challenge.badgeName}</p>
+              <p className="font-bold text-gray-900">{challenge.badgeName} <span className="text-xs font-medium text-gray-400">배지</span></p>
               <div className="flex items-center gap-1 mt-1">
                 <p className="text-sm text-gray-600">"나는 {challenge.identityKeyword} 사람"</p>
                 <span
@@ -546,6 +546,30 @@ export const ChallengeDetailPage = () => {
               </div>
             </div>
           </div>
+
+          {/* 완주 시 추가 지급되는 실물/온라인 상품 */}
+          {(challenge.rewardPhysical?.name || challenge.rewardOnline?.name) && (
+            <div className="mt-4 space-y-2">
+              {challenge.rewardPhysical?.name && (
+                <div className="flex items-center gap-2.5 bg-white/70 rounded-xl px-3 py-2.5 border border-amber-100">
+                  <span className="text-lg">📦</span>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-400 leading-none">실물 상품</p>
+                    <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">{challenge.rewardPhysical.name}</p>
+                  </div>
+                </div>
+              )}
+              {challenge.rewardOnline?.name && (
+                <div className="flex items-center gap-2.5 bg-white/70 rounded-xl px-3 py-2.5 border border-rose-100">
+                  <span className="text-lg">🎁</span>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-400 leading-none">온라인 상품(기프티콘 등)</p>
+                    <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">{challenge.rewardOnline.name}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </motion.div>
 
         <p className="text-sm text-gray-600 mb-3">
