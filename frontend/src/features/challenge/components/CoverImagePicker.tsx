@@ -79,7 +79,7 @@ export function CoverImagePicker({
             <>
               <span className="text-2xl">🖼️</span>
               <span className="text-sm mt-1 font-medium">대표 이미지 추가 (선택)</span>
-              <span className="text-[11px] mt-0.5 text-gray-400">없으면 카테고리 색 카드로 표시돼요</span>
+              <span className="text-[11px] mt-0.5 text-gray-400">권장 가로형 4:3 (예: 1200×900) · 없으면 색 카드</span>
             </>
           )}
         </button>

@@ -71,17 +71,11 @@ function BoldRecruitCard({
         whileTap={{ scale: 0.97 }}
         className="relative w-full text-left rounded-[28px] overflow-hidden min-h-[180px] shadow-lg shadow-black/5"
       >
-        {/* 우측 이미지 — 전체가 보이도록 contain(아래 정렬) + 블러 배경으로 여백을 자연스럽게 채움 */}
+        {/* 우측 이미지 — 여백 없이 꽉 채움. 세로는 아래 정렬(위만 잘림), 가로는 가운데 기준 크롭 */}
         <div className="absolute inset-y-0 right-0 w-[54%] overflow-hidden">
-          <img
-            src={cover}
-            alt=""
-            aria-hidden
-            className="absolute inset-0 w-full h-full object-cover scale-125 blur-lg opacity-50"
-          />
-          <img src={cover} alt="" className="relative z-[1] w-full h-full object-contain object-bottom" />
+          <img src={cover} alt="" className="w-full h-full object-cover object-bottom" />
           {/* 종이 → 사진 seam 페이드 */}
-          <div className="absolute inset-y-0 left-0 w-1/2 z-[2]" style={{ background: SEAM_GRADIENT }} />
+          <div className="absolute inset-y-0 left-0 w-1/2 z-[1]" style={{ background: SEAM_GRADIENT }} />
         </div>
         {/* 텍스트 */}
         <div className="relative z-10 p-5 w-[58%]">
