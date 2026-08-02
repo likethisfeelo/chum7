@@ -536,7 +536,7 @@ export const ChallengeDetailPage = () => {
             <div>
               <p className="font-bold text-gray-900">{challenge.badgeName} <span className="text-xs font-medium text-gray-400">배지</span></p>
               <div className="flex items-center gap-1 mt-1">
-                <p className="text-sm text-gray-600">"나는 {challenge.identityKeyword} 사람"</p>
+                <p className="text-sm text-gray-600">"나는 {challenge.identityKeyword}이다"</p>
                 <span
                   title="챌린지를 완주하면 이 정체성 키워드를 가진 사람이 됩니다"
                   className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] cursor-help"
