@@ -95,7 +95,7 @@ export async function listChallengeParticipations(challengeId: string): Promise<
 export async function addParticipationScores(
   challengeId: string,
   userId: string,
-  deltas: { cheerScore?: number; thankScore?: number },
+  deltas: { cheerScore?: number; thankScore?: number; cheerCount?: number },
   nowIso: string,
 ): Promise<void> {
   const adds: string[] = [];
@@ -107,6 +107,10 @@ export async function addParticipationScores(
   if (deltas.thankScore) {
     adds.push('thankScore :ts');
     values[':ts'] = deltas.thankScore;
+  }
+  if (deltas.cheerCount) {
+    adds.push('cheerCount :cc');
+    values[':cc'] = deltas.cheerCount;
   }
   if (adds.length === 0) return;
   try {

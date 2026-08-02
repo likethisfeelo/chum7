@@ -25,6 +25,8 @@ import { getChallenge } from '../repo/challenges';
 import { effectiveLifecycleOf } from '../domain/challenge-state';
 import { addParticipationScores, findMyParticipationByUcId, listChallengeParticipations, updateParticipationFields } from '../repo/participations';
 import { computeScoreDeltas } from '../domain/score-rules';
+import { buildCheerItems, computeCheerSchedule, randomAlias } from '../domain/auto-cheer';
+import { putCheerRecords } from '../repo/cheer-records';
 import { putVerification, verificationKeys } from '../repo/verifications';
 import { listQuests } from '../repo/quests';
 
@@ -383,9 +385,62 @@ verificationRoutes.post('/', async (c) => {
           addParticipationScores(challengeId, d.userId, { cheerScore: d.cheerScore, thankScore: d.thankScore }, nowIso),
         ),
       );
+
+      // ── 조기완료 자동응원 레코드 생성 (레거시 createAutoCheer) ──
+      // 미완료 팀원 각각에게 응원 레코드 생성. 즉시분은 cheer.delivered 발행(→ 푸시),
+      // 예약분은 SCHED#pending으로 저장되어 기존 cheer-scheduler가 발송·감사점수를 처리한다.
+      if (isEarlyCompletion) {
+        const incompleteMembers = activeMembers.filter(
+          (m) => String(m.userId) !== userId && !completedUserIds.has(String(m.userId)),
+        );
+        if (incompleteMembers.length > 0) {
+          const results = await Promise.allSettled(
+            incompleteMembers.map(async (member) => {
+              const memberTarget24 = member.personalTarget?.time24 || challengeTargetTime24;
+              const memberTimezone = member.personalTarget?.timezone || timezone;
+              const schedule = computeCheerSchedule({
+                memberTarget24,
+                verificationDate,
+                timezone: memberTimezone,
+                delta: delta || 0,
+                nowIso,
+              });
+              const cheerId = randomUUID();
+              const { meta, sentProjection } = buildCheerItems({
+                cheerId,
+                senderId: userId,
+                receiverId: String(member.userId),
+                challengeId,
+                verificationId,
+                day: input.day,
+                delta: delta || 0,
+                senderAlias: randomAlias(),
+                schedule,
+                nowIso,
+              });
+              await putCheerRecords(meta, sentProjection);
+              if (schedule.isImmediate) {
+                await publishEvent('cheer.delivered', {
+                  cheerId,
+                  senderId: userId,
+                  receiverId: String(member.userId),
+                  challengeId,
+                  day: input.day,
+                });
+              }
+            }),
+          );
+          const created = results.filter((r) => r.status === 'fulfilled').length;
+          const failed = results.length - created;
+          if (failed > 0) console.error(`auto-cheer: ${failed}/${results.length} 생성 실패 (non-fatal)`);
+          if (created > 0) {
+            await addParticipationScores(challengeId, userId, { cheerCount: created }, nowIso);
+          }
+        }
+      }
     }
   } catch (err) {
-    console.error('cheer/thank scoring aggregation error (non-fatal):', err);
+    console.error('cheer/thank scoring + auto-cheer error (non-fatal):', err);
   }
 
   await publishEvent('verification.submitted', {
