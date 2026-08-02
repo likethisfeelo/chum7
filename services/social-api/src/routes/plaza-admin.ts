@@ -11,7 +11,17 @@ import { ok, fail, requireGroup } from '@chum7/api-kit';
 import { createAdminPlazaPostSchema, plazaAdminUploadUrlSchema } from '../schemas';
 import { resolvePrimaryHashtag } from '../domain/hashtags';
 import { sanitizePost, toCreatorAnimalIcon } from '../domain/plaza-view';
-import { buildPostKeys, getPost, putPost, setPostActive } from '../repo/plaza';
+import {
+  buildPostKeys,
+  deleteAdminPostIndex,
+  deletePostCompletely,
+  getPost,
+  listAdminPostIndex,
+  putAdminPostIndex,
+  putPost,
+  setAdminPostIndexActive,
+  setPostActive,
+} from '../repo/plaza';
 import { registerHashtag } from '../repo/hashtags';
 import {
   buildPlazaImageKey,
@@ -117,6 +127,18 @@ plazaAdminRoutes.post('/posts', async (c) => {
   };
 
   await putPost(post);
+  // 운영자 게시물 관리 인덱스 포인터 기록
+  await putAdminPostIndex({
+    plazaPostId,
+    createdAt: nowIso,
+    content: input.content,
+    imageUrl: post.imageUrl,
+    imageUrls,
+    challengeCategory: input.challengeCategory ?? null,
+    hashtag: primary,
+    isActive: true,
+    authorId: userId,
+  });
 
   // 해시태그 레지스트리 유지 (사용자 작성 경로와 동일 정책)
   for (const tag of all) {
@@ -131,11 +153,47 @@ plazaAdminRoutes.post('/posts', async (c) => {
   return ok(c, await toPublicPost(post), '마당에 게시되었습니다', 201);
 });
 
+// 운영자 게시물 목록 — 관리 인덱스에서 최신순. 이미지 URL 서명 후 반환.
+plazaAdminRoutes.get('/posts', async (c) => {
+  const items = await listAdminPostIndex(200);
+  const posts = await Promise.all(
+    items.map(async (it) => ({
+      plazaPostId: it.plazaPostId,
+      createdAt: it.createdAt,
+      content: it.content ?? null,
+      imageUrl: await toSignedImageUrl(it.imageUrl || null),
+      challengeCategory: it.challengeCategory ?? null,
+      hashtag: it.hashtag ?? null,
+      isActive: it.isActive !== false,
+    })),
+  );
+  return ok(c, { posts });
+});
+
 // 게시물 내리기 — isActive=false (피드/상세에서 제외)
 plazaAdminRoutes.patch('/posts/:plazaPostId/deactivate', async (c) => {
   const plazaPostId = c.req.param('plazaPostId');
   const existing = await getPost(plazaPostId);
   if (!existing) return fail(c, 404, 'POST_NOT_FOUND', '게시물을 찾을 수 없습니다');
   await setPostActive(plazaPostId, false);
+  await setAdminPostIndexActive(plazaPostId, false);
   return ok(c, { plazaPostId, isActive: false }, '게시물을 내렸습니다');
+});
+
+// 게시물 다시 노출 — isActive=true
+plazaAdminRoutes.patch('/posts/:plazaPostId/activate', async (c) => {
+  const plazaPostId = c.req.param('plazaPostId');
+  const existing = await getPost(plazaPostId);
+  if (!existing) return fail(c, 404, 'POST_NOT_FOUND', '게시물을 찾을 수 없습니다');
+  await setPostActive(plazaPostId, true);
+  await setAdminPostIndexActive(plazaPostId, true);
+  return ok(c, { plazaPostId, isActive: true }, '게시물을 다시 노출했습니다');
+});
+
+// 게시물 완전 삭제 — META·댓글·리액션·관리 인덱스까지 제거
+plazaAdminRoutes.delete('/posts/:plazaPostId', async (c) => {
+  const plazaPostId = c.req.param('plazaPostId');
+  await deletePostCompletely(plazaPostId);
+  await deleteAdminPostIndex(plazaPostId);
+  return ok(c, { plazaPostId, deleted: true }, '게시물을 삭제했습니다');
 });

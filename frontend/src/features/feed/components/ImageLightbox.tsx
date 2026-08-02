@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
+
+const SWIPE_THRESHOLD = 40;
 
 interface Props {
   images: string[];
@@ -16,12 +18,29 @@ interface Props {
 export function ImageLightbox({ images, content, startIndex = 0, onClose }: Props) {
   const count = images.length;
   const [idx, setIdx] = useState(() => Math.min(Math.max(startIndex, 0), Math.max(count - 1, 0)));
+  const touchStartX = useRef<number | null>(null);
+
+  const goPrev = () => setIdx((i) => (i - 1 + count) % count);
+  const goNext = () => setIdx((i) => (i + 1) % count);
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0]?.clientX ?? null;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const startX = touchStartX.current;
+    touchStartX.current = null;
+    if (startX == null || count <= 1) return;
+    const dx = (e.changedTouches[0]?.clientX ?? startX) - startX;
+    if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+    if (dx < 0) goNext();
+    else goPrev();
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
-      else if (count > 1 && e.key === 'ArrowRight') setIdx((i) => (i + 1) % count);
-      else if (count > 1 && e.key === 'ArrowLeft') setIdx((i) => (i - 1 + count) % count);
+      else if (count > 1 && e.key === 'ArrowRight') goNext();
+      else if (count > 1 && e.key === 'ArrowLeft') goPrev();
     };
     window.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
@@ -58,11 +77,16 @@ export function ImageLightbox({ images, content, startIndex = 0, onClose }: Prop
         </div>
       )}
 
-      {/* 이미지 — 화면에 맞춰 전체 표시 */}
-      <div className="flex flex-1 items-center justify-center overflow-hidden">
+      {/* 이미지 — 화면에 맞춰 전체 표시. 좌우 스와이프로 넘김 */}
+      <div
+        className="flex flex-1 items-center justify-center overflow-hidden"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         <img
           src={src}
           alt=""
+          draggable={false}
           className="max-h-full max-w-full select-none object-contain"
           onClick={(e) => e.stopPropagation()}
         />
@@ -73,7 +97,7 @@ export function ImageLightbox({ images, content, startIndex = 0, onClose }: Prop
         <>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); setIdx((i) => (i - 1 + count) % count); }}
+            onClick={(e) => { e.stopPropagation(); goPrev(); }}
             aria-label="이전 이미지"
             className="absolute left-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white/80 hover:bg-white/20 hover:text-white"
           >
@@ -81,7 +105,7 @@ export function ImageLightbox({ images, content, startIndex = 0, onClose }: Prop
           </button>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); setIdx((i) => (i + 1) % count); }}
+            onClick={(e) => { e.stopPropagation(); goNext(); }}
             aria-label="다음 이미지"
             className="absolute right-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white/80 hover:bg-white/20 hover:text-white"
           >
