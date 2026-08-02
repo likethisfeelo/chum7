@@ -65,6 +65,9 @@ export interface VerificationFeedItem {
   imageUrl: string | null;
   todayNote: string | null;
   createdAt: string | null;
+  // 본인 피드(getMyVerifications)에서만 채워짐 — 비공개/추가 인증 구분 배지용
+  isPublic?: boolean;
+  isExtra?: boolean;
 }
 
 export interface ChallengeFeedItem {
@@ -166,6 +169,15 @@ export const personalFeedApi = {
   ): Promise<{ items: VerificationFeedItem[]; nextToken: string | null }> => {
     const params = nextToken ? `?nextToken=${encodeURIComponent(nextToken)}` : '';
     const res = await apiClient.get(`/public/users/${userId}/verifications${params}`);
+    return res.data.data;
+  },
+
+  // 본인 프로필 피드 인증 — 비공개/추가 인증까지 전량 (인증 필요). 타인 조회는 getVerifications(공개만).
+  getMyVerifications: async (
+    nextToken?: string,
+  ): Promise<{ items: VerificationFeedItem[]; nextToken: string | null }> => {
+    const params = nextToken ? `?nextToken=${encodeURIComponent(nextToken)}` : '';
+    const res = await apiClient.get(`/c/verifications/me/profile-feed${params}`);
     return res.data.data;
   },
 
