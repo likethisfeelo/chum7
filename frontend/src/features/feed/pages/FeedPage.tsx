@@ -14,6 +14,8 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { SkeletonList } from '@/shared/components/Skeleton';
 
 import { PlazaPostCard } from '@/features/feed/components/PlazaPostCard';
+import { ImageLightbox } from '@/features/feed/components/ImageLightbox';
+import type { PlazaPost } from '@/features/feed/api/plazaApi';
 import { usePlazaFeed } from '@/features/feed/hooks/usePlazaFeed';
 import { usePlazaComments } from '@/features/feed/hooks/usePlazaComments';
 import { usePlazaReactions } from '@/features/feed/hooks/usePlazaReactions';
@@ -158,6 +160,16 @@ export const FeedPage = () => {
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   // 카테고리 행 펼침 여부 — 기본 접힘(전체), CATEGORY 토글로 펼침
   const [categoryOpen, setCategoryOpen] = useState(false);
+  // 게시물 상세 박스 / 이미지 라이트박스
+  const [detailPost, setDetailPost] = useState<PlazaPost | null>(null);
+  const [imagePost, setImagePost] = useState<PlazaPost | null>(null);
+  const lightboxImages = imagePost
+    ? imagePost.imageUrls?.length
+      ? imagePost.imageUrls
+      : imagePost.imageUrl
+        ? [imagePost.imageUrl]
+        : []
+    : [];
   // 카테고리 선택 시 해당 탭을 가운데로 스크롤 → 좌우 숨은 메뉴가 슬라이드되며 노출
   // (justify-end + overflow 조합은 시작쪽이 스크롤 불가한 flexbox 버그가 있어 수동 scrollTo 사용)
   const catRowRef = useRef<HTMLDivElement>(null);
@@ -216,6 +228,7 @@ export const FeedPage = () => {
   };
 
   const handleUserHashtagClick = (hashtag: string) => {
+    setDetailPost(null);
     setSelectedCategory(null);
     setSelectedHashtag((prev) => (prev === hashtag ? null : hashtag));
   };
@@ -399,6 +412,8 @@ export const FeedPage = () => {
                       onDismissRecommendation={(item) => { void reactions.dismiss(post.plazaPostId, item); }}
                       initialSaved={savedPostIds.has(post.plazaPostId)}
                       onUserHashtagClick={handleUserHashtagClick}
+                      onOpenDetail={(p) => setDetailPost(p)}
+                      onOpenImage={(p) => setImagePost(p)}
                     />
                   </div>
                 ))}
@@ -437,6 +452,58 @@ export const FeedPage = () => {
 
         </aside>
       </div>
+
+      {/* ── 게시물 상세 박스 ── */}
+      <AnimatePresence>
+        {detailPost && (
+          <motion.div
+            key="plaza-detail"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm md:items-center md:p-4"
+            onClick={() => setDetailPost(null)}
+          >
+            <motion.div
+              initial={{ y: 28, opacity: 0.5 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 28, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl md:max-w-lg md:rounded-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <PlazaPostCard
+                post={detailPost}
+                likeCount={reactions.countMap[detailPost.plazaPostId] ?? Number(detailPost.likeCount ?? 0)}
+                isReacting={Boolean(reactions.reactingIds[detailPost.plazaPostId])}
+                commentHook={commentHook}
+                recommendations={reactions.recommendationsByPost[detailPost.plazaPostId] ?? []}
+                onReact={() => { void reactions.react(detailPost); }}
+                onDismissRecommendation={(item) => { void reactions.dismiss(detailPost.plazaPostId, item); }}
+                initialSaved={savedPostIds.has(detailPost.plazaPostId)}
+                onUserHashtagClick={handleUserHashtagClick}
+                onOpenImage={(p) => setImagePost(p)}
+              />
+              <button
+                type="button"
+                onClick={() => setDetailPost(null)}
+                className="mb-3 mt-2 w-full rounded-xl bg-white/90 py-2.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-white"
+              >
+                닫기
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 이미지 라이트박스 ── */}
+      {imagePost && lightboxImages.length > 0 && (
+        <ImageLightbox
+          images={lightboxImages}
+          content={imagePost.content}
+          onClose={() => setImagePost(null)}
+        />
+      )}
     </div>
   );
 };

@@ -9,9 +9,20 @@
  *  리액션   pk=`POST#<id>` sk=`RCT#<userId>`
  *  추천 억제 pk=`REC#<userId>` sk=`DIS#<challengeId>` (TTL expiresAt)
  */
-import { DeleteCommand, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  BatchWriteCommand,
+  DeleteCommand,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 import { postPk, recommendationPk, TABLE } from './shared';
+
+/** 운영자 게시물 관리 인덱스 파티션 — 저비용 목록 조회용(피드 스캔 회피) */
+export const ADMIN_POSTS_PK = 'ADMINPOSTS';
+const adminPostSk = (plazaPostId: string) => `POST#${plazaPostId}`;
 
 export function feedGsi1Pk(postType: string): string {
   return `FEED#${postType}`;
@@ -60,6 +71,119 @@ export async function setPostActive(plazaPostId: string, isActive: boolean): Pro
       ExpressionAttributeValues: { ':active': isActive },
     }),
   );
+}
+
+// ── 운영자 게시물 관리 인덱스 ────────────────────────────────────────────
+// pk=ADMINPOSTS, sk=POST#<plazaPostId> 포인터 아이템으로 목록/상태/삭제를 저비용 처리.
+
+/** 운영자 게시물 포인터 upsert (작성 시) */
+export async function putAdminPostIndex(input: {
+  plazaPostId: string;
+  createdAt: string;
+  content?: string | null;
+  imageUrl?: string | null;
+  imageUrls?: string[] | null;
+  challengeCategory?: string | null;
+  hashtag?: string | null;
+  isActive: boolean;
+  authorId?: string | null;
+}): Promise<void> {
+  await docClient.send(
+    new PutCommand({
+      TableName: tableName(TABLE),
+      Item: {
+        pk: ADMIN_POSTS_PK,
+        sk: adminPostSk(input.plazaPostId),
+        plazaPostId: input.plazaPostId,
+        createdAt: input.createdAt,
+        content: input.content ?? null,
+        imageUrl: input.imageUrl ?? null,
+        imageUrls: input.imageUrls ?? null,
+        challengeCategory: input.challengeCategory ?? null,
+        hashtag: input.hashtag ?? null,
+        isActive: input.isActive,
+        authorId: input.authorId ?? null,
+      },
+    }),
+  );
+}
+
+/** 운영자 게시물 목록 — 포인터 파티션 Query 후 createdAt 최신순 정렬 */
+export async function listAdminPostIndex(limit = 200): Promise<Record<string, any>[]> {
+  const items: Record<string, any>[] = [];
+  let lastKey: Record<string, any> | undefined;
+  do {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: tableName(TABLE),
+        KeyConditionExpression: 'pk = :pk',
+        ExpressionAttributeValues: { ':pk': ADMIN_POSTS_PK },
+        ExclusiveStartKey: lastKey,
+      }),
+    );
+    items.push(...(res.Items ?? []));
+    lastKey = res.LastEvaluatedKey;
+  } while (lastKey && items.length < limit);
+  return items
+    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+    .slice(0, limit);
+}
+
+/** 포인터 isActive 동기화 */
+export async function setAdminPostIndexActive(plazaPostId: string, isActive: boolean): Promise<void> {
+  await docClient
+    .send(
+      new UpdateCommand({
+        TableName: tableName(TABLE),
+        Key: { pk: ADMIN_POSTS_PK, sk: adminPostSk(plazaPostId) },
+        UpdateExpression: 'SET isActive = :active',
+        ConditionExpression: 'attribute_exists(pk)',
+        ExpressionAttributeValues: { ':active': isActive },
+      }),
+    )
+    .catch((err: any) => {
+      if (err?.name !== 'ConditionalCheckFailedException') throw err;
+    });
+}
+
+/** 포인터 삭제 */
+export async function deleteAdminPostIndex(plazaPostId: string): Promise<void> {
+  await docClient.send(
+    new DeleteCommand({
+      TableName: tableName(TABLE),
+      Key: { pk: ADMIN_POSTS_PK, sk: adminPostSk(plazaPostId) },
+    }),
+  );
+}
+
+/** 게시물 완전 삭제 — pk=POST#<id> 하위(META·댓글·리액션·익명순번) 전량 BatchDelete */
+export async function deletePostCompletely(plazaPostId: string): Promise<void> {
+  let lastKey: Record<string, any> | undefined;
+  do {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: tableName(TABLE),
+        KeyConditionExpression: 'pk = :pk',
+        ExpressionAttributeValues: { ':pk': postPk(plazaPostId) },
+        ProjectionExpression: 'pk, sk',
+        ExclusiveStartKey: lastKey,
+      }),
+    );
+    const rows = res.Items ?? [];
+    for (let i = 0; i < rows.length; i += 25) {
+      const chunk = rows.slice(i, i + 25);
+      await docClient.send(
+        new BatchWriteCommand({
+          RequestItems: {
+            [tableName(TABLE)]: chunk.map((it) => ({
+              DeleteRequest: { Key: { pk: it.pk, sk: it.sk } },
+            })),
+          },
+        }),
+      );
+    }
+    lastKey = res.LastEvaluatedKey;
+  } while (lastKey);
 }
 
 export interface FeedPageResult {

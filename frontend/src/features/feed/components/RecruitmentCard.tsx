@@ -63,6 +63,7 @@ interface Props {
   onDismissRecommendation: (item: Recommendation) => void;
   bookmarkButton?: React.ReactNode;
   onHashtagClick?: (slug: string) => void;
+  onOpenImage?: (post: PlazaPost) => void;
 }
 
 export function RecruitmentCard({
@@ -76,6 +77,7 @@ export function RecruitmentCard({
   onDismissRecommendation,
   bookmarkButton,
   onHashtagClick,
+  onOpenImage,
 }: Props) {
   const state = commentHook.getState(post.plazaPostId);
   const isUrgent = (post.daysUntilClose ?? Infinity) <= 7;
@@ -89,9 +91,17 @@ export function RecruitmentCard({
   return (
     <article className="rounded-2xl overflow-hidden glass-card">
 
-      {/* 미디어 — 4:5 비율, 엣지-투-엣지 */}
+      {/* 미디어 — 4:5 비율, 엣지-투-엣지. 이미지 클릭 시 라이트박스 */}
       {hasMedia && (
-        <div className="relative">
+        <div
+          className={`relative ${!isVideo && onOpenImage ? 'cursor-zoom-in' : ''}`}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('button')) return;
+            if (isVideo || !onOpenImage) return;
+            e.stopPropagation();
+            onOpenImage(post);
+          }}
+        >
           {isVideo ? (
             <FeedVideo src={resolveMediaUrl(post.imageUrl!)} />
           ) : (

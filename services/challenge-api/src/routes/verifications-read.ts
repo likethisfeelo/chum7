@@ -147,6 +147,42 @@ function matchesExtraFilter(v: VerificationItem, isExtra?: string) {
   return true;
 }
 
+// 내 프로필 피드 인증 목록 — 본인 전체(비공개·추가 인증 포함).
+//  타인 조회는 무인증 /public/users/:userId/verifications (공개 인증만) 로 분리돼 있으며,
+//  본인은 인증된 이 엔드포인트로 자기 인증을 전부 본다. (public-users 응답 형태와 동일 + isPublic/isExtra 플래그)
+verificationReadRoutes.get('/me/profile-feed', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const limit = Math.min(Math.max(Number(c.req.query('limit') || 20), 1), 50);
+
+  let startKey: Record<string, any> | undefined;
+  try {
+    startKey = parseNextToken(c.req.query('nextToken'));
+  } catch {
+    return fail(c, 400, 'INVALID_NEXT_TOKEN', 'nextToken 형식이 올바르지 않습니다');
+  }
+
+  // gsi1 VFUSER#<userId> Query 최신순 — 필터 없이 본인 인증 전량
+  const result = await listMyVerifications(userId, limit, startKey);
+  const items = await Promise.all(
+    result.items.map(async (v) => ({
+      verificationId: v.verificationId as string,
+      challengeId: (v.challengeId as string) ?? null,
+      challengeTitle: (v.challengeTitle as string) ?? null,
+      challengeCategory: (v.challengeCategory as string) ?? null,
+      day: typeof v.day === 'number' ? v.day : null,
+      score: typeof v.score === 'number' ? v.score : 0,
+      verificationType: (v.verificationType as string) ?? 'text',
+      imageUrl: await toRenderableMediaUrl(v.imageUrl as string | null),
+      todayNote: (v.todayNote as string) ?? null,
+      createdAt: (v.createdAt as string) ?? null,
+      isPublic: v.isPublic === 'true' || v.isPublic === true,
+      isExtra: v.isExtra === true,
+    })),
+  );
+
+  return ok(c, { items, nextToken: toNextToken(result.lastKey) });
+});
+
 // 인증 목록 (레거시 GET /verifications — mine / public 모드. Scan 모드는 풀스캔 금지로 mine 대체)
 verificationReadRoutes.get('/', async (c) => {
   const { userId } = c.get('authUser')!;

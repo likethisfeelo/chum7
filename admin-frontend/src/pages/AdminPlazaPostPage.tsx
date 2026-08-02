@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 
 // challenge-api CHALLENGE_CATEGORIES / social-api interest-area 라벨맵과 동일한 8종
@@ -17,14 +17,34 @@ const CATEGORIES = [
 
 const EMPTY_FORM = { content: '', title: '', imageUrl: '', category: '', hashtag: '' };
 
-type CreatedPost = { plazaPostId: string; createdAt?: string };
+type AdminPost = {
+  plazaPostId: string;
+  createdAt?: string;
+  content?: string | null;
+  imageUrl?: string | null;
+  challengeCategory?: string | null;
+  hashtag?: string | null;
+  isActive: boolean;
+};
+
+const CATEGORY_LABEL = new Map<string, string>(CATEGORIES.map((c) => [c.slug, c.label]));
 
 export const AdminPlazaPostPage = () => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [created, setCreated] = useState<CreatedPost | null>(null);
+
+  const qc = useQueryClient();
+  const invalidateList = () => qc.invalidateQueries({ queryKey: ['admin-plaza-posts'] });
+
+  const { data: posts = [], isLoading: listLoading, isError: listError } = useQuery({
+    queryKey: ['admin-plaza-posts'],
+    queryFn: async () => {
+      const res = await apiClient.get('/s/plaza-admin/posts');
+      return res.data.data.posts as AdminPost[];
+    },
+  });
 
   const createMutation = useMutation({
     mutationFn: async (body: typeof EMPTY_FORM) => {
@@ -34,28 +54,40 @@ export const AdminPlazaPostPage = () => {
       if (body.category) payload.challengeCategory = body.category;
       if (body.hashtag) payload.hashtag = body.hashtag;
       const res = await apiClient.post('/s/plaza-admin/posts', payload);
-      return res.data.data as CreatedPost;
+      return res.data.data as AdminPost;
     },
-    onSuccess: (post) => {
+    onSuccess: () => {
       setForm(EMPTY_FORM);
       setFormError('');
-      setCreated(post);
       setSuccessMsg('마당에 게시되었습니다.');
       setTimeout(() => setSuccessMsg(''), 3000);
+      invalidateList();
     },
     onError: () => setFormError('게시에 실패했습니다. 권한(admins/operators)과 입력값을 확인하세요.'),
   });
 
-  const deactivateMutation = useMutation({
-    mutationFn: async (plazaPostId: string) => {
-      await apiClient.patch(`/s/plaza-admin/posts/${plazaPostId}/deactivate`);
+  const toggleMutation = useMutation({
+    mutationFn: async ({ plazaPostId, next }: { plazaPostId: string; next: boolean }) => {
+      await apiClient.patch(`/s/plaza-admin/posts/${plazaPostId}/${next ? 'activate' : 'deactivate'}`);
     },
     onSuccess: () => {
-      setCreated(null);
-      setSuccessMsg('게시물을 내렸습니다.');
+      setSuccessMsg('노출 상태를 변경했습니다.');
       setTimeout(() => setSuccessMsg(''), 3000);
+      invalidateList();
     },
-    onError: () => setFormError('게시물 내리기에 실패했습니다.'),
+    onError: () => setFormError('노출 상태 변경에 실패했습니다.'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (plazaPostId: string) => {
+      await apiClient.delete(`/s/plaza-admin/posts/${plazaPostId}`);
+    },
+    onSuccess: () => {
+      setSuccessMsg('게시물을 삭제했습니다.');
+      setTimeout(() => setSuccessMsg(''), 3000);
+      invalidateList();
+    },
+    onError: () => setFormError('삭제에 실패했습니다.'),
   });
 
   // 파일 선택 → presigned PUT 로 S3 업로드 → imageUrl 에 CloudFront URL 반영
@@ -110,20 +142,6 @@ export const AdminPlazaPostPage = () => {
           운영자 명의로 마당(광장) 피드에 게시물을 올립니다. 게시물에는 <b>운영자</b> 배지가 표시됩니다.
         </p>
       </div>
-
-      {created && (
-        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <p className="text-sm font-semibold text-blue-800">방금 게시한 글</p>
-          <p className="text-xs text-blue-600 mt-1 break-all">ID: {created.plazaPostId}</p>
-          <button
-            onClick={() => deactivateMutation.mutate(created.plazaPostId)}
-            disabled={deactivateMutation.isPending}
-            className="mt-3 py-1.5 px-3 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-500 disabled:opacity-50"
-          >
-            {deactivateMutation.isPending ? '내리는 중…' : '이 게시물 내리기'}
-          </button>
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
         <div>
@@ -226,6 +244,89 @@ export const AdminPlazaPostPage = () => {
           {createMutation.isPending ? '게시 중...' : '마당에 게시'}
         </button>
       </form>
+
+      {/* 게시물 관리 */}
+      <div className="mt-8">
+        <h2 className="text-base font-semibold text-gray-800 mb-3">게시한 마당 글 관리</h2>
+
+        {listLoading && <p className="text-sm text-gray-500">불러오는 중...</p>}
+        {listError && <p className="text-sm text-red-500">목록을 불러오지 못했습니다.</p>}
+        {!listLoading && posts.length === 0 && (
+          <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-6 text-center text-sm text-gray-400">
+            아직 게시한 마당 글이 없습니다.
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {posts.map((post) => {
+            const busy =
+              (toggleMutation.isPending && toggleMutation.variables?.plazaPostId === post.plazaPostId) ||
+              (deleteMutation.isPending && deleteMutation.variables === post.plazaPostId);
+            return (
+              <div
+                key={post.plazaPostId}
+                className={`bg-white border rounded-xl p-4 flex gap-3 ${
+                  post.isActive ? 'border-gray-200' : 'border-gray-200 opacity-60'
+                }`}
+              >
+                {post.imageUrl && (
+                  <img
+                    src={post.imageUrl}
+                    alt=""
+                    className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
+                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                        post.isActive ? 'text-green-700 bg-green-100' : 'text-gray-500 bg-gray-100'
+                      }`}
+                    >
+                      {post.isActive ? '노출 중' : '숨김'}
+                    </span>
+                    {post.challengeCategory && (
+                      <span className="text-[11px] text-gray-500">
+                        {CATEGORY_LABEL.get(post.challengeCategory) ?? post.challengeCategory}
+                      </span>
+                    )}
+                    {post.hashtag && <span className="text-[11px] text-primary-600">#{post.hashtag}</span>}
+                  </div>
+                  <p className="text-sm text-gray-800 line-clamp-2 whitespace-pre-wrap">
+                    {post.content || <span className="text-gray-400">(본문 없음)</span>}
+                  </p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {post.createdAt ? new Date(post.createdAt).toLocaleString('ko-KR') : ''}
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() =>
+                        toggleMutation.mutate({ plazaPostId: post.plazaPostId, next: !post.isActive })
+                      }
+                      disabled={busy}
+                      className="py-1 px-2.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      {post.isActive ? '숨기기' : '다시 노출'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('이 게시물을 완전히 삭제할까요? 되돌릴 수 없습니다.')) {
+                          deleteMutation.mutate(post.plazaPostId);
+                        }
+                      }}
+                      disabled={busy}
+                      className="py-1 px-2.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-500 disabled:opacity-50"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 };

@@ -213,7 +213,7 @@ function VerificationCard({ item }: { item: VerificationFeedItem }) {
   );
 }
 
-function VerificationsTab({ userId }: { userId: string }) {
+function VerificationsTab({ userId, isOwn = false }: { userId: string; isOwn?: boolean }) {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [selectedItem, setSelectedItem] = useState<VerificationFeedItem | null>(null);
 
@@ -224,10 +224,13 @@ function VerificationsTab({ userId }: { userId: string }) {
     isFetchingNextPage,
     isLoading,
   } = useInfiniteQuery({
-    queryKey: ['personal-feed-verifications', userId],
-    enabled: Boolean(userId),
+    // 본인은 비공개·추가 인증까지 전량(인증된 엔드포인트), 타인은 공개 인증만
+    queryKey: ['personal-feed-verifications', isOwn ? 'me' : userId],
+    enabled: isOwn || Boolean(userId),
     queryFn: ({ pageParam }) =>
-      personalFeedApi.getVerifications(userId, pageParam as string | undefined),
+      isOwn
+        ? personalFeedApi.getMyVerifications(pageParam as string | undefined)
+        : personalFeedApi.getVerifications(userId, pageParam as string | undefined),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextToken ?? undefined,
   });
@@ -286,6 +289,12 @@ function VerificationsTab({ userId }: { userId: string }) {
               <div className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
                 D{item.day ?? '-'}
               </div>
+              {/* 본인 피드 전용 — 비공개/추가 인증 표시 (타인에게는 애초에 안 보임) */}
+              {isOwn && item.isPublic === false && (
+                <div className="absolute top-1.5 right-1.5 bg-gray-900/70 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                  {item.isExtra ? '➕ 추가' : '🔒 비공개'}
+                </div>
+              )}
               {/* 점수 배지 */}
               {item.score > 0 && (
                 <div className="absolute bottom-1.5 right-1.5 bg-primary-500/90 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
@@ -1107,7 +1116,7 @@ export function PersonalFeedPage() {
       <div className="p-4">
         {activeTab === 'verifications' && (
           <LayerGate layer={currentLayer} minLayer={isOwn ? 0 : 3}>
-            <VerificationsTab userId={publicUserId} />
+            <VerificationsTab userId={publicUserId} isOwn={isOwn} />
           </LayerGate>
         )}
         {activeTab === 'challenges' && (
