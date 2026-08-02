@@ -19,6 +19,10 @@ interface Props {
   onDismissRecommendation: (item: Recommendation) => void;
   initialSaved?: boolean;
   onUserHashtagClick?: (hashtag: string) => void;
+  /** 카드(본문 영역) 클릭 시 상세 박스 열기 */
+  onOpenDetail?: (post: PlazaPost) => void;
+  /** 이미지 클릭 시 라이트박스 열기 */
+  onOpenImage?: (post: PlazaPost) => void;
 }
 
 export function BookmarkButton({
@@ -78,7 +82,7 @@ export function BookmarkButton({
   );
 }
 
-export function PlazaPostCard({ post, initialSaved, onUserHashtagClick, ...rest }: Props) {
+export function PlazaPostCard({ post, initialSaved, onUserHashtagClick, onOpenDetail, onOpenImage, ...rest }: Props) {
   const commentCount = rest.commentHook.getState(post.plazaPostId).count;
 
   const bookmarkButton = (
@@ -96,6 +100,15 @@ export function PlazaPostCard({ post, initialSaved, onUserHashtagClick, ...rest 
     onDismissRecommendation: rest.onDismissRecommendation,
     bookmarkButton,
     onUserHashtagClick,
+    onOpenImage,
+  };
+
+  // 카드 클릭 → 상세 박스. 단, 버튼/링크/입력(좋아요·댓글·북마크·해시태그·이미지 등)은 제외.
+  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onOpenDetail) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, textarea, video, [data-no-detail]')) return;
+    onOpenDetail(post);
   };
 
   return (
@@ -104,7 +117,10 @@ export function PlazaPostCard({ post, initialSaved, onUserHashtagClick, ...rest 
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -5, transition: { duration: 0.18, ease: 'easeOut' } }}
-      className="relative rounded-2xl transition-shadow duration-300 hover:shadow-xl hover:shadow-black/[0.06]"
+      onClick={handleCardClick}
+      className={`relative rounded-2xl transition-shadow duration-300 hover:shadow-xl hover:shadow-black/[0.06] ${
+        onOpenDetail ? 'cursor-pointer' : ''
+      }`}
     >
       {post.isOfficial && (
         <span className="absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm">

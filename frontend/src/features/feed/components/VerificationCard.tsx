@@ -82,6 +82,7 @@ interface Props {
   onDismissRecommendation: (item: Recommendation) => void;
   bookmarkButton?: React.ReactNode;
   onUserHashtagClick?: (hashtag: string) => void;
+  onOpenImage?: (post: PlazaPost) => void;
 }
 
 export function VerificationCard({
@@ -94,6 +95,7 @@ export function VerificationCard({
   onDismissRecommendation,
   bookmarkButton,
   onUserHashtagClick,
+  onOpenImage,
 }: Props) {
   const navigate = useNavigate();
   const state = commentHook.getState(post.plazaPostId);
@@ -104,9 +106,17 @@ export function VerificationCard({
   return (
     <article className="rounded-2xl overflow-hidden glass-card">
 
-      {/* 미디어 — 4:5 비율, 다중 이미지면 슬라이드 */}
+      {/* 미디어 — 4:5 비율, 다중 이미지면 슬라이드. 이미지 클릭 시 라이트박스 */}
       {hasMedia && (
-        <div className="relative">
+        <div
+          className={`relative ${!isVideo && onOpenImage ? 'cursor-zoom-in' : ''}`}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('button')) return; // 북마크 등
+            if (isVideo || !onOpenImage) return;
+            e.stopPropagation();
+            onOpenImage(post);
+          }}
+        >
           {isVideo ? (
             <FeedVideo src={resolveMediaUrl(images[0]!)} />
           ) : images.length > 1 ? (
