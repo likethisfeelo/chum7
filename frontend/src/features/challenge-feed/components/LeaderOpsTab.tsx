@@ -267,21 +267,35 @@ const VERIFICATION_TYPE_OPTIONS: Array<{ key: 'image' | 'video' | 'link' | 'text
 ];
 
 // 공통 리더퀘스트 등록 — 리더가 전체 참여자 공통 퀘스트를 운영탭에서 추가.
-function LeaderQuestCreateSection({ challengeId }: { challengeId: string }) {
+function LeaderQuestCreateSection({
+  challengeId,
+  challengeType,
+  allowedVerificationTypes,
+}: {
+  challengeId: string;
+  challengeType: string;
+  allowedVerificationTypes?: Array<'image' | 'video' | 'link' | 'text'>;
+}) {
   const queryClient = useQueryClient();
+  // 챌린지가 허용한 인증 방식만 리더퀘스트에 쓸 수 있다 (나머지는 비활성).
+  const allowedList = allowedVerificationTypes && allowedVerificationTypes.length
+    ? allowedVerificationTypes
+    : (['image', 'text', 'link', 'video'] as const);
+  const allowedSet = new Set<'image' | 'video' | 'link' | 'text'>(allowedList);
+  // 리더 퀘스트를 진행하지 않는 챌린지(개인 전용)면 등록 UI를 막는다.
+  const notLeaderChallenge = challengeType === 'personal_only';
+
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [types, setTypes] = useState<Set<'image' | 'video' | 'link' | 'text'>>(
-    new Set(['image', 'text', 'link', 'video']),
-  );
+  const [types, setTypes] = useState<Set<'image' | 'video' | 'link' | 'text'>>(new Set(allowedSet));
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [targetTime, setTargetTime] = useState('');
 
   const reset = () => {
     setTitle('');
     setDescription('');
-    setTypes(new Set(['image', 'text', 'link', 'video']));
+    setTypes(new Set(allowedSet));
     setApprovalRequired(false);
     setTargetTime('');
   };
@@ -336,9 +350,15 @@ function LeaderQuestCreateSection({ challengeId }: { challengeId: string }) {
           <path d="M6 9l6 6 6-6" />
         </svg>
       </button>
-      <p className="text-[11px] text-gray-400 mt-1">전체 참여자가 공통으로 수행하는 리더퀘스트를 추가합니다.</p>
+      {notLeaderChallenge ? (
+        <p className="text-sm text-gray-500 mt-2">
+          이 챌린지는 <b>리더 퀘스트를 진행하지 않아요</b> (개인 퀘스트 전용). 리더퀘스트 등록이 필요 없어요.
+        </p>
+      ) : (
+        <p className="text-[11px] text-gray-400 mt-1">전체 참여자가 공통으로 수행하는 리더퀘스트를 추가합니다.</p>
+      )}
 
-      {open && (
+      {!notLeaderChallenge && open && (
         <div className="mt-4 space-y-3">
           <div>
             <label className="text-xs font-semibold text-gray-600">퀘스트 제목</label>
@@ -364,20 +384,26 @@ function LeaderQuestCreateSection({ challengeId }: { challengeId: string }) {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-gray-600">허용 인증 방식</label>
-            <div className="mt-1 flex flex-wrap gap-1.5">
+            <label className="text-xs font-semibold text-gray-600">인증 방식</label>
+            <p className="text-[11px] text-gray-400 mt-0.5">챌린지에서 허용한 방식만 선택할 수 있어요.</p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
               {VERIFICATION_TYPE_OPTIONS.map((opt) => {
-                const active = types.has(opt.key);
+                const isAllowed = allowedSet.has(opt.key);
+                const active = isAllowed && types.has(opt.key);
                 return (
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => toggleType(opt.key)}
+                    disabled={!isAllowed}
+                    onClick={() => isAllowed && toggleType(opt.key)}
+                    title={isAllowed ? undefined : '이 챌린지에서 허용하지 않은 인증 방식이에요'}
                     className={[
                       'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
-                      active
-                        ? 'bg-primary-50 border-primary-300 text-primary-700'
-                        : 'bg-white border-gray-200 text-gray-500',
+                      !isAllowed
+                        ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed line-through'
+                        : active
+                          ? 'bg-primary-50 border-primary-300 text-primary-700'
+                          : 'bg-white border-gray-200 text-gray-500',
                     ].join(' ')}
                   >
                     {opt.label}
@@ -428,7 +454,15 @@ const PROPOSAL_STATUS_META: Record<string, { label: string; cls: string }> = {
 };
 
 // 개인 퀘스트 제안 심사 섹션 — 기본 자동승인이지만 수동검토 챌린지·재검토용.
-function ProposalReviewSection({ challengeId }: { challengeId: string }) {
+function ProposalReviewSection({
+  challengeId,
+  challengeType,
+  personalQuestEnabled,
+}: {
+  challengeId: string;
+  challengeType: string;
+  personalQuestEnabled?: boolean;
+}) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<'pending' | 'all'>('pending');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -470,6 +504,19 @@ function ProposalReviewSection({ challengeId }: { challengeId: string }) {
   });
 
   const proposals = data?.proposals ?? [];
+
+  // 개인 퀘스트를 진행하지 않는 챌린지(리더 전용 or 비활성)면 심사 UI 대신 안내.
+  const noPersonalQuest = challengeType === 'leader_only' || personalQuestEnabled === false;
+  if (noPersonalQuest) {
+    return (
+      <section className="glass-card rounded-2xl p-5">
+        <h3 className="font-bold text-gray-900">📝 개인 퀘스트 제안 심사</h3>
+        <p className="text-sm text-gray-500 mt-2">
+          이 챌린지는 <b>개인 퀘스트를 진행하지 않아요</b>. 심사할 제안이 없습니다.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section className="glass-card rounded-2xl p-5">
@@ -716,16 +763,34 @@ function OpsPostsSection({ challengeId }: { challengeId: string }) {
   );
 }
 
-export function LeaderOpsTab({ challengeId }: { challengeId: string }) {
+export function LeaderOpsTab({
+  challengeId,
+  challengeType = 'leader_personal',
+  allowedVerificationTypes,
+  personalQuestEnabled,
+}: {
+  challengeId: string;
+  challengeType?: string;
+  allowedVerificationTypes?: Array<'image' | 'video' | 'link' | 'text'>;
+  personalQuestEnabled?: boolean;
+}) {
   const navigate = useNavigate();
 
   return (
     <div className="space-y-4">
       <ChallengeControlCard challengeId={challengeId} />
       <BriefingSection challengeId={challengeId} />
-      <LeaderQuestCreateSection challengeId={challengeId} />
+      <LeaderQuestCreateSection
+        challengeId={challengeId}
+        challengeType={challengeType}
+        allowedVerificationTypes={allowedVerificationTypes}
+      />
       <ParticipantsSection challengeId={challengeId} />
-      <ProposalReviewSection challengeId={challengeId} />
+      <ProposalReviewSection
+        challengeId={challengeId}
+        challengeType={challengeType}
+        personalQuestEnabled={personalQuestEnabled}
+      />
       <OpsPostsSection challengeId={challengeId} />
 
       {/* 퀘스트 심사 바로가기 */}

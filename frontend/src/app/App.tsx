@@ -41,6 +41,7 @@ import { MythologyOnboardingPage } from '@/features/character/pages/MythologyOnb
 import { CharacterViewerPage } from '@/features/character/pages/CharacterViewerPage';
 import { HashtagPage } from '@/features/hashtag/pages/HashtagPage';
 import { PushPermissionSheet } from '@/features/notifications/components/PushPermissionSheet';
+import { ChallengeRecapSheet } from '@/features/challenge/components/ChallengeRecapSheet';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -377,6 +378,8 @@ export default function App() {
       </Routes>
       {/* 푸시 권한 요청 시트 — 첫 응원 예약 완료 직후 전역 노출 (§4.10) */}
       <PushPermissionSheet />
+      {/* 챌린지 종료 리캡 — 최근 종료·미열람 챌린지 자동 1회 노출 */}
+      <ChallengeRecapSheet />
     </BrowserRouter>
   );
 }

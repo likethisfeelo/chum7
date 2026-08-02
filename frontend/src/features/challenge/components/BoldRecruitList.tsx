@@ -8,7 +8,7 @@ import { SLUG_TO_HEX, SLUG_TO_EMOJI, SLUG_TO_LABEL } from '../constants/categori
 // 이미지 영역 전체에 길게 깔아 경계선이 안 보이도록 완만하게 페이드.
 const PAPER = '#F4F0E7';
 const PAPER_FADE = 'rgba(244,240,231,0)';
-const SEAM_GRADIENT = `linear-gradient(95deg, ${PAPER} 0%, ${PAPER} 16%, ${PAPER_FADE} 64%)`;
+const SEAM_GRADIENT = `linear-gradient(95deg, ${PAPER} 0%, ${PAPER} 46%, ${PAPER_FADE} 80%)`;
 
 // 레퍼런스(Charmi) 스타일의 컬러풀 대형 모집 카드 + 스크롤 무브 인터랙션 + 탭 시 전체화면 상세 확장.
 // 색/이모지는 카테고리 상수 재사용(SLUG_TO_HEX/SLUG_TO_EMOJI).
@@ -46,9 +46,13 @@ function hasCompletionReward(c: BoldChallenge): boolean {
 function BoldRecruitCard({
   challenge,
   onOpen,
+  joined,
+  joinedLabel = '참여신청완료',
 }: {
   challenge: BoldChallenge;
   onOpen: (c: BoldChallenge) => void;
+  joined?: boolean;
+  joinedLabel?: string;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
@@ -75,9 +79,9 @@ function BoldRecruitCard({
         {/* 우측 이미지 — 여백 없이 꽉 채움. 세로는 아래 정렬(위만 잘림), 가로는 가운데 기준 크롭 */}
         <div className="absolute inset-y-0 right-0 w-[62%] overflow-hidden">
           <img src={cover} alt="" className="w-full h-full object-cover object-bottom" />
-          {/* 종이 → 사진 seam 페이드 (이미지 영역 전체에 길게 걸쳐 경계선 제거) */}
-          <div className="absolute inset-0 z-[1]" style={{ background: SEAM_GRADIENT }} />
         </div>
+        {/* seam 그라데이션 — 카드 전체에 덮어 이미지 컨테이너 경계선까지 파묻어 자연스럽게 페이드 */}
+        <div className="absolute inset-0 z-[1] pointer-events-none" style={{ background: SEAM_GRADIENT }} />
         {/* 텍스트 */}
         <div className="relative z-10 p-5 w-[56%]">
           <span className="inline-block text-[10px] font-semibold text-gray-500 bg-black/5 rounded-full px-2 py-0.5 mb-1.5">
@@ -88,6 +92,11 @@ function BoldRecruitCard({
             <p className="mt-1.5 text-gray-500 text-xs leading-snug line-clamp-2">{challenge.description}</p>
           )}
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            {joined && (
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 rounded-full px-2 py-0.5">
+                ✓ {joinedLabel}
+              </span>
+            )}
             <span className="text-[11px] font-semibold text-gray-700 bg-black/5 rounded-full px-2 py-0.5">
               {metricLabel(challenge)}
             </span>
@@ -139,6 +148,11 @@ function BoldRecruitCard({
           </p>
         )}
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {joined && (
+            <span className="text-[11px] font-bold text-emerald-800 bg-white rounded-full px-2.5 py-1">
+              ✓ {joinedLabel}
+            </span>
+          )}
           <span className="text-white text-[11px] font-semibold bg-white/25 rounded-full px-2.5 py-1">
             {SLUG_TO_LABEL[challenge.category] ?? challenge.category}
           </span>
@@ -161,10 +175,14 @@ function ChallengeQuickView({
   challenge,
   onClose,
   onViewDetail,
+  joined,
+  joinedLabel = '참여신청완료',
 }: {
   challenge: BoldChallenge;
   onClose: () => void;
   onViewDetail: (id: string) => void;
+  joined?: boolean;
+  joinedLabel?: string;
 }) {
   const hex = SLUG_TO_HEX[challenge.category] ?? '#6E7687';
   const emoji = SLUG_TO_EMOJI[challenge.category] ?? '✨';
@@ -321,7 +339,7 @@ function ChallengeQuickView({
             className="w-full py-4 rounded-2xl text-white font-bold text-base shadow-lg"
             style={{ backgroundColor: hex }}
           >
-            자세히 보고 참여하기 →
+            {joined ? `✓ ${joinedLabel} · 자세히 보기` : '자세히 보고 참여하기 →'}
           </button>
         </div>
       </motion.div>
@@ -333,17 +351,28 @@ function ChallengeQuickView({
 export function BoldRecruitList({
   challenges,
   onNavigate,
+  joinedIds,
+  joinedLabel = '참여신청완료',
 }: {
   challenges: BoldChallenge[];
   onNavigate: (id: string) => void;
+  joinedIds?: Set<string>;
+  joinedLabel?: string;
 }) {
   const [selected, setSelected] = useState<BoldChallenge | null>(null);
+  const isJoined = (id: string) => Boolean(joinedIds?.has(id));
 
   return (
     <>
       <div className="space-y-4">
         {challenges.map((c) => (
-          <BoldRecruitCard key={c.challengeId} challenge={c} onOpen={setSelected} />
+          <BoldRecruitCard
+            key={c.challengeId}
+            challenge={c}
+            onOpen={setSelected}
+            joined={isJoined(c.challengeId)}
+            joinedLabel={joinedLabel}
+          />
         ))}
       </div>
 
@@ -352,6 +381,8 @@ export function BoldRecruitList({
           <ChallengeQuickView
             key={selected.challengeId}
             challenge={selected}
+            joined={isJoined(selected.challengeId)}
+            joinedLabel={joinedLabel}
             onClose={() => setSelected(null)}
             onViewDetail={(id) => {
               setSelected(null);

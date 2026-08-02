@@ -1049,7 +1049,12 @@ export const ChallengeFeedPage = () => {
 
         {isCreator && mainTab === "ops" ? (
           <div className="p-4 lg:p-6 mx-auto w-full max-w-2xl">
-            <LeaderOpsTab challengeId={challengeId} />
+            <LeaderOpsTab
+              challengeId={challengeId}
+              challengeType={challengeType}
+              allowedVerificationTypes={challengeData?.allowedVerificationTypes}
+              personalQuestEnabled={challengeData?.personalQuestEnabled}
+            />
           </div>
         ) : (
         <div className="p-4 lg:p-6">

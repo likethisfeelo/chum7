@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { maybeOpenRecap, useRecapStore } from '@/features/challenge/recapStore';
 import { apiClient } from '@/lib/api-client';
 import { challengeApi, CreatedChallenge, ChallengeLifecycle } from '@/features/challenge/api/challengeApi';
 import { motion } from 'framer-motion';
@@ -490,6 +491,13 @@ export const MEPage = () => {
     }),
     [completedChallengesData],
   );
+
+  // 종료 리캡 자동 1회 노출 — 최근 종료·미열람 챌린지가 있으면 팝업
+  const openRecap = useRecapStore((s) => s.openRecap);
+  useEffect(() => {
+    const all = completedChallengesData?.challenges;
+    if (Array.isArray(all) && all.length) maybeOpenRecap(all);
+  }, [completedChallengesData]);
 
   // progress 배열 + verifications 테이블 이중 확인으로 오늘 인증 여부 판단
   // (혼합형 partial 쓰기 실패 또는 GSI 일관성 지연 시에도 정확하게 동작)
@@ -993,13 +1001,22 @@ export const MEPage = () => {
                           )}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
-                        className="w-full py-2.5 rounded-xl border border-primary-200 text-primary-700 bg-primary-50 text-sm font-medium hover:bg-primary-100 transition-colors"
-                      >
-                        챌린지 피드 →
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openRecap(challenge)}
+                          className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 bg-white text-sm font-medium hover:bg-gray-50 transition-colors"
+                        >
+                          🎞 리캡 보기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/challenge-feed/${challenge.challengeId || challenge.challenge?.challengeId}`)}
+                          className="flex-1 py-2.5 rounded-xl border border-primary-200 text-primary-700 bg-primary-50 text-sm font-medium hover:bg-primary-100 transition-colors"
+                        >
+                          챌린지 피드 →
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

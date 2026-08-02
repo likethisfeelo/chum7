@@ -630,6 +630,19 @@ export const ChallengeDetailPage = () => {
           {ctaLabelMap[lifecycle] ?? '챌린지 참여하기'}
         </Button>
 
+        {(alreadyJoined || isCreator) && (
+          <div className="mt-3">
+            <Button
+              fullWidth
+              size="lg"
+              variant="outline"
+              onClick={() => navigate(`/challenge-feed/${challengeId}`)}
+            >
+              챌린지 피드 바로가기 →
+            </Button>
+          </div>
+        )}
+
         <p className="text-xs text-gray-500 text-center mt-4">
           💡 {hasStarted
             ? `총 ${challenge.durationDays ?? 7}일간 진행돼요`
