@@ -89,6 +89,8 @@ export const submitVerificationSchema = z.object({
   questType: z.enum(['leader', 'personal']).optional(),
   questId: z.string().optional(),
   imageUrl: z.string().url().optional(),
+  // 사진 인증 다중 이미지 (최대 10) — 슬라이드 게시. imageUrl은 하위호환(첫 장).
+  imageUrls: z.array(z.string().url()).max(10).optional(),
   videoUrl: z.string().url().optional(),
   videoDurationSec: z.number().min(0).max(60).optional(),
   trimStartSec: z.number().min(0).max(60).optional(),
@@ -124,6 +126,7 @@ export const remedyVerificationSchema = z.object({
   originalDay: z.number().int().min(1).max(30),
   verificationType: z.enum(['image', 'text', 'link', 'video']).optional(),
   imageUrl: z.string().url().optional(),
+  imageUrls: z.array(z.string().url()).max(10).optional(),
   videoUrl: z.string().url().optional(),
   linkUrl: z.string().url().optional(),
   todayNote: z.string().max(500).optional(),

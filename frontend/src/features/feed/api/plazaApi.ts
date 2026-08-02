@@ -30,6 +30,7 @@ export interface PlazaPost {
   currentDay?: number;
   content?: string;
   imageUrl?: string;
+  imageUrls?: string[];
   createdAt: string;
   likeCount?: number;
   commentCount?: number;

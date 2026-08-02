@@ -40,14 +40,17 @@ function userTimezone(c: ApiContext, fallback?: string): string {
 verificationRoutes.post('/', async (c) => {
   const { userId } = c.get('authUser')!;
   const input = submitVerificationSchema.parse(await c.req.json().catch(() => ({})));
-  const verificationType = resolveVerificationType(input);
+  // 다중 이미지 정규화 (최대 10) — imageUrls 우선, 없으면 단일 imageUrl. primaryImage=첫 장(하위호환·타입판정용).
+  const imageUrls = input.imageUrls?.length ? input.imageUrls.slice(0, 10) : (input.imageUrl ? [input.imageUrl] : []);
+  const primaryImage = imageUrls[0] ?? null;
+  const verificationType = resolveVerificationType({ ...input, imageUrl: input.imageUrl || primaryImage || undefined });
 
   // ── 콘텐츠 검증 (레거시 승계) ──────────────────────────────────────────
-  if (verificationType === 'image' && !input.imageUrl) {
-    return fail(c, 400, 'MISSING_IMAGE_URL', '사진 인증에는 imageUrl이 필요합니다');
+  if (verificationType === 'image' && !primaryImage) {
+    return fail(c, 400, 'MISSING_IMAGE_URL', '사진 인증에는 이미지가 필요합니다');
   }
   if (verificationType === 'video') {
-    if (!input.videoUrl && !input.imageUrl) {
+    if (!input.videoUrl && !primaryImage) {
       return fail(c, 400, 'MISSING_VIDEO_URL', '영상 인증에는 videoUrl이 필요합니다');
     }
     if (input.videoDurationSec !== undefined && input.videoDurationSec > 60) {
@@ -64,7 +67,7 @@ verificationRoutes.post('/', async (c) => {
     return fail(c, 400, 'INVALID_LINK_URL', '링크는 https URL만 허용됩니다');
   }
   const hasTodayNote = Boolean(input.todayNote?.trim());
-  if (!hasTodayNote && !input.imageUrl && !input.videoUrl && !input.linkUrl) {
+  if (!hasTodayNote && !primaryImage && !input.videoUrl && !input.linkUrl) {
     return fail(c, 400, 'EMPTY_VERIFICATION_CONTENT', '텍스트, 이미지, 영상, 링크 중 하나 이상은 필요합니다');
   }
 
@@ -201,8 +204,9 @@ verificationRoutes.post('/', async (c) => {
     day: input.day,
     type: 'normal',
     verificationType,
-    imageUrl: input.imageUrl || null,
-    videoUrl: input.videoUrl || (verificationType === 'video' ? input.imageUrl || null : null),
+    imageUrl: primaryImage,
+    imageUrls: imageUrls.length ? imageUrls : null,
+    videoUrl: input.videoUrl || (verificationType === 'video' ? primaryImage : null),
     videoDurationSec: input.videoDurationSec ?? null,
     trimStartSec: input.trimStartSec ?? null,
     trimEndSec: input.trimEndSec ?? null,

@@ -230,6 +230,9 @@ export const InlineVerificationForm = ({
   const [selectedQuestType, setSelectedQuestType] = useState<'leader' | 'personal'>(defaultQuestType);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  // 사진 인증 다중 이미지 (최대 10). mediaFile/mediaPreview는 대표(첫 장)로 유지 — 기존 로직 호환.
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [cachedImageUrls, setCachedImageUrls] = useState<string[] | undefined>(undefined);
   const [videoDurationSec, setVideoDurationSec] = useState<number | null>(null);
   const [linkUrl, setLinkUrl] = useState("");
   const [formData, setFormData] = useState({
@@ -305,6 +308,8 @@ export const InlineVerificationForm = ({
     }
     setMediaFile(null);
     setMediaPreview(null);
+    setImageFiles([]);
+    setCachedImageUrls(undefined);
     setVideoDurationSec(null);
     setTrimStartSec(0);
     setTrimEndSec(0);
@@ -335,34 +340,55 @@ export const InlineVerificationForm = ({
   };
 
   const handleMediaSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+
+    // ── 사진 인증: 다중 선택(최대 10, 인스타 슬라이드) ──
+    if (selectedType === "image") {
+      const valid: File[] = [];
+      for (const f of files) {
+        if (!f.type.startsWith("image/")) {
+          toast.error("사진 인증에서는 이미지 파일만 업로드할 수 있어요.");
+          continue;
+        }
+        const lower = f.name.toLowerCase();
+        if (
+          f.type.includes("heic") || f.type.includes("heif") ||
+          lower.endsWith(".heic") || lower.endsWith(".heif")
+        ) {
+          toast.error("HEIC/HEIF 이미지는 피드에서 표시되지 않을 수 있어요. JPEG로 변경해주세요.", { duration: 5000 });
+          continue;
+        }
+        if (f.size > MAX_IMAGE_SIZE_BYTES) {
+          toast.error(`${f.name}: 이미지는 10MB 이내만 업로드할 수 있어요.`);
+          continue;
+        }
+        valid.push(f);
+        if (valid.length >= 10) break;
+      }
+      if (!valid.length) {
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+      if (files.length > valid.length && valid.length >= 10) {
+        toast("사진은 최대 10장까지 올릴 수 있어요.", { icon: "🖼️" });
+      }
+      setUploadErrorMessage(null);
+      setImageFiles(valid);
+      setCachedImageUrls(undefined);
+      setVideoDurationSec(null);
+      const previewUrl = URL.createObjectURL(valid[0]);
+      if (mediaPreviewUrlRef.current) URL.revokeObjectURL(mediaPreviewUrlRef.current);
+      mediaPreviewUrlRef.current = previewUrl;
+      setMediaFile(valid[0]);
+      setMediaPreview(previewUrl);
+      return;
+    }
+
+    // ── 영상 인증: 단일 ──
+    const file = files[0];
     if (!file) return;
-
-    if (selectedType === "image" && !file.type.startsWith("image/")) {
-      toast.error("사진 인증에서는 이미지 파일만 업로드할 수 있어요.");
-      return;
-    }
-
-    if (
-      selectedType === "image" &&
-      (file.type === "image/heic" ||
-        file.type === "image/heif" ||
-        file.type === "image/heic-sequence" ||
-        file.type === "image/heif-sequence" ||
-        file.name.toLowerCase().endsWith(".heic") ||
-        file.name.toLowerCase().endsWith(".heif"))
-    ) {
-      toast.error(
-        "HEIC/HEIF 이미지는 피드에서 표시되지 않을 수 있어요. 카메라 설정에서 JPEG 형식으로 변경하거나 다른 파일을 선택해주세요.",
-        { duration: 5000 },
-      );
-      return;
-    }
-
-    if (selectedType === "image" && file.size > MAX_IMAGE_SIZE_BYTES) {
-      toast.error("이미지는 10MB 이내만 업로드할 수 있어요.");
-      return;
-    }
+    setImageFiles([]);
 
     if (selectedType === "video" && !file.type.startsWith("video/")) {
       toast.error("영상 인증에서는 영상 파일만 업로드할 수 있어요.");
@@ -406,11 +432,36 @@ export const InlineVerificationForm = ({
     mutationFn: async (payload?: { performedAtLocal?: string }) => {
       let uploadedUrl: string | undefined = cachedUploadUrl;
       let uploadedObjectKey: string | undefined = cachedUploadObjectKey;
+      let uploadedImageUrls: string[] | undefined;
+      const challengeId =
+        userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
 
-      if (acceptsFile && mediaFile && !uploadedUrl) {
+      // 사진 인증 다중 이미지 — 각 파일 presigned PUT 후 imageUrls 수집(캐시로 재시도 중복 방지)
+      if (selectedType === "image" && imageFiles.length) {
+        uploadedImageUrls = cachedImageUrls;
+        if (!uploadedImageUrls) {
+          setUploadErrorMessage(null);
+          const urls: string[] = [];
+          for (let i = 0; i < imageFiles.length; i += 1) {
+            const f = imageFiles[i];
+            const { data: up } = await apiClient.post("/c/verifications/upload-url", {
+              fileName: f.name,
+              fileType: f.type,
+              fileSize: f.size,
+              challengeId,
+              userChallengeId: userChallenge.userChallengeId,
+              mediaKind: "image",
+            });
+            await uploadFileWithProgress(up.data.uploadUrl, f, (p) => {
+              setUploadProgress(Math.round(((i + p / 100) / imageFiles.length) * 100));
+            });
+            urls.push(up.data.fileUrl);
+          }
+          uploadedImageUrls = urls;
+          setCachedImageUrls(urls);
+        }
+      } else if (acceptsFile && mediaFile && !uploadedUrl) {
         setUploadErrorMessage(null);
-        const challengeId =
-          userChallenge.challengeId ?? userChallenge.challenge?.challengeId;
         const { data: uploadData } = await apiClient.post(
           "/c/verifications/upload-url",
           {
@@ -442,7 +493,7 @@ export const InlineVerificationForm = ({
         setCachedUploadObjectKey(uploadedObjectKey);
       }
 
-      lastUploadedUrlRef.current = uploadedUrl;
+      lastUploadedUrlRef.current = uploadedImageUrls?.[0] ?? uploadedUrl;
       lastUploadedObjectKeyRef.current = uploadedObjectKey;
 
       const response = await apiClient.post("/c/verifications", {
@@ -451,7 +502,9 @@ export const InlineVerificationForm = ({
         verificationType: selectedType,
         questType: selectedQuestType,
         ...(quest?.questId ? { questId: quest.questId } : {}),
-        ...(selectedType === "image" && uploadedUrl
+        ...(selectedType === "image" && uploadedImageUrls?.length
+          ? { imageUrls: uploadedImageUrls, imageUrl: uploadedImageUrls[0] }
+          : selectedType === "image" && uploadedUrl
           ? { imageUrl: uploadedUrl }
           : {}),
         ...(selectedType === "video" && uploadedUrl
@@ -559,6 +612,7 @@ export const InlineVerificationForm = ({
         // S3 upload itself failed — clear the cache so retry re-uploads
         setCachedUploadUrl(undefined);
         setCachedUploadObjectKey(undefined);
+        setCachedImageUrls(undefined);
         setUploadErrorMessage(message);
       }
       toast.error(message);
@@ -773,6 +827,12 @@ export const InlineVerificationForm = ({
                         className="w-full h-40 object-cover rounded-xl"
                       />
                     )}
+                    {/* 다중 이미지 장수 표시 */}
+                    {selectedType === "image" && imageFiles.length > 1 && (
+                      <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[11px] font-semibold px-2 py-0.5 rounded-full">
+                        🖼️ {imageFiles.length}장 · 슬라이드로 게시돼요
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={resetMedia}
@@ -833,7 +893,8 @@ export const InlineVerificationForm = ({
                   ref={fileInputRef}
                   type="file"
                   accept={acceptAttr}
-                  capture="environment"
+                  multiple={selectedType === "image"}
+                  {...(selectedType === "video" ? { capture: "environment" as const } : {})}
                   onChange={handleMediaSelect}
                   className="hidden"
                 />

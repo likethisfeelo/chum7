@@ -52,6 +52,14 @@ const ALL_FILTER_PER_TYPE_QUERY_LIMIT = 40;
 async function toPublicPost(item: Record<string, any>): Promise<Record<string, any>> {
   const sanitized = sanitizePost(stripKeys(item));
   sanitized.imageUrl = await toSignedImageUrl(sanitized.imageUrl || null);
+  // 슬라이드용 다중 이미지 — 각 URL 서명. 없으면 단일에서 파생.
+  if (Array.isArray(sanitized.imageUrls) && sanitized.imageUrls.length) {
+    sanitized.imageUrls = (
+      await Promise.all(sanitized.imageUrls.map((u: unknown) => toSignedImageUrl(typeof u === 'string' ? u : null)))
+    ).filter((u): u is string => Boolean(u));
+  } else {
+    sanitized.imageUrls = sanitized.imageUrl ? [sanitized.imageUrl] : [];
+  }
   return sanitized;
 }
 

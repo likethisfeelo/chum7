@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api-client";
 import { Loading } from "@/shared/components/Loading";
 import { resolveMediaUrl } from "@/shared/utils/mediaUrl";
+import { ImageCarousel } from "@/shared/components/ImageCarousel";
 import { InlineVerificationForm } from "@/features/verification/components/InlineVerificationForm";
 import { BottomSheet } from "@/shared/components/BottomSheet";
 import { BoardGuideSection } from "@/features/challenge-board/components/BoardGuideSection";
@@ -647,22 +648,20 @@ export const ChallengeFeedPage = () => {
   // 인증 카드 1장 렌더 (리더/개인 피드 아코디언에서 공통 사용)
   const renderVerificationCard = (item: any) => (
     <article key={item.verificationId} className="glass-card rounded-2xl">
-      {/* 4:5 이미지 — 오버레이 배지 포함 (overflow-hidden을 이미지 div에만 적용) */}
-      {item.verificationType === "image" && item.imageUrl && (
-        <div className="aspect-[4/5] overflow-hidden relative rounded-t-2xl">
-          <img
-            src={resolveMediaUrl(item.imageUrl)}
-            alt="verification"
-            loading="lazy"
-            className="w-full h-full object-cover"
+      {/* 4:5 이미지 — 다중이면 슬라이드. 오버레이 배지 포함 */}
+      {item.verificationType === "image" && (item.imageUrls?.length || item.imageUrl) && (
+        <div className="relative rounded-t-2xl overflow-hidden">
+          <ImageCarousel
+            images={item.imageUrls?.length ? item.imageUrls : [item.imageUrl]}
+            aspect="aspect-[4/5]"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-          <div className="absolute top-3 left-3 flex items-center gap-1 bg-black/50 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
+          <div className="absolute top-3 left-3 flex items-center gap-1 bg-black/50 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full pointer-events-none">
             <span>📸</span>
             <span>Day {item.day || "-"}</span>
           </div>
           {item.score > 0 && (
-            <div className="absolute top-3 right-3 bg-primary-500/90 backdrop-blur-sm text-white text-[11px] font-bold px-2.5 py-1 rounded-full">
+            <div className="absolute bottom-3 right-3 bg-primary-500/90 backdrop-blur-sm text-white text-[11px] font-bold px-2.5 py-1 rounded-full pointer-events-none">
               +{item.score}pt
             </div>
           )}

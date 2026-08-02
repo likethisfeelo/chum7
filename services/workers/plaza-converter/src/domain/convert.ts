@@ -99,6 +99,10 @@ export function buildPlazaPostItem(
     challengeCategory: verification.challengeCategory || null,
     currentDay: verification.day || null,
     imageUrl: verification.imageUrl || verification.videoUrl || null,
+    // 슬라이드용 다중 이미지 (마당에서도 인스타 슬라이드로 노출). 없으면 단일에서 파생.
+    imageUrls: Array.isArray(verification.imageUrls) && verification.imageUrls.length
+      ? verification.imageUrls
+      : [verification.imageUrl || verification.videoUrl].filter(Boolean),
     content: resolvePlazaFallbackContent(verification).content,
     leaderId: null,
     leaderName: null,
