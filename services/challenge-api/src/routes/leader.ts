@@ -33,6 +33,7 @@ import {
   updateQuestFields,
 } from '../repo/quests';
 import {
+  countChallengeVerificationsByQuest,
   findChallengeVerificationById,
   updateVerificationFields,
 } from '../repo/verifications';
@@ -325,8 +326,36 @@ leaderRoutes.delete('/quests/:questId', async (c) => {
     return fail(c, 404, 'QUEST_NOT_FOUND', '리더퀘스트를 찾을 수 없습니다');
   }
 
+  // 인증게시물이 연결돼 있으면 삭제 불가 — 이동/중단 안내
+  const vfCount = await countChallengeVerificationsByQuest(challengeId, questId);
+  if (vfCount > 0) {
+    return fail(
+      c,
+      409,
+      'QUEST_HAS_VERIFICATIONS',
+      `이 퀘스트에 인증 ${vfCount}건이 연결돼 있어 삭제할 수 없어요. 인증을 다른 퀘스트로 옮기거나 '중단'하세요.`,
+    );
+  }
+
   await deleteQuest(challengeId, questId);
   return ok(c, { questId, deleted: true }, '리더퀘스트를 삭제했어요');
+});
+
+// 리더퀘스트 목록 (관리용) — 상태 무관 + 각 퀘스트에 실제 인증(questId 연결) 수 포함
+leaderRoutes.get('/quests', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+
+  const quests = (await listQuests(challengeId)).filter((q) => q.questScope !== 'personal');
+  const withCounts = await Promise.all(
+    quests.map(async (q) => ({
+      ...stripKeys(q),
+      verificationCount: await countChallengeVerificationsByQuest(challengeId, q.questId),
+    })),
+  );
+  withCounts.sort((a: any, b: any) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  return ok(c, { quests: withCounts });
 });
 
 // 개인 퀘스트 제안 심사 목록 (리더 — 기본 pending, status=all 지원)

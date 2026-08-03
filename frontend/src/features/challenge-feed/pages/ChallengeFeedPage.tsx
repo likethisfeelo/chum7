@@ -537,6 +537,7 @@ export const ChallengeFeedPage = () => {
       toast.success("인증을 다른 퀘스트로 옮겼어요 (점수 유지)");
       queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
       queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
+      queryClient.invalidateQueries({ queryKey: ["leader-quests-manage", challengeId] });
     },
     onError: (err: any) => toast.error(err?.response?.data?.message || "이동에 실패했어요"),
   });
