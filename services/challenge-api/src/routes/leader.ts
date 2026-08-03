@@ -520,3 +520,67 @@ leaderRoutes.put('/verifications/:verificationId/reject', async (c) => {
     '인증을 반려했어요. 챌린지·공개 피드에서 숨겨지고 본인 기록에는 남습니다.',
   );
 });
+
+// 인증을 다른 리더퀘스트로 이동 — 사용자가 잘못된 퀘스트에 올린 인증을 재배정. 점수(일자 기반)는 유지.
+leaderRoutes.put('/verifications/:verificationId/move-quest', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const verificationId = c.req.param('verificationId');
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+
+  const body = await c.req.json().catch(() => ({} as any));
+  const toQuestId = String(body.toQuestId || '');
+  if (!toQuestId) return fail(c, 400, 'VALIDATION_ERROR', '이동할 퀘스트(toQuestId)가 필요합니다');
+
+  const vf = await findChallengeVerificationById(challengeId, verificationId);
+  if (!vf) return fail(c, 404, 'VERIFICATION_NOT_FOUND', '인증을 찾을 수 없습니다');
+  if (String(vf.questType ?? '') !== 'leader') {
+    return fail(c, 400, 'NOT_LEADER_VERIFICATION', '리더퀘스트 인증만 이동할 수 있어요');
+  }
+
+  const target = await getQuest(challengeId, toQuestId);
+  if (!target || target.questScope === 'personal') {
+    return fail(c, 404, 'QUEST_NOT_FOUND', '이동할 리더퀘스트를 찾을 수 없습니다');
+  }
+
+  const fromQuestId = String(vf.questId ?? '');
+  if (fromQuestId === toQuestId) return ok(c, { verificationId, questId: toQuestId }, '이미 해당 퀘스트예요');
+
+  const nowIso = new Date().toISOString();
+  const day = Number(vf.day);
+  const participantId = String(vf.userId ?? '');
+
+  // 1) 인증 아이템 — questId 재배정 (questType='leader' 유지, 점수·공개상태 불변 → 점수 유지)
+  await updateVerificationFields(
+    { pk: String(vf.pk), sk: String(vf.sk) },
+    { questId: toQuestId, questType: 'leader', updatedAt: nowIso },
+  );
+
+  // 2) 진행 기록 — 해당 day의 leaderQuestIds에서 원 questId 제거 + 대상 questId 추가(중복 제거).
+  //    점수/status/연속일은 건드리지 않는다(일자 기반 점수 유지).
+  try {
+    const participation = await getParticipation(challengeId, participantId);
+    if (participation) {
+      const progress = normalizeProgress(participation.progress);
+      let totalLeaderQuests = 0;
+      try {
+        const quests = await listQuests(challengeId);
+        totalLeaderQuests = quests.filter((q) => q.questScope !== 'personal' && q.status === 'active').length;
+      } catch { /* 조회 실패는 leaderQuestDone 재계산만 생략 */ }
+      const updated = progress.map((entry: any) => {
+        if (Number(entry.day) !== day) return entry;
+        const ids: string[] = Array.isArray(entry.leaderQuestIds) ? entry.leaderQuestIds : [];
+        const nextIds = ids.filter((id) => id !== fromQuestId && id !== toQuestId);
+        nextIds.push(toQuestId);
+        const next: any = { ...entry, leaderQuestIds: nextIds };
+        if (totalLeaderQuests > 0) next.leaderQuestDone = nextIds.length >= totalLeaderQuests;
+        return next;
+      });
+      await updateParticipationFields(challengeId, participantId, { progress: updated, updatedAt: nowIso });
+    }
+  } catch (err: any) {
+    console.error('move-quest: progress update error (non-fatal):', err?.message);
+  }
+
+  return ok(c, { verificationId, questId: toQuestId }, '인증을 다른 퀘스트로 옮겼어요');
+});

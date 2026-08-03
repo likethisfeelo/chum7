@@ -223,6 +223,19 @@ export const challengeApi = {
     return res.data.data;
   },
 
+  // 인증을 다른 리더퀘스트로 이동 — 잘못된 퀘스트에 올린 인증 재배정(점수 유지)
+  moveLeaderQuestVerification: async (
+    challengeId: string,
+    verificationId: string,
+    toQuestId: string,
+  ): Promise<{ verificationId: string; questId: string }> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/verifications/${verificationId}/move-quest`,
+      { toQuestId },
+    );
+    return res.data.data;
+  },
+
   // 인증 게시물 1건 반려 — 그날 인증만 반려(피드/마당에서 숨김, 본인 기록엔 남김, 점수 되돌림)
   rejectVerification: async (
     challengeId: string,
