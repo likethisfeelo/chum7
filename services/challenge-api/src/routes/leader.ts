@@ -70,6 +70,77 @@ async function requireLeaderChallenge(c: ApiContext, challengeId: string): Promi
   return { challenge };
 }
 
+/**
+ * 리더퀘스트 변경(삭제·중단)으로 요구 개수가 줄었을 때, 지나간 날짜의 완료·점수를 재계산한다.
+ * '상향(upgrade)만' — 이미 성공한 날은 유지하고, 미완료였던 날이 이제 조건을 충족하면 성공/1점으로 올린다.
+ * (요구 개수가 줄어드는 이벤트에서만 호출하므로 점수를 깎지 않는다.)
+ */
+async function recomputeProgressUpgradeOnly(challenge: Record<string, any>, challengeId: string): Promise<void> {
+  const challengeType = String(challenge.challengeType || 'leader_personal');
+  const quests = await listQuests(challengeId);
+  const totalLeaderQuestIds = quests
+    .filter((q) => q.status === 'active' && q.questScope !== 'personal')
+    .map((q) => String(q.questId));
+  const activeLeaderSet = new Set(totalLeaderQuestIds);
+  const rules = createDayCompletionRules({ challengeType, totalLeaderQuestIds, leaderQuestsFetched: true });
+
+  const members = await listChallengeParticipations(challengeId);
+  const nowIso = new Date().toISOString();
+  for (const m of members) {
+    const userId = String(m.userId ?? '');
+    if (!userId) continue;
+    const progress = normalizeProgress(m.progress);
+    const durationDays = resolveDurationDays(challenge.durationDays, progress);
+    let changed = false;
+
+    const updated = progress.map((dp: any) => {
+      // 삭제/중단된 리더퀘스트 id 제거 + leaderQuestDone 재계산
+      const prunedIds = Array.isArray(dp.leaderQuestIds)
+        ? dp.leaderQuestIds.filter((id: string) => activeLeaderSet.has(id))
+        : [];
+      const next: any = { ...dp, leaderQuestIds: prunedIds };
+      next.leaderQuestDone = rules.isLeaderAllDone(next);
+      if (
+        JSON.stringify(prunedIds) !== JSON.stringify(dp.leaderQuestIds ?? []) ||
+        next.leaderQuestDone !== dp.leaderQuestDone
+      ) {
+        changed = true;
+      }
+      // 이미 성공한 날은 유지(하향 없음). 미완료였던 날이 이제 완료 조건을 충족하면 상향.
+      if (dp.status !== 'success') {
+        const attempted =
+          prunedIds.length > 0 ||
+          next.personalQuestDone === true ||
+          Boolean(next.verificationId || next.leaderVerificationId || next.personalVerificationId) ||
+          dp.status === 'partial';
+        if (attempted && rules.isDayComplete(next)) {
+          next.status = 'success';
+          next.score = 1;
+          changed = true;
+        }
+      }
+      return next;
+    });
+
+    if (!changed) continue;
+    const totalScore = updated
+      .filter((p: any) => p.status === 'success')
+      .reduce((s: number, p: any) => s + (Number(p.score) || 0), 0);
+    let consecutive = 0;
+    for (let d = 1; d <= durationDays; d += 1) {
+      const e = updated.find((p: any) => Number(p.day) === d);
+      if (e && e.status === 'success') consecutive += 1;
+      else break;
+    }
+    await updateParticipationFields(challengeId, userId, {
+      progress: updated,
+      score: totalScore,
+      consecutiveDays: consecutive,
+      updatedAt: nowIso,
+    });
+  }
+}
+
 // 오늘의 리더 브리핑
 leaderRoutes.get('/briefing', async (c) => {
   const challengeId = c.req.param('challengeId')!;
@@ -307,8 +378,17 @@ leaderRoutes.put('/quests/:questId', async (c) => {
   const okUpdate = await updateQuestFields(challengeId, questId, patch);
   if (!okUpdate) return fail(c, 404, 'QUEST_NOT_FOUND', '리더퀘스트를 찾을 수 없습니다');
 
+  // 중단(active→inactive)으로 요구 리더퀘스트 개수가 줄면 지나간 날짜 완료·점수 재계산(상향만)
+  if (input.status === 'inactive' && existing.status === 'active') {
+    try {
+      await recomputeProgressUpgradeOnly(challenge, challengeId);
+    } catch (err: any) {
+      console.error('stop quest: progress recompute error (non-fatal):', err?.message);
+    }
+  }
+
   const updated = await getQuest(challengeId, questId);
-  const msg = input.status === 'inactive' ? '리더퀘스트를 중단했어요'
+  const msg = input.status === 'inactive' ? '리더퀘스트를 중단했어요 (지난 날짜 완료·점수 재계산)'
     : input.status === 'active' ? '리더퀘스트를 재개했어요'
     : '리더퀘스트를 수정했어요';
   return ok(c, updated ? stripKeys(updated) : null, msg);
@@ -338,7 +418,15 @@ leaderRoutes.delete('/quests/:questId', async (c) => {
   }
 
   await deleteQuest(challengeId, questId);
-  return ok(c, { questId, deleted: true }, '리더퀘스트를 삭제했어요');
+
+  // 요구 리더퀘스트 개수가 줄었으니 지나간 날짜 완료·점수 재계산(상향만)
+  try {
+    await recomputeProgressUpgradeOnly(guard.challenge!, challengeId);
+  } catch (err: any) {
+    console.error('delete quest: progress recompute error (non-fatal):', err?.message);
+  }
+
+  return ok(c, { questId, deleted: true }, '리더퀘스트를 삭제했어요. 지난 날짜 완료·점수를 다시 계산했어요.');
 });
 
 // 리더퀘스트 목록 (관리용) — 상태 무관 + 각 퀘스트에 실제 인증(questId 연결) 수 포함

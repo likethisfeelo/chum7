@@ -527,6 +527,10 @@ function LeaderQuestManageRow({
     queryClient.invalidateQueries({ queryKey: ['challenge-quests', challengeId] });
     queryClient.invalidateQueries({ queryKey: ['quests', challengeId] });
     queryClient.invalidateQueries({ queryKey: ['leader-briefing', challengeId] });
+    // 삭제/중단 시 지난 날짜 완료·점수가 재계산되므로 참여자 진행현황·내 챌린지도 갱신
+    queryClient.invalidateQueries({ queryKey: ['leader-participants', challengeId] });
+    queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
+    queryClient.invalidateQueries({ queryKey: ['challenge-feed-verifications', challengeId] });
   };
 
   const updateMutation = useMutation({
