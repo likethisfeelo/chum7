@@ -88,6 +88,14 @@ export const domainEventSchemas = {
     day: z.number().int(),
     plazaConverted: z.boolean(),
   }),
+  // 관리자가 인증 1건 숨김(신고 처리) — 마당(plaza) 변환분 비활성화 소비자용. 점수 롤백 없음(순수 숨김).
+  'verification.hidden': z.object({
+    verificationId: z.string(),
+    challengeId: z.string(),
+    userId: z.string(),
+    day: z.number().int(),
+    plazaConverted: z.boolean(),
+  }),
   // 리더가 이미 승인된 개인 퀘스트 제안을 재반려 — 참여자에게 사유·결과 안내
   'proposal.rerejected': z.object({
     challengeId: z.string(),

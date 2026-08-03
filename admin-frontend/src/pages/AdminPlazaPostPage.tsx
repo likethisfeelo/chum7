@@ -36,13 +36,31 @@ export const AdminPlazaPostPage = () => {
   const [uploading, setUploading] = useState(false);
 
   const qc = useQueryClient();
-  const invalidateList = () => qc.invalidateQueries({ queryKey: ['admin-plaza-posts'] });
+  const invalidateList = () => {
+    qc.invalidateQueries({ queryKey: ['admin-plaza-posts'] });
+    qc.invalidateQueries({ queryKey: ['admin-plaza-logs'] });
+  };
 
   const { data: posts = [], isLoading: listLoading, isError: listError } = useQuery({
     queryKey: ['admin-plaza-posts'],
     queryFn: async () => {
       const res = await apiClient.get('/s/plaza-admin/posts');
       return res.data.data.posts as AdminPost[];
+    },
+  });
+
+  const { data: logs = [] } = useQuery({
+    queryKey: ['admin-plaza-logs'],
+    queryFn: async () => {
+      const res = await apiClient.get('/s/plaza-admin/logs');
+      return res.data.data.logs as Array<{
+        action: string;
+        actorId: string;
+        plazaPostId: string;
+        authorId?: string | null;
+        contentPreview?: string | null;
+        at: string;
+      }>;
     },
   });
 
@@ -326,6 +344,30 @@ export const AdminPlazaPostPage = () => {
             );
           })}
         </div>
+      </div>
+
+      {/* 게시/삭제 로그 — 누가 올리고 누가 지웠는지 */}
+      <div className="mt-8">
+        <h2 className="text-base font-semibold text-gray-800 mb-3">게시/삭제 로그</h2>
+        {logs.length === 0 ? (
+          <p className="text-sm text-gray-400">로그가 없습니다.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {logs.map((log, i) => (
+              <div key={`${log.plazaPostId}-${log.at}-${i}`} className="text-xs text-gray-600 flex items-center gap-2 border-b border-gray-100 pb-1.5">
+                <span className={`font-semibold px-1.5 py-0.5 rounded ${log.action === 'delete' ? 'text-red-600 bg-red-50' : 'text-emerald-600 bg-emerald-50'}`}>
+                  {log.action === 'delete' ? '삭제' : '게시'}
+                </span>
+                <span className="text-gray-400">{new Date(log.at).toLocaleString('ko-KR')}</span>
+                <span className="truncate">
+                  실행 {log.actorId?.slice(0, 8)}
+                  {log.action === 'delete' && log.authorId ? ` · 원게시 ${log.authorId.slice(0, 8)}` : ''}
+                  {log.contentPreview ? ` · "${log.contentPreview}"` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -45,7 +45,8 @@ async function signMediaUrl(url?: string | null): Promise<string | null> {
 
 function isPublicVerification(v: Record<string, any>): boolean {
   const isPublic = v.isPublic === 'true' || v.isPublic === true;
-  return isPublic && v.isPersonalOnly !== true;
+  // 관리자 숨김은 타인 프로필 조회에서도 제외 (본인 me/profile-feed 는 무필터라 유지)
+  return isPublic && v.isPersonalOnly !== true && v.hiddenByAdmin !== true;
 }
 
 // 공개 인증 목록 (레거시 GET /personal-feed/{userId}/verifications — 퍼블릭 전환에 따라 isPublic 만 노출)

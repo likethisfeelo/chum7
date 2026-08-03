@@ -5,6 +5,7 @@ import { ko } from 'date-fns/locale';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import { SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
 import { CommentSection } from './CommentSection';
+import { ReportButton } from './ReportModal';
 import { RecommendationInline } from './RecommendationInline';
 import type { PlazaPost } from '@/features/feed/api/plazaApi';
 import type { usePlazaComments } from '@/features/feed/hooks/usePlazaComments';
@@ -208,6 +209,7 @@ export function RecruitmentCard({
           >
             💬 {state.count}
           </button>
+          <ReportButton target={{ targetType: 'plaza', targetId: post.plazaPostId }} className="text-gray-300 hover:text-red-500 text-sm leading-none" />
           {bookmarkButton && hasMedia && (
             <div className="ml-auto">{bookmarkButton}</div>
           )}

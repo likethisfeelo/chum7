@@ -1,4 +1,5 @@
 import type { usePlazaComments } from '@/features/feed/hooks/usePlazaComments';
+import { ReportButton } from './ReportModal';
 
 type CommentHook = ReturnType<typeof usePlazaComments>;
 
@@ -43,7 +44,7 @@ export function CommentSection({ postId, hook }: Props) {
                   </span>
                 )}
                 <span className="flex-1" />
-                {comment.isMine && (
+                {comment.isMine ? (
                   <button
                     type="button"
                     onClick={() => {
@@ -55,6 +56,16 @@ export function CommentSection({ postId, hook }: Props) {
                   >
                     ✕
                   </button>
+                ) : (
+                  <ReportButton
+                    target={{
+                      targetType: 'comment',
+                      targetId: comment.commentId,
+                      plazaPostId: postId,
+                      commentCreatedAt: (comment as { createdAt?: string }).createdAt ?? null,
+                    }}
+                    className="shrink-0 text-gray-300 hover:text-red-500 text-xs leading-none"
+                  />
                 )}
               </div>
               <p className="mt-0.5 break-words whitespace-pre-wrap">{comment.content}</p>

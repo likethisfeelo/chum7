@@ -24,6 +24,45 @@ import { postPk, recommendationPk, TABLE } from './shared';
 export const ADMIN_POSTS_PK = 'ADMINPOSTS';
 const adminPostSk = (plazaPostId: string) => `POST#${plazaPostId}`;
 
+/** 운영자 마당글 게시/삭제 감사 로그 — 누가 올리고 누가 지웠는지 */
+const PLAZA_ADMIN_LOG_PK = 'PLAZAADMINLOG';
+export async function putPlazaAdminLog(input: {
+  action: 'create' | 'delete';
+  actorId: string;
+  plazaPostId: string;
+  authorId?: string | null;
+  at: string;
+  contentPreview?: string | null;
+}): Promise<void> {
+  await docClient.send(
+    new PutCommand({
+      TableName: tableName(TABLE),
+      Item: {
+        pk: PLAZA_ADMIN_LOG_PK,
+        sk: `${input.at}#${input.plazaPostId}#${input.action}`,
+        action: input.action,
+        actorId: input.actorId,
+        plazaPostId: input.plazaPostId,
+        authorId: input.authorId ?? null,
+        contentPreview: input.contentPreview ?? null,
+        at: input.at,
+      },
+    }),
+  );
+}
+export async function listPlazaAdminLog(limit = 100): Promise<Record<string, any>[]> {
+  const res = await docClient.send(
+    new QueryCommand({
+      TableName: tableName(TABLE),
+      KeyConditionExpression: 'pk = :pk',
+      ExpressionAttributeValues: { ':pk': PLAZA_ADMIN_LOG_PK },
+      ScanIndexForward: false,
+      Limit: limit,
+    }),
+  );
+  return res.Items ?? [];
+}
+
 export function feedGsi1Pk(postType: string): string {
   return `FEED#${postType}`;
 }
@@ -269,13 +308,38 @@ export async function listPostComments(
     new QueryCommand({
       TableName: tableName(TABLE),
       KeyConditionExpression: 'pk = :pk AND begins_with(sk, :cmt)',
-      ExpressionAttributeValues: { ':pk': postPk(plazaPostId), ':cmt': 'CMT#' },
+      // 관리자 숨김 댓글 제외
+      FilterExpression: 'attribute_not_exists(hiddenByAdmin) OR hiddenByAdmin = :false',
+      ExpressionAttributeValues: { ':pk': postPk(plazaPostId), ':cmt': 'CMT#', ':false': false },
       ScanIndexForward: false,
       Limit: limit,
       ExclusiveStartKey: exclusiveStartKey,
     }),
   );
   return { items: res.Items ?? [], lastKey: res.LastEvaluatedKey };
+}
+
+/** 관리자 댓글 숨김/복원 — hiddenByAdmin 플래그 */
+export async function setCommentHidden(
+  plazaPostId: string,
+  commentSkValue: string,
+  hidden: boolean,
+): Promise<boolean> {
+  try {
+    await docClient.send(
+      new UpdateCommand({
+        TableName: tableName(TABLE),
+        Key: { pk: postPk(plazaPostId), sk: commentSkValue },
+        UpdateExpression: 'SET hiddenByAdmin = :h, hiddenAt = :t',
+        ConditionExpression: 'attribute_exists(pk)',
+        ExpressionAttributeValues: { ':h': hidden, ':t': new Date().toISOString() },
+      }),
+    );
+    return true;
+  } catch (err: any) {
+    if (err?.name === 'ConditionalCheckFailedException') return false;
+    throw err;
+  }
 }
 
 /** 게시물 META 카운터 증분 (commentCount 등) — 레거시 if_not_exists 패턴 승계 */
