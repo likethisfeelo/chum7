@@ -463,10 +463,8 @@ function LeaderQuestManageSection({
   const { data: quests = [], isLoading } = useQuery<any[]>({
     queryKey: ['leader-quests-manage', challengeId],
     enabled: !notLeaderChallenge && Boolean(challengeId),
-    queryFn: async () => {
-      const all = await challengeApi.listQuests(challengeId, 'all');
-      return all.filter((q) => q.questScope !== 'personal');
-    },
+    // 실제 인증(questId 연결) 수를 포함한 리더 전용 목록 — 인증 이동 후에도 정확
+    queryFn: () => challengeApi.listLeaderQuests(challengeId),
   });
 
   if (notLeaderChallenge) return null;
@@ -512,7 +510,8 @@ function LeaderQuestManageRow({
   const allowedSet = new Set<'image' | 'video' | 'link' | 'text'>(allowedList);
 
   const isActive = quest.status !== 'inactive';
-  const submissionCount = Number(quest.submissionCount ?? 0);
+  // 실제 이 퀘스트에 연결된 인증 수(questId 기준). 이동 후에도 정확.
+  const verificationCount = Number(quest.verificationCount ?? 0);
 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(quest.title ?? '');
@@ -565,10 +564,14 @@ function LeaderQuestManageRow({
   };
 
   const onDelete = () => {
-    const warn = submissionCount > 0
-      ? `이미 ${submissionCount}건의 인증이 있어요. 삭제하면 퀘스트가 사라집니다(인증 기록은 보존). 대신 '중단'을 권장해요.\n\n그래도 삭제할까요?`
-      : '이 리더퀘스트를 삭제할까요?';
-    if (window.confirm(warn)) deleteMutation.mutate();
+    // 인증이 연결돼 있으면 삭제 불가(서버도 409로 막음) — 이동/중단 안내
+    if (verificationCount > 0) {
+      window.alert(
+        `이 퀘스트에 인증 ${verificationCount}건이 연결돼 있어 삭제할 수 없어요.\n인증을 다른 퀘스트로 옮기거나 '중단'하세요.`,
+      );
+      return;
+    }
+    if (window.confirm('이 리더퀘스트를 삭제할까요?')) deleteMutation.mutate();
   };
 
   const busy = updateMutation.isPending || deleteMutation.isPending;
@@ -587,7 +590,7 @@ function LeaderQuestManageRow({
             </span>
             <p className="text-sm font-semibold text-gray-900 truncate">{quest.title}</p>
           </div>
-          <p className="text-[11px] text-gray-400 mt-0.5">인증 {submissionCount}건{quest.targetTime ? ` · 목표 ${quest.targetTime}` : ''}</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">인증 {verificationCount}건{quest.targetTime ? ` · 목표 ${quest.targetTime}` : ''}</p>
         </div>
       </div>
 
@@ -695,7 +698,12 @@ function LeaderQuestManageRow({
             type="button"
             disabled={busy}
             onClick={onDelete}
-            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-500 disabled:opacity-50"
+            title={verificationCount > 0 ? '인증이 있어 삭제할 수 없어요 (이동/중단 후 가능)' : '삭제'}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 ${
+              verificationCount > 0
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-red-600 text-white hover:bg-red-500'
+            }`}
           >
             삭제
           </button>

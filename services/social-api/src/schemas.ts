@@ -155,7 +155,7 @@ export const verificationCommentSchema = z.object({
 });
 
 export const VERIFICATION_REACTION_EMOJIS = new Set([
-  '🔥', '💪', '👏', '❤️', '🎉', '⭐', '😮', '😂', '🙌', '💡',
+  '👍', '🔥', '💪', '👏', '❤️', '🎉', '⭐', '😮', '😂', '🙌', '💡',
 ]);
 
 export const verificationReactionSchema = z.object({

@@ -195,6 +195,12 @@ export const challengeApi = {
     return res.data.data?.quests ?? [];
   },
 
+  // 리더퀘스트 관리 목록 — 상태 무관 + 실제 인증(questId 연결) 수 포함
+  listLeaderQuests: async (challengeId: string): Promise<any[]> => {
+    const res = await apiClient.get(`/c/${challengeId}/leader/quests`);
+    return res.data.data?.quests ?? [];
+  },
+
   // ── 리더퀘스트 수정 / 중단·재개 (PUT /c/:id/leader/quests/:questId) ──────────
   updateLeaderQuest: async (
     challengeId: string,
