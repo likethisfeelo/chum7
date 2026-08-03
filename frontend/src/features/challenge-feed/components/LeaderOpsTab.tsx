@@ -44,6 +44,7 @@ interface LeaderParticipant {
   personalGoal: string | null;
   usedRemedyCount: number;
   joinedAt: string | null;
+  days?: Array<{ day: number; status: string; granted: boolean }>;
 }
 
 interface LeaderParticipantsData {
@@ -158,6 +159,82 @@ function BriefingSection({ challengeId }: { challengeId: string }) {
   );
 }
 
+// 참여자 일자별 완료 인정 그리드 — 리더가 게시물 없이도 특정 날짜를 완료 인정/취소
+function ParticipantDayGrid({ challengeId, participant }: { challengeId: string; participant: LeaderParticipant }) {
+  const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const days = participant.days ?? [];
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ day, granted }: { day: number; granted: boolean }) =>
+      granted
+        ? challengeApi.revokeDayComplete(challengeId, participant.userId, day)
+        : challengeApi.grantDayComplete(challengeId, participant.userId, day),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leader-participants', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['leader-briefing', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '처리에 실패했어요'),
+  });
+
+  if (days.length === 0) return null;
+
+  return (
+    <div className="mt-2 pt-2 border-t border-gray-100">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="text-[11px] font-semibold text-gray-500 flex items-center gap-1"
+      >
+        일자별 완료 인정 {open ? '▲' : '▼'}
+      </button>
+      {open && (
+        <>
+          <div className="mt-2 grid grid-cols-7 gap-1">
+            {days.map((d) => {
+              const isSuccess = d.status === 'success';
+              const busy = toggleMutation.isPending && toggleMutation.variables?.day === d.day;
+              const base =
+                isSuccess
+                  ? 'bg-emerald-500 text-white'
+                  : d.status === 'partial'
+                    ? 'bg-amber-200 text-amber-800'
+                    : 'bg-gray-100 text-gray-400';
+              return (
+                <button
+                  key={d.day}
+                  type="button"
+                  disabled={busy}
+                  title={
+                    isSuccess
+                      ? `${d.day}일차 완료${d.granted ? '(수동인정)' : ''} — 눌러서 취소`
+                      : `${d.day}일차 — 눌러서 완료 인정(+1점)`
+                  }
+                  onClick={() => toggleMutation.mutate({ day: d.day, granted: isSuccess })}
+                  className={`relative h-8 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-50 ${base}`}
+                >
+                  {d.day}
+                  {d.granted && (
+                    <span className="absolute -top-1 -right-1 text-[8px] leading-none bg-white text-emerald-700 rounded-full w-3 h-3 flex items-center justify-center border border-emerald-300">
+                      ✋
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1.5">
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500 align-middle" /> 완료 ·
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-200 align-middle ml-1" /> 일부 ·
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-100 align-middle ml-1" /> 미완 · ✋ 수동인정. 칸을 눌러 완료/취소.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ParticipantsSection({ challengeId }: { challengeId: string }) {
   const navigate = useNavigate();
   const { data, isLoading, isError } = useQuery<LeaderParticipantsData>({
@@ -250,6 +327,7 @@ function ParticipantsSection({ challengeId }: { challengeId: string }) {
                     💬 DM
                   </button>
                 </div>
+                <ParticipantDayGrid challengeId={challengeId} participant={p} />
               </div>
             );
           })}

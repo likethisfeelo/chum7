@@ -235,6 +235,17 @@ leaderRoutes.get('/participants', async (c) => {
       durationDays,
     );
 
+    // 그리드용 일자별 상태 (success/partial/none + 리더 수동인정 여부)
+    const days = Array.from({ length: durationDays }, (_, i) => {
+      const d = i + 1;
+      const rec = progressList.find((e: any) => Number(e.day) === d) as any;
+      return {
+        day: d,
+        status: (rec?.status as string) ?? 'none',
+        granted: rec?.leaderGrantedComplete === true,
+      };
+    });
+
     return {
       userChallengeId: p.userChallengeId,
       userId: p.userId,
@@ -244,6 +255,7 @@ leaderRoutes.get('/participants', async (c) => {
       startDate: p.startDate ?? null,
       currentDay: effectiveCurrentDay,
       durationDays,
+      days,
       completedDays,
       progressPercentage,
       score: p.score ?? 0,
@@ -702,60 +714,9 @@ leaderRoutes.put('/verifications/:verificationId/move-quest', async (c) => {
   return ok(c, { verificationId, questId: toQuestId }, '인증을 다른 퀘스트로 옮겼어요');
 });
 
-// 게시물별 '완료 인정' — 규칙상 자동 완료가 안 잡힌 날을 리더가 수동으로 완료(성공·1점) 처리.
-//  leaderGrantedComplete 플래그로 남겨 이후 자동 재계산에도 유지된다.
-leaderRoutes.put('/verifications/:verificationId/grant-complete', async (c) => {
-  const challengeId = c.req.param('challengeId')!;
-  const verificationId = c.req.param('verificationId');
-  const guard = await requireLeaderChallenge(c, challengeId);
-  if (guard.error) return guard.error;
-  const challenge = guard.challenge!;
-  const { userId: leaderId } = c.get('authUser')!;
+// ── 완료 인정(수동 완료) 공용 로직 — 게시물 단위 / 참여자×날짜 그리드 단위 공유 ──
 
-  const vf = await findChallengeVerificationById(challengeId, verificationId);
-  if (!vf) return fail(c, 404, 'VERIFICATION_NOT_FOUND', '인증을 찾을 수 없습니다');
-  const participantId = String(vf.userId ?? '');
-  const day = Number(vf.day);
-
-  const participation = await getParticipation(challengeId, participantId);
-  if (!participation) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
-
-  const nowIso = new Date().toISOString();
-  const progress = normalizeProgress(participation.progress);
-  const durationDays = resolveDurationDays(challenge.durationDays, progress);
-
-  let found = false;
-  const updated = progress.map((entry: any) => {
-    if (Number(entry.day) !== day) return entry;
-    found = true;
-    const ids: string[] = Array.isArray(entry.leaderQuestIds) ? [...entry.leaderQuestIds] : [];
-    if (vf.questId && !ids.includes(String(vf.questId))) ids.push(String(vf.questId));
-    return {
-      ...entry,
-      status: 'success',
-      score: 1,
-      leaderQuestIds: ids,
-      leaderQuestDone: true,
-      leaderGrantedComplete: true,
-      grantedBy: leaderId,
-      grantedAt: nowIso,
-      verificationId: entry.verificationId ?? verificationId,
-    };
-  });
-  if (!found) {
-    updated.push({
-      day,
-      status: 'success',
-      score: 1,
-      leaderQuestIds: vf.questId ? [String(vf.questId)] : [],
-      leaderQuestDone: true,
-      leaderGrantedComplete: true,
-      grantedBy: leaderId,
-      grantedAt: nowIso,
-      verificationId,
-    } as any);
-  }
-
+function recomputeTotals(updated: any[], durationDays: number) {
   const totalScore = updated
     .filter((p: any) => p.status === 'success')
     .reduce((s: number, p: any) => s + (Number(p.score) || 0), 0);
@@ -765,33 +726,76 @@ leaderRoutes.put('/verifications/:verificationId/grant-complete', async (c) => {
     if (e && e.status === 'success') consecutive += 1;
     else break;
   }
+  return { totalScore, consecutive };
+}
+
+/** 해당 참여자의 특정 day를 수동 완료(성공·1점) 처리 */
+async function grantDayComplete(
+  challenge: Record<string, any>,
+  challengeId: string,
+  participantId: string,
+  day: number,
+  leaderId: string,
+  opts?: { questId?: string | null; verificationId?: string | null },
+): Promise<{ ok: boolean; code?: string }> {
+  const participation = await getParticipation(challengeId, participantId);
+  if (!participation) return { ok: false, code: 'PARTICIPATION_NOT_FOUND' };
+  const nowIso = new Date().toISOString();
+  const progress = normalizeProgress(participation.progress);
+  const durationDays = resolveDurationDays(challenge.durationDays, progress);
+
+  let found = false;
+  const updated = progress.map((entry: any) => {
+    if (Number(entry.day) !== day) return entry;
+    found = true;
+    const ids: string[] = Array.isArray(entry.leaderQuestIds) ? [...entry.leaderQuestIds] : [];
+    if (opts?.questId && !ids.includes(String(opts.questId))) ids.push(String(opts.questId));
+    return {
+      ...entry,
+      status: 'success',
+      score: 1,
+      leaderQuestIds: ids,
+      leaderQuestDone: true,
+      leaderGrantedComplete: true,
+      grantedBy: leaderId,
+      grantedAt: nowIso,
+      ...(opts?.verificationId ? { verificationId: entry.verificationId ?? opts.verificationId } : {}),
+    };
+  });
+  if (!found) {
+    updated.push({
+      day,
+      status: 'success',
+      score: 1,
+      leaderQuestIds: opts?.questId ? [String(opts.questId)] : [],
+      leaderQuestDone: true,
+      leaderGrantedComplete: true,
+      grantedBy: leaderId,
+      grantedAt: nowIso,
+      ...(opts?.verificationId ? { verificationId: opts.verificationId } : {}),
+    } as any);
+  }
+
+  const { totalScore, consecutive } = recomputeTotals(updated, durationDays);
   await updateParticipationFields(challengeId, participantId, {
     progress: updated,
     score: totalScore,
     consecutiveDays: consecutive,
     updatedAt: nowIso,
   });
+  return { ok: true };
+}
 
-  return ok(c, { verificationId, day, granted: true }, `${day}일차를 완료 인정했어요 (+1점)`);
-});
-
-// '완료 인정' 취소 — 수동 완료 플래그 제거 후 현재 규칙으로 해당 날짜 재판정
-leaderRoutes.put('/verifications/:verificationId/revoke-complete', async (c) => {
-  const challengeId = c.req.param('challengeId')!;
-  const verificationId = c.req.param('verificationId');
-  const guard = await requireLeaderChallenge(c, challengeId);
-  if (guard.error) return guard.error;
-  const challenge = guard.challenge!;
-
-  const vf = await findChallengeVerificationById(challengeId, verificationId);
-  if (!vf) return fail(c, 404, 'VERIFICATION_NOT_FOUND', '인증을 찾을 수 없습니다');
-  const participantId = String(vf.userId ?? '');
-  const day = Number(vf.day);
-
+/** 수동 완료 해제 후 현재 활성 리더퀘스트 규칙으로 해당 day 재판정 */
+async function revokeDayComplete(
+  challenge: Record<string, any>,
+  challengeId: string,
+  participantId: string,
+  day: number,
+): Promise<{ ok: boolean; code?: string }> {
   const participation = await getParticipation(challengeId, participantId);
-  if (!participation) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
+  if (!participation) return { ok: false, code: 'PARTICIPATION_NOT_FOUND' };
 
-  // 현재 활성 리더퀘스트 기준 규칙으로 해당 날짜 재판정
   const challengeType = String(challenge.challengeType || 'leader_personal');
   const quests = await listQuests(challengeId);
   const totalLeaderQuestIds = quests
@@ -814,21 +818,72 @@ leaderRoutes.put('/verifications/:verificationId/revoke-complete', async (c) => 
     return next;
   });
 
-  const totalScore = updated
-    .filter((p: any) => p.status === 'success')
-    .reduce((s: number, p: any) => s + (Number(p.score) || 0), 0);
-  let consecutive = 0;
-  for (let d = 1; d <= durationDays; d += 1) {
-    const e = updated.find((p: any) => Number(p.day) === d);
-    if (e && e.status === 'success') consecutive += 1;
-    else break;
-  }
+  const { totalScore, consecutive } = recomputeTotals(updated, durationDays);
   await updateParticipationFields(challengeId, participantId, {
     progress: updated,
     score: totalScore,
     consecutiveDays: consecutive,
     updatedAt: nowIso,
   });
+  return { ok: true };
+}
 
-  return ok(c, { verificationId, day, granted: false }, '완료 인정을 취소했어요');
+// 게시물별 '완료 인정' — 규칙상 자동 완료가 안 잡힌 날을 리더가 수동으로 완료 처리.
+leaderRoutes.put('/verifications/:verificationId/grant-complete', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const verificationId = c.req.param('verificationId');
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const { userId: leaderId } = c.get('authUser')!;
+
+  const vf = await findChallengeVerificationById(challengeId, verificationId);
+  if (!vf) return fail(c, 404, 'VERIFICATION_NOT_FOUND', '인증을 찾을 수 없습니다');
+  const day = Number(vf.day);
+  const r = await grantDayComplete(guard.challenge!, challengeId, String(vf.userId ?? ''), day, leaderId, {
+    questId: vf.questId ? String(vf.questId) : null,
+    verificationId,
+  });
+  if (!r.ok) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
+  return ok(c, { verificationId, day, granted: true }, `${day}일차를 완료 인정했어요 (+1점)`);
+});
+
+leaderRoutes.put('/verifications/:verificationId/revoke-complete', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const verificationId = c.req.param('verificationId');
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+
+  const vf = await findChallengeVerificationById(challengeId, verificationId);
+  if (!vf) return fail(c, 404, 'VERIFICATION_NOT_FOUND', '인증을 찾을 수 없습니다');
+  const r = await revokeDayComplete(guard.challenge!, challengeId, String(vf.userId ?? ''), Number(vf.day));
+  if (!r.ok) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
+  return ok(c, { verificationId, day: Number(vf.day), granted: false }, '완료 인정을 취소했어요');
+});
+
+// 참여자×날짜 그리드 완료 인정/취소 — 게시물 없이도 특정 참여자의 특정 day를 직접 처리
+leaderRoutes.put('/participants/:participantId/days/:day/grant', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const participantId = c.req.param('participantId')!;
+  const day = Number(c.req.param('day'));
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const { userId: leaderId } = c.get('authUser')!;
+  if (!Number.isFinite(day) || day < 1) return fail(c, 400, 'INVALID_DAY', '유효한 day가 필요합니다');
+
+  const r = await grantDayComplete(guard.challenge!, challengeId, participantId, day, leaderId);
+  if (!r.ok) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
+  return ok(c, { participantId, day, granted: true }, `${day}일차를 완료 인정했어요 (+1점)`);
+});
+
+leaderRoutes.put('/participants/:participantId/days/:day/revoke', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const participantId = c.req.param('participantId')!;
+  const day = Number(c.req.param('day'));
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  if (!Number.isFinite(day) || day < 1) return fail(c, 400, 'INVALID_DAY', '유효한 day가 필요합니다');
+
+  const r = await revokeDayComplete(guard.challenge!, challengeId, participantId, day);
+  if (!r.ok) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
+  return ok(c, { participantId, day, granted: false }, '완료 인정을 취소했어요');
 });
