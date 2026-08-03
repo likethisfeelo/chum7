@@ -34,10 +34,13 @@ questRoutes.get('/', async (c) => {
 
   let quests = await listQuests(challengeId);
 
+  // status='all' 이면 상태·만료 필터를 건너뛴다 (리더 관리 화면에서 중단된 퀘스트까지 조회)
+  const showAll = statusFilter === 'all';
+
   // 상태 필터 + 기간 만료 필터 + 개인 퀘스트 소유자 필터 + displayOrder 정렬 (레거시 승계)
   quests = quests
-    .filter((q) => q.status === statusFilter)
-    .filter((q) => !q.endAt || q.endAt >= now)
+    .filter((q) => showAll || q.status === statusFilter)
+    .filter((q) => showAll || !q.endAt || q.endAt >= now)
     .filter((q) => q.questScope !== 'personal' || q.assignedUserId === userId)
     .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
 
