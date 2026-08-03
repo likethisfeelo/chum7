@@ -129,13 +129,13 @@ async function deactivatePlazaPost(verificationId: string): Promise<boolean> {
 }
 
 export const handler = async (event: EventBridgeEvent<string, unknown>) => {
-  // 이벤트 구동: 인증 반려 → 마당 변환분 비활성화 (스케줄 변환과 별개 경로)
-  if (event['detail-type'] === 'verification.rejected') {
+  // 이벤트 구동: 인증 반려/관리자숨김 → 마당 변환분 비활성화 (스케줄 변환과 별개 경로)
+  if (event['detail-type'] === 'verification.rejected' || event['detail-type'] === 'verification.hidden') {
     const detail = (event.detail ?? {}) as { verificationId?: string };
     const verificationId = String(detail.verificationId ?? '');
     if (!verificationId) return { statusCode: 400, body: 'missing verificationId' };
     const deactivated = await deactivatePlazaPost(verificationId);
-    console.log(JSON.stringify({ level: 'info', message: 'plaza post deactivate (verification.rejected)', verificationId, deactivated }));
+    console.log(JSON.stringify({ level: 'info', message: `plaza post deactivate (${event['detail-type']})`, verificationId, deactivated }));
     return { statusCode: 200, body: JSON.stringify({ verificationId, deactivated }) };
   }
 

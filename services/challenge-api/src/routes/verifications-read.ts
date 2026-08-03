@@ -60,7 +60,8 @@ async function toRenderableMediaUrl(url?: string | null): Promise<string | null>
 function isPublicVerification(v: VerificationItem): boolean {
   const isPublic = v.isPublic === 'true' || v.isPublic === true;
   const isPersonalOnly = v.isPersonalOnly === true;
-  return isPublic && !isPersonalOnly;
+  // 관리자 숨김(hiddenByAdmin)은 공개면에서 제외 — 본인 피드(me/profile-feed)는 무필터라 유지됨
+  return isPublic && !isPersonalOnly && v.hiddenByAdmin !== true;
 }
 
 interface ViewerCtx {

@@ -17,6 +17,7 @@ import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import { challengeApi } from "@/features/challenge/api/challengeApi";
 import { SLUG_TO_LABEL } from "@/features/challenge/constants/categories";
 import { ChallengeChatPanel } from "@/features/challenge-chat/components/ChallengeChatPanel";
+import { ReportButton } from "@/features/feed/components/ReportModal";
 import {
   getRemedyType,
   getRemainingRemedyCount,
@@ -836,6 +837,17 @@ export const ChallengeFeedPage = () => {
                 🚩 이 인증 반려
               </button>
             )}
+          </div>
+        )}
+
+        {/* 신고 — 본인/리더 외 참여자 */}
+        {!item.isMine && !isCreator && (
+          <div className="mt-2 pt-2 border-t border-white/40 flex justify-end">
+            <ReportButton
+              target={{ targetType: "verification", targetId: item.verificationId, challengeId: challengeId! }}
+              label="신고"
+              className="text-[11px] font-medium text-gray-400 hover:text-red-500 transition-colors"
+            />
           </div>
         )}
       </div>

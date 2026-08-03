@@ -78,6 +78,38 @@ export const createAdminPlazaPostSchema = z.object({
     .nullable(),
 });
 
+// ── 신고(report) ───────────────────────────────────────────────────────
+
+/** 신고 사유 — 스팸/광고, 욕설·괴롭힘, 음란물, 폭력, 혐오, 허위정보, 기타 */
+export const REPORT_REASONS = [
+  'spam',
+  'harassment',
+  'sexual',
+  'violence',
+  'hate',
+  'misinfo',
+  'other',
+] as const;
+
+export const createReportSchema = z
+  .object({
+    targetType: z.enum(['verification', 'plaza', 'comment']),
+    targetId: z.string().min(1),
+    challengeId: z.string().optional().nullable(), // 인증 숨김에 필요
+    plazaPostId: z.string().optional().nullable(), // 댓글의 부모 게시물
+    commentCreatedAt: z.string().optional().nullable(), // 댓글 sk 구성용
+    reason: z.enum(REPORT_REASONS),
+    detail: z.string().max(500).optional().nullable(),
+  })
+  .refine((v) => v.targetType !== 'verification' || Boolean(v.challengeId), {
+    message: '인증 신고에는 challengeId가 필요합니다',
+    path: ['challengeId'],
+  })
+  .refine((v) => v.targetType !== 'comment' || Boolean(v.plazaPostId && v.commentCreatedAt), {
+    message: '댓글 신고에는 plazaPostId와 commentCreatedAt이 필요합니다',
+    path: ['plazaPostId'],
+  });
+
 // ── 챌린지보드 ─────────────────────────────────────────────────────────
 
 /** blocks 상세 검증은 domain/blocks.validateBlocks (레거시 규칙 그대로) */

@@ -313,8 +313,10 @@ function LeaderQuestCreateSection({
       toast.success('공통 리더퀘스트가 등록됐어요 🎯');
       reset();
       setOpen(false);
-      // 피드/보드의 퀘스트 목록 갱신
+      // 피드/보드/관리 목록 갱신
       queryClient.invalidateQueries({ queryKey: ['challenge-quests', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['quests', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['leader-quests-manage', challengeId] });
       queryClient.invalidateQueries({ queryKey: ['leader-briefing', challengeId] });
     },
     onError: (err: any) => toast.error(err?.response?.data?.message || '등록에 실패했어요'),
@@ -444,6 +446,262 @@ function LeaderQuestCreateSection({
         </div>
       )}
     </section>
+  );
+}
+
+// ── 리더퀘스트 관리 (진행중/중단 목록 + 수정·중단·삭제) ──────────────────────
+function LeaderQuestManageSection({
+  challengeId,
+  challengeType,
+  allowedVerificationTypes,
+}: {
+  challengeId: string;
+  challengeType: string;
+  allowedVerificationTypes?: Array<'image' | 'video' | 'link' | 'text'>;
+}) {
+  const notLeaderChallenge = challengeType === 'personal_only';
+  const { data: quests = [], isLoading } = useQuery<any[]>({
+    queryKey: ['leader-quests-manage', challengeId],
+    enabled: !notLeaderChallenge && Boolean(challengeId),
+    queryFn: async () => {
+      const all = await challengeApi.listQuests(challengeId, 'all');
+      return all.filter((q) => q.questScope !== 'personal');
+    },
+  });
+
+  if (notLeaderChallenge) return null;
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <h3 className="font-bold text-gray-900">🛠️ 리더퀘스트 관리</h3>
+      <p className="text-[11px] text-gray-400 mt-1">진행 중인 리더퀘스트를 수정·중단·삭제할 수 있어요.</p>
+
+      {isLoading ? (
+        <p className="text-sm text-gray-400 mt-3">불러오는 중...</p>
+      ) : quests.length === 0 ? (
+        <p className="text-sm text-gray-400 mt-3">아직 등록한 리더퀘스트가 없어요.</p>
+      ) : (
+        <div className="mt-3 space-y-2.5">
+          {quests.map((q) => (
+            <LeaderQuestManageRow
+              key={q.questId}
+              challengeId={challengeId}
+              quest={q}
+              allowedVerificationTypes={allowedVerificationTypes}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LeaderQuestManageRow({
+  challengeId,
+  quest,
+  allowedVerificationTypes,
+}: {
+  challengeId: string;
+  quest: any;
+  allowedVerificationTypes?: Array<'image' | 'video' | 'link' | 'text'>;
+}) {
+  const queryClient = useQueryClient();
+  const allowedList = allowedVerificationTypes && allowedVerificationTypes.length
+    ? allowedVerificationTypes
+    : (['image', 'text', 'link', 'video'] as const);
+  const allowedSet = new Set<'image' | 'video' | 'link' | 'text'>(allowedList);
+
+  const isActive = quest.status !== 'inactive';
+  const submissionCount = Number(quest.submissionCount ?? 0);
+
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(quest.title ?? '');
+  const [description, setDescription] = useState(quest.description ?? '');
+  const [types, setTypes] = useState<Set<'image' | 'video' | 'link' | 'text'>>(
+    new Set((quest.allowedVerificationTypes ?? Array.from(allowedSet)) as Array<'image' | 'video' | 'link' | 'text'>),
+  );
+  const [approvalRequired, setApprovalRequired] = useState(Boolean(quest.approvalRequired));
+  const [targetTime, setTargetTime] = useState<string>(quest.targetTime ?? '');
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['leader-quests-manage', challengeId] });
+    queryClient.invalidateQueries({ queryKey: ['challenge-quests', challengeId] });
+    queryClient.invalidateQueries({ queryKey: ['quests', challengeId] });
+    queryClient.invalidateQueries({ queryKey: ['leader-briefing', challengeId] });
+  };
+
+  const updateMutation = useMutation({
+    mutationFn: (params: Parameters<typeof challengeApi.updateLeaderQuest>[2]) =>
+      challengeApi.updateLeaderQuest(challengeId, quest.questId, params),
+    onSuccess: (_d, params) => {
+      toast.success(
+        params.status === 'inactive' ? '중단했어요' : params.status === 'active' ? '재개했어요' : '수정했어요',
+      );
+      setEditing(false);
+      invalidate();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '변경에 실패했어요'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => challengeApi.deleteLeaderQuest(challengeId, quest.questId),
+    onSuccess: () => {
+      toast.success('삭제했어요');
+      invalidate();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '삭제에 실패했어요'),
+  });
+
+  const toggleType = (key: 'image' | 'video' | 'link' | 'text') => {
+    setTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        if (next.size > 1) next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const onDelete = () => {
+    const warn = submissionCount > 0
+      ? `이미 ${submissionCount}건의 인증이 있어요. 삭제하면 퀘스트가 사라집니다(인증 기록은 보존). 대신 '중단'을 권장해요.\n\n그래도 삭제할까요?`
+      : '이 리더퀘스트를 삭제할까요?';
+    if (window.confirm(warn)) deleteMutation.mutate();
+  };
+
+  const busy = updateMutation.isPending || deleteMutation.isPending;
+
+  return (
+    <div className={`rounded-xl border p-3 ${isActive ? 'border-gray-200 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
+              }`}
+            >
+              {isActive ? '진행중' : '중단됨'}
+            </span>
+            <p className="text-sm font-semibold text-gray-900 truncate">{quest.title}</p>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-0.5">인증 {submissionCount}건{quest.targetTime ? ` · 목표 ${quest.targetTime}` : ''}</p>
+        </div>
+      </div>
+
+      {editing ? (
+        <div className="mt-3 space-y-2">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={100}
+            className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary-300"
+          />
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            maxLength={1000}
+            rows={3}
+            className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary-300 resize-none"
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {VERIFICATION_TYPE_OPTIONS.map((opt) => {
+              const allowed = allowedSet.has(opt.key);
+              const active = allowed && types.has(opt.key);
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  disabled={!allowed}
+                  onClick={() => allowed && toggleType(opt.key)}
+                  className={[
+                    'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                    !allowed
+                      ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed line-through'
+                      : active
+                        ? 'bg-primary-50 border-primary-300 text-primary-700'
+                        : 'bg-white border-gray-200 text-gray-500',
+                  ].join(' ')}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <label className="text-[11px] font-semibold text-gray-600">목표 시각</label>
+              <input
+                type="time"
+                value={targetTime}
+                onChange={(e) => setTargetTime(e.target.value)}
+                className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary-300"
+              />
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer pt-5">
+              <input type="checkbox" checked={approvalRequired} onChange={(e) => setApprovalRequired(e.target.checked)} />
+              <span className="text-xs text-gray-700">리더 승인 후 인정</span>
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={busy || !title.trim() || !description.trim() || types.size === 0}
+              onClick={() =>
+                updateMutation.mutate({
+                  title: title.trim(),
+                  description: description.trim(),
+                  allowedVerificationTypes: Array.from(types),
+                  approvalRequired,
+                  targetTime: targetTime || undefined,
+                })
+              }
+              className="flex-1 py-2 rounded-lg bg-primary-600 text-white text-xs font-semibold disabled:opacity-50"
+            >
+              저장
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="px-4 py-2 rounded-lg bg-gray-100 text-gray-600 text-xs font-semibold"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setEditing(true)}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+          >
+            수정
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => updateMutation.mutate({ status: isActive ? 'inactive' : 'active' })}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 ${
+              isActive ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+            }`}
+          >
+            {isActive ? '중단' : '재개'}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onDelete}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-500 disabled:opacity-50"
+          >
+            삭제
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -781,6 +1039,11 @@ export function LeaderOpsTab({
       <ChallengeControlCard challengeId={challengeId} />
       <BriefingSection challengeId={challengeId} />
       <LeaderQuestCreateSection
+        challengeId={challengeId}
+        challengeType={challengeType}
+        allowedVerificationTypes={allowedVerificationTypes}
+      />
+      <LeaderQuestManageSection
         challengeId={challengeId}
         challengeType={challengeType}
         allowedVerificationTypes={allowedVerificationTypes}

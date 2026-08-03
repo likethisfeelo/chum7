@@ -7,11 +7,66 @@
  * 레거시 2-테이블 패턴(questSubmissions + activeQuestSubmissions)을 단일 테이블 내
  * 이력 아이템 + ACTIVE 마커(조건부 put으로 user+quest당 활성 제출 1건 보장)로 재구성.
  */
-import { GetCommand, PutCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  DeleteCommand,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  TransactWriteCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 import { TABLE, challengePk } from './shared';
 
 const questSk = (questId: string) => `QUEST#${questId}`;
+
+/**
+ * 퀘스트 부분 수정 — 리더 운영탭의 수정/중단(status)용 (admin-api updateQuestFields 대응).
+ * 존재하지 않으면 false 반환(ConditionalCheckFailed). 키 속성은 patch에서 무시한다.
+ */
+export async function updateQuestFields(
+  challengeId: string,
+  questId: string,
+  patch: Record<string, any>,
+): Promise<boolean> {
+  const entries = Object.entries(patch).filter(
+    ([k, v]) => v !== undefined && !['pk', 'sk', 'questId', 'challengeId'].includes(k),
+  );
+  if (entries.length === 0) return true;
+  const names: Record<string, string> = {};
+  const values: Record<string, any> = {};
+  const sets = entries.map(([k, v], i) => {
+    names[`#f${i}`] = k;
+    values[`:v${i}`] = v;
+    return `#f${i} = :v${i}`;
+  });
+  try {
+    await docClient.send(
+      new UpdateCommand({
+        TableName: tableName(TABLE),
+        Key: { pk: challengePk(challengeId), sk: questSk(questId) },
+        UpdateExpression: `SET ${sets.join(', ')}`,
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: values,
+        ConditionExpression: 'attribute_exists(sk)',
+      }),
+    );
+    return true;
+  } catch (err: any) {
+    if (err?.name === 'ConditionalCheckFailedException') return false;
+    throw err;
+  }
+}
+
+/** 퀘스트 정의 삭제 — QUEST# 아이템만 제거(제출/인증 이력은 보존). */
+export async function deleteQuest(challengeId: string, questId: string): Promise<void> {
+  await docClient.send(
+    new DeleteCommand({
+      TableName: tableName(TABLE),
+      Key: { pk: challengePk(challengeId), sk: questSk(questId) },
+    }),
+  );
+}
 
 /**
  * 퀘스트 생성 — pk=`CHAL#<challengeId>`, sk=`QUEST#<questId>`.

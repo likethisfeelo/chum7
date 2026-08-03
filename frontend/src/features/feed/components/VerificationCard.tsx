@@ -6,6 +6,8 @@ import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import { ImageCarousel } from '@/shared/components/ImageCarousel';
 import { CommentSection } from './CommentSection';
 import { RecommendationInline } from './RecommendationInline';
+import { ReportButton } from './ReportModal';
+import type { ReportTarget } from '@/features/feed/api/reportApi';
 import type { PlazaPost } from '@/features/feed/api/plazaApi';
 import type { usePlazaComments } from '@/features/feed/hooks/usePlazaComments';
 import type { Recommendation } from '@/features/feed/hooks/usePlazaReactions';
@@ -103,6 +105,16 @@ export function VerificationCard({
   const hasMedia = images.length > 0;
   const isVideo = hasMedia && images.length === 1 && isVideoUrl(images[0]!);
 
+  // courtyard(인증 변환)면 인증 신고, 그 외(뱃지후기 등)는 마당 게시물 신고
+  const isCourtyardVf = post.postType === 'courtyard' && post.plazaPostId.startsWith('courtyard-');
+  const reportTarget: ReportTarget = isCourtyardVf
+    ? {
+        targetType: 'verification',
+        targetId: post.plazaPostId.slice('courtyard-'.length),
+        challengeId: post.challengeId ?? null,
+      }
+    : { targetType: 'plaza', targetId: post.plazaPostId };
+
   return (
     <article className="rounded-2xl overflow-hidden glass-card">
 
@@ -186,6 +198,7 @@ export function VerificationCard({
           <span className="ml-auto text-[11px] text-gray-400">
             {format(new Date(post.createdAt), 'M월 d일 HH:mm', { locale: ko })}
           </span>
+          <ReportButton target={reportTarget} className="ml-1 text-gray-300 hover:text-red-500 text-sm leading-none" />
         </div>
 
         {state.isOpen && <CommentSection postId={post.plazaPostId} hook={commentHook} />}

@@ -207,6 +207,24 @@ export const createLeaderQuestSchema = z.object({
 });
 export type CreateLeaderQuestInput = z.infer<typeof createLeaderQuestSchema>;
 
+// 리더 퀘스트 수정/중단 — 부분 수정. status='inactive'면 중단(제출 차단), 'active'면 재개.
+export const updateLeaderQuestSchema = z
+  .object({
+    title: z.string().min(1).max(100).optional(),
+    description: z.string().min(1).max(1000).optional(),
+    allowedVerificationTypes: z.array(z.enum(['image', 'video', 'link', 'text'])).min(1).optional(),
+    verificationGuide: z.string().min(1).max(500).optional(),
+    approvalRequired: z.boolean().optional(),
+    rewardPoints: z.number().int().min(0).max(1000).optional(),
+    targetTime: z
+      .string()
+      .regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/)
+      .optional(),
+    status: z.enum(['active', 'inactive']).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: '수정할 항목이 없습니다' });
+export type UpdateLeaderQuestInput = z.infer<typeof updateLeaderQuestSchema>;
+
 // ── 퀘스트 제출 (레거시 quest/submit) ───────────────────────────────────────
 
 export const submitQuestSchema = z.object({

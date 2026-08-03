@@ -17,7 +17,9 @@ import {
   deletePostCompletely,
   getPost,
   listAdminPostIndex,
+  listPlazaAdminLog,
   putAdminPostIndex,
+  putPlazaAdminLog,
   putPost,
   setAdminPostIndexActive,
   setPostActive,
@@ -139,6 +141,15 @@ plazaAdminRoutes.post('/posts', async (c) => {
     isActive: true,
     authorId: userId,
   });
+  // 감사 로그 — 게시자
+  await putPlazaAdminLog({
+    action: 'create',
+    actorId: userId,
+    plazaPostId,
+    authorId: userId,
+    at: nowIso,
+    contentPreview: input.content?.slice(0, 80) ?? null,
+  });
 
   // 해시태그 레지스트리 유지 (사용자 작성 경로와 동일 정책)
   for (const tag of all) {
@@ -190,10 +201,27 @@ plazaAdminRoutes.patch('/posts/:plazaPostId/activate', async (c) => {
   return ok(c, { plazaPostId, isActive: true }, '게시물을 다시 노출했습니다');
 });
 
-// 게시물 완전 삭제 — META·댓글·리액션·관리 인덱스까지 제거
+// 게시물 완전 삭제 — META·댓글·리액션·관리 인덱스까지 제거. 전 관리자 삭제 가능, 로그 기록.
 plazaAdminRoutes.delete('/posts/:plazaPostId', async (c) => {
+  const { userId } = c.get('authUser')!;
   const plazaPostId = c.req.param('plazaPostId');
+  const existing = await getPost(plazaPostId);
   await deletePostCompletely(plazaPostId);
   await deleteAdminPostIndex(plazaPostId);
+  // 감사 로그 — 누가 삭제했는지 + 원게시자
+  await putPlazaAdminLog({
+    action: 'delete',
+    actorId: userId,
+    plazaPostId,
+    authorId: (existing?.authorId as string) ?? null,
+    at: new Date().toISOString(),
+    contentPreview: (existing?.content as string)?.slice(0, 80) ?? null,
+  });
   return ok(c, { plazaPostId, deleted: true }, '게시물을 삭제했습니다');
+});
+
+// 운영자 마당글 게시/삭제 로그 조회
+plazaAdminRoutes.get('/logs', async (c) => {
+  const logs = await listPlazaAdminLog(100);
+  return ok(c, { logs });
 });

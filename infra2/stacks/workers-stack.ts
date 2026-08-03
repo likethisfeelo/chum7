@@ -186,7 +186,7 @@ export class WorkersStack extends cdk.Stack {
     // 인증 반려 → 마당 변환분 비활성화 (같은 워커의 이벤트 구동 경로)
     new events.Rule(this, 'VerificationRejectedToPlaza', {
       ruleName: `${config.prefix}-verification-rejected-plaza`,
-      eventPattern: { detailType: ['verification.rejected'] },
+      eventPattern: { detailType: ['verification.rejected', 'verification.hidden'] },
       targets: [new eventsTargets.LambdaFunction(plazaConverter)],
     });
 

@@ -189,6 +189,40 @@ export const challengeApi = {
     return res.data.data;
   },
 
+  // 퀘스트 목록 조회 (GET /c/:id/quests?status=). 리더 관리용은 status='all'.
+  listQuests: async (challengeId: string, status: string = 'active'): Promise<any[]> => {
+    const res = await apiClient.get(`/c/${challengeId}/quests?status=${encodeURIComponent(status)}`);
+    return res.data.data?.quests ?? [];
+  },
+
+  // ── 리더퀘스트 수정 / 중단·재개 (PUT /c/:id/leader/quests/:questId) ──────────
+  updateLeaderQuest: async (
+    challengeId: string,
+    questId: string,
+    params: {
+      title?: string;
+      description?: string;
+      allowedVerificationTypes?: Array<'image' | 'text' | 'link' | 'video'>;
+      verificationGuide?: string;
+      approvalRequired?: boolean;
+      rewardPoints?: number;
+      targetTime?: string;
+      status?: 'active' | 'inactive';
+    },
+  ): Promise<any> => {
+    const res = await apiClient.put(`/c/${challengeId}/leader/quests/${questId}`, params);
+    return res.data.data;
+  },
+
+  // 리더퀘스트 삭제 (DELETE /c/:id/leader/quests/:questId)
+  deleteLeaderQuest: async (
+    challengeId: string,
+    questId: string,
+  ): Promise<{ questId: string; deleted: true }> => {
+    const res = await apiClient.delete(`/c/${challengeId}/leader/quests/${questId}`);
+    return res.data.data;
+  },
+
   // 인증 게시물 1건 반려 — 그날 인증만 반려(피드/마당에서 숨김, 본인 기록엔 남김, 점수 되돌림)
   rejectVerification: async (
     challengeId: string,

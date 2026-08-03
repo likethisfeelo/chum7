@@ -24,7 +24,14 @@ import {
   listChallengeParticipations,
   updateParticipationFields,
 } from '../repo/participations';
-import { countPendingSubmissions, listQuests, putQuest } from '../repo/quests';
+import {
+  countPendingSubmissions,
+  deleteQuest,
+  getQuest,
+  listQuests,
+  putQuest,
+  updateQuestFields,
+} from '../repo/quests';
 import {
   findChallengeVerificationById,
   updateVerificationFields,
@@ -36,7 +43,12 @@ import {
   updateProposalReReject,
 } from '../repo/quest-proposals';
 import { canRerejectProposal, canReviewProposal, proposalReviewOutcome } from '../domain/proposal-rules';
-import { createLeaderQuestSchema, proposalReviewSchema, proposalReRejectSchema } from '../schemas';
+import {
+  createLeaderQuestSchema,
+  updateLeaderQuestSchema,
+  proposalReviewSchema,
+  proposalReRejectSchema,
+} from '../schemas';
 import { stripKeys } from '../repo/shared';
 
 export const leaderRoutes = new Hono<AppEnv>();
@@ -251,6 +263,70 @@ leaderRoutes.post('/quests', async (c) => {
 
   await putQuest(challengeId, quest);
   return ok(c, quest, '공통 리더퀘스트가 등록됐어요', 201);
+});
+
+// 리더퀘스트 수정 / 중단·재개 (리더 — status='inactive'면 중단, 'active'면 재개)
+leaderRoutes.put('/quests/:questId', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const questId = c.req.param('questId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const challenge = guard.challenge!;
+
+  const existing = await getQuest(challengeId, questId);
+  if (!existing || existing.questScope === 'personal') {
+    return fail(c, 404, 'QUEST_NOT_FOUND', '리더퀘스트를 찾을 수 없습니다');
+  }
+
+  const input = updateLeaderQuestSchema.parse(await c.req.json().catch(() => ({})));
+
+  const patch: Record<string, any> = {};
+  if (input.title !== undefined) patch.title = input.title;
+  if (input.description !== undefined) patch.description = input.description;
+  if (input.verificationGuide !== undefined) patch.verificationGuide = input.verificationGuide.trim();
+  if (input.approvalRequired !== undefined) patch.approvalRequired = input.approvalRequired;
+  if (input.rewardPoints !== undefined) patch.rewardPoints = input.rewardPoints;
+  if (input.targetTime !== undefined) patch.targetTime = input.targetTime;
+  if (input.status !== undefined) patch.status = input.status;
+
+  // 인증 방식 변경 시 챌린지 허용범위 교차검증 + 대표 verificationType 재설정
+  if (input.allowedVerificationTypes !== undefined) {
+    const challengeAllowedTypes: string[] = Array.isArray(challenge.allowedVerificationTypes)
+      ? challenge.allowedVerificationTypes
+      : ['image', 'video', 'link', 'text'];
+    if (!input.allowedVerificationTypes.every((t) => challengeAllowedTypes.includes(t))) {
+      return fail(c, 400, 'INVALID_VERIFICATION_TYPES',
+        `이 챌린지에서 허용되지 않는 인증 방식입니다. 허용: ${challengeAllowedTypes.join(', ')}`);
+    }
+    patch.allowedVerificationTypes = input.allowedVerificationTypes;
+    patch.verificationType = input.allowedVerificationTypes[0];
+  }
+
+  patch.updatedAt = new Date().toISOString();
+  const okUpdate = await updateQuestFields(challengeId, questId, patch);
+  if (!okUpdate) return fail(c, 404, 'QUEST_NOT_FOUND', '리더퀘스트를 찾을 수 없습니다');
+
+  const updated = await getQuest(challengeId, questId);
+  const msg = input.status === 'inactive' ? '리더퀘스트를 중단했어요'
+    : input.status === 'active' ? '리더퀘스트를 재개했어요'
+    : '리더퀘스트를 수정했어요';
+  return ok(c, updated ? stripKeys(updated) : null, msg);
+});
+
+// 리더퀘스트 삭제 (리더 — 퀘스트 정의 제거. 기존 제출/인증 이력은 보존)
+leaderRoutes.delete('/quests/:questId', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const questId = c.req.param('questId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+
+  const existing = await getQuest(challengeId, questId);
+  if (!existing || existing.questScope === 'personal') {
+    return fail(c, 404, 'QUEST_NOT_FOUND', '리더퀘스트를 찾을 수 없습니다');
+  }
+
+  await deleteQuest(challengeId, questId);
+  return ok(c, { questId, deleted: true }, '리더퀘스트를 삭제했어요');
 });
 
 // 개인 퀘스트 제안 심사 목록 (리더 — 기본 pending, status=all 지원)
