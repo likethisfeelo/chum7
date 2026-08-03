@@ -116,6 +116,7 @@ async function normalizeVerification(v: VerificationItem, ctx: ViewerCtx) {
     day: v.day,
     verificationType,
     questType: v.questType || null,
+    questId: v.questId || null, // 리더 퀘스트 이동 UI에서 현재 퀘스트 식별용
     // 퀘스트 제목/설명 — 게시물에 어떤 퀘스트 인증인지 표시(설명은 프론트 '더보기'). 챌린지 스코프에서만 해석됨.
     questTitle: v.questId && ctx.questMap ? ctx.questMap.get(v.questId)?.title ?? null : null,
     questDescription: v.questId && ctx.questMap ? ctx.questMap.get(v.questId)?.description ?? null : null,

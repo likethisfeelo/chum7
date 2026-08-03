@@ -530,6 +530,17 @@ export const ChallengeFeedPage = () => {
     onError: (err: any) => toast.error(err?.response?.data?.message || "반려에 실패했어요"),
   });
 
+  const moveQuestMutation = useMutation({
+    mutationFn: (vars: { verificationId: string; toQuestId: string }) =>
+      challengeApi.moveLeaderQuestVerification(challengeId!, vars.verificationId, vars.toQuestId),
+    onSuccess: () => {
+      toast.success("인증을 다른 퀘스트로 옮겼어요 (점수 유지)");
+      queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
+      queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || "이동에 실패했어요"),
+  });
+
   const challengeVerifications = useMemo(() => verificationData || [], [verificationData]);
   const myChallengeVerifications = useMemo(() => myVerificationData || [], [myVerificationData]);
 
@@ -793,6 +804,32 @@ export const ChallengeFeedPage = () => {
             notStartedYet={!isActive && !challengeEnded}
           />
         </div>
+
+        {/* 리더 전용 — 인증을 다른 리더퀘스트로 이동 (잘못된 퀘스트에 올린 경우, 점수 유지) */}
+        {isCreator && item.questType === "leader" && leaderQuests.length >= 2 && (
+          <div className="mt-2 pt-2 border-t border-white/40 flex items-center gap-2">
+            <span className="text-[11px] text-gray-500 shrink-0">퀘스트 이동</span>
+            <select
+              value=""
+              onChange={(e) => {
+                const toQuestId = e.target.value;
+                if (toQuestId) moveQuestMutation.mutate({ verificationId: item.verificationId, toQuestId });
+                e.target.value = "";
+              }}
+              disabled={moveQuestMutation.isPending}
+              className="flex-1 text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:border-primary-300 disabled:opacity-50"
+            >
+              <option value="">다른 퀘스트로 옮기기…</option>
+              {leaderQuests
+                .filter((q: any) => q.questId !== item.questId)
+                .map((q: any) => (
+                  <option key={q.questId} value={q.questId}>
+                    {q.title}
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
 
         {/* 리더 전용 — 인증 게시물 반려 (본인 게시물 제외) */}
         {isCreator && !item.isMine && (
