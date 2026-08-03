@@ -773,10 +773,14 @@ export const InlineVerificationForm = ({
                   value={formData.hashtag}
                   onChange={(e) => {
                     const raw = e.target.value;
-                    // 한글 IME 조합 중에는 자모가 완성되기 전이라 필터링을 건너뛴다
-                    // (조합 중 필터링하면 자모가 즉시 제거돼 한글 입력이 불가능)
-                    if (isHashtagComposingRef.current) {
-                      setFormData((prev) => ({ ...prev, hashtag: raw.slice(0, 20) }));
+                    // 한글 IME 조합 중에는 자모가 완성되기 전이라 필터링·자르기를 하지 않는다.
+                    // 모바일 IME는 compositionstart가 첫 input 뒤에 오거나 ref가 stale일 수 있어
+                    // nativeEvent.isComposing 을 함께 확인한다. (조합 중 value를 바꾸면 조합이 깨짐)
+                    const composing =
+                      (e.nativeEvent as unknown as { isComposing?: boolean }).isComposing ||
+                      isHashtagComposingRef.current;
+                    if (composing) {
+                      setFormData((prev) => ({ ...prev, hashtag: raw }));
                       return;
                     }
                     setFormData((prev) => ({ ...prev, hashtag: sanitizeHashtag(raw) }));
@@ -786,12 +790,12 @@ export const InlineVerificationForm = ({
                   }}
                   onCompositionEnd={(e) => {
                     isHashtagComposingRef.current = false;
+                    // 조합 완료 후에만 필터링·20자 제한 적용
                     const val = sanitizeHashtag((e.target as HTMLInputElement).value);
                     setFormData((prev) => ({ ...prev, hashtag: val }));
                   }}
                   className="flex-1 py-2.5 pr-2 bg-transparent focus:outline-none text-sm"
                   placeholder="해쉬태그 (선택, 최대 20자)"
-                  maxLength={20}
                 />
                 <span className="pr-3 text-xs text-gray-400">{formData.hashtag.length}/20</span>
               </div>
