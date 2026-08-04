@@ -242,6 +242,42 @@ export const challengeApi = {
     return res.data.data;
   },
 
+  // 게시물별 '완료 인정' — 해당 날짜를 리더가 수동 완료(성공·+1점) 처리 (보수용)
+  grantVerificationComplete: async (
+    challengeId: string,
+    verificationId: string,
+  ): Promise<{ verificationId: string; day: number; granted: boolean }> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/verifications/${verificationId}/grant-complete`,
+    );
+    return res.data.data;
+  },
+
+  // '완료 인정' 취소 — 수동 완료 해제 후 규칙으로 재판정
+  revokeVerificationComplete: async (
+    challengeId: string,
+    verificationId: string,
+  ): Promise<{ verificationId: string; day: number; granted: boolean }> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/verifications/${verificationId}/revoke-complete`,
+    );
+    return res.data.data;
+  },
+
+  // 참여자×날짜 그리드 — 특정 참여자의 특정 day를 완료 인정/취소 (게시물 없이도)
+  grantDayComplete: async (challengeId: string, participantId: string, day: number): Promise<any> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/participants/${participantId}/days/${day}/grant`,
+    );
+    return res.data.data;
+  },
+  revokeDayComplete: async (challengeId: string, participantId: string, day: number): Promise<any> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/participants/${participantId}/days/${day}/revoke`,
+    );
+    return res.data.data;
+  },
+
   // 인증 게시물 1건 반려 — 그날 인증만 반려(피드/마당에서 숨김, 본인 기록엔 남김, 점수 되돌림)
   rejectVerification: async (
     challengeId: string,

@@ -542,6 +542,20 @@ export const ChallengeFeedPage = () => {
     onError: (err: any) => toast.error(err?.response?.data?.message || "이동에 실패했어요"),
   });
 
+  const grantCompleteMutation = useMutation({
+    mutationFn: (vars: { verificationId: string; revoke?: boolean }) =>
+      vars.revoke
+        ? challengeApi.revokeVerificationComplete(challengeId!, vars.verificationId)
+        : challengeApi.grantVerificationComplete(challengeId!, vars.verificationId),
+    onSuccess: (_d, vars) => {
+      toast.success(vars.revoke ? "완료 인정을 취소했어요" : "이 날을 완료 인정했어요 (+1점)");
+      queryClient.invalidateQueries({ queryKey: ["leader-participants", challengeId] });
+      queryClient.invalidateQueries({ queryKey: ["leader-briefing", challengeId] });
+      queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || "처리에 실패했어요"),
+  });
+
   const challengeVerifications = useMemo(() => verificationData || [], [verificationData]);
   const myChallengeVerifications = useMemo(() => myVerificationData || [], [myVerificationData]);
 
@@ -829,6 +843,28 @@ export const ChallengeFeedPage = () => {
                   </option>
                 ))}
             </select>
+          </div>
+        )}
+
+        {/* 리더 전용 — 완료 인정(보수): 규칙상 완료가 안 잡힌 날을 수동으로 완료 처리 */}
+        {isCreator && (
+          <div className="mt-2 pt-2 border-t border-white/40 flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              disabled={grantCompleteMutation.isPending}
+              onClick={() => grantCompleteMutation.mutate({ verificationId: item.verificationId })}
+              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              ✅ 이 날 완료 인정 (+1점)
+            </button>
+            <button
+              type="button"
+              disabled={grantCompleteMutation.isPending}
+              onClick={() => grantCompleteMutation.mutate({ verificationId: item.verificationId, revoke: true })}
+              className="text-[11px] font-medium text-gray-400 hover:text-gray-600 disabled:opacity-50"
+            >
+              인정 취소
+            </button>
           </div>
         )}
 
