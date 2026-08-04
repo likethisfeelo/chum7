@@ -68,9 +68,13 @@ function getChallengeDay(userChallenge: any): number {
   return Math.max(1, elapsed + 1);
 }
 
-// 해쉬태그 정규화: 한글/영문/숫자/_/- 만 허용, 최대 20자
+// 해쉬태그 정규화: 한글(완성형+호환자모+조합자모)/영문/숫자/_/- 만 허용, 최대 20자.
+//  '가-힣'(완성형)만 허용하면 ㅋㅋ·ㅎㅎ 같은 호환자모나 IME 조합 중 자모가 걸러져 한글이 안 써진다.
 function sanitizeHashtag(raw: string): string {
-  return raw.replace(/[^가-힣a-zA-Z0-9_-]/g, "").slice(0, 20);
+  return raw
+    .replace(/^#+/, "")
+    .replace(/[^ᄀ-ᇿ㄰-㆏가-힣a-zA-Z0-9_-]/g, "")
+    .slice(0, 20);
 }
 
 function toIsoFromLocalDateTime(localDateTime: string): string {
@@ -177,7 +181,6 @@ export const InlineVerificationForm = ({
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaPreviewUrlRef = useRef<string | null>(null);
-  const isHashtagComposingRef = useRef(false);
   const lastUploadedUrlRef = useRef<string | undefined>(undefined);
   const lastUploadedObjectKeyRef = useRef<string | undefined>(undefined);
 
@@ -531,8 +534,9 @@ export const InlineVerificationForm = ({
         ...(formData.todayNote.trim()
           ? { todayNote: formData.todayNote.trim() }
           : {}),
-        ...(formData.hashtag.trim().replace(/^#+/, '')
-          ? { hashtag: formData.hashtag.trim().replace(/^#+/, '') }
+        // blur 전에 제출될 수 있으니 여기서 최종 정규화(필터·20자·선행# 제거)
+        ...(sanitizeHashtag(formData.hashtag)
+          ? { hashtag: sanitizeHashtag(formData.hashtag) }
           : {}),
         performedAt: toIsoFromLocalDateTime(
           payload?.performedAtLocal || formData.completedAt,
@@ -780,27 +784,14 @@ export const InlineVerificationForm = ({
                 <input
                   type="text"
                   value={formData.hashtag}
+                  // 입력 중에는 값을 절대 변형하지 않는다(raw 저장). 한글 IME는 조합 중 controlled value를
+                  // 바꾸면 조합이 깨져 한글이 안 써지는 기기가 있다. 필터링·자르기는 blur/제출 시점에만.
                   onChange={(e) => {
                     const raw = e.target.value;
-                    // 한글 IME 조합 중에는 자모가 완성되기 전이라 필터링·자르기를 하지 않는다.
-                    // 모바일 IME는 compositionstart가 첫 input 뒤에 오거나 ref가 stale일 수 있어
-                    // nativeEvent.isComposing 을 함께 확인한다. (조합 중 value를 바꾸면 조합이 깨짐)
-                    const composing =
-                      (e.nativeEvent as unknown as { isComposing?: boolean }).isComposing ||
-                      isHashtagComposingRef.current;
-                    if (composing) {
-                      setFormData((prev) => ({ ...prev, hashtag: raw }));
-                      return;
-                    }
-                    setFormData((prev) => ({ ...prev, hashtag: sanitizeHashtag(raw) }));
+                    setFormData((prev) => ({ ...prev, hashtag: raw }));
                   }}
-                  onCompositionStart={() => {
-                    isHashtagComposingRef.current = true;
-                  }}
-                  onCompositionEnd={(e) => {
-                    isHashtagComposingRef.current = false;
-                    // 조합 완료 후에만 필터링·20자 제한 적용
-                    const val = sanitizeHashtag((e.target as HTMLInputElement).value);
+                  onBlur={(e) => {
+                    const val = sanitizeHashtag(e.target.value);
                     setFormData((prev) => ({ ...prev, hashtag: val }));
                   }}
                   className="flex-1 py-2.5 pr-2 bg-transparent focus:outline-none text-sm"
