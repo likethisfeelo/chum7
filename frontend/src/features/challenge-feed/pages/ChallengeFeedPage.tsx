@@ -1024,12 +1024,12 @@ export const ChallengeFeedPage = () => {
     open: boolean,
     toggle: () => void,
   ) => (
-    <div className="rounded-xl border border-gray-100 overflow-hidden bg-white/40">
+    <div className="border-t border-gray-200 first:border-t-0">
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="w-full flex items-center justify-between px-3.5 py-3 hover:bg-white/60 transition-colors"
+        className="w-full flex items-center justify-between py-3 hover:opacity-70 transition-opacity"
       >
         <span className="text-sm font-semibold text-gray-800">
           {kind === "leader" ? "🎯 리더퀘스트" : "🌱 개인퀘스트"}
@@ -1043,7 +1043,7 @@ export const ChallengeFeedPage = () => {
         </svg>
       </button>
       {open && (
-        <div className="px-3 pb-3 space-y-4">
+        <div className="pb-4 space-y-4">
           {list.length === 0 ? (
             <p className="text-sm text-gray-500 py-6 text-center">
               {kind === "leader" ? "아직 올라온 리더퀘스트 인증이 없습니다." : "아직 올라온 개인퀘스트 인증이 없습니다."}
@@ -1781,8 +1781,8 @@ export const ChallengeFeedPage = () => {
 
           {/* 5) 인증 피드 — 챌린지 유형에 맞는 섹션만, 각 섹션 펼침/접힘(아코디언) */}
           {/*    종료된 챌린지는 참여했던 사람 + 생성자/리더만 열람 가능 — 미참여자에게는 안내 카드 */}
-          <section className="glass-card rounded-2xl p-5">
-            <h3 className="font-bold text-gray-900 mb-3">인증 피드</h3>
+          <section className="glass-card rounded-2xl px-3 py-4 sm:p-5">
+            <h3 className="font-bold text-gray-900 mb-1 px-0.5">인증 피드</h3>
             {feedLockedForNonMember ? (
               <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-8 text-center">
                 <p className="text-2xl mb-2">🔒</p>
@@ -1797,7 +1797,7 @@ export const ChallengeFeedPage = () => {
                 </button>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div>
                 {showLeaderFeed && renderFeedSection("leader", leaderFeedVerifications, openLeaderFeed, () => setOpenLeaderFeed((v) => !v))}
                 {showPersonalFeed && renderFeedSection("personal", personalFeedVerifications, openPersonalFeed, () => setOpenPersonalFeed((v) => !v))}
               </div>
