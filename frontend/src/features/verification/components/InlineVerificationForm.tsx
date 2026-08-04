@@ -182,13 +182,22 @@ export const InlineVerificationForm = ({
   const lastUploadedObjectKeyRef = useRef<string | undefined>(undefined);
 
   const availableTypes = useMemo(() => {
-    const base = quest
+    // 백엔드는 '챌린지' allowedVerificationTypes 로 검증한다(verifications.ts). 폼은 절대 그 밖의
+    //  타입을 제공하면 안 됨 — 피드의 퀘스트 폼이 퀘스트 값 없을 때 4종 전부로 열려 400 나던 버그 수정.
+    const challengeAllowed = (userChallenge?.challenge?.allowedVerificationTypes as string[] | undefined)
+      ?.filter(Boolean);
+    // 퀘스트/프롭 허용집합으로 더 좁히되(있을 때만), 최종 결과는 항상 챌린지 허용집합 이내로 상한.
+    const narrow = quest
       ? (quest.allowedVerificationTypes?.length ? quest.allowedVerificationTypes : null)
-      : allowedVerificationTypes;
-    if (!base || base.length === 0) return ALL_TYPES;
-    const filtered = ALL_TYPES.filter((t) => base.includes(t));
-    return filtered.length ? filtered : ALL_TYPES;
-  }, [allowedVerificationTypes, quest]);
+      : (allowedVerificationTypes?.length ? allowedVerificationTypes : null);
+    let result = ALL_TYPES.filter((t) => !narrow || narrow.includes(t));
+    if (challengeAllowed && challengeAllowed.length) {
+      result = result.filter((t) => challengeAllowed.includes(t));
+      // 퀘스트 값이 챌린지와 어긋나 교집합이 비면(데이터 불일치) 챌린지 허용집합으로 폴백(안전).
+      if (result.length === 0) result = ALL_TYPES.filter((t) => challengeAllowed.includes(t));
+    }
+    return result.length ? result : ALL_TYPES;
+  }, [allowedVerificationTypes, quest, userChallenge]);
 
   // challengeType 기반 questType 가용 여부
   const challengeType = String(userChallenge?.challenge?.challengeType || 'leader_personal');
