@@ -106,8 +106,8 @@ async function recomputeProgressUpgradeOnly(challenge: Record<string, any>, chal
       ) {
         changed = true;
       }
-      // 이미 성공한 날은 유지(하향 없음). 미완료였던 날이 이제 완료 조건을 충족하면 상향.
-      if (dp.status !== 'success') {
+      // 이미 성공한 날·리더가 명시적으로 미완 처리한 날은 유지. 그 외 미완료였던 날이 조건 충족 시 상향.
+      if (dp.status !== 'success' && dp.leaderForcedIncomplete !== true) {
         const attempted =
           prunedIds.length > 0 ||
           next.personalQuestDone === true ||
@@ -828,6 +828,56 @@ async function revokeDayComplete(
   return { ok: true };
 }
 
+/** 그리드 3단계 상태 지정 — complete(성공·1점) / partial(일부·0점) / none(미완·취소·0점) */
+async function setDayState(
+  challenge: Record<string, any>,
+  challengeId: string,
+  participantId: string,
+  day: number,
+  state: 'complete' | 'partial' | 'none',
+  leaderId: string,
+): Promise<{ ok: boolean; code?: string }> {
+  if (state === 'complete') {
+    return grantDayComplete(challenge, challengeId, participantId, day, leaderId);
+  }
+  const participation = await getParticipation(challengeId, participantId);
+  if (!participation) return { ok: false, code: 'PARTICIPATION_NOT_FOUND' };
+  const nowIso = new Date().toISOString();
+  const progress = normalizeProgress(participation.progress);
+  const durationDays = resolveDurationDays(challenge.durationDays, progress);
+
+  let found = false;
+  const updated = progress.map((entry: any) => {
+    if (Number(entry.day) !== day) return entry;
+    found = true;
+    const next: any = { ...entry, status: state === 'partial' ? 'partial' : 'none', score: 0 };
+    delete next.leaderGrantedComplete;
+    delete next.grantedBy;
+    delete next.grantedAt;
+    // 취소(none)는 리더가 명시적으로 미완 처리 → 자동 재계산이 다시 올리지 않도록 플래그
+    if (state === 'none') next.leaderForcedIncomplete = true;
+    else delete next.leaderForcedIncomplete;
+    return next;
+  });
+  if (!found) {
+    updated.push({
+      day,
+      status: state === 'partial' ? 'partial' : 'none',
+      score: 0,
+      ...(state === 'none' ? { leaderForcedIncomplete: true } : {}),
+    } as any);
+  }
+
+  const { totalScore, consecutive } = recomputeTotals(updated, durationDays);
+  await updateParticipationFields(challengeId, participantId, {
+    progress: updated,
+    score: totalScore,
+    consecutiveDays: consecutive,
+    updatedAt: nowIso,
+  });
+  return { ok: true };
+}
+
 // 게시물별 '완료 인정' — 규칙상 자동 완료가 안 잡힌 날을 리더가 수동으로 완료 처리.
 leaderRoutes.put('/verifications/:verificationId/grant-complete', async (c) => {
   const challengeId = c.req.param('challengeId')!;
@@ -886,4 +936,24 @@ leaderRoutes.put('/participants/:participantId/days/:day/revoke', async (c) => {
   const r = await revokeDayComplete(guard.challenge!, challengeId, participantId, day);
   if (!r.ok) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
   return ok(c, { participantId, day, granted: false }, '완료 인정을 취소했어요');
+});
+
+// 그리드 3단계 상태 지정 — body {state:'complete'|'partial'|'none'}
+leaderRoutes.put('/participants/:participantId/days/:day/set-state', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const participantId = c.req.param('participantId')!;
+  const day = Number(c.req.param('day'));
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const { userId: leaderId } = c.get('authUser')!;
+  if (!Number.isFinite(day) || day < 1) return fail(c, 400, 'INVALID_DAY', '유효한 day가 필요합니다');
+
+  const body = await c.req.json().catch(() => ({} as any));
+  const state = body.state;
+  if (state !== 'complete' && state !== 'partial' && state !== 'none') {
+    return fail(c, 400, 'INVALID_STATE', 'state는 complete|partial|none 이어야 합니다');
+  }
+  const r = await setDayState(guard.challenge!, challengeId, participantId, day, state, leaderId);
+  if (!r.ok) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
+  return ok(c, { participantId, day, state });
 });

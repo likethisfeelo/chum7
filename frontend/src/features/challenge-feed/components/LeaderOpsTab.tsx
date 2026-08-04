@@ -165,11 +165,10 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
   const queryClient = useQueryClient();
   const days = participant.days ?? [];
 
-  const toggleMutation = useMutation({
-    mutationFn: ({ day, granted }: { day: number; granted: boolean }) =>
-      granted
-        ? challengeApi.revokeDayComplete(challengeId, participant.userId, day)
-        : challengeApi.grantDayComplete(challengeId, participant.userId, day),
+  // 3단계 순환: 완료 → 일부 → 취소(미완) → 완료
+  const cycleMutation = useMutation({
+    mutationFn: ({ day, state }: { day: number; state: 'complete' | 'partial' | 'none' }) =>
+      challengeApi.setDayState(challengeId, participant.userId, day, state),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leader-participants', challengeId] });
       queryClient.invalidateQueries({ queryKey: ['leader-briefing', challengeId] });
@@ -177,6 +176,9 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
     },
     onError: (err: any) => toast.error(err?.response?.data?.message || '처리에 실패했어요'),
   });
+
+  const nextState = (status: string): 'complete' | 'partial' | 'none' =>
+    status === 'success' ? 'partial' : status === 'partial' ? 'none' : 'complete';
 
   if (days.length === 0) return null;
 
@@ -194,24 +196,21 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
           <div className="mt-2 grid grid-cols-7 gap-1">
             {days.map((d) => {
               const isSuccess = d.status === 'success';
-              const busy = toggleMutation.isPending && toggleMutation.variables?.day === d.day;
+              const busy = cycleMutation.isPending && cycleMutation.variables?.day === d.day;
               const base =
                 isSuccess
                   ? 'bg-emerald-500 text-white'
                   : d.status === 'partial'
                     ? 'bg-amber-200 text-amber-800'
                     : 'bg-gray-100 text-gray-400';
+              const label = isSuccess ? '완료' : d.status === 'partial' ? '일부' : '미완';
               return (
                 <button
                   key={d.day}
                   type="button"
                   disabled={busy}
-                  title={
-                    isSuccess
-                      ? `${d.day}일차 완료${d.granted ? '(수동인정)' : ''} — 눌러서 취소`
-                      : `${d.day}일차 — 눌러서 완료 인정(+1점)`
-                  }
-                  onClick={() => toggleMutation.mutate({ day: d.day, granted: isSuccess })}
+                  title={`${d.day}일차 · 현재 ${label} — 눌러서 ${nextState(d.status) === 'complete' ? '완료' : nextState(d.status) === 'partial' ? '일부' : '취소(미완)'}`}
+                  onClick={() => cycleMutation.mutate({ day: d.day, state: nextState(d.status) })}
                   className={`relative h-8 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-50 ${base}`}
                 >
                   {d.day}
@@ -227,7 +226,7 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
           <p className="text-[10px] text-gray-400 mt-1.5">
             <span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500 align-middle" /> 완료 ·
             <span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-200 align-middle ml-1" /> 일부 ·
-            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-100 align-middle ml-1" /> 미완 · ✋ 수동인정. 칸을 눌러 완료/취소.
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-100 align-middle ml-1" /> 미완 · ✋ 수동인정. 칸을 누르면 완료→일부→미완 순환.
           </p>
         </>
       )}

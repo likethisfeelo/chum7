@@ -277,6 +277,19 @@ export const challengeApi = {
     );
     return res.data.data;
   },
+  // 그리드 3단계 상태 지정 — 완료(complete)/일부(partial)/취소·미완(none)
+  setDayState: async (
+    challengeId: string,
+    participantId: string,
+    day: number,
+    state: 'complete' | 'partial' | 'none',
+  ): Promise<any> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/participants/${participantId}/days/${day}/set-state`,
+      { state },
+    );
+    return res.data.data;
+  },
 
   // 인증 게시물 1건 반려 — 그날 인증만 반려(피드/마당에서 숨김, 본인 기록엔 남김, 점수 되돌림)
   rejectVerification: async (
