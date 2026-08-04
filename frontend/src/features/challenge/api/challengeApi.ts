@@ -311,6 +311,11 @@ export const challengeApi = {
     const res = await apiClient.post(`/c/${challengeId}/completion-requests`, params);
     return res.data.data;
   },
+  // 사용자 — 내 인정 요청 목록(상태 포함)
+  getMyCompletionRequests: async (challengeId: string): Promise<any[]> => {
+    const res = await apiClient.get(`/c/${challengeId}/completion-requests/my`);
+    return res.data.data?.requests ?? [];
+  },
   // 리더 — 인정 요청 큐 조회
   getLeaderCompletionRequests: async (challengeId: string, status = 'pending'): Promise<any[]> => {
     const res = await apiClient.get(
