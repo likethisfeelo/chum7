@@ -80,7 +80,7 @@
 ## 8. 알림 (h)
 
 - **인증 취소 → 리더 노티**: 사용자가 자기 인증을 취소하면 리더에게 알림(스탯 영향 인지). 신규 이벤트 `verification.self_cancelled`(수신자 leaderId) → notification-worker 케이스 추가. (알림워커는 `chme.*` 전부 수신 → 인프라 변경 불필요)
-- **마당 삭제 요청 → 관리자 노티**: 삭제 요청(신고 사유) 접수 시 관리자에게 알림. (신고 알림 경로가 없다면 이때 함께 신설 — `report.created`(수신자=운영자군) 검토)
+- **마당 삭제 요청 → 관리자 전달**: 삭제 요청(신고 사유 `deletion_request`)은 **기존 신고 큐**로 접수돼 관리자 신고 관리 페이지에 노출된다. 별도 푸시 알림 이벤트(`report.created`)는 관리자군 팬아웃 인프라가 없어 이번 범위에서 신설하지 않고, 기존 신고 처리 흐름(관리자 큐)에 합류한다.
 
 ---
 
@@ -102,14 +102,15 @@
 
 ---
 
-## 11. 구현 순서(제안)
+## 11. 구현 상태 (2026-08 구현 완료)
 
-1. 취소 코어: `PUT .../cancel`(가드+재계산+플래그) + "취소됨" 배지 + ⋮ 메뉴 + 2중확인/옵션.
-2. 개인피드 제외 필터(`removedFromOwnerFeed`) + 챌린지피드 숨김(isPublic).
-3. 보완 특별 개방(`remedyUnlocked`) — remedy 제출 경로 확장.
-4. 완주 후 조회전용 잠금(b).
-5. 마당 삭제요청(신고 사유 재사용) + 관리자 노티.
-6. 인증 취소 → 리더 노티.
+1. ✅ 취소 코어: `PUT /c/verifications/:id/cancel`(본인·완주전 가드 + day 재판정 + 플래그) + "취소됨·점수 미반영" 배지 + 카드 ⋮ 메뉴 + 2중 확인/노출 옵션 체크박스.
+2. ✅ 개인피드 제외 필터(`removedFromOwnerFeed` — `me/profile-feed`·레거시 mine) + 챌린지피드 숨김(`isPublic='false'` + gsi2 제거).
+3. ✅ 보완 특별 개방(`remedyUnlocked`) — `verifications-remedy` 가 대상 일자의 플래그를 인정해 정상 창(day 제약·disabled)을 우회(점수 ×0.7 유지).
+4. ✅ 완주 후 조회전용 잠금 — `participation.status==='completed'` 이면 취소/인정요청 액션 비활성(서버 409 `CHALLENGE_COMPLETED_READONLY` + 프론트 숨김).
+5. ✅ 마당 삭제요청 — 신고 사유 `deletion_request` 추가 + ⋮ 메뉴에서 `plaza`(courtyard) 타깃으로 기존 신고/모더레이션 큐 접수.
+6. ✅ 인증 취소 → 리더 노티 — `verification.self_cancelled`(수신자 leaderId) + notification-worker 라우팅(알림워커 rate-limit로 스팸 완화).
 
-## 남은 확인 (구현 착수 전 1개만)
-- 취소 → 리더 노티가 "스팸"이 될 수 있는지(취소가 잦으면). 필요 시 번들/레이트리밋(알림워커에 이미 있음)로 완화. 정책만 확인.
+관련 코드: `services/challenge-api/src/routes/verifications-cancel.ts`, `verifications-remedy.ts`, `verifications-read.ts`;
+`packages/contracts/src/events.ts`; `services/workers/notification-worker/src/index.ts`;
+`services/social-api/src/schemas.ts`; 프론트 `ChallengeFeedPage.tsx`·`ReportModal.tsx`·`PersonalFeedPage.tsx`·`NotificationsPage.tsx`·`challengeApi.ts`.

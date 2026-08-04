@@ -17,7 +17,7 @@ import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import { challengeApi } from "@/features/challenge/api/challengeApi";
 import { SLUG_TO_LABEL } from "@/features/challenge/constants/categories";
 import { ChallengeChatPanel } from "@/features/challenge-chat/components/ChallengeChatPanel";
-import { ReportButton } from "@/features/feed/components/ReportModal";
+import { ReportButton, ReportModal } from "@/features/feed/components/ReportModal";
 import {
   getRemedyType,
   getRemainingRemedyCount,
@@ -514,6 +514,37 @@ export const ChallengeFeedPage = () => {
     },
   });
 
+  // 사용자 본인 — 인증 취소(⋮ 메뉴) / 마당 삭제요청 상태
+  const [ownerMenuVfId, setOwnerMenuVfId] = useState<string | null>(null); // 열린 ⋮ 메뉴
+  const [cancelModal, setCancelModal] = useState<{ verificationId: string; day: number } | null>(null);
+  const [cancelStep, setCancelStep] = useState<1 | 2>(1); // 2중 확인
+  const [cancelHideFeed, setCancelHideFeed] = useState(false);
+  const [cancelHideOwner, setCancelHideOwner] = useState(false);
+  const [deletionReqVfId, setDeletionReqVfId] = useState<string | null>(null); // 마당 삭제요청 모달
+
+  const closeCancelModal = () => {
+    setCancelModal(null);
+    setCancelStep(1);
+    setCancelHideFeed(false);
+    setCancelHideOwner(false);
+  };
+
+  const cancelVerificationMutation = useMutation({
+    mutationFn: (vars: { verificationId: string; hideFromChallengeFeed: boolean; hideFromOwnerFeed: boolean }) =>
+      challengeApi.cancelVerification(vars.verificationId, {
+        hideFromChallengeFeed: vars.hideFromChallengeFeed,
+        hideFromOwnerFeed: vars.hideFromOwnerFeed,
+      }),
+    onSuccess: (d) => {
+      toast.success(d.dayNowIncomplete ? "인증을 취소했어요. 그 날 보완이 특별히 열렸어요." : "인증을 취소했어요.");
+      closeCancelModal();
+      queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
+      queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
+      queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || "취소에 실패했어요"),
+  });
+
   // 리더의 인증 게시물 반려 (그날 인증만 반려 — 피드/마당에서 숨김, 본인 기록엔 유지, 점수 되돌림)
   const [rejectingVfId, setRejectingVfId] = useState<string | null>(null);
   const [rejectVfReason, setRejectVfReason] = useState("");
@@ -670,6 +701,8 @@ export const ChallengeFeedPage = () => {
   const challengeEnded = lifecycleNow === "completed" || lifecycleNow === "archived";
   // 리더 운영 탭 노출 조건 — 챌린지 생성자 본인 (PRODUCT_SPEC §4.12-A)
   const isCreator = Boolean(challengeData?.createdBy) && challengeData?.createdBy === user?.userId;
+  // 완주(뱃지 발급) 이후에는 챌린지 피드가 조회 전용 — 인증 취소·요청 등 변경 액션 비활성 (스펙 09 §4-b)
+  const isCompletedByMe = userChallenge?.status === "completed";
   const isGaveUp = userChallenge?.phase === "gave_up" || userChallenge?.status === "gave_up";
   const canGiveUp = Boolean(userChallenge) && !isLeader && !isGaveUp && isActive;
   // 채팅방 노출 — 준비중(모집중/준비기간) 챌린지의 참여자 전용 (서버 $connect가 최종 검증).
@@ -734,15 +767,68 @@ export const ChallengeFeedPage = () => {
                 <span className="text-[11px] font-semibold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-md border border-primary-100">
                   Day {item.day || "-"}
                 </span>
+                {/* 사용자가 스스로 점수를 취소한 게시물 — 콘텐츠는 남고 점수만 미반영 */}
+                {item.scoreCancelled && (
+                  <span className="text-[11px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md border border-gray-200">
+                    취소됨 · 점수 미반영
+                  </span>
+                )}
               </div>
             </div>
           </div>
-          {/* 이미지 타입이 아닐 때 점수 */}
-          {item.verificationType !== "image" && item.score > 0 && (
-            <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2.5 py-1 rounded-full border border-primary-100 flex-shrink-0">
-              +{item.score}pt
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* 이미지 타입이 아닐 때 점수 */}
+            {item.verificationType !== "image" && item.score > 0 && (
+              <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2.5 py-1 rounded-full border border-primary-100">
+                +{item.score}pt
+              </span>
+            )}
+            {/* 본인 게시물 ⋮ 오버플로 — 인증 취소 / 마당 삭제요청 (완주 후엔 조회 전용이라 숨김) */}
+            {item.isMine && !isCompletedByMe && (
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-label="더보기"
+                  onClick={() => setOwnerMenuVfId((prev) => (prev === item.verificationId ? null : item.verificationId))}
+                  className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  ⋮
+                </button>
+                {ownerMenuVfId === item.verificationId && (
+                  <>
+                    <div className="fixed inset-0 z-[70]" onClick={() => setOwnerMenuVfId(null)} />
+                    <div className="absolute right-0 top-8 z-[71] w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1 overflow-hidden">
+                      {!item.scoreCancelled && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOwnerMenuVfId(null);
+                            setCancelStep(1);
+                            setCancelHideFeed(false);
+                            setCancelHideOwner(false);
+                            setCancelModal({ verificationId: item.verificationId, day: item.day });
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          🚫 이 날 인증 취소
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOwnerMenuVfId(null);
+                          setDeletionReqVfId(item.verificationId);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        🗑️ 마당에서 내려달라 요청
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 인증 내용 */}
@@ -921,8 +1007,8 @@ export const ChallengeFeedPage = () => {
           </div>
         )}
 
-        {/* 본인 게시물 — 리더에게 '이 게시물을 N일차 인증으로 인정 요청' */}
-        {item.isMine && !isCreator && (
+        {/* 본인 게시물 — 리더에게 '이 게시물을 N일차 인증으로 인정 요청' (완주 후엔 조회 전용) */}
+        {item.isMine && !isCreator && !isCompletedByMe && (
           <div className="mt-2 pt-2 border-t border-white/40 flex justify-end">
             <button
               type="button"
@@ -1100,6 +1186,91 @@ export const ChallengeFeedPage = () => {
             </div>
           );
         })()}
+
+        {/* 인증 취소 — 2중 확인(복구 없음) + 노출 옵션 (스펙 09) */}
+        {cancelModal && (
+          <div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 px-6"
+            onClick={closeCancelModal}
+          >
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <div className="text-center mb-2">
+                <span className="text-3xl">🚫</span>
+                <p className="text-xs text-gray-400 mt-1">{cancelStep} / 2</p>
+              </div>
+              {cancelStep === 1 ? (
+                <>
+                  <h2 className="text-lg font-bold text-gray-900 mb-2 text-center">
+                    {cancelModal.day}일차 인증을 취소할까요?
+                  </h2>
+                  <p className="text-sm text-gray-600 mb-3 text-center leading-relaxed">
+                    이 게시물이 채운 <b>해당 일자 완료·점수</b>가 해제돼요. 총점·연속일이 함께 조정될 수 있어요.
+                    게시물 자체는 남고, 그 날 <b>보완이 특별히 열려요</b>.
+                  </p>
+                  <div className="space-y-1.5 mb-4">
+                    <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" checked={cancelHideFeed} onChange={(e) => setCancelHideFeed(e.target.checked)} />
+                      챌린지 피드에서도 숨기기
+                    </label>
+                    <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" checked={cancelHideOwner} onChange={(e) => setCancelHideOwner(e.target.checked)} />
+                      개인 프로필 피드에서도 숨기기
+                    </label>
+                    <p className="text-[11px] text-gray-400 px-1">
+                      마당(광장) 게시물은 취소로 사라지지 않아요. 내리려면 ⋮의 ‘마당에서 내려달라 요청’을 이용하세요.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-lg font-bold text-rose-600 mb-2 text-center">되돌릴 수 없어요</h2>
+                  <p className="text-sm text-gray-600 mb-4 text-center leading-relaxed">
+                    취소한 점수는 <b>복구되지 않아요</b>. 회복하려면 그 날 다시 인증하거나 보완해야 해요. 정말 취소할까요?
+                  </p>
+                </>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={closeCancelModal}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-medium text-sm"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  disabled={cancelVerificationMutation.isPending}
+                  onClick={() => {
+                    if (cancelStep === 1) setCancelStep(2);
+                    else
+                      cancelVerificationMutation.mutate({
+                        verificationId: cancelModal.verificationId,
+                        hideFromChallengeFeed: cancelHideFeed,
+                        hideFromOwnerFeed: cancelHideOwner,
+                      });
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-medium text-sm disabled:opacity-50"
+                >
+                  {cancelVerificationMutation.isPending ? "처리 중..." : cancelStep === 1 ? "계속" : "취소 확정"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 마당 삭제요청 — 신고/모더레이션 큐 재사용(사유 deletion_request). 인증 취소와 분리된 동작. */}
+        {deletionReqVfId && (
+          <ReportModal
+            mode="deletion"
+            target={{
+              targetType: "plaza",
+              targetId: `courtyard-${deletionReqVfId}`,
+              plazaPostId: `courtyard-${deletionReqVfId}`,
+              challengeId: challengeId!,
+            }}
+            onClose={() => setDeletionReqVfId(null)}
+          />
+        )}
 
         {/* 응원 기록 바텀시트 (🕯️) */}
         {showCheerSheet && (

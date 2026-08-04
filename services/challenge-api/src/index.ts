@@ -12,6 +12,7 @@ import { myChallengeRoutes } from './routes/my-challenges';
 import { verificationRoutes } from './routes/verifications';
 import { verificationRemedyRoutes } from './routes/verifications-remedy';
 import { verificationReadRoutes } from './routes/verifications-read';
+import { verificationCancelRoutes } from './routes/verifications-cancel';
 import { questRoutes } from './routes/quests';
 import { leaderRoutes } from './routes/leader';
 import { publicUserRoutes } from './routes/public-users';
@@ -35,6 +36,7 @@ app.use('/c/*', requireAuth());
 // 인증 (정적 세그먼트 — /c/:challengeId 파라미터 라우트보다 우선 매칭)
 app.route('/c/verifications', verificationRoutes);
 app.route('/c/verifications', verificationRemedyRoutes);
+app.route('/c/verifications', verificationCancelRoutes);
 app.route('/c/verifications', verificationReadRoutes);
 
 // 챌린지 생성/수정/공개 + 참여 + 내 챌린지 + 관심 토글 + 개인 퀘스트 제안

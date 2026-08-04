@@ -42,7 +42,14 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
   const remedyPolicyType: 'anytime' | 'last_day' | 'disabled' = remedyPolicy.type ?? 'anytime';
   const regularDays = remedyPolicyType === 'last_day' ? durationDays - 1 : durationDays;
 
-  if (remedyPolicyType === 'disabled') {
+  // 인증 취소(스펙 09)로 그 일자 보완이 '특별 개방'된 경우 — 정상 보완 창(day 제약·disabled)을 우회한다.
+  //  (보완 점수 계수 ×0.7 정책은 그대로 유지. 이미 보완/성공한 day 가드는 아래에서 계속 적용.)
+  const targetDayRecord = normalizeProgress(userChallenge.progress).find(
+    (p) => Number(p.day) === input.originalDay,
+  );
+  const remedyUnlocked = (targetDayRecord as any)?.remedyUnlocked === true;
+
+  if (remedyPolicyType === 'disabled' && !remedyUnlocked) {
     return fail(c, 400, 'REMEDY_NOT_ALLOWED', '이 챌린지는 보완이 허용되지 않습니다');
   }
 
@@ -62,25 +69,28 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
     }
   }
 
-  if (remedyPolicyType === 'last_day') {
-    // 마지막 날(durationDays)에만 보완 가능 (Day 1..durationDays-1 대상)
-    if (effectiveCurrentDay !== durationDays) {
-      return fail(c, 400, 'REMEDY_WRONG_DAY', `Day ${durationDays}에만 보완 인증이 가능합니다`);
+  if (!remedyUnlocked) {
+    if (remedyPolicyType === 'last_day') {
+      // 마지막 날(durationDays)에만 보완 가능 (Day 1..durationDays-1 대상)
+      if (effectiveCurrentDay !== durationDays) {
+        return fail(c, 400, 'REMEDY_WRONG_DAY', `Day ${durationDays}에만 보완 인증이 가능합니다`);
+      }
+    } else if (effectiveCurrentDay < 2) {
+      return fail(c, 400, 'REMEDY_WRONG_DAY', 'Day 2부터 보완 인증이 가능합니다');
     }
-  } else if (effectiveCurrentDay < 2) {
-    return fail(c, 400, 'REMEDY_WRONG_DAY', 'Day 2부터 보완 인증이 가능합니다');
-  }
 
-  if (input.originalDay > regularDays) {
-    return fail(c, 400, 'REMEDY_TARGET_INVALID', `보완 가능한 최대 day는 ${regularDays}입니다`);
-  }
-  if (remedyPolicyType === 'anytime' && input.originalDay >= effectiveCurrentDay) {
-    return fail(c, 400, 'REMEDY_TARGET_INVALID', '아직 완료되지 않은 day는 보완할 수 없습니다');
+    if (input.originalDay > regularDays) {
+      return fail(c, 400, 'REMEDY_TARGET_INVALID', `보완 가능한 최대 day는 ${regularDays}입니다`);
+    }
+    if (remedyPolicyType === 'anytime' && input.originalDay >= effectiveCurrentDay) {
+      return fail(c, 400, 'REMEDY_TARGET_INVALID', '아직 완료되지 않은 day는 보완할 수 없습니다');
+    }
   }
 
   const progress = normalizeProgress(userChallenge.progress);
   const failedDays = progress.filter((p) => p.status !== 'success' && p.day <= regularDays);
-  if (failedDays.length === 0) {
+  // 취소로 특별 개방된 경우엔 대상 일자 자체가 유효한 실패일이므로 이 가드를 우회한다.
+  if (failedDays.length === 0 && !remedyUnlocked) {
     return fail(c, 400, 'REMEDY_NO_FAILED_DAYS', '보완할 실패일이 없습니다');
   }
 

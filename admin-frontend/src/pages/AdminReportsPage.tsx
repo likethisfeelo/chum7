@@ -16,6 +16,7 @@ const REASON_LABEL: Record<string, string> = {
   violence: '폭력/위협',
   hate: '혐오 발언',
   misinfo: '허위정보',
+  deletion_request: '마당 삭제 요청',
   other: '기타',
 };
 

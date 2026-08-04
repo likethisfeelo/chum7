@@ -105,6 +105,15 @@ export const domainEventSchemas = {
     day: z.number().int(),
     verificationId: z.string().optional(),
   }),
+  // 사용자가 자기 인증 1건의 '해당 일자 완료·점수'를 스스로 취소 — 수신자는 리더(leaderId).
+  //  게시물 자체는 남고(노출은 선택) 일자 점수만 해제. 마당(plaza) 변환분은 유지(취소로 내리지 않음).
+  'verification.self_cancelled': z.object({
+    verificationId: z.string(),
+    challengeId: z.string(),
+    userId: z.string(), // 취소한 사용자
+    leaderId: z.string(), // 알림 수신자(리더)
+    day: z.number().int(),
+  }),
   // 리더가 인정 요청을 처리 — 수신자는 요청자(userId)
   'completion.resolved': z.object({
     challengeId: z.string(),

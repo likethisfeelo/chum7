@@ -173,6 +173,14 @@ function routeNotification(
         title: '인증 인정 요청',
         message: `${Number(detail.day) || ''}일차 인증을 인정해달라는 요청이 도착했어요`,
       };
+    case 'verification.self_cancelled':
+      return {
+        recipientId: String(detail.leaderId),
+        category: 'challenge',
+        type: 'verification_self_cancelled',
+        title: '참여자가 인증을 취소했어요',
+        message: `${Number(detail.day) || ''}일차 인증 하나가 취소돼 해당 일자 점수가 빠졌어요`,
+      };
     case 'completion.resolved':
       return {
         recipientId: String(detail.userId),
@@ -216,6 +224,7 @@ function buildDeepLink(type: DomainEventType, detail: Record<string, unknown>): 
       return '/my';
     case 'completion.requested':
     case 'completion.resolved':
+    case 'verification.self_cancelled':
       return detail.challengeId ? `/challenge-feed/${detail.challengeId}` : undefined;
     default:
       return undefined;

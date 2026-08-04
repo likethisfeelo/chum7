@@ -30,6 +30,7 @@ const NOTIFICATION_TYPE_META: Record<string, { icon: string; label: string }> = 
   challenge_recruiting:     { icon: '🔔', label: '관심 리더 새 챌린지' },
   completion_requested:     { icon: '🙋', label: '인증 인정 요청' },
   completion_resolved:      { icon: '✅', label: '인정 요청 처리' },
+  verification_self_cancelled: { icon: '🚫', label: '참여자 인증 취소' },
 };
 
 function formatRelativeTime(iso: string): string {
