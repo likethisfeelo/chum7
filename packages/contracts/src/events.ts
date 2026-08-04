@@ -96,6 +96,23 @@ export const domainEventSchemas = {
     day: z.number().int(),
     plazaConverted: z.boolean(),
   }),
+  // 사용자가 '이 게시물을 N일차 인증으로 인정해달라' 요청 — 수신자는 리더(leaderId)
+  'completion.requested': z.object({
+    challengeId: z.string(),
+    requestId: z.string(),
+    userId: z.string(), // 요청자
+    leaderId: z.string(), // 알림 수신자(리더)
+    day: z.number().int(),
+    verificationId: z.string().optional(),
+  }),
+  // 리더가 인정 요청을 처리 — 수신자는 요청자(userId)
+  'completion.resolved': z.object({
+    challengeId: z.string(),
+    requestId: z.string(),
+    userId: z.string(), // 알림 수신자(요청자)
+    day: z.number().int(),
+    outcome: z.enum(['granted', 'rejected']),
+  }),
   // 리더가 이미 승인된 개인 퀘스트 제안을 재반려 — 참여자에게 사유·결과 안내
   'proposal.rerejected': z.object({
     challengeId: z.string(),

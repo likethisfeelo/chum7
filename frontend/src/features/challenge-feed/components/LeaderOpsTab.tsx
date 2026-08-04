@@ -887,6 +887,95 @@ const PROPOSAL_STATUS_META: Record<string, { label: string; cls: string }> = {
   rejected: { label: '반려', cls: 'bg-rose-100 text-rose-700' },
 };
 
+// 인증 완료 인정 요청 심사 — 사용자가 '이 게시물을 N일차 인증으로 인정해달라'고 보낸 요청 처리
+function CompletionRequestSection({ challengeId }: { challengeId: string }) {
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<'pending' | 'all'>('pending');
+
+  const { data: requests = [], isLoading } = useQuery<any[]>({
+    queryKey: ['leader-completion-requests', challengeId, tab],
+    queryFn: () => challengeApi.getLeaderCompletionRequests(challengeId, tab),
+  });
+
+  const resolveMutation = useMutation({
+    mutationFn: ({ requestId, decision }: { requestId: string; decision: 'approve' | 'reject' }) =>
+      challengeApi.resolveCompletionRequest(challengeId, requestId, { decision }),
+    onSuccess: (_d, vars) => {
+      toast.success(vars.decision === 'approve' ? '인정 처리했어요 (+1점)' : '요청을 반려했어요');
+      queryClient.invalidateQueries({ queryKey: ['leader-completion-requests', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['leader-participants', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['leader-briefing', challengeId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '처리에 실패했어요'),
+  });
+
+  const pendingCount = requests.filter((r) => r.status === 'pending').length;
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-gray-900">🙋 인증 인정 요청 {pendingCount > 0 && <span className="text-xs text-rose-500">({pendingCount})</span>}</h3>
+        <div className="flex gap-1">
+          {(['pending', 'all'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`text-[11px] px-2 py-1 rounded-full ${tab === t ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'}`}
+            >
+              {t === 'pending' ? '대기' : '전체'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-gray-400">불러오는 중...</p>
+      ) : requests.length === 0 ? (
+        <p className="text-sm text-gray-500">요청이 없어요.</p>
+      ) : (
+        <div className="space-y-2">
+          {requests.map((r) => {
+            const meta = PROPOSAL_STATUS_META[r.status] ?? { label: r.status, cls: 'bg-gray-100 text-gray-500' };
+            const busy = resolveMutation.isPending && resolveMutation.variables?.requestId === r.requestId;
+            return (
+              <div key={r.requestId} className="rounded-xl bg-white/60 border border-gray-100 p-3">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-sm font-semibold text-gray-800">{r.day}일차</span>
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
+                  <span className="ml-auto text-[11px] text-gray-400">{maskUserId(r.userId)}</span>
+                </div>
+                {r.message && <p className="text-[12px] text-gray-600 mt-1 whitespace-pre-wrap">{r.message}</p>}
+                <p className="text-[10px] text-gray-400 mt-0.5">{r.createdAt ? new Date(r.createdAt).toLocaleString('ko-KR') : ''}</p>
+                {r.status === 'pending' && (
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => resolveMutation.mutate({ requestId: r.requestId, decision: 'approve' })}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 text-white disabled:opacity-50"
+                    >
+                      ✅ 완료 인정 (+1점)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => resolveMutation.mutate({ requestId: r.requestId, decision: 'reject' })}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 disabled:opacity-50"
+                    >
+                      반려
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // 개인 퀘스트 제안 심사 섹션 — 기본 자동승인이지만 수동검토 챌린지·재검토용.
 function ProposalReviewSection({
   challengeId,
@@ -1225,6 +1314,7 @@ export function LeaderOpsTab({
         allowedVerificationTypes={allowedVerificationTypes}
       />
       <ParticipantsSection challengeId={challengeId} />
+      <CompletionRequestSection challengeId={challengeId} />
       <ProposalReviewSection
         challengeId={challengeId}
         challengeType={challengeType}

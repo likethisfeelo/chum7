@@ -165,6 +165,25 @@ function routeNotification(
             ? '개인 퀘스트를 다시 제출하지 않아 이 챌린지 참여가 제한됐어요.'
             : '개인 퀘스트를 다시 제출하지 않아 기존 제출본으로 진행돼요.',
       };
+    case 'completion.requested':
+      return {
+        recipientId: String(detail.leaderId),
+        category: 'challenge',
+        type: 'completion_requested',
+        title: '인증 인정 요청',
+        message: `${Number(detail.day) || ''}일차 인증을 인정해달라는 요청이 도착했어요`,
+      };
+    case 'completion.resolved':
+      return {
+        recipientId: String(detail.userId),
+        category: 'challenge',
+        type: 'completion_resolved',
+        title: detail.outcome === 'granted' ? '인증이 인정됐어요' : '인정 요청이 반려됐어요',
+        message:
+          detail.outcome === 'granted'
+            ? `${Number(detail.day) || ''}일차 인증이 완료로 인정됐어요 (+1점)`
+            : `${Number(detail.day) || ''}일차 인정 요청이 반려됐어요`,
+      };
     default:
       return null; // challenge.completed 등은 다중 수신자 — Phase 4에서 확장
   }
@@ -195,6 +214,9 @@ function buildDeepLink(type: DomainEventType, detail: Record<string, unknown>): 
       return detail.followeeId ? `/personal-feed/${detail.followeeId}` : undefined;
     case 'feed.invite_link_used':
       return '/my';
+    case 'completion.requested':
+    case 'completion.resolved':
+      return detail.challengeId ? `/challenge-feed/${detail.challengeId}` : undefined;
     default:
       return undefined;
   }

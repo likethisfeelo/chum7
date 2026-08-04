@@ -192,6 +192,21 @@ export const proposalReRejectSchema = z.object({
 });
 export type ProposalReRejectInput = z.infer<typeof proposalReRejectSchema>;
 
+// ── 인증 완료 인정 요청 (사용자 → 리더) ──────────────────────────────────
+export const completionRequestSchema = z.object({
+  verificationId: z.string().min(1),
+  day: z.number().int().min(1),
+  message: z.string().max(500).optional(),
+});
+export type CompletionRequestInput = z.infer<typeof completionRequestSchema>;
+
+// 리더 처리 — approve(완료 인정) / reject(반려)
+export const completionResolveSchema = z.object({
+  decision: z.enum(['approve', 'reject']),
+  feedback: z.string().max(500).optional(),
+});
+export type CompletionResolveInput = z.infer<typeof completionResolveSchema>;
+
 // ── 리더 공통 퀘스트(리더퀘스트) 등록 — 챌린지 리더 전용, 운영탭 ────────────
 // challengeId는 경로 파라미터에서 취득. admin createQuestSchema의 리더용 간이 버전
 // (questScope='leader' 고정, 노출순서·시작시각 등은 서버 기본값). approvalRequired

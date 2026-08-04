@@ -44,12 +44,18 @@ import {
   updateProposalReview,
   updateProposalReReject,
 } from '../repo/quest-proposals';
+import {
+  findCompletionRequestById,
+  listChallengeCompletionRequests,
+  updateCompletionRequestReview,
+} from '../repo/completion-requests';
 import { canRerejectProposal, canReviewProposal, proposalReviewOutcome } from '../domain/proposal-rules';
 import {
   createLeaderQuestSchema,
   updateLeaderQuestSchema,
   proposalReviewSchema,
   proposalReRejectSchema,
+  completionResolveSchema,
 } from '../schemas';
 import { stripKeys } from '../repo/shared';
 
@@ -992,4 +998,66 @@ leaderRoutes.get('/participants/:participantId/days/:day/verifications', async (
     }));
 
   return ok(c, { verifications, total: verifications.length });
+});
+
+// 인증 완료 인정 요청 — 리더 심사 큐
+leaderRoutes.get('/completion-requests', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const status = (c.req.query('status') ?? 'pending').trim();
+  const requests = (await listChallengeCompletionRequests(challengeId))
+    .filter((r) => (status === 'all' ? true : r.status === status))
+    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+    .map(stripKeys);
+  return ok(c, { requests, total: requests.length });
+});
+
+// 인증 완료 인정 요청 처리 — 승인 시 기존 grantDayComplete 재사용, 요청자에게 결과 알림
+leaderRoutes.put('/completion-requests/:requestId', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const requestId = c.req.param('requestId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const { userId: leaderId } = c.get('authUser')!;
+
+  const input = completionResolveSchema.parse(await c.req.json().catch(() => ({})));
+  const reqItem = await findCompletionRequestById(challengeId, requestId);
+  if (!reqItem) return fail(c, 404, 'REQUEST_NOT_FOUND', '요청을 찾을 수 없습니다');
+  if (reqItem.status !== 'pending') return fail(c, 409, 'ALREADY_RESOLVED', '이미 처리된 요청이에요');
+
+  const requesterId = String(reqItem.userId ?? '');
+  const day = Number(reqItem.day);
+
+  if (input.decision === 'approve') {
+    const r = await grantDayComplete(guard.challenge!, challengeId, requesterId, day, leaderId, {
+      verificationId: reqItem.verificationId ? String(reqItem.verificationId) : null,
+    });
+    if (!r.ok) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
+  }
+
+  const okReview = await updateCompletionRequestReview({
+    challengeId,
+    userId: requesterId,
+    requestId,
+    status: input.decision === 'approve' ? 'approved' : 'rejected',
+    reviewerId: leaderId,
+    feedback: input.feedback,
+    nowIso: new Date().toISOString(),
+  });
+  if (!okReview) return fail(c, 409, 'ALREADY_RESOLVED', '이미 처리된 요청이에요');
+
+  try {
+    await publishEvent('completion.resolved', {
+      challengeId,
+      requestId,
+      userId: requesterId,
+      day,
+      outcome: input.decision === 'approve' ? 'granted' : 'rejected',
+    });
+  } catch (err: any) {
+    console.error('completion.resolved publish error (non-fatal):', err?.message);
+  }
+
+  return ok(c, { requestId, status: input.decision === 'approve' ? 'approved' : 'rejected' });
 });
