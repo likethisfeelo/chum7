@@ -159,18 +159,29 @@ function BriefingSection({ challengeId }: { challengeId: string }) {
   );
 }
 
-// 참여자 일자별 완료 인정 그리드 — 리더가 게시물 없이도 특정 날짜를 완료 인정/취소
+// 참여자 일자별 완료 인정 그리드 — 칸을 누르면 그날 인증 게시물을 보여주고 리더가 확인 후 처리
 function ParticipantDayGrid({ challengeId, participant }: { challengeId: string; participant: LeaderParticipant }) {
   const [open, setOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const days = participant.days ?? [];
 
-  const toggleMutation = useMutation({
-    mutationFn: ({ day, granted }: { day: number; granted: boolean }) =>
-      granted
-        ? challengeApi.revokeDayComplete(challengeId, participant.userId, day)
-        : challengeApi.grantDayComplete(challengeId, participant.userId, day),
-    onSuccess: () => {
+  // 선택한 날짜의 인증 게시물 조회
+  const { data: dayVerifications = [], isLoading: vfLoading } = useQuery<any[]>({
+    queryKey: ['leader-day-verifications', challengeId, participant.userId, selectedDay],
+    enabled: open && selectedDay !== null,
+    queryFn: () =>
+      challengeApi.getParticipantDayVerifications(challengeId, participant.userId, selectedDay as number),
+  });
+
+  const setStateMutation = useMutation({
+    mutationFn: ({ day, state }: { day: number; state: 'complete' | 'partial' | 'none' }) =>
+      challengeApi.setDayState(challengeId, participant.userId, day, state),
+    onSuccess: (_d, vars) => {
+      toast.success(
+        vars.state === 'complete' ? '완료 인정했어요 (+1점)' : vars.state === 'partial' ? '일부로 처리했어요' : '미완(취소) 처리했어요',
+      );
+      setSelectedDay(null);
       queryClient.invalidateQueries({ queryKey: ['leader-participants', challengeId] });
       queryClient.invalidateQueries({ queryKey: ['leader-briefing', challengeId] });
       queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
@@ -180,11 +191,16 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
 
   if (days.length === 0) return null;
 
+  const selected = selectedDay !== null ? days.find((d) => d.day === selectedDay) : null;
+  const curLabel = selected
+    ? selected.status === 'success' ? '완료' : selected.status === 'partial' ? '일부' : '미완'
+    : '';
+
   return (
     <div className="mt-2 pt-2 border-t border-gray-100">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { setOpen((v) => !v); setSelectedDay(null); }}
         className="text-[11px] font-semibold text-gray-500 flex items-center gap-1"
       >
         일자별 완료 인정 {open ? '▲' : '▼'}
@@ -194,25 +210,19 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
           <div className="mt-2 grid grid-cols-7 gap-1">
             {days.map((d) => {
               const isSuccess = d.status === 'success';
-              const busy = toggleMutation.isPending && toggleMutation.variables?.day === d.day;
               const base =
                 isSuccess
                   ? 'bg-emerald-500 text-white'
                   : d.status === 'partial'
                     ? 'bg-amber-200 text-amber-800'
                     : 'bg-gray-100 text-gray-400';
+              const isSel = selectedDay === d.day;
               return (
                 <button
                   key={d.day}
                   type="button"
-                  disabled={busy}
-                  title={
-                    isSuccess
-                      ? `${d.day}일차 완료${d.granted ? '(수동인정)' : ''} — 눌러서 취소`
-                      : `${d.day}일차 — 눌러서 완료 인정(+1점)`
-                  }
-                  onClick={() => toggleMutation.mutate({ day: d.day, granted: isSuccess })}
-                  className={`relative h-8 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-50 ${base}`}
+                  onClick={() => setSelectedDay(isSel ? null : d.day)}
+                  className={`relative h-8 rounded-md text-[11px] font-semibold transition-colors ${base} ${isSel ? 'ring-2 ring-gray-800' : ''}`}
                 >
                   {d.day}
                   {d.granted && (
@@ -227,8 +237,84 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
           <p className="text-[10px] text-gray-400 mt-1.5">
             <span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500 align-middle" /> 완료 ·
             <span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-200 align-middle ml-1" /> 일부 ·
-            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-100 align-middle ml-1" /> 미완 · ✋ 수동인정. 칸을 눌러 완료/취소.
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-100 align-middle ml-1" /> 미완 · ✋ 수동인정. 칸을 눌러 기록 확인 후 처리.
           </p>
+
+          {/* 선택한 날짜 리뷰 패널 — 인증 게시물 확인 후 처리 */}
+          {selected && (
+            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs font-semibold text-gray-800">
+                {selected.day}일차 · 현재 {curLabel}
+              </p>
+
+              {vfLoading ? (
+                <p className="text-[11px] text-gray-400 mt-2">불러오는 중...</p>
+              ) : dayVerifications.length === 0 ? (
+                <p className="text-[11px] text-gray-500 mt-2">이 날 등록된 인증 기록이 없습니다.</p>
+              ) : (
+                <>
+                  <p className="text-[11px] text-amber-700 mt-2">
+                    인증 기록 {dayVerifications.length}건이 있습니다. 확인 후 처리하세요.
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {dayVerifications.map((v) => (
+                      <div key={v.verificationId} className="flex gap-2 rounded-lg bg-white border border-gray-100 p-2">
+                        {v.imageUrl ? (
+                          <img
+                            src={resolveMediaUrl(v.imageUrl)}
+                            alt=""
+                            className="w-12 h-12 rounded-md object-cover flex-shrink-0"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center text-base flex-shrink-0">📝</div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {v.questTitle && <span className="text-[11px] font-semibold text-gray-700 truncate">{v.questTitle}</span>}
+                            {v.rejectedByLeader && <span className="text-[9px] px-1 rounded bg-rose-100 text-rose-600">반려됨</span>}
+                            {v.hiddenByAdmin && <span className="text-[9px] px-1 rounded bg-gray-200 text-gray-600">숨김</span>}
+                            {!v.isPublic && !v.rejectedByLeader && <span className="text-[9px] px-1 rounded bg-gray-100 text-gray-500">비공개</span>}
+                          </div>
+                          {v.todayNote && <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-2 whitespace-pre-wrap">{v.todayNote}</p>}
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {v.createdAt ? new Date(v.createdAt).toLocaleString('ko-KR') : ''}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <div className="mt-3 flex gap-1.5">
+                <button
+                  type="button"
+                  disabled={setStateMutation.isPending}
+                  onClick={() => setStateMutation.mutate({ day: selected.day, state: 'complete' })}
+                  className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500 text-white disabled:opacity-50"
+                >
+                  ✅ 완료 인정 (+1점)
+                </button>
+                <button
+                  type="button"
+                  disabled={setStateMutation.isPending}
+                  onClick={() => setStateMutation.mutate({ day: selected.day, state: 'partial' })}
+                  className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-amber-200 text-amber-800 disabled:opacity-50"
+                >
+                  🟡 일부
+                </button>
+                <button
+                  type="button"
+                  disabled={setStateMutation.isPending}
+                  onClick={() => setStateMutation.mutate({ day: selected.day, state: 'none' })}
+                  className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-200 text-gray-700 disabled:opacity-50"
+                >
+                  ⬜ 미완(취소)
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -801,6 +887,95 @@ const PROPOSAL_STATUS_META: Record<string, { label: string; cls: string }> = {
   rejected: { label: '반려', cls: 'bg-rose-100 text-rose-700' },
 };
 
+// 인증 완료 인정 요청 심사 — 사용자가 '이 게시물을 N일차 인증으로 인정해달라'고 보낸 요청 처리
+function CompletionRequestSection({ challengeId }: { challengeId: string }) {
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<'pending' | 'all'>('pending');
+
+  const { data: requests = [], isLoading } = useQuery<any[]>({
+    queryKey: ['leader-completion-requests', challengeId, tab],
+    queryFn: () => challengeApi.getLeaderCompletionRequests(challengeId, tab),
+  });
+
+  const resolveMutation = useMutation({
+    mutationFn: ({ requestId, decision }: { requestId: string; decision: 'approve' | 'reject' }) =>
+      challengeApi.resolveCompletionRequest(challengeId, requestId, { decision }),
+    onSuccess: (_d, vars) => {
+      toast.success(vars.decision === 'approve' ? '인정 처리했어요 (+1점)' : '요청을 반려했어요');
+      queryClient.invalidateQueries({ queryKey: ['leader-completion-requests', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['leader-participants', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['leader-briefing', challengeId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '처리에 실패했어요'),
+  });
+
+  const pendingCount = requests.filter((r) => r.status === 'pending').length;
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-gray-900">🙋 인증 인정 요청 {pendingCount > 0 && <span className="text-xs text-rose-500">({pendingCount})</span>}</h3>
+        <div className="flex gap-1">
+          {(['pending', 'all'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`text-[11px] px-2 py-1 rounded-full ${tab === t ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'}`}
+            >
+              {t === 'pending' ? '대기' : '전체'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-gray-400">불러오는 중...</p>
+      ) : requests.length === 0 ? (
+        <p className="text-sm text-gray-500">요청이 없어요.</p>
+      ) : (
+        <div className="space-y-2">
+          {requests.map((r) => {
+            const meta = PROPOSAL_STATUS_META[r.status] ?? { label: r.status, cls: 'bg-gray-100 text-gray-500' };
+            const busy = resolveMutation.isPending && resolveMutation.variables?.requestId === r.requestId;
+            return (
+              <div key={r.requestId} className="rounded-xl bg-white/60 border border-gray-100 p-3">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-sm font-semibold text-gray-800">{r.day}일차</span>
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
+                  <span className="ml-auto text-[11px] text-gray-400">{maskUserId(r.userId)}</span>
+                </div>
+                {r.message && <p className="text-[12px] text-gray-600 mt-1 whitespace-pre-wrap">{r.message}</p>}
+                <p className="text-[10px] text-gray-400 mt-0.5">{r.createdAt ? new Date(r.createdAt).toLocaleString('ko-KR') : ''}</p>
+                {r.status === 'pending' && (
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => resolveMutation.mutate({ requestId: r.requestId, decision: 'approve' })}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 text-white disabled:opacity-50"
+                    >
+                      ✅ 완료 인정 (+1점)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => resolveMutation.mutate({ requestId: r.requestId, decision: 'reject' })}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 disabled:opacity-50"
+                    >
+                      반려
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // 개인 퀘스트 제안 심사 섹션 — 기본 자동승인이지만 수동검토 챌린지·재검토용.
 function ProposalReviewSection({
   challengeId,
@@ -1139,6 +1314,7 @@ export function LeaderOpsTab({
         allowedVerificationTypes={allowedVerificationTypes}
       />
       <ParticipantsSection challengeId={challengeId} />
+      <CompletionRequestSection challengeId={challengeId} />
       <ProposalReviewSection
         challengeId={challengeId}
         challengeType={challengeType}

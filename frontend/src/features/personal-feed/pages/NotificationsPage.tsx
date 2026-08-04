@@ -28,6 +28,8 @@ const NOTIFICATION_TYPE_META: Record<string, { icon: string; label: string }> = 
   order_rejected:           { icon: '⚠️', label: '입금 확인 실패' },
   shipment_updated:         { icon: '📦', label: '배송 상태 변경' },
   challenge_recruiting:     { icon: '🔔', label: '관심 리더 새 챌린지' },
+  completion_requested:     { icon: '🙋', label: '인증 인정 요청' },
+  completion_resolved:      { icon: '✅', label: '인정 요청 처리' },
 };
 
 function formatRelativeTime(iso: string): string {

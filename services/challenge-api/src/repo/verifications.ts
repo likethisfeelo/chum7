@@ -101,6 +101,23 @@ export async function listPublicVerificationsByDate(
  * 모든 인증(전 참여자·전 day)을 반환한다 — 챌린지 스코프 공개 피드/운영탭이 기간 전체를 보여주기 위함.
  * sk 정렬은 userId 기준이라 시간순이 아니므로, 호출부에서 createdAt로 재정렬한다.
  */
+/** 특정 참여자의 특정 day 인증 목록 — 리더 그리드 리뷰용 (sk = VF#<userId>#D<dd>#...) */
+export async function listParticipantDayVerifications(
+  challengeId: string,
+  userId: string,
+  day: number,
+): Promise<Record<string, any>[]> {
+  const prefix = `VF#${userId}#D${String(day).padStart(2, '0')}#`;
+  const res = await docClient.send(
+    new QueryCommand({
+      TableName: tableName(TABLE),
+      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :sk)',
+      ExpressionAttributeValues: { ':pk': challengePk(challengeId), ':sk': prefix },
+    }),
+  );
+  return res.Items ?? [];
+}
+
 /** 특정 리더퀘스트(questId)에 연결된 인증 개수 — 퀘스트 삭제 가드용 (있으면 삭제 불가). */
 export async function countChallengeVerificationsByQuest(
   challengeId: string,

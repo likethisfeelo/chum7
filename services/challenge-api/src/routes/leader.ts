@@ -35,6 +35,7 @@ import {
 import {
   countChallengeVerificationsByQuest,
   findChallengeVerificationById,
+  listParticipantDayVerifications,
   updateVerificationFields,
 } from '../repo/verifications';
 import {
@@ -43,12 +44,18 @@ import {
   updateProposalReview,
   updateProposalReReject,
 } from '../repo/quest-proposals';
+import {
+  findCompletionRequestById,
+  listChallengeCompletionRequests,
+  updateCompletionRequestReview,
+} from '../repo/completion-requests';
 import { canRerejectProposal, canReviewProposal, proposalReviewOutcome } from '../domain/proposal-rules';
 import {
   createLeaderQuestSchema,
   updateLeaderQuestSchema,
   proposalReviewSchema,
   proposalReRejectSchema,
+  completionResolveSchema,
 } from '../schemas';
 import { stripKeys } from '../repo/shared';
 
@@ -106,8 +113,8 @@ async function recomputeProgressUpgradeOnly(challenge: Record<string, any>, chal
       ) {
         changed = true;
       }
-      // 이미 성공한 날은 유지(하향 없음). 미완료였던 날이 이제 완료 조건을 충족하면 상향.
-      if (dp.status !== 'success') {
+      // 이미 성공한 날·리더가 명시적으로 미완 처리한 날은 유지. 그 외 미완료였던 날이 조건 충족 시 상향.
+      if (dp.status !== 'success' && dp.leaderForcedIncomplete !== true) {
         const attempted =
           prunedIds.length > 0 ||
           next.personalQuestDone === true ||
@@ -828,6 +835,56 @@ async function revokeDayComplete(
   return { ok: true };
 }
 
+/** 그리드 3단계 상태 지정 — complete(성공·1점) / partial(일부·0점) / none(미완·취소·0점) */
+async function setDayState(
+  challenge: Record<string, any>,
+  challengeId: string,
+  participantId: string,
+  day: number,
+  state: 'complete' | 'partial' | 'none',
+  leaderId: string,
+): Promise<{ ok: boolean; code?: string }> {
+  if (state === 'complete') {
+    return grantDayComplete(challenge, challengeId, participantId, day, leaderId);
+  }
+  const participation = await getParticipation(challengeId, participantId);
+  if (!participation) return { ok: false, code: 'PARTICIPATION_NOT_FOUND' };
+  const nowIso = new Date().toISOString();
+  const progress = normalizeProgress(participation.progress);
+  const durationDays = resolveDurationDays(challenge.durationDays, progress);
+
+  let found = false;
+  const updated = progress.map((entry: any) => {
+    if (Number(entry.day) !== day) return entry;
+    found = true;
+    const next: any = { ...entry, status: state === 'partial' ? 'partial' : 'none', score: 0 };
+    delete next.leaderGrantedComplete;
+    delete next.grantedBy;
+    delete next.grantedAt;
+    // 취소(none)는 리더가 명시적으로 미완 처리 → 자동 재계산이 다시 올리지 않도록 플래그
+    if (state === 'none') next.leaderForcedIncomplete = true;
+    else delete next.leaderForcedIncomplete;
+    return next;
+  });
+  if (!found) {
+    updated.push({
+      day,
+      status: state === 'partial' ? 'partial' : 'none',
+      score: 0,
+      ...(state === 'none' ? { leaderForcedIncomplete: true } : {}),
+    } as any);
+  }
+
+  const { totalScore, consecutive } = recomputeTotals(updated, durationDays);
+  await updateParticipationFields(challengeId, participantId, {
+    progress: updated,
+    score: totalScore,
+    consecutiveDays: consecutive,
+    updatedAt: nowIso,
+  });
+  return { ok: true };
+}
+
 // 게시물별 '완료 인정' — 규칙상 자동 완료가 안 잡힌 날을 리더가 수동으로 완료 처리.
 leaderRoutes.put('/verifications/:verificationId/grant-complete', async (c) => {
   const challengeId = c.req.param('challengeId')!;
@@ -886,4 +943,121 @@ leaderRoutes.put('/participants/:participantId/days/:day/revoke', async (c) => {
   const r = await revokeDayComplete(guard.challenge!, challengeId, participantId, day);
   if (!r.ok) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
   return ok(c, { participantId, day, granted: false }, '완료 인정을 취소했어요');
+});
+
+// 그리드 3단계 상태 지정 — body {state:'complete'|'partial'|'none'}
+leaderRoutes.put('/participants/:participantId/days/:day/set-state', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const participantId = c.req.param('participantId')!;
+  const day = Number(c.req.param('day'));
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const { userId: leaderId } = c.get('authUser')!;
+  if (!Number.isFinite(day) || day < 1) return fail(c, 400, 'INVALID_DAY', '유효한 day가 필요합니다');
+
+  const body = await c.req.json().catch(() => ({} as any));
+  const state = body.state;
+  if (state !== 'complete' && state !== 'partial' && state !== 'none') {
+    return fail(c, 400, 'INVALID_STATE', 'state는 complete|partial|none 이어야 합니다');
+  }
+  const r = await setDayState(guard.challenge!, challengeId, participantId, day, state, leaderId);
+  if (!r.ok) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
+  return ok(c, { participantId, day, state });
+});
+
+// 참여자 특정 day의 인증 게시물 목록 — 그리드에서 '일부 기록이 있습니다' 확인용 (리뷰 후 처리)
+leaderRoutes.get('/participants/:participantId/days/:day/verifications', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const participantId = c.req.param('participantId')!;
+  const day = Number(c.req.param('day'));
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  if (!Number.isFinite(day) || day < 1) return fail(c, 400, 'INVALID_DAY', '유효한 day가 필요합니다');
+
+  const [items, quests] = await Promise.all([
+    listParticipantDayVerifications(challengeId, participantId, day),
+    listQuests(challengeId),
+  ]);
+  const questTitle = new Map(quests.map((q) => [String(q.questId), q.title as string]));
+
+  const verifications = items
+    .sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')))
+    .map((v) => ({
+      verificationId: v.verificationId as string,
+      day: typeof v.day === 'number' ? v.day : day,
+      questId: (v.questId as string) ?? null,
+      questType: (v.questType as string) ?? null,
+      questTitle: v.questId ? questTitle.get(String(v.questId)) ?? null : null,
+      verificationType: (v.verificationType as string) ?? 'text',
+      imageUrl: (v.imageUrl as string) ?? null,
+      todayNote: (v.todayNote as string) ?? null,
+      createdAt: (v.createdAt as string) ?? null,
+      isPublic: v.isPublic === 'true' || v.isPublic === true,
+      rejectedByLeader: v.rejectedByLeader === true,
+      hiddenByAdmin: v.hiddenByAdmin === true,
+    }));
+
+  return ok(c, { verifications, total: verifications.length });
+});
+
+// 인증 완료 인정 요청 — 리더 심사 큐
+leaderRoutes.get('/completion-requests', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const status = (c.req.query('status') ?? 'pending').trim();
+  const requests = (await listChallengeCompletionRequests(challengeId))
+    .filter((r) => (status === 'all' ? true : r.status === status))
+    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+    .map(stripKeys);
+  return ok(c, { requests, total: requests.length });
+});
+
+// 인증 완료 인정 요청 처리 — 승인 시 기존 grantDayComplete 재사용, 요청자에게 결과 알림
+leaderRoutes.put('/completion-requests/:requestId', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const requestId = c.req.param('requestId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const { userId: leaderId } = c.get('authUser')!;
+
+  const input = completionResolveSchema.parse(await c.req.json().catch(() => ({})));
+  const reqItem = await findCompletionRequestById(challengeId, requestId);
+  if (!reqItem) return fail(c, 404, 'REQUEST_NOT_FOUND', '요청을 찾을 수 없습니다');
+  if (reqItem.status !== 'pending') return fail(c, 409, 'ALREADY_RESOLVED', '이미 처리된 요청이에요');
+
+  const requesterId = String(reqItem.userId ?? '');
+  const day = Number(reqItem.day);
+
+  if (input.decision === 'approve') {
+    const r = await grantDayComplete(guard.challenge!, challengeId, requesterId, day, leaderId, {
+      verificationId: reqItem.verificationId ? String(reqItem.verificationId) : null,
+    });
+    if (!r.ok) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
+  }
+
+  const okReview = await updateCompletionRequestReview({
+    challengeId,
+    userId: requesterId,
+    requestId,
+    status: input.decision === 'approve' ? 'approved' : 'rejected',
+    reviewerId: leaderId,
+    feedback: input.feedback,
+    nowIso: new Date().toISOString(),
+  });
+  if (!okReview) return fail(c, 409, 'ALREADY_RESOLVED', '이미 처리된 요청이에요');
+
+  try {
+    await publishEvent('completion.resolved', {
+      challengeId,
+      requestId,
+      userId: requesterId,
+      day,
+      outcome: input.decision === 'approve' ? 'granted' : 'rejected',
+    });
+  } catch (err: any) {
+    console.error('completion.resolved publish error (non-fatal):', err?.message);
+  }
+
+  return ok(c, { requestId, status: input.decision === 'approve' ? 'approved' : 'rejected' });
 });

@@ -19,6 +19,7 @@ import { linkPreviewRoutes } from './routes/link-preview';
 import { interestRoutes } from './routes/interest';
 import { questProposalRoutes } from './routes/quest-proposals';
 import { moderationRoutes } from './routes/moderation';
+import { completionRequestRoutes } from './routes/completion-requests';
 
 const app = createApi({ service: 'challenge-api' });
 
@@ -46,6 +47,7 @@ app.route('/c', participationRoutes);
 // 퀘스트(유저) + 리더 도구
 app.route('/c/:challengeId/quests', questRoutes);
 app.route('/c/:challengeId/leader', leaderRoutes);
+app.route('/c/:challengeId/completion-requests', completionRequestRoutes);
 
 // 관리자 모더레이션 (그룹 게이트는 라우터 내부)
 app.route('/c/mod', moderationRoutes);

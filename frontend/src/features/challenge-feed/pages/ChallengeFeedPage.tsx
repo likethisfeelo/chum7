@@ -556,6 +556,13 @@ export const ChallengeFeedPage = () => {
     onError: (err: any) => toast.error(err?.response?.data?.message || "처리에 실패했어요"),
   });
 
+  const requestCompletionMutation = useMutation({
+    mutationFn: (vars: { verificationId: string; day: number }) =>
+      challengeApi.requestCompletion(challengeId!, { verificationId: vars.verificationId, day: vars.day }),
+    onSuccess: () => toast.success("리더에게 인정 요청을 보냈어요"),
+    onError: (err: any) => toast.error(err?.response?.data?.message || "요청에 실패했어요"),
+  });
+
   const challengeVerifications = useMemo(() => verificationData || [], [verificationData]);
   const myChallengeVerifications = useMemo(() => myVerificationData || [], [myVerificationData]);
 
@@ -911,6 +918,22 @@ export const ChallengeFeedPage = () => {
                 🚩 이 인증 반려
               </button>
             )}
+          </div>
+        )}
+
+        {/* 본인 게시물 — 리더에게 '이 게시물을 N일차 인증으로 인정 요청' */}
+        {item.isMine && !isCreator && (
+          <div className="mt-2 pt-2 border-t border-white/40 flex justify-end">
+            <button
+              type="button"
+              disabled={requestCompletionMutation.isPending}
+              onClick={() =>
+                requestCompletionMutation.mutate({ verificationId: item.verificationId, day: item.day })
+              }
+              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+            >
+              🙋 {item.day}일차 인증 인정 요청
+            </button>
           </div>
         )}
 

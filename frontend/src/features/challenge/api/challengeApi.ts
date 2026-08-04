@@ -277,6 +277,59 @@ export const challengeApi = {
     );
     return res.data.data;
   },
+  // 그리드 리뷰 — 특정 참여자·특정 day의 인증 게시물 목록
+  getParticipantDayVerifications: async (
+    challengeId: string,
+    participantId: string,
+    day: number,
+  ): Promise<any[]> => {
+    const res = await apiClient.get(
+      `/c/${challengeId}/leader/participants/${participantId}/days/${day}/verifications`,
+    );
+    return res.data.data?.verifications ?? [];
+  },
+
+  // 그리드 3단계 상태 지정 — 완료(complete)/일부(partial)/취소·미완(none)
+  setDayState: async (
+    challengeId: string,
+    participantId: string,
+    day: number,
+    state: 'complete' | 'partial' | 'none',
+  ): Promise<any> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/participants/${participantId}/days/${day}/set-state`,
+      { state },
+    );
+    return res.data.data;
+  },
+
+  // 인증 완료 인정 요청 (사용자) — 이 게시물을 N일차 인증으로 인정해달라 요청
+  requestCompletion: async (
+    challengeId: string,
+    params: { verificationId: string; day: number; message?: string },
+  ): Promise<{ requestId: string; status: string }> => {
+    const res = await apiClient.post(`/c/${challengeId}/completion-requests`, params);
+    return res.data.data;
+  },
+  // 리더 — 인정 요청 큐 조회
+  getLeaderCompletionRequests: async (challengeId: string, status = 'pending'): Promise<any[]> => {
+    const res = await apiClient.get(
+      `/c/${challengeId}/leader/completion-requests?status=${encodeURIComponent(status)}`,
+    );
+    return res.data.data?.requests ?? [];
+  },
+  // 리더 — 인정 요청 처리(승인=완료 인정 / 반려)
+  resolveCompletionRequest: async (
+    challengeId: string,
+    requestId: string,
+    params: { decision: 'approve' | 'reject'; feedback?: string },
+  ): Promise<any> => {
+    const res = await apiClient.put(
+      `/c/${challengeId}/leader/completion-requests/${requestId}`,
+      params,
+    );
+    return res.data.data;
+  },
 
   // 인증 게시물 1건 반려 — 그날 인증만 반려(피드/마당에서 숨김, 본인 기록엔 남김, 점수 되돌림)
   rejectVerification: async (
