@@ -207,6 +207,14 @@ export const completionResolveSchema = z.object({
 });
 export type CompletionResolveInput = z.infer<typeof completionResolveSchema>;
 
+// 사용자 인증 취소 — 특정 게시물 1건의 '해당 일자 완료·점수'를 스스로 해제.
+//  게시물은 남기고 노출만 선택적으로 끈다(챌린지 피드 / 개인 프로필 피드). 마당(plaza)은 항상 유지.
+export const cancelVerificationSchema = z.object({
+  hideFromChallengeFeed: z.boolean().optional(),
+  hideFromOwnerFeed: z.boolean().optional(),
+});
+export type CancelVerificationInput = z.infer<typeof cancelVerificationSchema>;
+
 // ── 리더 공통 퀘스트(리더퀘스트) 등록 — 챌린지 리더 전용, 운영탭 ────────────
 // challengeId는 경로 파라미터에서 취득. admin createQuestSchema의 리더용 간이 버전
 // (questScope='leader' 고정, 노출순서·시작시각 등은 서버 기본값). approvalRequired

@@ -68,6 +68,8 @@ export interface VerificationFeedItem {
   // 본인 피드(getMyVerifications)에서만 채워짐 — 비공개/추가 인증 구분 배지용
   isPublic?: boolean;
   isExtra?: boolean;
+  // 스스로 취소한 인증(점수 미반영) — 개인 피드 '취소됨' 배지용
+  scoreCancelled?: boolean;
 }
 
 export interface ChallengeFeedItem {

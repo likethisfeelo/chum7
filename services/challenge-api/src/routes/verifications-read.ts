@@ -132,6 +132,8 @@ async function normalizeVerification(v: VerificationItem, ctx: ViewerCtx) {
     isAnonymous: Boolean(v.isAnonymous),
     isExtra: Boolean(v.isExtra),
     isPersonalOnly: Boolean(v.isPersonalOnly),
+    // 사용자가 '해당 일자 점수'를 스스로 취소한 게시물 — 카드에 '취소됨/점수 미반영' 배지
+    scoreCancelled: v.scoreCancelled === true,
     cheerCount: v.cheerCount || 0,
     createdAt: v.createdAt,
     performedAt: v.performedAt || v.practiceAt || null,
@@ -163,10 +165,13 @@ verificationReadRoutes.get('/me/profile-feed', async (c) => {
     return fail(c, 400, 'INVALID_NEXT_TOKEN', 'nextToken 형식이 올바르지 않습니다');
   }
 
-  // gsi1 VFUSER#<userId> Query 최신순 — 필터 없이 본인 인증 전량
+  // gsi1 VFUSER#<userId> Query 최신순 — 본인 인증 전량(비공개·추가 포함).
+  //  단, 사용자가 '개인 프로필 피드에서도 숨기기'로 취소한 건(removedFromOwnerFeed)은 제외.
   const result = await listMyVerifications(userId, limit, startKey);
   const items = await Promise.all(
-    result.items.map(async (v) => ({
+    result.items
+      .filter((v) => v.removedFromOwnerFeed !== true)
+      .map(async (v) => ({
       verificationId: v.verificationId as string,
       challengeId: (v.challengeId as string) ?? null,
       challengeTitle: (v.challengeTitle as string) ?? null,
@@ -179,6 +184,8 @@ verificationReadRoutes.get('/me/profile-feed', async (c) => {
       createdAt: (v.createdAt as string) ?? null,
       isPublic: v.isPublic === 'true' || v.isPublic === true,
       isExtra: v.isExtra === true,
+      // 스스로 취소한 인증 — 개인 피드에도 '취소됨' 배지로 표시(숨기기 선택 시엔 위 필터로 제외됨)
+      scoreCancelled: v.scoreCancelled === true,
     })),
   );
 
@@ -270,6 +277,8 @@ verificationReadRoutes.get('/', async (c) => {
     items = result.items.filter((v) => {
       if (!matchesExtraFilter(v, isExtra)) return false;
       if (challengeIdFilter && v.challengeId !== challengeIdFilter) return false;
+      // 개인 프로필 피드에서 숨기기로 취소한 건 제외 (스펙 09 §5)
+      if (v.removedFromOwnerFeed === true) return false;
       return true;
     });
     items = items.slice(0, limit);

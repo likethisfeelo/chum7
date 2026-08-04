@@ -331,6 +331,25 @@ export const challengeApi = {
     return res.data.data;
   },
 
+  // 인증 취소 (사용자 본인) — 특정 게시물의 '해당 일자 완료·점수'를 스스로 해제. 복구 불가.
+  //  게시물은 남고(노출은 옵션), 마당(plaza)은 유지. 미완이 되면 그 날 보완이 특별히 열린다.
+  cancelVerification: async (
+    verificationId: string,
+    params: { hideFromChallengeFeed?: boolean; hideFromOwnerFeed?: boolean } = {},
+  ): Promise<{
+    verificationId: string;
+    day: number | null;
+    scoreCancelled: true;
+    dayNowIncomplete: boolean;
+    remedyUnlocked: boolean;
+  }> => {
+    const res = await apiClient.put(
+      `/c/verifications/${verificationId}/cancel`,
+      params,
+    );
+    return res.data.data;
+  },
+
   // 인증 게시물 1건 반려 — 그날 인증만 반려(피드/마당에서 숨김, 본인 기록엔 남김, 점수 되돌림)
   rejectVerification: async (
     challengeId: string,

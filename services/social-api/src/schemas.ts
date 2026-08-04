@@ -80,7 +80,10 @@ export const createAdminPlazaPostSchema = z.object({
 
 // ── 신고(report) ───────────────────────────────────────────────────────
 
-/** 신고 사유 — 스팸/광고, 욕설·괴롭힘, 음란물, 폭력, 혐오, 허위정보, 기타 */
+/**
+ * 신고 사유 — 스팸/광고, 욕설·괴롭힘, 음란물, 폭력, 혐오, 허위정보, 기타.
+ *  deletion_request: 인증 취소(스펙 09) 후 '마당에서 내려달라'는 삭제 요청 — 관리자 큐로 전달.
+ */
 export const REPORT_REASONS = [
   'spam',
   'harassment',
@@ -88,6 +91,7 @@ export const REPORT_REASONS = [
   'violence',
   'hate',
   'misinfo',
+  'deletion_request',
   'other',
 ] as const;
 

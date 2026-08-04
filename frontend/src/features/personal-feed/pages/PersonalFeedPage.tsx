@@ -289,6 +289,12 @@ function VerificationsTab({ userId, isOwn = false }: { userId: string; isOwn?: b
               <div className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
                 D{item.day ?? '-'}
               </div>
+              {/* 스스로 취소한 인증 — 점수 미반영 표시 */}
+              {isOwn && item.scoreCancelled && (
+                <div className="absolute bottom-1.5 left-1.5 bg-gray-700/80 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                  취소됨
+                </div>
+              )}
               {/* 본인 피드 전용 — 비공개/추가 인증 표시 (타인에게는 애초에 안 보임) */}
               {isOwn && item.isPublic === false && (
                 <div className="absolute top-1.5 right-1.5 bg-gray-900/70 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
