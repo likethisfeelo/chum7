@@ -35,6 +35,7 @@ import {
 import {
   countChallengeVerificationsByQuest,
   findChallengeVerificationById,
+  listParticipantDayVerifications,
   updateVerificationFields,
 } from '../repo/verifications';
 import {
@@ -956,4 +957,39 @@ leaderRoutes.put('/participants/:participantId/days/:day/set-state', async (c) =
   const r = await setDayState(guard.challenge!, challengeId, participantId, day, state, leaderId);
   if (!r.ok) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
   return ok(c, { participantId, day, state });
+});
+
+// 참여자 특정 day의 인증 게시물 목록 — 그리드에서 '일부 기록이 있습니다' 확인용 (리뷰 후 처리)
+leaderRoutes.get('/participants/:participantId/days/:day/verifications', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const participantId = c.req.param('participantId')!;
+  const day = Number(c.req.param('day'));
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  if (!Number.isFinite(day) || day < 1) return fail(c, 400, 'INVALID_DAY', '유효한 day가 필요합니다');
+
+  const [items, quests] = await Promise.all([
+    listParticipantDayVerifications(challengeId, participantId, day),
+    listQuests(challengeId),
+  ]);
+  const questTitle = new Map(quests.map((q) => [String(q.questId), q.title as string]));
+
+  const verifications = items
+    .sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')))
+    .map((v) => ({
+      verificationId: v.verificationId as string,
+      day: typeof v.day === 'number' ? v.day : day,
+      questId: (v.questId as string) ?? null,
+      questType: (v.questType as string) ?? null,
+      questTitle: v.questId ? questTitle.get(String(v.questId)) ?? null : null,
+      verificationType: (v.verificationType as string) ?? 'text',
+      imageUrl: (v.imageUrl as string) ?? null,
+      todayNote: (v.todayNote as string) ?? null,
+      createdAt: (v.createdAt as string) ?? null,
+      isPublic: v.isPublic === 'true' || v.isPublic === true,
+      rejectedByLeader: v.rejectedByLeader === true,
+      hiddenByAdmin: v.hiddenByAdmin === true,
+    }));
+
+  return ok(c, { verifications, total: verifications.length });
 });

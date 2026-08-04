@@ -277,6 +277,18 @@ export const challengeApi = {
     );
     return res.data.data;
   },
+  // 그리드 리뷰 — 특정 참여자·특정 day의 인증 게시물 목록
+  getParticipantDayVerifications: async (
+    challengeId: string,
+    participantId: string,
+    day: number,
+  ): Promise<any[]> => {
+    const res = await apiClient.get(
+      `/c/${challengeId}/leader/participants/${participantId}/days/${day}/verifications`,
+    );
+    return res.data.data?.verifications ?? [];
+  },
+
   // 그리드 3단계 상태 지정 — 완료(complete)/일부(partial)/취소·미완(none)
   setDayState: async (
     challengeId: string,

@@ -159,17 +159,29 @@ function BriefingSection({ challengeId }: { challengeId: string }) {
   );
 }
 
-// 참여자 일자별 완료 인정 그리드 — 리더가 게시물 없이도 특정 날짜를 완료 인정/취소
+// 참여자 일자별 완료 인정 그리드 — 칸을 누르면 그날 인증 게시물을 보여주고 리더가 확인 후 처리
 function ParticipantDayGrid({ challengeId, participant }: { challengeId: string; participant: LeaderParticipant }) {
   const [open, setOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const days = participant.days ?? [];
 
-  // 3단계 순환: 완료 → 일부 → 취소(미완) → 완료
-  const cycleMutation = useMutation({
+  // 선택한 날짜의 인증 게시물 조회
+  const { data: dayVerifications = [], isLoading: vfLoading } = useQuery<any[]>({
+    queryKey: ['leader-day-verifications', challengeId, participant.userId, selectedDay],
+    enabled: open && selectedDay !== null,
+    queryFn: () =>
+      challengeApi.getParticipantDayVerifications(challengeId, participant.userId, selectedDay as number),
+  });
+
+  const setStateMutation = useMutation({
     mutationFn: ({ day, state }: { day: number; state: 'complete' | 'partial' | 'none' }) =>
       challengeApi.setDayState(challengeId, participant.userId, day, state),
-    onSuccess: () => {
+    onSuccess: (_d, vars) => {
+      toast.success(
+        vars.state === 'complete' ? '완료 인정했어요 (+1점)' : vars.state === 'partial' ? '일부로 처리했어요' : '미완(취소) 처리했어요',
+      );
+      setSelectedDay(null);
       queryClient.invalidateQueries({ queryKey: ['leader-participants', challengeId] });
       queryClient.invalidateQueries({ queryKey: ['leader-briefing', challengeId] });
       queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
@@ -177,16 +189,18 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
     onError: (err: any) => toast.error(err?.response?.data?.message || '처리에 실패했어요'),
   });
 
-  const nextState = (status: string): 'complete' | 'partial' | 'none' =>
-    status === 'success' ? 'partial' : status === 'partial' ? 'none' : 'complete';
-
   if (days.length === 0) return null;
+
+  const selected = selectedDay !== null ? days.find((d) => d.day === selectedDay) : null;
+  const curLabel = selected
+    ? selected.status === 'success' ? '완료' : selected.status === 'partial' ? '일부' : '미완'
+    : '';
 
   return (
     <div className="mt-2 pt-2 border-t border-gray-100">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { setOpen((v) => !v); setSelectedDay(null); }}
         className="text-[11px] font-semibold text-gray-500 flex items-center gap-1"
       >
         일자별 완료 인정 {open ? '▲' : '▼'}
@@ -196,22 +210,19 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
           <div className="mt-2 grid grid-cols-7 gap-1">
             {days.map((d) => {
               const isSuccess = d.status === 'success';
-              const busy = cycleMutation.isPending && cycleMutation.variables?.day === d.day;
               const base =
                 isSuccess
                   ? 'bg-emerald-500 text-white'
                   : d.status === 'partial'
                     ? 'bg-amber-200 text-amber-800'
                     : 'bg-gray-100 text-gray-400';
-              const label = isSuccess ? '완료' : d.status === 'partial' ? '일부' : '미완';
+              const isSel = selectedDay === d.day;
               return (
                 <button
                   key={d.day}
                   type="button"
-                  disabled={busy}
-                  title={`${d.day}일차 · 현재 ${label} — 눌러서 ${nextState(d.status) === 'complete' ? '완료' : nextState(d.status) === 'partial' ? '일부' : '취소(미완)'}`}
-                  onClick={() => cycleMutation.mutate({ day: d.day, state: nextState(d.status) })}
-                  className={`relative h-8 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-50 ${base}`}
+                  onClick={() => setSelectedDay(isSel ? null : d.day)}
+                  className={`relative h-8 rounded-md text-[11px] font-semibold transition-colors ${base} ${isSel ? 'ring-2 ring-gray-800' : ''}`}
                 >
                   {d.day}
                   {d.granted && (
@@ -226,8 +237,84 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
           <p className="text-[10px] text-gray-400 mt-1.5">
             <span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500 align-middle" /> 완료 ·
             <span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-200 align-middle ml-1" /> 일부 ·
-            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-100 align-middle ml-1" /> 미완 · ✋ 수동인정. 칸을 누르면 완료→일부→미완 순환.
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-100 align-middle ml-1" /> 미완 · ✋ 수동인정. 칸을 눌러 기록 확인 후 처리.
           </p>
+
+          {/* 선택한 날짜 리뷰 패널 — 인증 게시물 확인 후 처리 */}
+          {selected && (
+            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs font-semibold text-gray-800">
+                {selected.day}일차 · 현재 {curLabel}
+              </p>
+
+              {vfLoading ? (
+                <p className="text-[11px] text-gray-400 mt-2">불러오는 중...</p>
+              ) : dayVerifications.length === 0 ? (
+                <p className="text-[11px] text-gray-500 mt-2">이 날 등록된 인증 기록이 없습니다.</p>
+              ) : (
+                <>
+                  <p className="text-[11px] text-amber-700 mt-2">
+                    인증 기록 {dayVerifications.length}건이 있습니다. 확인 후 처리하세요.
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {dayVerifications.map((v) => (
+                      <div key={v.verificationId} className="flex gap-2 rounded-lg bg-white border border-gray-100 p-2">
+                        {v.imageUrl ? (
+                          <img
+                            src={resolveMediaUrl(v.imageUrl)}
+                            alt=""
+                            className="w-12 h-12 rounded-md object-cover flex-shrink-0"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center text-base flex-shrink-0">📝</div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {v.questTitle && <span className="text-[11px] font-semibold text-gray-700 truncate">{v.questTitle}</span>}
+                            {v.rejectedByLeader && <span className="text-[9px] px-1 rounded bg-rose-100 text-rose-600">반려됨</span>}
+                            {v.hiddenByAdmin && <span className="text-[9px] px-1 rounded bg-gray-200 text-gray-600">숨김</span>}
+                            {!v.isPublic && !v.rejectedByLeader && <span className="text-[9px] px-1 rounded bg-gray-100 text-gray-500">비공개</span>}
+                          </div>
+                          {v.todayNote && <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-2 whitespace-pre-wrap">{v.todayNote}</p>}
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {v.createdAt ? new Date(v.createdAt).toLocaleString('ko-KR') : ''}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <div className="mt-3 flex gap-1.5">
+                <button
+                  type="button"
+                  disabled={setStateMutation.isPending}
+                  onClick={() => setStateMutation.mutate({ day: selected.day, state: 'complete' })}
+                  className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500 text-white disabled:opacity-50"
+                >
+                  ✅ 완료 인정 (+1점)
+                </button>
+                <button
+                  type="button"
+                  disabled={setStateMutation.isPending}
+                  onClick={() => setStateMutation.mutate({ day: selected.day, state: 'partial' })}
+                  className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-amber-200 text-amber-800 disabled:opacity-50"
+                >
+                  🟡 일부
+                </button>
+                <button
+                  type="button"
+                  disabled={setStateMutation.isPending}
+                  onClick={() => setStateMutation.mutate({ day: selected.day, state: 'none' })}
+                  className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-200 text-gray-700 disabled:opacity-50"
+                >
+                  ⬜ 미완(취소)
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
