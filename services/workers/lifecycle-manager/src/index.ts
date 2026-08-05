@@ -219,6 +219,26 @@ async function completeChallenge(challenge: ChallengeLike, now: Date, summary: R
     });
   }
 
+  // 미달성(failed) 참여자 — '도전이취미' 뱃지. 끝까지 남아 도전한 사람만 대상
+  // (중도포기 gave_up·해산 멤버는 finalize 대상(phase=active)이 아니라 자연 제외).
+  for (const final of finals) {
+    if (final.finalStatus !== 'failed') continue;
+    try {
+      const item = buildSpecificBadgeItem(
+        {
+          badgeId: 'challenge-hobby',
+          userId: final.userId,
+          challengeId: challenge.challengeId,
+          metadata: { source: 'finalize', completedDays: final.completedDays },
+        },
+        now,
+      );
+      await repo.putBadgeIfAbsent(item);
+    } catch (err: any) {
+      console.error(JSON.stringify({ level: 'error', message: 'challenge-hobby badge grant failed', userId: final.userId, challengeId: challenge.challengeId, error: err?.message ?? String(err) }));
+    }
+  }
+
   for (const userId of completedUserIds) {
     try {
       await fillCharacterSlot(userId, challenge.challengeId, nowIso);

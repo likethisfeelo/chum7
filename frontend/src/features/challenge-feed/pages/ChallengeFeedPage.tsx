@@ -518,7 +518,7 @@ export const ChallengeFeedPage = () => {
       await apiClient.post(`/c/user-challenges/${userChallengeId}/give-up`);
     },
     onSuccess: () => {
-      toast.success("중도 포기했습니다. 포기는쉽다 뱃지가 지급되었어요.");
+      toast.success("중도 포기했습니다. 배추한포기 뱃지가 지급되었어요 🥬");
       setShowGiveUpConfirm(false);
       queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-challenges", challengeId] });
       queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
@@ -1166,7 +1166,7 @@ export const ChallengeFeedPage = () => {
             : [
                 { title: '정말 포기하시겠어요?', body: '중도 포기는 되돌릴 수 없어요.' },
                 { title: '한 번 더 확인할게요', body: '포기하면 더 이상 인증을 올릴 수 없어요. 다른 참여자의 피드는 계속 볼 수 있어요.' },
-                { title: '마지막 확인이에요', body: '이 작업은 취소할 수 없습니다. 포기 시 ‘포기는쉽다’ 뱃지가 지급돼요.' },
+                { title: '마지막 확인이에요', body: '이 작업은 취소할 수 없습니다. 포기 시 ‘배추한포기’ 뱃지가 지급돼요.' },
               ];
           const step = steps[giveUpStep - 1];
           return (

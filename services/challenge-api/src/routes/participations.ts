@@ -6,7 +6,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import { GetCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import type { AppEnv } from '@chum7/api-kit';
 import { docClient, ok, fail, publishEvent } from '@chum7/api-kit';
 import { joinChallengeSchema, reviewJoinRequestSchema, disbandRequestSchema } from '../schemas';
@@ -113,6 +113,41 @@ export async function executeDisband(
   }
 
   return { memberIds };
+}
+
+/**
+ * 중도포기 '배추한포기' 뱃지 조건부 부여 — gamification 테이블 쓰기
+ * (GAMIFICATION_TABLE env, 문서화된 크로스 도메인 예외. lifecycle-manager putBadgeIfAbsent와 동일 키/조건).
+ * 실패해도 포기 처리 자체는 성공시킨다(뱃지는 부가 효과).
+ */
+async function grantGiveUpBadge(userId: string, challengeId: string): Promise<void> {
+  const table = process.env.GAMIFICATION_TABLE;
+  if (!table) return;
+  const grantedAt = new Date().toISOString();
+  const badgeId = 'cabbage-giveup';
+  try {
+    await docClient.send(
+      new PutCommand({
+        TableName: table,
+        Item: {
+          pk: `USER#${userId}`,
+          sk: `BADGE#${badgeId}`,
+          gsi1pk: `BADGE#${badgeId}`,
+          gsi1sk: grantedAt,
+          badgeId,
+          userId,
+          challengeId,
+          grantedAt,
+          createdAt: grantedAt,
+          source: 'give_up',
+        },
+        ConditionExpression: 'attribute_not_exists(pk)',
+      }),
+    );
+  } catch (err: any) {
+    if (err?.name === 'ConditionalCheckFailedException') return; // 이미 보유
+    console.error('give-up badge grant failed (non-fatal):', err?.message);
+  }
 }
 
 /** 결제 주문 조회 — commerce 테이블 읽기 전용 (COMMERCE_TABLE env, 문서화된 예외) */
@@ -423,9 +458,10 @@ participationRoutes.post('/user-challenges/:userChallengeId/give-up', async (c) 
     updatedAt: now,
   });
 
-  // "포기는쉽다" 뱃지 부여는 gamification 도메인 소유 — 이벤트 계약 필요 (PORTING.md gap 기록)
+  // '배추한포기' 뱃지 부여 (조건부 — 이미 보유 시 무시, 실패는 non-fatal)
+  await grantGiveUpBadge(userId, uc.challengeId);
 
-  return ok(c, { userChallengeId, phase: 'gave_up', status: 'gave_up' }, '챌린지를 중도 포기했습니다.');
+  return ok(c, { userChallengeId, phase: 'gave_up', status: 'gave_up' }, '챌린지를 중도 포기했습니다. 배추한포기 뱃지가 지급되었어요.');
 });
 
 // ── 챌린지 전체 해산 (리더) ────────────────────────────────────────────────
