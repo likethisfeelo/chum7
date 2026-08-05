@@ -157,6 +157,12 @@ describe('settle domain', () => {
       expect(second.pk).toBe(first.pk); // 시각이 달라도 키 동일 → attribute_not_exists로 한 번만 생성
       expect(first.sk).toBe('META');
 
+      // 정산서는 held로 생성 + 종료+7일 holdUntil (환불 보류 버퍼)
+      expect(first.status).toBe('held');
+      expect(first.gsi2pk).toBe('SETTLEMENTSTATUS#held');
+      expect(first.holdUntil).toBe('2026-07-28T00:00:00.000Z');
+      expect(first.notifyOnRelease).toBe(true); // 몰수분 payout>0
+
       const refund = buildRefundItem(order({ orderId: 'o-9' }), '2026-07-21T00:00:00.000Z');
       expect(refund.pk).toBe('REFUND#o-9');
       expect(refund.gsi2pk).toBe('REFUNDSTATUS#refund_due');

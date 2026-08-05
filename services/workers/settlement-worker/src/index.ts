@@ -14,7 +14,7 @@
  */
 import type { EventBridgeEvent } from 'aws-lambda';
 import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { docClient, publishEvent, tableName } from '@chum7/api-kit';
+import { docClient, tableName } from '@chum7/api-kit';
 import {
   buildRefundItem,
   buildSettlementItem,
@@ -191,13 +191,11 @@ export const handler = async (event: EventBridgeEvent<'challenge.completed', Cha
     throw error;
   }
 
-  if (plan.shouldPublishReady) {
-    await publishEvent('settlement.ready', { challengeId, creatorId, payoutAmount: plan.payoutAmount });
-  }
-
+  // 정산서는 held로 생성됨 — settlement.ready 알림은 어드민 release(환불 보류 경과) 시 발행한다.
   const summary = {
     challengeId,
     pricingType,
+    status: 'held',
     orderCount: plan.orderCount,
     refundsCreated,
     forfeited: plan.forfeitedOrders.length,
@@ -205,6 +203,6 @@ export const handler = async (event: EventBridgeEvent<'challenge.completed', Cha
     platformFee: plan.platformFee,
     payoutAmount: plan.payoutAmount,
   };
-  log('info', 'settlement created', summary);
+  log('info', 'settlement created (held)', summary);
   return { statusCode: 200, body: JSON.stringify(summary) };
 };

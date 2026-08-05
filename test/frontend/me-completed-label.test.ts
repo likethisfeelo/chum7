@@ -6,9 +6,9 @@ function read(relPath: string): string {
 }
 
 describe('ME completed tab failed label', () => {
-  test('shows 종료(미달성) label and gray border for failed challenge', () => {
+  test('shows 도전하는 자 label and gray border for failed challenge', () => {
     const src = read('frontend/src/features/me/pages/MEPage.tsx');
-    expect(src).toContain('종료(미달성)');
+    expect(src).toContain('도전하는 자');
     expect(src).toContain('border-gray-300');
     expect(src).toContain('isFailedChallengeState(challenge)');
     expect(src).toContain('getChallengeDisplayMeta(challenge)');

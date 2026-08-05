@@ -30,11 +30,21 @@ type Settlement = {
   grossAmount: number;
   platformFee: number;
   payoutAmount: number;
-  status: 'ready' | 'paid';
+  status: 'held' | 'ready' | 'paid';
   createdAt: string;
+  holdUntil?: string | null;
+  releasedAt?: string | null;
   paidAt?: string | null;
   paidBy?: string | null;
   memo?: string | null;
+};
+
+const holdRemainingLabel = (holdUntil?: string | null): string => {
+  if (!holdUntil) return '';
+  const ms = new Date(holdUntil).getTime() - Date.now();
+  if (ms <= 0) return '해제 가능';
+  const days = Math.ceil(ms / 86_400_000);
+  return `${days}일 남음`;
 };
 
 type Tab = 'refund_due' | 'refund_completed' | 'settlements';
@@ -74,11 +84,13 @@ export const AdminCommerceSettlementsPage = () => {
     queryKey: ['admin-commerce-settlements'],
     enabled: tab === 'settlements',
     queryFn: async () => {
-      const [ready, paid] = await Promise.all([
+      const [held, ready, paid] = await Promise.all([
+        apiClient.get('/pay/admin/settlements?status=held'),
         apiClient.get('/pay/admin/settlements?status=ready'),
         apiClient.get('/pay/admin/settlements?status=paid'),
       ]);
       return [
+        ...((held.data?.data?.settlements ?? []) as Settlement[]),
         ...((ready.data?.data?.settlements ?? []) as Settlement[]),
         ...((paid.data?.data?.settlements ?? []) as Settlement[]),
       ];
@@ -110,6 +122,35 @@ export const AdminCommerceSettlementsPage = () => {
     },
     onError: (err: any) => alert(err?.response?.data?.message || '처리에 실패했습니다'),
   });
+
+  const releaseMutation = useMutation({
+    mutationFn: async ({ challengeId, memo, force }: { challengeId: string; memo: string; force: boolean }) => {
+      const res = await apiClient.post(`/pay/admin/settlements/${challengeId}/release`, { ...(memo ? { memo } : {}), ...(force ? { force: true } : {}) });
+      return res.data;
+    },
+    onSuccess: (res) => {
+      alert(res?.message || '보류를 해제했습니다');
+      qc.invalidateQueries({ queryKey: ['admin-commerce-settlements'] });
+    },
+    onError: (err: any) => alert(err?.response?.data?.message || '처리에 실패했습니다'),
+  });
+
+  const handleRelease = (s: Settlement) => {
+    const remain = holdRemainingLabel(s.holdUntil);
+    const elapsed = remain === '해제 가능' || !s.holdUntil;
+    const lines = [
+      elapsed
+        ? '환불 보류를 해제하고 지급 대기로 전환할까요?'
+        : `아직 환불 보류 기간입니다 (${remain}). 조기 강제 해제할까요?`,
+      `챌린지: ${s.challengeTitle || s.challengeId}`,
+      `해제 예정: ${formatDate(s.holdUntil)}`,
+      `지급 예정액: ${won(s.payoutAmount)}`,
+    ];
+    if (!window.confirm(lines.join('\n'))) return;
+    const memo = window.prompt('처리 메모 (선택, 최대 200자)', '');
+    if (memo === null) return;
+    releaseMutation.mutate({ challengeId: s.challengeId, memo: memo.trim().slice(0, 200), force: !elapsed });
+  };
 
   // 확인 다이얼로그 + 메모 입력 — 확인 후 prompt 취소 시 중단
   const handleCompleteRefund = (r: Refund) => {
@@ -273,7 +314,12 @@ export const AdminCommerceSettlementsPage = () => {
                       <td className="px-4 py-3 text-right text-gray-500 whitespace-nowrap">{won(s.platformFee)}</td>
                       <td className="px-4 py-3 text-right font-semibold text-gray-900 whitespace-nowrap">{won(s.payoutAmount)}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {s.status === 'ready' ? (
+                        {s.status === 'held' ? (
+                          <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-200 text-gray-700">
+                            환불 보류
+                            <span className="block text-[10px] font-normal">{holdRemainingLabel(s.holdUntil)}</span>
+                          </span>
+                        ) : s.status === 'ready' ? (
                           <span className="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700">지급 대기</span>
                         ) : (
                           <span className="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">
@@ -283,6 +329,16 @@ export const AdminCommerceSettlementsPage = () => {
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
+                        {s.status === 'held' && (
+                          <button
+                            type="button"
+                            onClick={() => handleRelease(s)}
+                            disabled={releaseMutation.isPending}
+                            className="px-3 py-1.5 rounded-lg bg-gray-800 text-white text-xs font-semibold hover:bg-gray-900 disabled:opacity-50"
+                          >
+                            {releaseMutation.isPending ? '처리 중...' : '보류 해제'}
+                          </button>
+                        )}
                         {s.status === 'ready' && (
                           <button
                             type="button"

@@ -10,6 +10,8 @@
  */
 
 export const DEFAULT_FEE_RATE = 0.05;
+/** 환불 보류(분쟁 버퍼) 기간 — 종료 + N일 후 정산서 지급 대기 전환 (PAYMENT_SPEC §6.2) */
+export const SETTLEMENT_HOLD_DAYS = 7;
 
 export interface PaidOrderLike {
   orderId: string;
@@ -104,19 +106,26 @@ export function buildRefundItem(order: PaidOrderLike, nowIso: string): Record<st
   };
 }
 
-/** 정산서 아이템 — pk=SETTLEMENT#<challengeId>/sk=META, gsi2 SETTLEMENTSTATUS#ready 어드민 큐 */
+/**
+ * 정산서 아이템 — pk=SETTLEMENT#<challengeId>/sk=META, gsi2 SETTLEMENTSTATUS#held 어드민 큐.
+ * 생성 시 status='held' + holdUntil(종료+holdDays). 환불 보류 기간이 지나면 어드민이 release로
+ * held→ready 전환하고 그때 settlement.ready 알림을 발행한다(notifyOnRelease 기준). 지급 대기(ready)
+ * 상태만 mark-paid 가능하므로, 보류 기간 중에는 지급 자체가 막힌다.
+ */
 export function buildSettlementItem(params: {
   challengeId: string;
   creatorId: string;
   challengeTitle?: string | null;
   plan: SettlementPlan;
   nowIso: string;
+  holdDays?: number;
 }): Record<string, unknown> {
-  const { challengeId, creatorId, challengeTitle, plan, nowIso } = params;
+  const { challengeId, creatorId, challengeTitle, plan, nowIso, holdDays = SETTLEMENT_HOLD_DAYS } = params;
+  const holdUntil = new Date(new Date(nowIso).getTime() + holdDays * 86_400_000).toISOString();
   return {
     pk: `SETTLEMENT#${challengeId}`,
     sk: 'META',
-    gsi2pk: 'SETTLEMENTSTATUS#ready',
+    gsi2pk: 'SETTLEMENTSTATUS#held',
     gsi2sk: nowIso,
     challengeId,
     creatorId,
@@ -127,7 +136,10 @@ export function buildSettlementItem(params: {
     grossAmount: plan.grossAmount,
     platformFee: plan.platformFee,
     payoutAmount: plan.payoutAmount,
-    status: 'ready',
+    status: 'held',
+    holdUntil,
+    // 보류 해제 시 크리에이터에게 정산서 도착 알림을 보낼지 (지급액·반환 건 있을 때만)
+    notifyOnRelease: plan.shouldPublishReady,
     createdAt: nowIso,
   };
 }
