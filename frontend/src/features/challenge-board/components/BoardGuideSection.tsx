@@ -26,7 +26,14 @@ const readPinned = (challengeId: string): boolean => {
   }
 };
 
-export const BoardGuideSection = ({ challengeId }: { challengeId: string }) => {
+export const BoardGuideSection = ({
+  challengeId,
+  openSignal,
+}: {
+  challengeId: string;
+  /** 값이 바뀌면(0→1→2…) 가이드를 강제로 펼친다 — 헤더 확성기 클릭 연동 */
+  openSignal?: number;
+}) => {
   const navigate = useNavigate();
   const [pinned, setPinned] = useState(() => readPinned(challengeId));
   const [open, setOpen] = useState(() => readPinned(challengeId));
@@ -38,6 +45,14 @@ export const BoardGuideSection = ({ challengeId }: { challengeId: string }) => {
   useEffect(() => {
     if (expanded) setMounted(true);
   }, [expanded]);
+
+  // 외부 신호로 강제 펼침 (초기 0은 무시)
+  useEffect(() => {
+    if (openSignal && openSignal > 0) {
+      setOpen(true);
+      setMounted(true);
+    }
+  }, [openSignal]);
 
   // 챌린지 전환 시 고정 상태 재복원
   useEffect(() => {
