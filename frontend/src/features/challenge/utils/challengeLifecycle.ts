@@ -118,6 +118,11 @@ export function isFailedChallengeState(item: any): boolean {
   return status === 'failed' || phase === 'failed';
 }
 
+/** 리더가 전체 해산한 챌린지인지 — 완료 탭에서 '전체 해산' 라벨 분기용 (완주·미달성과 구분). */
+export function isDisbandedChallengeState(item: any): boolean {
+  return item?.disbanded === true || item?.challenge?.disbanded === true || Boolean(item?.challenge?.disbandedAt);
+}
+
 export function resolveChallengeBucket(item: any): ChallengeBucket {
   const userStatus = String(item?.status || '').toLowerCase();
   const userPhase = String(item?.phase || '').toLowerCase();
@@ -155,7 +160,9 @@ export function resolveChallengeBucket(item: any): ChallengeBucket {
 export function getChallengeStatusLabel(item: any): string {
   const bucket = resolveChallengeBucket(item);
   if (bucket === 'preparing') return '준비중';
-  if (bucket === 'completed') return '완주';
+  // 리더 본인(gave_up)은 '중도포기', 그 외 멤버는 리더 해산 시 '전체 해산'
   if (bucket === 'gave_up') return '중도포기';
+  if (isDisbandedChallengeState(item)) return '전체 해산';
+  if (bucket === 'completed') return '완주';
   return '진행중';
 }

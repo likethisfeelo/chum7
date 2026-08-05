@@ -1286,16 +1286,140 @@ function OpsPostsSection({ challengeId }: { challengeId: string }) {
   );
 }
 
+// ── 챌린지 해산 (리더) ─────────────────────────────────────────────────────
+//  무료: 리더가 즉시 해산(2중 확인). 유료(참가비/보증금/티켓): 운영자에게 사유와 함께 해산 신청.
+function DisbandSection({
+  challengeId,
+  isPaid,
+  lifecycle,
+}: {
+  challengeId: string;
+  isPaid: boolean;
+  lifecycle?: string;
+}) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [reason, setReason] = useState('');
+
+  const alreadyEnded = lifecycle === 'completed' || lifecycle === 'archived';
+
+  const reset = () => { setOpen(false); setConfirmed(false); setReason(''); };
+
+  const disbandMutation = useMutation({
+    mutationFn: () => apiClient.post(`/c/challenges/${challengeId}/disband`),
+    onSuccess: () => {
+      toast.success('챌린지를 해산했어요. 참여자에게 안내가 전송됩니다.');
+      reset();
+      queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
+      queryClient.invalidateQueries({ queryKey: ['my-challenges-completed', 'all'] });
+      queryClient.invalidateQueries({ queryKey: ['my-created-challenges'] });
+      navigate('/me');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '해산에 실패했어요'),
+  });
+
+  const requestMutation = useMutation({
+    mutationFn: () => apiClient.post(`/c/challenges/${challengeId}/disband-request`, { reason: reason.trim() }),
+    onSuccess: () => {
+      toast.success('해산 신청을 접수했어요. 운영자 검토 후 결과를 알려드릴게요.');
+      reset();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '신청에 실패했어요'),
+  });
+
+  const busy = disbandMutation.isPending || requestMutation.isPending;
+
+  return (
+    <section className="glass-card rounded-2xl p-5 border border-rose-100">
+      <h3 className="font-bold text-rose-700">🚨 챌린지 해산</h3>
+      {alreadyEnded ? (
+        <p className="text-sm text-gray-500 mt-2">이미 종료된 챌린지예요.</p>
+      ) : isPaid ? (
+        <p className="text-[11px] text-gray-500 mt-1">
+          유료 챌린지는 리더가 바로 해산할 수 없어요. 사유와 함께 <b>운영자에게 해산을 신청</b>합니다. (환불은 운영자가 별도 처리)
+        </p>
+      ) : (
+        <p className="text-[11px] text-gray-500 mt-1">
+          챌린지를 <b>전체 해산</b>합니다. 참여자 전원에게 안내되고 완료 탭으로 이동해요. <b>되돌릴 수 없어요.</b>
+        </p>
+      )}
+
+      {!alreadyEnded && !open && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="mt-3 w-full py-2.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 font-semibold text-sm hover:bg-rose-100 transition-colors"
+        >
+          {isPaid ? '운영자에게 해산 신청' : '챌린지 해산'}
+        </button>
+      )}
+
+      {!alreadyEnded && open && (
+        <div className="mt-3 space-y-3 rounded-xl border border-rose-200 bg-rose-50/50 p-3">
+          {isPaid ? (
+            <>
+              <label className="text-xs font-semibold text-gray-700">해산 사유 (운영자 전달)</label>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                maxLength={500}
+                placeholder="해산이 필요한 이유를 5자 이상 적어주세요."
+                className="w-full text-sm px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-rose-300 resize-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={busy || reason.trim().length < 5}
+                  onClick={() => requestMutation.mutate()}
+                  className="flex-1 py-2 rounded-lg bg-rose-600 text-white text-sm font-semibold disabled:opacity-50"
+                >
+                  {requestMutation.isPending ? '신청 중...' : '해산 신청 보내기'}
+                </button>
+                <button type="button" onClick={reset} className="px-4 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm font-semibold">취소</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-0.5" />
+                <span className="text-xs text-gray-700">위 내용을 이해했으며, 해산은 <b>되돌릴 수 없음</b>을 확인합니다.</span>
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={busy || !confirmed}
+                  onClick={() => disbandMutation.mutate()}
+                  className="flex-1 py-2 rounded-lg bg-rose-600 text-white text-sm font-semibold disabled:opacity-50"
+                >
+                  {disbandMutation.isPending ? '해산 중...' : '해산 확정'}
+                </button>
+                <button type="button" onClick={reset} className="px-4 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm font-semibold">취소</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function LeaderOpsTab({
   challengeId,
   challengeType = 'leader_personal',
   allowedVerificationTypes,
   personalQuestEnabled,
+  isPaid = false,
+  lifecycle,
 }: {
   challengeId: string;
   challengeType?: string;
   allowedVerificationTypes?: Array<'image' | 'video' | 'link' | 'text'>;
   personalQuestEnabled?: boolean;
+  isPaid?: boolean;
+  lifecycle?: string;
 }) {
   const navigate = useNavigate();
 
@@ -1321,6 +1445,8 @@ export function LeaderOpsTab({
         personalQuestEnabled={personalQuestEnabled}
       />
       <OpsPostsSection challengeId={challengeId} />
+
+      <DisbandSection challengeId={challengeId} isPaid={isPaid} lifecycle={lifecycle} />
 
       {/* 퀘스트 심사 바로가기 */}
       <button

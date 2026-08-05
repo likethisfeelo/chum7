@@ -47,6 +47,7 @@ export const createChallengeSchema = z.object({
 export const updateChallengeSchema = z.object({
   title: z.string().min(2).max(60).optional(),
   description: z.string().min(10).max(2000).optional(),
+  category: z.enum(CHALLENGE_CATEGORIES).optional(),
   targetTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   badgeIcon: z.string().max(10).optional(),
   badgeName: z.string().min(1).max(30).optional(),
@@ -206,6 +207,12 @@ export const completionResolveSchema = z.object({
   feedback: z.string().max(500).optional(),
 });
 export type CompletionResolveInput = z.infer<typeof completionResolveSchema>;
+
+// 유료 챌린지 해산 신청 — 리더가 운영자에게 사유와 함께 제출.
+export const disbandRequestSchema = z.object({
+  reason: z.string().trim().min(5, '해산 사유를 5자 이상 입력해주세요').max(500),
+});
+export type DisbandRequestInput = z.infer<typeof disbandRequestSchema>;
 
 // 사용자 인증 취소 — 특정 게시물 1건의 '해당 일자 완료·점수'를 스스로 해제.
 //  게시물은 남기고 노출만 선택적으로 끈다(챌린지 피드 / 개인 프로필 피드). 마당(plaza)은 항상 유지.

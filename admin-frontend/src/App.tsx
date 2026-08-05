@@ -13,6 +13,7 @@ import { AdminNotificationsPage } from '@/pages/AdminNotificationsPage';
 import { AdminCategoryBannersPage } from '@/pages/AdminCategoryBannersPage';
 import { AdminPlazaPostPage } from '@/pages/AdminPlazaPostPage';
 import { AdminReportsPage } from '@/pages/AdminReportsPage';
+import { AdminDisbandRequestsPage } from '@/pages/AdminDisbandRequestsPage';
 import { AdminCheerMonitorPage } from '@/pages/AdminCheerMonitorPage';
 import { AdminCommerceCouponsPage } from '@/pages/AdminCommerceCouponsPage';
 import { AdminCommerceOrdersPage } from '@/pages/AdminCommerceOrdersPage';
@@ -125,6 +126,7 @@ const Sidebar = () => {
     nav.push({ path: '/admin/category-banners', label: '🖼️ 카테고리 배너' });
     nav.push({ path: '/admin/plaza', label: '📣 마당 게시물' });
     nav.push({ path: '/admin/reports', label: '🚩 신고 관리' });
+    nav.push({ path: '/admin/disband-requests', label: '🚨 해산 신청 관리' });
     nav.push({ path: '/admin/ops/dashboard', label: '📊 운영 대시보드' });
     nav.push({ path: '/admin/audit/logs', label: '🧾 감사 로그' });
     nav.push({ path: '/admin/notifications', label: '🔔 알림함' });
@@ -351,6 +353,17 @@ export default function App() {
               <RoleRoute roles={['admins', 'operators']}>
                 <Layout>
                   <AdminReportsPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/admin/disband-requests"
+            element={
+              <RoleRoute roles={['admins', 'operators']}>
+                <Layout>
+                  <AdminDisbandRequestsPage />
                 </Layout>
               </RoleRoute>
             }

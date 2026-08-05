@@ -165,6 +165,24 @@ function routeNotification(
             ? '개인 퀘스트를 다시 제출하지 않아 이 챌린지 참여가 제한됐어요.'
             : '개인 퀘스트를 다시 제출하지 않아 기존 제출본으로 진행돼요.',
       };
+    case 'challenge.disband_requested':
+      return {
+        recipientId: String(detail.leaderId),
+        category: 'challenge',
+        type: 'challenge_disband_requested',
+        title: '해산 신청이 접수됐어요',
+        message: '유료 챌린지 해산 신청을 접수했어요. 운영자 검토 후 결과를 알려드릴게요.',
+      };
+    case 'challenge.disband_rejected': {
+      const reason = typeof detail.reason === 'string' && detail.reason.trim() ? detail.reason.trim() : '';
+      return {
+        recipientId: String(detail.leaderId),
+        category: 'challenge',
+        type: 'challenge_disband_rejected',
+        title: '해산 신청이 반려됐어요',
+        message: reason ? `사유: ${reason}` : '해산 신청이 반려됐어요. 자세한 내용은 운영자에게 문의해주세요.',
+      };
+    }
     case 'completion.requested':
       return {
         recipientId: String(detail.leaderId),
@@ -226,6 +244,11 @@ function buildDeepLink(type: DomainEventType, detail: Record<string, unknown>): 
     case 'completion.resolved':
     case 'verification.self_cancelled':
       return detail.challengeId ? `/challenge-feed/${detail.challengeId}` : undefined;
+    case 'challenge.disbanded':
+      return detail.challengeId ? `/challenge-feed/${detail.challengeId}` : undefined;
+    case 'challenge.disband_requested':
+    case 'challenge.disband_rejected':
+      return detail.challengeId ? `/challenges/${detail.challengeId}` : undefined;
     default:
       return undefined;
   }
@@ -392,6 +415,42 @@ async function fanOutChallengeRecruiting(
   }
 }
 
+/** 챌린지 해산 알림 팬아웃 — 리더 제외 참여 멤버 전원에게 발송. */
+async function fanOutChallengeDisbanded(
+  event: EventBridgeEvent<string, Record<string, unknown>>,
+  now: string,
+): Promise<void> {
+  const detail = event.detail;
+  const leaderId = String(detail.leaderId ?? '');
+  const challengeId = String(detail.challengeId ?? '');
+  const title = typeof detail.title === 'string' ? detail.title.trim() : '';
+  const memberIds = Array.isArray(detail.memberIds) ? detail.memberIds.map((id) => String(id)) : [];
+  const recipients = [...new Set(memberIds)].filter((id) => id && id !== leaderId);
+  console.log(JSON.stringify({ level: 'info', message: 'disband fan-out', challengeId, recipients: recipients.length }));
+
+  const deepLink = challengeId ? `/challenge-feed/${challengeId}` : undefined;
+  const message = title
+    ? `리더가 '${title}' 챌린지를 해산했어요. 그동안의 기록은 완료 탭에서 볼 수 있어요.`
+    : '리더가 챌린지를 해산했어요. 그동안의 기록은 완료 탭에서 볼 수 있어요.';
+
+  for (const recipientId of recipients) {
+    await deliverToRecipient({
+      routed: {
+        recipientId,
+        category: 'challenge',
+        type: 'challenge_disbanded',
+        title: '챌린지가 해산됐어요',
+        message,
+      },
+      eventType: 'challenge.disbanded',
+      detail,
+      deepLink,
+      now,
+      notificationId: `${now}#${event.id}#${recipientId}`,
+    });
+  }
+}
+
 export const handler = async (
   event: EventBridgeEvent<string, Record<string, unknown>>,
 ): Promise<void> => {
@@ -401,6 +460,12 @@ export const handler = async (
   // 다중 수신자 팬아웃 — 관심영역 구독자 알림
   if (type === 'challenge.recruiting') {
     await fanOutChallengeRecruiting(event, now);
+    return;
+  }
+
+  // 다중 수신자 팬아웃 — 챌린지 해산 알림 (참여 멤버 전원)
+  if (type === 'challenge.disbanded') {
+    await fanOutChallengeDisbanded(event, now);
     return;
   }
 

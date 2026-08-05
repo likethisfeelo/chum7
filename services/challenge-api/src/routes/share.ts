@@ -35,10 +35,17 @@ export function buildChallengeShareHtml(
   let description = '7일 챌린지에 함께 도전해요.';
   let image = appOrigin ? `${appOrigin}/og-image.png` : '';
   if (challenge) {
+    // 종료(완주·보관·리더 해산)된 챌린지는 카드에 '종료된 챌린지입니다.' 표시.
+    const lifecycle = typeof challenge.lifecycle === 'string' ? challenge.lifecycle : '';
+    const isEnded = lifecycle === 'completed' || lifecycle === 'archived' || challenge.disbanded === true;
     const t = typeof challenge.title === 'string' ? challenge.title.trim() : '';
-    if (t) title = `${t} · ${BRAND}`;
-    const d = typeof challenge.description === 'string' ? challenge.description.trim() : '';
-    if (d) description = d.length > 200 ? `${d.slice(0, 200)}…` : d;
+    if (t) title = isEnded ? `[종료] ${t} · ${BRAND}` : `${t} · ${BRAND}`;
+    if (isEnded) {
+      description = '종료된 챌린지입니다.';
+    } else {
+      const d = typeof challenge.description === 'string' ? challenge.description.trim() : '';
+      if (d) description = d.length > 200 ? `${d.slice(0, 200)}…` : d;
+    }
     if (typeof challenge.coverImageUrl === 'string' && challenge.coverImageUrl.trim()) {
       image = challenge.coverImageUrl.trim();
     }

@@ -97,6 +97,8 @@ myChallengeRoutes.get('/challenges/my', async (c) => {
         personalQuestAutoApprove: challenge.personalQuestAutoApprove,
         remedyPolicy: challenge.defaultRemedyPolicy || null,
         lifecycle: effectiveLifecycle,
+        // 리더 전체 해산 표식 — 완료 탭에서 '전체 해산' 라벨 분기용 (완주와 구분)
+        disbanded: challenge.disbanded === true || Boolean(challenge.disbandedAt),
         requireStartConfirmation: challenge.requireStartConfirmation ?? false,
         challengeStartAt: challenge.challengeStartAt,
         actualStartAt: challenge.actualStartAt || null,

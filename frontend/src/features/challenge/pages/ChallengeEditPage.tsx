@@ -5,6 +5,7 @@ import { apiClient } from '@/lib/api-client';
 import { FiArrowLeft } from 'react-icons/fi';
 import { Loading } from '@/shared/components/Loading';
 import { CoverImagePicker } from '../components/CoverImagePicker';
+import { CHALLENGE_CATEGORIES } from '../constants/categories';
 import toast from 'react-hot-toast';
 
 function toLocalDateTimeInputValue(isoStr?: string): string {
@@ -35,6 +36,7 @@ export const ChallengeEditPage = () => {
   });
 
   const [form, setForm] = useState<{
+    category: string;
     title: string;
     description: string;
     targetTime: string;
@@ -54,6 +56,7 @@ export const ChallengeEditPage = () => {
   // challenge 로드 후 한 번만 초기화
   if (challenge && form === null) {
     setForm({
+      category: challenge.category || '',
       title: challenge.title || '',
       description: challenge.description || '',
       targetTime: challenge.targetTime || '',
@@ -75,6 +78,7 @@ export const ChallengeEditPage = () => {
     mutationFn: async () => {
       if (!form) return;
       const payload: Record<string, unknown> = {};
+      if (form.category) payload.category = form.category;
       if (form.title.trim()) payload.title = form.title.trim();
       if (form.description.trim()) payload.description = form.description.trim();
       if (form.targetTime) payload.targetTime = form.targetTime;
@@ -143,6 +147,27 @@ export const ChallengeEditPage = () => {
             value={form.coverImageUrl}
             onChange={(url) => setForm((f) => (f ? { ...f, coverImageUrl: url } : f))}
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">카테고리</label>
+          <div className="grid grid-cols-4 gap-2">
+            {CHALLENGE_CATEGORIES.map((cat) => (
+              <button
+                key={cat.slug}
+                type="button"
+                onClick={() => setForm((f) => (f ? { ...f, category: cat.slug } : f))}
+                className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all text-xs font-medium ${
+                  form.category === cat.slug
+                    ? 'border-primary-400 bg-primary-50 text-primary-700'
+                    : 'border-gray-100 bg-white text-gray-600'
+                }`}
+              >
+                <span className="text-xl mb-0.5">{cat.emoji}</span>
+                {cat.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>

@@ -388,9 +388,21 @@ export const ChallengeFeedPage = () => {
 
   // 탭 상태
   const [searchParams] = useSearchParams();
-  const [mainTab, setMainTab] = useState<"feed" | "ops" | "requests">(
-    searchParams.get("tab") === "ops" ? "ops" : searchParams.get("tab") === "requests" ? "requests" : "feed",
-  );
+  // 3단 탭 — about(소개·가이드·인증입력) / challenge(인증피드) / manage(운영·관리)
+  const [mainTab, setMainTab] = useState<"about" | "challenge" | "manage">(() => {
+    const t = searchParams.get("tab");
+    if (t === "ops" || t === "requests" || t === "manage") return "manage";
+    if (t === "feed" || t === "challenge") return "challenge";
+    return "about";
+  });
+  // 헤더 확성기(가이드) 클릭 시 챌린지 가이드 섹션을 강제로 펼치는 신호 + 스크롤 타깃
+  const [guideOpenSignal, setGuideOpenSignal] = useState(0);
+  const guideSectionRef = useRef<HTMLDivElement | null>(null);
+  const openGuide = () => {
+    setMainTab("about");
+    setGuideOpenSignal((s) => s + 1);
+    setTimeout(() => guideSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  };
   const [activeQuestTab, setActiveQuestTab] = useState<"leader" | "personal">("leader");
   // 인증 피드 — 리더/개인 퀘스트 섹션을 각각 펼치고 접는다(아코디언, 독립 토글)
   const [openLeaderFeed, setOpenLeaderFeed] = useState(true);
@@ -422,6 +434,8 @@ export const ChallengeFeedPage = () => {
     queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
     queryClient.invalidateQueries({ queryKey: ["challenge-quests", challengeId] });
     queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
+    // 인증 입력 완료 → 인증 피드(챌린지) 탭으로 이동
+    setMainTab("challenge");
   };
 
   // 퀘스트 분류 및 정렬
@@ -711,6 +725,18 @@ export const ChallengeFeedPage = () => {
   // 시작 전에는 '오늘' 개념이 없다 — todayDay=-1 로 두어 완료/오늘 하이라이트가 뜨지 않게 한다
   const todayDay = userChallenge && isActive ? computeTodayChallengeDay(userChallenge) : -1;
   const progressList: any[] = userChallenge?.progress || [];
+
+  // 이미 완료(자동 인정)된 일자 집합 — 요청 탭에서 '인정 요청'을 띄우지 않기 위한 기준
+  const completedDays = useMemo(() => {
+    const set = new Set<number>();
+    for (const p of progressList) {
+      const status = String(p?.status ?? "");
+      if (status === "success" || status === "completed" || status === "remedy") {
+        set.add(Number(p?.day));
+      }
+    }
+    return set;
+  }, [progressList]);
 
   const isTodayAllDone = isMixedChallengeType
     ? allLeaderQuestsDoneToday && (personalQuest === null || iDidTodayPersonalQuestVerification)
@@ -1060,80 +1086,73 @@ export const ChallengeFeedPage = () => {
     <div className="min-h-screen">
       <div className="mx-auto min-h-screen w-full max-w-3xl lg:max-w-6xl pb-20">
 
-        {/* 헤더 — 챌린지 이름 + (리더)피드/운영 탭 + 중도 포기 */}
-        <div className="sticky top-0 glass-header px-4 lg:px-6 py-4 flex items-center gap-3 z-10">
-          <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0">
-            <FiArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-lg font-bold text-gray-900 flex-1 min-w-0 truncate">
-            {challengeData?.title || "챌린지"}
-          </h1>
-          {/* 리더 DM — 참여자가 리더에게 1:1 문의 (상단 이동) */}
-          {userChallenge && (
+        {/* 헤더 — 챌린지 이름 + 리더 DM + 가이드(확성기), 그 아래 3단 탭바 */}
+        <div className="sticky top-0 glass-header px-4 lg:px-6 pt-4 z-10">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0">
+              <FiArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-lg font-bold text-gray-900 flex-1 min-w-0 truncate">
+              {challengeData?.title || "챌린지"}
+            </h1>
+            {/* 챌린지 가이드 바로가기 (확성기) — ABOUT 탭 + 가이드 펼침·스크롤 */}
             <button
               type="button"
-              onClick={() => leaderDmMutation.mutate()}
-              disabled={leaderDmMutation.isPending}
-              aria-label="리더 DM"
-              title="리더에게 DM 보내기"
-              className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 transition-colors disabled:opacity-50"
+              onClick={openGuide}
+              aria-label="챌린지 가이드"
+              title="챌린지 가이드 보기"
+              className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg border border-gray-200 text-base hover:bg-primary-50 hover:border-primary-200 transition-colors"
             >
-              <span className="leading-none">💬</span>
-              <span className="hidden sm:inline">{leaderDmMutation.isPending ? "연결중..." : "리더 DM"}</span>
+              📢
             </button>
-          )}
-          {isCreator ? (
-            <div className="flex gap-0.5 p-0.5 bg-gray-100 rounded-lg flex-shrink-0">
+            {/* 리더 DM — 참여자가 리더에게 1:1 문의 */}
+            {userChallenge && (
               <button
                 type="button"
-                onClick={() => setMainTab("feed")}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${mainTab === "feed" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+                onClick={() => leaderDmMutation.mutate()}
+                disabled={leaderDmMutation.isPending}
+                aria-label="리더 DM"
+                title="리더에게 DM 보내기"
+                className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 transition-colors disabled:opacity-50"
               >
-                피드
+                <span className="leading-none">💬</span>
+                <span className="hidden sm:inline">{leaderDmMutation.isPending ? "연결중..." : "리더 DM"}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setMainTab("ops")}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${mainTab === "ops" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
-              >
-                👑 운영
-              </button>
-            </div>
-          ) : (
-            userChallenge && !isGaveUp && (
-              /* 참여자 — 피드 / 요청(인정 요청·리더 DM) 분리 */
-              <div className="flex gap-0.5 p-0.5 bg-gray-100 rounded-lg flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setMainTab("feed")}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${mainTab === "feed" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
-                >
-                  피드
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMainTab("requests")}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${mainTab === "requests" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
-                >
-                  🙋 요청
-                </button>
+            )}
+          </div>
+
+          {/* 3단 탭바 — 활성 탭은 밑줄 + 굵은 글씨 (배경색 변경 없음) */}
+          {(() => {
+            const showManage = isCreator || Boolean(userChallenge);
+            const tabs: Array<{ key: "about" | "challenge" | "manage"; label: string }> = [
+              { key: "about", label: "ABOUT" },
+              { key: "challenge", label: "챌린지" },
+              ...(showManage
+                ? [{ key: "manage" as const, label: isCreator ? "운영" : "관리" }]
+                : []),
+            ];
+            return (
+              <div className="flex mt-3">
+                {tabs.map((t) => {
+                  const active = mainTab === t.key;
+                  return (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setMainTab(t.key)}
+                      className={`flex-1 pb-2.5 text-sm text-center border-b-2 transition-colors ${
+                        active
+                          ? "border-gray-900 text-gray-900 font-bold"
+                          : "border-transparent text-gray-400 font-medium hover:text-gray-600"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
               </div>
-            )
-          )}
-          {canGiveUp && (
-            <button
-              type="button"
-              onClick={() => {
-                setGiveUpStep(1);
-                setShowGiveUpConfirm(true);
-              }}
-              aria-label="중도 포기"
-              title="중도 포기"
-              className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg border border-gray-200 text-base hover:bg-red-50 hover:border-red-200 transition-colors"
-            >
-              🏳️
-            </button>
-          )}
+            );
+          })()}
         </div>
 
         {/* 중도 포기 확인 모달 — 3단계 확인 (리더/참여자 분기) */}
@@ -1339,29 +1358,67 @@ export const ChallengeFeedPage = () => {
           </div>
         )}
 
-        {isCreator && mainTab === "ops" ? (
-          <div className="p-4 lg:p-6 mx-auto w-full max-w-2xl">
-            <LeaderOpsTab
-              challengeId={challengeId}
-              challengeType={challengeType}
-              allowedVerificationTypes={challengeData?.allowedVerificationTypes}
-              personalQuestEnabled={challengeData?.personalQuestEnabled}
-            />
-          </div>
-        ) : !isCreator && mainTab === "requests" && userChallenge ? (
-          <ParticipantRequestsTab
-            challengeId={challengeId}
-            myVerifications={myChallengeVerifications}
-            canRequest={isActive && !isCompletedByMe && !isGaveUp}
-            onLeaderDm={() => leaderDmMutation.mutate()}
-            dmPending={leaderDmMutation.isPending}
-            hasLeaderDm={Boolean(userChallenge)}
-          />
+        {mainTab === "manage" ? (
+          isCreator ? (
+            <div className="p-4 lg:p-6 mx-auto w-full max-w-2xl">
+              <LeaderOpsTab
+                challengeId={challengeId}
+                challengeType={challengeType}
+                allowedVerificationTypes={challengeData?.allowedVerificationTypes}
+                personalQuestEnabled={challengeData?.personalQuestEnabled}
+                isPaid={
+                  challengeData?.pricingType === 'paid_fee' ||
+                  challengeData?.pricingType === 'paid_deposit' ||
+                  Boolean(challengeData?.isPaid) ||
+                  Number(challengeData?.price ?? 0) > 0
+                }
+                lifecycle={challengeData?.effectiveLifecycle || challengeData?.lifecycle}
+              />
+            </div>
+          ) : userChallenge ? (
+            <div className="mx-auto w-full max-w-2xl">
+              <ParticipantRequestsTab
+                challengeId={challengeId}
+                myVerifications={myChallengeVerifications}
+                canRequest={isActive && !isCompletedByMe && !isGaveUp}
+                onLeaderDm={() => leaderDmMutation.mutate()}
+                dmPending={leaderDmMutation.isPending}
+                hasLeaderDm={Boolean(userChallenge)}
+                completedDays={completedDays}
+              />
+              {/* 챌린지 포기 — 관리 탭 하단 */}
+              {(canGiveUp || isGaveUp) && (
+                <div className="px-4 lg:px-6 pb-6">
+                  {isGaveUp ? (
+                    <section className="bg-red-50 rounded-2xl p-5 border border-red-100">
+                      <h3 className="font-bold text-red-800 mb-1">🏳️ 중도 포기한 챌린지</h3>
+                      <p className="text-sm text-red-700">인증 게시물 업로드가 제한되지만, 다른 참여자의 인증 피드는 계속 볼 수 있어요.</p>
+                    </section>
+                  ) : (
+                    <section className="glass-card rounded-2xl p-5 border border-rose-100">
+                      <h3 className="font-bold text-rose-700">🏳️ 챌린지 포기</h3>
+                      <p className="text-[11px] text-gray-500 mt-1">포기하면 더 이상 인증을 올릴 수 없어요. 다른 참여자 피드는 계속 볼 수 있고, 되돌릴 수 없어요.</p>
+                      <button
+                        type="button"
+                        onClick={() => { setGiveUpStep(1); setShowGiveUpConfirm(true); }}
+                        className="mt-3 w-full py-2.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 font-semibold text-sm hover:bg-rose-100 transition-colors"
+                      >
+                        챌린지 포기하기
+                      </button>
+                    </section>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-8 text-center text-sm text-gray-400">관전 중이에요. 참여하면 관리 기능이 열려요.</div>
+          )
         ) : (
         <div className="p-4 lg:p-6">
-          <div className="lg:grid lg:grid-cols-[300px_1fr] lg:gap-6 lg:items-start">
+          <div className={mainTab === "about" ? "lg:grid lg:grid-cols-[300px_1fr] lg:gap-6 lg:items-start" : ""}>
 
-          {/* ── Left Sidebar ── */}
+          {/* ── Left Sidebar (ABOUT 전용) ── */}
+          {mainTab === "about" && (
           <div className="space-y-4 lg:sticky lg:top-20">
 
           {/* 1) 카테고리 + 설명(좌) · 참여자/완료율 미니 카드(우) — 배경 없음 */}
@@ -1487,10 +1544,15 @@ export const ChallengeFeedPage = () => {
             </section>
           )}
 
-          </div>{/* ── End Left Sidebar ── */}
+          </div>
+          )}{/* ── End Left Sidebar (ABOUT 전용) ── */}
 
           {/* ── Right Main Content ── */}
           <div className="space-y-4 mt-4 lg:mt-0">
+
+          {/* ===== ABOUT 탭 — 소개 하위·가이드·개인퀘스트 제안·인증 입력 ===== */}
+          {mainTab === "about" && (
+          <>
 
           {/* 중도 포기 배너 */}
           {isGaveUp && (
@@ -1501,7 +1563,9 @@ export const ChallengeFeedPage = () => {
           )}
 
           {/* 2) 챌린지 보드 안내 — 인라인 아코디언 확장 + 📌 고정 (전체보기 페이지는 확장 영역 내 링크로 유지) */}
-          <BoardGuideSection challengeId={challengeId} />
+          <div ref={guideSectionRef} className="scroll-mt-24">
+            <BoardGuideSection challengeId={challengeId} openSignal={guideOpenSignal} />
+          </div>
 
           {/* 개인 퀘스트 제안 섹션 */}
           {challengeData?.personalQuestEnabled && (() => {
@@ -1779,6 +1843,13 @@ export const ChallengeFeedPage = () => {
             </section>
           )}
 
+          </>
+          )}{/* ===== End ABOUT ===== */}
+
+          {/* ===== 챌린지 탭 — 인증 피드 ===== */}
+          {mainTab === "challenge" && (
+          <>
+
           {/* 5) 인증 피드 — 챌린지 유형에 맞는 섹션만, 각 섹션 펼침/접힘(아코디언) */}
           {/*    종료된 챌린지는 참여했던 사람 + 생성자/리더만 열람 가능 — 미참여자에게는 안내 카드 */}
           <section className="glass-card rounded-2xl px-3 py-4 sm:p-5">
@@ -1884,8 +1955,11 @@ export const ChallengeFeedPage = () => {
             피드에서 다른 참여자들의 인증 게시물에 리액션과 댓글로 서로 힘을 나눠주세요.
           </div>
 
-          {/* 9) 보완 인증 — 맨 아래 */}
-          {(() => {
+          </>
+          )}{/* ===== End 챌린지 ===== */}
+
+          {/* 9) 보완 인증 — ABOUT 하단 (실패 Day 보완 입력) */}
+          {mainTab === "about" && (() => {
             if (!userChallenge) return null;
             if (isGaveUp) return null;
             const remedyType = getRemedyType(userChallenge.remedyPolicy);
