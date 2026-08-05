@@ -999,7 +999,7 @@ export const MEPage = () => {
                           ) : isDisbanded ? (
                             <p className="text-xs text-gray-500 mt-0.5">전체 해산 🏳️</p>
                           ) : isFailedChallengeState(challenge) ? (
-                            <p className="text-xs text-gray-600 mt-0.5">종료(미달성)</p>
+                            <p className="text-xs text-orange-600 mt-0.5">도전하는 자 🔥</p>
                           ) : (
                             <p className="text-xs text-emerald-700 mt-0.5">완주 완료 🎉</p>
                           )}

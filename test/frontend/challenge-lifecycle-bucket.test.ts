@@ -32,6 +32,8 @@ describe('challengeLifecycle resolveChallengeBucket', () => {
     expect(getChallengeStatusLabel({ status: 'active' })).toBe('진행중');
     expect(getChallengeStatusLabel({ status: 'active', phase: 'preparing' })).toBe('준비중');
     expect(getChallengeStatusLabel({ status: 'completed' })).toBe('완주');
+    expect(getChallengeStatusLabel({ status: 'failed' })).toBe('도전하는 자');
+    expect(getChallengeStatusLabel({ status: 'gave_up' })).toBe('중도포기');
   });
 
   test('resolveChallengeDay clamps by duration', () => {

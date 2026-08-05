@@ -1,5 +1,5 @@
 /**
- * lifecycle-manager — 챌린지 라이프사이클 워커 (EventBridge 매 1시간, plain Lambda handler).
+ * lifecycle-manager — 챌린지 라이프사이클 워커 (EventBridge 10분 주기, plain Lambda handler).
  * 레거시 backend/services/challenge/lifecycle-manager 이식 (상세: PORTING.md).
  *
  *  1. gsi1 `LC#<lifecycle>#CAT#<category>` Query (recruiting/preparing/active × 8 카테고리)
