@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FiArrowLeft } from "react-icons/fi";
 import { useAuthStore } from "@/stores/authStore";
 import { LeaderOpsTab } from "../components/LeaderOpsTab";
+import { ParticipantRequestsTab } from "../components/ParticipantRequestsTab";
 import { VerificationComments } from "../components/VerificationComments";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api-client";
@@ -387,8 +388,8 @@ export const ChallengeFeedPage = () => {
 
   // 탭 상태
   const [searchParams] = useSearchParams();
-  const [mainTab, setMainTab] = useState<"feed" | "ops">(
-    searchParams.get("tab") === "ops" ? "ops" : "feed",
+  const [mainTab, setMainTab] = useState<"feed" | "ops" | "requests">(
+    searchParams.get("tab") === "ops" ? "ops" : searchParams.get("tab") === "requests" ? "requests" : "feed",
   );
   const [activeQuestTab, setActiveQuestTab] = useState<"leader" | "personal">("leader");
   // 인증 피드 — 리더/개인 퀘스트 섹션을 각각 펼치고 접는다(아코디언, 독립 토글)
@@ -585,13 +586,6 @@ export const ChallengeFeedPage = () => {
       queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
     },
     onError: (err: any) => toast.error(err?.response?.data?.message || "처리에 실패했어요"),
-  });
-
-  const requestCompletionMutation = useMutation({
-    mutationFn: (vars: { verificationId: string; day: number }) =>
-      challengeApi.requestCompletion(challengeId!, { verificationId: vars.verificationId, day: vars.day }),
-    onSuccess: () => toast.success("리더에게 인정 요청을 보냈어요"),
-    onError: (err: any) => toast.error(err?.response?.data?.message || "요청에 실패했어요"),
   });
 
   const challengeVerifications = useMemo(() => verificationData || [], [verificationData]);
@@ -1007,21 +1001,7 @@ export const ChallengeFeedPage = () => {
           </div>
         )}
 
-        {/* 본인 게시물 — 리더에게 '이 게시물을 N일차 인증으로 인정 요청' (완주 후엔 조회 전용) */}
-        {item.isMine && !isCreator && !isCompletedByMe && (
-          <div className="mt-2 pt-2 border-t border-white/40 flex justify-end">
-            <button
-              type="button"
-              disabled={requestCompletionMutation.isPending}
-              onClick={() =>
-                requestCompletionMutation.mutate({ verificationId: item.verificationId, day: item.day })
-              }
-              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
-            >
-              🙋 {item.day}일차 인증 인정 요청
-            </button>
-          </div>
-        )}
+        {/* 인증 인정 요청은 카드가 아니라 참여자 '요청' 탭으로 이동 (자동 인증과 혼동·중복 방지) */}
 
         {/* 신고 — 본인/리더 외 참여자 */}
         {!item.isMine && !isCreator && (
@@ -1044,12 +1024,12 @@ export const ChallengeFeedPage = () => {
     open: boolean,
     toggle: () => void,
   ) => (
-    <div className="rounded-xl border border-gray-100 overflow-hidden bg-white/40">
+    <div className="border-t border-gray-200 first:border-t-0">
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="w-full flex items-center justify-between px-3.5 py-3 hover:bg-white/60 transition-colors"
+        className="w-full flex items-center justify-between py-3 hover:opacity-70 transition-opacity"
       >
         <span className="text-sm font-semibold text-gray-800">
           {kind === "leader" ? "🎯 리더퀘스트" : "🌱 개인퀘스트"}
@@ -1063,7 +1043,7 @@ export const ChallengeFeedPage = () => {
         </svg>
       </button>
       {open && (
-        <div className="px-3 pb-3 space-y-4">
+        <div className="pb-4 space-y-4">
           {list.length === 0 ? (
             <p className="text-sm text-gray-500 py-6 text-center">
               {kind === "leader" ? "아직 올라온 리더퀘스트 인증이 없습니다." : "아직 올라온 개인퀘스트 인증이 없습니다."}
@@ -1102,7 +1082,7 @@ export const ChallengeFeedPage = () => {
               <span className="hidden sm:inline">{leaderDmMutation.isPending ? "연결중..." : "리더 DM"}</span>
             </button>
           )}
-          {isCreator && (
+          {isCreator ? (
             <div className="flex gap-0.5 p-0.5 bg-gray-100 rounded-lg flex-shrink-0">
               <button
                 type="button"
@@ -1119,6 +1099,26 @@ export const ChallengeFeedPage = () => {
                 👑 운영
               </button>
             </div>
+          ) : (
+            userChallenge && !isGaveUp && (
+              /* 참여자 — 피드 / 요청(인정 요청·리더 DM) 분리 */
+              <div className="flex gap-0.5 p-0.5 bg-gray-100 rounded-lg flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setMainTab("feed")}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${mainTab === "feed" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+                >
+                  피드
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMainTab("requests")}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${mainTab === "requests" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+                >
+                  🙋 요청
+                </button>
+              </div>
+            )
           )}
           {canGiveUp && (
             <button
@@ -1348,6 +1348,15 @@ export const ChallengeFeedPage = () => {
               personalQuestEnabled={challengeData?.personalQuestEnabled}
             />
           </div>
+        ) : !isCreator && mainTab === "requests" && userChallenge ? (
+          <ParticipantRequestsTab
+            challengeId={challengeId}
+            myVerifications={myChallengeVerifications}
+            canRequest={isActive && !isCompletedByMe && !isGaveUp}
+            onLeaderDm={() => leaderDmMutation.mutate()}
+            dmPending={leaderDmMutation.isPending}
+            hasLeaderDm={Boolean(userChallenge)}
+          />
         ) : (
         <div className="p-4 lg:p-6">
           <div className="lg:grid lg:grid-cols-[300px_1fr] lg:gap-6 lg:items-start">
@@ -1772,8 +1781,8 @@ export const ChallengeFeedPage = () => {
 
           {/* 5) 인증 피드 — 챌린지 유형에 맞는 섹션만, 각 섹션 펼침/접힘(아코디언) */}
           {/*    종료된 챌린지는 참여했던 사람 + 생성자/리더만 열람 가능 — 미참여자에게는 안내 카드 */}
-          <section className="glass-card rounded-2xl p-5">
-            <h3 className="font-bold text-gray-900 mb-3">인증 피드</h3>
+          <section className="glass-card rounded-2xl px-3 py-4 sm:p-5">
+            <h3 className="font-bold text-gray-900 mb-1 px-0.5">인증 피드</h3>
             {feedLockedForNonMember ? (
               <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-8 text-center">
                 <p className="text-2xl mb-2">🔒</p>
@@ -1788,7 +1797,7 @@ export const ChallengeFeedPage = () => {
                 </button>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div>
                 {showLeaderFeed && renderFeedSection("leader", leaderFeedVerifications, openLeaderFeed, () => setOpenLeaderFeed((v) => !v))}
                 {showPersonalFeed && renderFeedSection("personal", personalFeedVerifications, openPersonalFeed, () => setOpenPersonalFeed((v) => !v))}
               </div>
