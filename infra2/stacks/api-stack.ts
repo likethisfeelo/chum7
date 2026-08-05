@@ -141,6 +141,8 @@ export class ApiStack extends cdk.Stack {
         CHALLENGES_TABLE: stateful.tables.challenges.tableName,
         UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
         COMMERCE_TABLE: stateful.tables.commerce.tableName,
+        // 공유 링크 OG 페이지가 사람을 SPA(/preview/:id)로 되돌릴 앱 오리진. prod에서만 커스텀 도메인.
+        APP_ORIGIN: config.domain ? `https://${config.domain.app}` : '',
         // 인증글 작성자 일일 활동명 생성용 (social-api와 동일 salt·알고리즘 공유)
         ANON_ID_SALT_SECRET_NAME: stateful.anonSaltSecret.secretName,
         // 조기완료 자동응원 레코드 생성용 — cheer 테이블 쓰기 (문서화된 크로스 도메인 예외)

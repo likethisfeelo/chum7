@@ -65,6 +65,75 @@ discoveryRoutes.get('/:challengeId', async (c) => {
   return ok(c, { ...stripKeys(challenge), effectiveLifecycle: effectiveLifecycleOf(challenge, new Date()) });
 });
 
+// 공유 링크 OG 페이지 — 크롤러(카톡·슬랙·페북 등)가 이 URL을 긁으면 챌린지별 OG 메타를 반환하고,
+//  실제 사람 브라우저는 JS로 SPA 미리보기(APP_ORIGIN/preview/:id)로 이동시킨다.
+//  SPA(index.html)는 모든 경로에 동일한 정적 OG를 주므로, 동적 OG는 이 서버 렌더 경로가 담당.
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+discoveryRoutes.get('/:challengeId/share', async (c) => {
+  const challengeId = c.req.param('challengeId');
+  const appOrigin = (process.env.APP_ORIGIN || '').replace(/\/$/, '');
+  const previewUrl = `${appOrigin}/preview/${encodeURIComponent(challengeId)}`;
+
+  const brand = 'CHUM7 익명 챌린지 커뮤니티';
+  let title = brand;
+  let description = '7일 챌린지에 함께 도전해요.';
+  let image = appOrigin ? `${appOrigin}/og-image.png` : '';
+
+  const challenge = await getChallenge(challengeId).catch(() => null);
+  if (challenge) {
+    // 요구사항: '챌린지 제목'이 앞, 'CHUM7 익명 챌린지 커뮤니티'가 뒤.
+    const t = typeof challenge.title === 'string' ? challenge.title.trim() : '';
+    if (t) title = `${t} · ${brand}`;
+    const d = typeof challenge.description === 'string' ? challenge.description.trim() : '';
+    if (d) description = d.length > 200 ? `${d.slice(0, 200)}…` : d;
+    if (typeof challenge.coverImageUrl === 'string' && challenge.coverImageUrl.trim()) {
+      image = challenge.coverImageUrl.trim();
+    }
+  }
+
+  const eTitle = escapeHtml(title);
+  const eDesc = escapeHtml(description);
+  const eImage = escapeHtml(image);
+  const eUrl = escapeHtml(previewUrl);
+
+  const html = `<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${eTitle}</title>
+<meta name="description" content="${eDesc}" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="CHUM7" />
+<meta property="og:title" content="${eTitle}" />
+<meta property="og:description" content="${eDesc}" />
+<meta property="og:url" content="${eUrl}" />
+${eImage ? `<meta property="og:image" content="${eImage}" />` : ''}
+<meta property="og:locale" content="ko_KR" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="${eTitle}" />
+<meta name="twitter:description" content="${eDesc}" />
+${eImage ? `<meta name="twitter:image" content="${eImage}" />` : ''}
+<script>window.location.replace(${JSON.stringify(previewUrl)});</script>
+</head>
+<body>
+<p>이동 중이에요… 자동으로 넘어가지 않으면 <a href="${eUrl}">여기</a>를 눌러주세요.</p>
+</body>
+</html>`;
+
+  // 공유 미리보기 캐시(5분). 챌린지가 없어도 기본 OG로 200 반환(링크 깨짐 방지).
+  c.header('Cache-Control', 'public, max-age=300');
+  return c.html(html);
+});
+
 // 챌린지 통계 (레거시 GET /challenges/{challengeId}/stats — 퍼블릭)
 discoveryRoutes.get('/:challengeId/stats', async (c) => {
   const challengeId = c.req.param('challengeId');

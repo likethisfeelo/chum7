@@ -214,9 +214,11 @@ export const ChallengeDetailPage = () => {
   const lifecycle = String(challenge.effectiveLifecycle || challenge.lifecycle || 'draft');
   const isCreator = challenge.createdBy === user?.userId;
 
-  // 공유 — 로그인 전에도 열리는 공개 미리보기(/preview/:id) 링크. Web Share 우선, 미지원 시 클립보드 복사.
+  // 공유 — 챌린지별 OG(썸네일·제목·설명)가 잡히는 서버 렌더 공유 페이지 링크.
+  //  크롤러는 OG를 읽고, 사람은 그 페이지에서 SPA 미리보기(/preview/:id)로 자동 이동한다.
   const handleShare = async () => {
-    const url = `${window.location.origin}/preview/${challengeId}`;
+    const apiBase = (import.meta.env.VITE_API_URL || 'https://dev.chum7.com').replace(/\/$/, '');
+    const url = `${apiBase}/public/challenges/${challengeId}/share`;
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({ title: challenge.title, text: `${challenge.title} — chum7에서 함께 도전해요`, url });
