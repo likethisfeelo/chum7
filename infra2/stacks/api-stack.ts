@@ -136,7 +136,7 @@ export class ApiStack extends cdk.Stack {
     this.challengeApi = this.addDomainApi({
       name: 'challenge-api',
       protectedPrefix: '/c',
-      publicPrefixes: ['/public/challenges'],
+      publicPrefixes: ['/public/challenges', '/share'],
       environment: {
         CHALLENGES_TABLE: stateful.tables.challenges.tableName,
         UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,

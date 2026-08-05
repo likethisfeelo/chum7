@@ -6,6 +6,7 @@
 import { handle } from 'hono/aws-lambda';
 import { createApi, ok, requireAuth } from '@chum7/api-kit';
 import { discoveryRoutes } from './routes/discovery';
+import { shareRoutes } from './routes/share';
 import { challengeRoutes } from './routes/challenges';
 import { participationRoutes } from './routes/participations';
 import { myChallengeRoutes } from './routes/my-challenges';
@@ -29,6 +30,8 @@ app.get('/health', (c) => ok(c, { service: 'challenge-api', at: new Date().toISO
 app.route('/public/challenges', discoveryRoutes);
 app.route('/public/users', publicUserRoutes);
 app.route('/public/link-preview', linkPreviewRoutes);
+// 공유 링크 OG 페이지 — 앱 도메인(www)/share/* → 이 라우트로 CloudFront 라우팅됨
+app.route('/share', shareRoutes);
 
 // 보호 영역: /c/*
 app.use('/c/*', requireAuth());

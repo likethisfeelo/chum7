@@ -79,10 +79,29 @@ export class EdgeStack extends cdk.Stack {
       cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
     };
 
+    // 공유 링크 OG 페이지 — www/share/* 를 API(challenge-api /share/:id)로 라우팅해
+    //  카톡·슬랙 등이 챌린지별 OG(썸네일·제목·설명)를 읽게 한다. 커스텀 도메인(prod)에서만.
+    //  origin request policy로 쿼리스트링을 전달(공유 캐시 무효화 파라미터 대비), Host는 API 도메인 자동.
+    const shareBehavior: Record<string, cloudfront.BehaviorOptions> = domain
+      ? {
+          '/share/*': {
+            origin: new origins.HttpOrigin(domain.api, {
+              protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+            }),
+            viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+            originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          },
+        }
+      : {};
+
     this.appDistribution = new cloudfront.Distribution(this, 'AppDistribution', {
       comment: `${config.prefix}-app`,
       defaultBehavior: { ...behaviorDefaults, origin: staticOrigin },
-      additionalBehaviors: { '/uploads/*': { ...behaviorDefaults, origin: uploadsOrigin } },
+      additionalBehaviors: {
+        '/uploads/*': { ...behaviorDefaults, origin: uploadsOrigin },
+        ...shareBehavior,
+      },
       defaultRootObject: 'index.html',
       errorResponses: spaErrorResponses,
       ...(domain && certificate ? { domainNames: [domain.app], certificate } : {}),
