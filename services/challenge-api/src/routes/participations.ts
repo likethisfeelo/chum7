@@ -141,9 +141,11 @@ participationRoutes.post('/challenges/:challengeId/join', async (c) => {
   const challenge = await getChallenge(challengeId);
   if (!challenge) return fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다');
 
-  const challengePrice = Number(challenge.price ?? 0);
-  const isPaidChallenge = Boolean(challenge.isPaid) || challengePrice > 0;
-  const requiresApproval = isPaidChallenge ? (challenge.joinApprovalRequired ?? true) : false;
+  // 결제 게이트와 승인 게이트가 동일한 유료 판정을 쓰도록 통일 (pricingType 포함).
+  // 과거: 승인 판정이 isPaid‖price>0만 봐서 pricingType=paid_* + price=0이면 결제는 요구하나
+  // 리더 승인을 건너뛰는 모순이 있었다.
+  const paid = isPaidChallenge(challenge);
+  const requiresApproval = paid ? (challenge.joinApprovalRequired ?? true) : false;
 
   // recruiting 단계에서만 참여 가능
   if (challenge.lifecycle !== 'recruiting') {
@@ -168,9 +170,7 @@ participationRoutes.post('/challenges/:challengeId/join', async (c) => {
 
   // 유료 챌린지: 결제 완료(paid) 주문 필요 — commerce 테이블 읽기 전용 검증
   // (커머스 v0: 쿠폰 또는 어드민 수동 입금 확인으로 paid 상태가 됨. COMMERCE_V0.md 참조)
-  const isPaidPricing =
-    challenge.pricingType === 'paid_fee' || challenge.pricingType === 'paid_deposit' || isPaidChallenge;
-  if (isPaidPricing) {
+  if (paid) {
     if (!input.orderId) {
       return fail(c, 402, 'ORDER_REQUIRED', '유료 챌린지는 결제(또는 쿠폰 적용) 후 참여할 수 있습니다');
     }
@@ -250,7 +250,7 @@ participationRoutes.post('/challenges/:challengeId/join', async (c) => {
     personalGoal: input.personalGoal ?? null,
     personalTarget,
     joinStatus: requiresApproval ? 'requested' : 'approved',
-    paymentStatus: isPaidChallenge ? (requiresApproval ? 'paid_pending_approval' : 'paid_confirmed') : 'free',
+    paymentStatus: paid ? (requiresApproval ? 'paid_pending_approval' : 'paid_confirmed') : 'free',
     refundStatus: 'none',
     refundLockedAt: challenge.challengeStartAt ?? null,
     consecutiveDays: 0,
@@ -268,7 +268,7 @@ participationRoutes.post('/challenges/:challengeId/join', async (c) => {
     userChallengeId,
     phase: 'preparing',
     joinStatus: requiresApproval ? 'requested' : 'approved',
-    paymentStatus: isPaidChallenge ? (requiresApproval ? 'paid_pending_approval' : 'paid_confirmed') : 'free',
+    paymentStatus: paid ? (requiresApproval ? 'paid_pending_approval' : 'paid_confirmed') : 'free',
     challenge: {
       challengeId: challenge.challengeId,
       title: challenge.title,
