@@ -23,6 +23,7 @@ import { ChallengeBoardPage } from '@/features/challenge-board/pages/ChallengeBo
 import { MEPage } from '@/features/me/pages/MEPage';
 import { MyPage } from '@/features/me/pages/MyPage';
 import { MyRecordsPage } from '@/features/me/pages/MyRecordsPage';
+import { GiftBoxPage } from '@/features/me/pages/GiftBoxPage';
 import { CheerHistoryPage } from '@/features/today/pages/CheerHistoryPage';
 import { TodayPage } from '@/features/today/pages/TodayPage';
 import { FeedPage } from '@/features/feed/pages/FeedPage';
@@ -204,6 +205,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MyRecordsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/me/gifts"
+          element={
+            <ProtectedRoute>
+              <GiftBoxPage />
             </ProtectedRoute>
           }
         />

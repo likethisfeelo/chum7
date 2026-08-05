@@ -1440,6 +1440,317 @@ function TicketSection({ challengeId }: { challengeId: string }) {
   );
 }
 
+// ── 완주 선물 발송 (리더) ──────────────────────────────────────────────────
+//  완주자에게 선물 교환권 발송 — 미리 등록(카탈로그)+일괄 발송 또는 즉석 입력 개별 발송.
+//  교환권 만료 기본 30일, 지급(교환 신청) 전까지 수정 가능. 실물은 claim 시 유저가
+//  배송 정보를 입력하고, 리더가 발송 처리(ship)한다.
+function GiftSection({ challengeId }: { challengeId: string }) {
+  const queryClient = useQueryClient();
+  const [giftName, setGiftName] = useState('');
+  const [giftDesc, setGiftDesc] = useState('');
+  const [giftType, setGiftType] = useState<'digital' | 'physical'>('digital');
+  const [selectedGiftId, setSelectedGiftId] = useState('');
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['leader-gifts', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/pay/gifts/leader/${challengeId}`);
+      return res.data.data;
+    },
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['leader-gifts', challengeId] });
+
+  const addCatalogMutation = useMutation({
+    mutationFn: () =>
+      apiClient.post(`/pay/gifts/leader/${challengeId}/catalog`, {
+        name: giftName.trim(),
+        ...(giftDesc.trim() ? { description: giftDesc.trim() } : {}),
+        type: giftType,
+      }),
+    onSuccess: () => {
+      toast.success('선물을 등록했어요');
+      setGiftName('');
+      setGiftDesc('');
+      invalidate();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '등록에 실패했어요'),
+  });
+
+  const deleteCatalogMutation = useMutation({
+    mutationFn: (giftId: string) => apiClient.delete(`/pay/gifts/leader/${challengeId}/catalog/${giftId}`),
+    onSuccess: () => invalidate(),
+    onError: (err: any) => toast.error(err?.response?.data?.message || '삭제에 실패했어요'),
+  });
+
+  const sendBatchMutation = useMutation({
+    mutationFn: () =>
+      apiClient.post(`/pay/gifts/leader/${challengeId}/send-batch`, {
+        giftId: selectedGiftId,
+        userIds: Array.from(selectedUsers),
+      }),
+    onSuccess: (res: any) => {
+      toast.success(res?.data?.message || '선물을 보냈어요 🎁');
+      setSelectedUsers(new Set());
+      invalidate();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '발송에 실패했어요'),
+  });
+
+  const shipMutation = useMutation({
+    mutationFn: ({ voucherId, trackingInfo }: { voucherId: string; trackingInfo?: string }) =>
+      apiClient.post(`/pay/gifts/leader/${challengeId}/vouchers/${voucherId}/ship`, trackingInfo ? { trackingInfo } : {}),
+    onSuccess: () => {
+      toast.success('발송 처리했어요 📦');
+      invalidate();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '발송 처리에 실패했어요'),
+  });
+
+  const editExpiryMutation = useMutation({
+    mutationFn: ({ voucherId, expiresAt }: { voucherId: string; expiresAt: string }) =>
+      apiClient.patch(`/pay/gifts/leader/${challengeId}/vouchers/${voucherId}`, { expiresAt }),
+    onSuccess: () => {
+      toast.success('만료일을 수정했어요');
+      invalidate();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '수정에 실패했어요'),
+  });
+
+  const catalog = (data?.catalog ?? []) as any[];
+  const completers = (data?.completers ?? []) as any[];
+  const vouchers = (data?.vouchers ?? []) as any[];
+  const vouchersByUser = new Map<string, any[]>();
+  for (const v of vouchers) {
+    const list = vouchersByUser.get(String(v.userId)) ?? [];
+    list.push(v);
+    vouchersByUser.set(String(v.userId), list);
+  }
+  const claimedPhysical = vouchers.filter((v) => v.status === 'claimed' && v.type === 'physical');
+  const busy =
+    addCatalogMutation.isPending || sendBatchMutation.isPending || shipMutation.isPending || deleteCatalogMutation.isPending;
+
+  const toggleUser = (userId: string) =>
+    setSelectedUsers((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+
+  const VOUCHER_STATUS_LABEL: Record<string, string> = {
+    issued: '발송됨(미교환)',
+    claimed: '교환 신청',
+    shipped: '배송중',
+    delivered: '수령 완료',
+    expired: '만료',
+  };
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <h3 className="font-bold text-gray-900">🎁 완주 선물</h3>
+      <p className="text-[11px] text-gray-400 mt-1">
+        완주자에게 선물 교환권을 보내요. 만료는 발행 후 30일(교환 전까지 수정 가능), 실물은 유저가 배송지를 입력하면 발송 처리해요.
+      </p>
+
+      {isLoading ? (
+        <p className="text-sm text-gray-400 mt-3">불러오는 중...</p>
+      ) : (
+        <>
+          {/* 배송 대기 알림 — 실물 교환 신청 건 */}
+          {claimedPhysical.length > 0 && (
+            <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3 space-y-2">
+              <p className="text-xs font-bold text-amber-800">📦 배송 대기 {claimedPhysical.length}건</p>
+              {claimedPhysical.map((v) => (
+                <div key={v.voucherId} className="rounded-lg bg-white border border-amber-100 p-2.5">
+                  <p className="text-xs font-semibold text-gray-800">
+                    {v.giftName} → {maskUserId(String(v.userId))}
+                  </p>
+                  {v.recipient && (
+                    <p className="text-[11px] text-gray-600 mt-0.5">
+                      {v.recipient.name} · {v.recipient.phone}
+                      <span className="block">{v.recipient.address}</span>
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      const tracking = window.prompt('운송장/배송 메모 (선택)') ?? undefined;
+                      shipMutation.mutate({ voucherId: v.voucherId, trackingInfo: tracking?.trim() || undefined });
+                    }}
+                    className="mt-1.5 w-full py-1.5 rounded-lg bg-amber-600 text-white text-[11px] font-semibold disabled:opacity-50"
+                  >
+                    발송 완료 처리
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 선물 카탈로그 (미리 등록) */}
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-gray-600">선물 목록 (미리 등록)</p>
+            {catalog.length > 0 && (
+              <div className="mt-1.5 space-y-1">
+                {catalog.map((g) => (
+                  <div key={g.giftId} className="flex items-center gap-2 rounded-lg bg-white/60 border border-gray-100 px-2.5 py-1.5">
+                    <span className="text-sm">{g.type === 'physical' ? '📦' : '🎁'}</span>
+                    <span className="text-xs font-medium text-gray-800 truncate flex-1">{g.name}</span>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => deleteCatalogMutation.mutate(g.giftId)}
+                      className="text-[11px] text-gray-400 hover:text-rose-500"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-2 space-y-1.5">
+              <div className="flex gap-1.5">
+                <input
+                  value={giftName}
+                  onChange={(e) => setGiftName(e.target.value)}
+                  maxLength={100}
+                  placeholder="선물 이름 (예: 스타벅스 기프티콘)"
+                  className="flex-1 text-xs px-2.5 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary-300"
+                />
+                <select
+                  value={giftType}
+                  onChange={(e) => setGiftType(e.target.value as 'digital' | 'physical')}
+                  className="text-xs px-2 py-2 rounded-lg border border-gray-200 bg-white"
+                >
+                  <option value="digital">디지털</option>
+                  <option value="physical">실물 배송</option>
+                </select>
+              </div>
+              <div className="flex gap-1.5">
+                <input
+                  value={giftDesc}
+                  onChange={(e) => setGiftDesc(e.target.value)}
+                  maxLength={500}
+                  placeholder="설명 (선택 — 교환 방법 등)"
+                  className="flex-1 text-xs px-2.5 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary-300"
+                />
+                <button
+                  type="button"
+                  disabled={busy || !giftName.trim()}
+                  onClick={() => addCatalogMutation.mutate()}
+                  className="px-3 py-2 rounded-lg bg-gray-800 text-white text-xs font-semibold disabled:opacity-50"
+                >
+                  등록
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 완주자 선택 + 일괄 발송 */}
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-600">완주자에게 발송 ({completers.length}명)</p>
+            {completers.length === 0 ? (
+              <p className="text-xs text-gray-400 mt-1.5">아직 완주자가 없어요. 챌린지 종료 후 이용하세요.</p>
+            ) : (
+              <>
+                <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
+                  {completers.map((p) => {
+                    const sent = vouchersByUser.get(String(p.userId)) ?? [];
+                    return (
+                      <label
+                        key={p.userId}
+                        className="flex items-center gap-2 rounded-lg bg-white/60 border border-gray-100 px-2.5 py-2 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.has(String(p.userId))}
+                          onChange={() => toggleUser(String(p.userId))}
+                        />
+                        <span className="text-xs font-medium text-gray-800">{maskUserId(String(p.userId))}</span>
+                        <span className="ml-auto text-[10px] text-gray-400">
+                          {sent.length > 0
+                            ? sent.map((v) => VOUCHER_STATUS_LABEL[v.status] ?? v.status).join(' · ')
+                            : '미발송'}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="mt-2 flex gap-1.5">
+                  <select
+                    value={selectedGiftId}
+                    onChange={(e) => setSelectedGiftId(e.target.value)}
+                    className="flex-1 text-xs px-2 py-2 rounded-lg border border-gray-200 bg-white"
+                  >
+                    <option value="">보낼 선물 선택 (미리 등록에서)</option>
+                    {catalog.map((g) => (
+                      <option key={g.giftId} value={g.giftId}>
+                        {g.type === 'physical' ? '📦' : '🎁'} {g.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={busy || !selectedGiftId || selectedUsers.size === 0}
+                    onClick={() => {
+                      if (window.confirm(`선택한 완주자 ${selectedUsers.size}명에게 선물 교환권을 보낼까요?`)) {
+                        sendBatchMutation.mutate();
+                      }
+                    }}
+                    className="px-3 py-2 rounded-lg bg-primary-600 text-white text-xs font-semibold disabled:opacity-50"
+                  >
+                    {sendBatchMutation.isPending ? '발송 중...' : `일괄 발송 (${selectedUsers.size})`}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* 발송 현황 + 지급 전 만료일 수정 */}
+          {vouchers.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-gray-100">
+              <p className="text-xs font-semibold text-gray-600">발송 현황 ({vouchers.length})</p>
+              <div className="mt-1.5 space-y-1">
+                {vouchers.slice(0, 15).map((v) => (
+                  <div key={v.voucherId} className="flex items-center gap-2 text-xs text-gray-600">
+                    <span className="truncate">
+                      {v.giftName} → {maskUserId(String(v.userId))}
+                    </span>
+                    <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
+                      {VOUCHER_STATUS_LABEL[v.status] ?? v.status}
+                    </span>
+                    {v.status === 'issued' && (
+                      <button
+                        type="button"
+                        disabled={busy || editExpiryMutation.isPending}
+                        onClick={() => {
+                          const cur = String(v.expiresAt ?? '').slice(0, 10);
+                          const next = window.prompt('만료일 수정 (YYYY-MM-DD)', cur);
+                          if (!next || !/^\d{4}-\d{2}-\d{2}$/.test(next.trim())) return;
+                          editExpiryMutation.mutate({
+                            voucherId: v.voucherId,
+                            expiresAt: new Date(`${next.trim()}T23:59:59.000Z`).toISOString(),
+                          });
+                        }}
+                        className="text-[10px] text-primary-600 whitespace-nowrap"
+                      >
+                        만료수정
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {vouchers.length > 15 && <p className="text-[10px] text-gray-400">+{vouchers.length - 15}건 더</p>}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 // ── 챌린지 해산 (리더) ─────────────────────────────────────────────────────
 //  무료: 리더가 즉시 해산(2중 확인). 유료(참가비/보증금/티켓): 운영자에게 사유와 함께 해산 신청.
 function DisbandSection({
@@ -1601,6 +1912,8 @@ export function LeaderOpsTab({
       <OpsPostsSection challengeId={challengeId} />
 
       {isPaid && <TicketSection challengeId={challengeId} />}
+
+      <GiftSection challengeId={challengeId} />
 
       <DisbandSection challengeId={challengeId} isPaid={isPaid} lifecycle={lifecycle} />
 

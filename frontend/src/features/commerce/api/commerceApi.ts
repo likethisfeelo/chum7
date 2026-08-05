@@ -23,6 +23,40 @@ export interface TicketRequest {
   rejectReason?: string | null;
 }
 
+export interface GiftCatalogItem {
+  giftId: string;
+  challengeId: string;
+  name: string;
+  description?: string | null;
+  type: 'digital' | 'physical';
+  createdAt: string;
+}
+
+export interface Voucher {
+  voucherId: string;
+  challengeId: string;
+  challengeTitle?: string | null;
+  leaderId: string;
+  userId: string;
+  giftName: string;
+  giftDescription?: string | null;
+  type: 'digital' | 'physical';
+  status: 'issued' | 'claimed' | 'shipped' | 'delivered' | 'expired';
+  createdAt: string;
+  expiresAt: string;
+  claimedAt?: string | null;
+  recipient?: { name: string; phone: string; address: string } | null;
+  shippedAt?: string | null;
+  trackingInfo?: string | null;
+  deliveredAt?: string | null;
+}
+
+export interface LeaderGiftStatus {
+  catalog: GiftCatalogItem[];
+  completers: Array<{ userId: string; score?: number }>;
+  vouchers: Voucher[];
+}
+
 export interface LeaderTicketStatus {
   quota: { total: number; issued: number; remaining: number };
   batches: Array<{ batchId: string; total: number; issued: number; createdAt: string }>;
@@ -151,5 +185,69 @@ export const commerceApi = {
   rejectTicketRequest: async (challengeId: string, userId: string, reason?: string) => {
     const res = await apiClient.post(`/pay/tickets/leader/${challengeId}/requests/${userId}/reject`, reason ? { reason } : {});
     return res.data.data;
+  },
+
+  // ── 완주 선물 교환권 ────────────────────────────────────────────────────
+  getMyVouchers: async (): Promise<{ vouchers: Voucher[]; total: number }> => {
+    const res = await apiClient.get('/pay/gifts/my');
+    return res.data.data ?? { vouchers: [], total: 0 };
+  },
+
+  claimVoucher: async (
+    voucherId: string,
+    recipient?: { name: string; phone: string; address: string },
+  ) => {
+    const res = await apiClient.post(`/pay/gifts/${voucherId}/claim`, recipient ?? {});
+    return res.data;
+  },
+
+  confirmVoucherReceipt: async (voucherId: string) => {
+    const res = await apiClient.post(`/pay/gifts/${voucherId}/confirm-receipt`);
+    return res.data;
+  },
+
+  getLeaderGiftStatus: async (challengeId: string): Promise<LeaderGiftStatus> => {
+    const res = await apiClient.get(`/pay/gifts/leader/${challengeId}`);
+    return res.data.data as LeaderGiftStatus;
+  },
+
+  addGiftCatalogItem: async (
+    challengeId: string,
+    params: { name: string; description?: string; type: 'digital' | 'physical' },
+  ) => {
+    const res = await apiClient.post(`/pay/gifts/leader/${challengeId}/catalog`, params);
+    return res.data.data;
+  },
+
+  deleteGiftCatalogItem: async (challengeId: string, giftId: string) => {
+    const res = await apiClient.delete(`/pay/gifts/leader/${challengeId}/catalog/${giftId}`);
+    return res.data.data;
+  },
+
+  sendGift: async (
+    challengeId: string,
+    params: { toUserId: string; giftId?: string; name?: string; description?: string; type?: 'digital' | 'physical'; expiresAt?: string },
+  ) => {
+    const res = await apiClient.post(`/pay/gifts/leader/${challengeId}/send`, params);
+    return res.data;
+  },
+
+  sendGiftBatch: async (challengeId: string, params: { giftId: string; userIds: string[]; expiresAt?: string }) => {
+    const res = await apiClient.post(`/pay/gifts/leader/${challengeId}/send-batch`, params);
+    return res.data;
+  },
+
+  editVoucher: async (
+    challengeId: string,
+    voucherId: string,
+    patch: { giftName?: string; giftDescription?: string; expiresAt?: string },
+  ) => {
+    const res = await apiClient.patch(`/pay/gifts/leader/${challengeId}/vouchers/${voucherId}`, patch);
+    return res.data;
+  },
+
+  shipVoucher: async (challengeId: string, voucherId: string, trackingInfo?: string) => {
+    const res = await apiClient.post(`/pay/gifts/leader/${challengeId}/vouchers/${voucherId}/ship`, trackingInfo ? { trackingInfo } : {});
+    return res.data;
   },
 };

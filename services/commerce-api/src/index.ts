@@ -2,6 +2,7 @@ import { handle } from 'hono/aws-lambda';
 import { createApi, ok, requireAuth, requireGroup } from '@chum7/api-kit';
 import { orderRoutes } from './routes/orders';
 import { ticketRoutes } from './routes/tickets';
+import { giftRoutes } from './routes/gifts';
 import { commerceAdminRoutes } from './routes/admin';
 import { commerceAdminSettlementRoutes } from './routes/admin-settlement';
 
@@ -23,5 +24,6 @@ app.route('/pay/admin', commerceAdminRoutes);
 app.route('/pay/admin', commerceAdminSettlementRoutes);
 app.route('/pay/orders', orderRoutes);
 app.route('/pay/tickets', ticketRoutes);
+app.route('/pay/gifts', giftRoutes);
 
 export const handler = handle(app);

@@ -1029,6 +1029,16 @@ export const MEPage = () => {
           </>
         )}
 
+        {/* 선물 교환권함 — 완주 선물 확인 */}
+        <button
+          type="button"
+          onClick={() => navigate('/me/gifts')}
+          className="w-full py-3 border border-gray-200 rounded-2xl text-sm text-gray-600 bg-white flex items-center justify-between px-5 hover:border-primary-300 hover:text-primary-600 transition-colors"
+        >
+          <span>🎁 선물 교환권함</span>
+          <span className="text-xs text-gray-400">확인하기 →</span>
+        </button>
+
         {/* 추가기록 링크 (active 탭 외에서도 접근 가능하도록) */}
         {activeTab !== 'active' && (extraCountData?.verifications?.length > 0 || extraCountData?.nextToken) && (
           <button

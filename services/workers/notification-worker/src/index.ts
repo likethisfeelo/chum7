@@ -195,6 +195,33 @@ function routeNotification(
         message: ticketRejectReason ? `사유: ${ticketRejectReason}` : '티켓 신청이 반려됐어요.',
       };
     }
+    case 'gift.issued':
+      return {
+        recipientId: String(detail.userId),
+        category: 'commerce',
+        type: 'gift_issued',
+        title: '완주 선물이 도착했어요 🎁',
+        message: `리더가 '${String(detail.giftName ?? '선물')}' 교환권을 보냈어요. 교환권함에서 확인하세요!`,
+      };
+    case 'gift.claimed':
+      return {
+        recipientId: String(detail.leaderId),
+        category: 'commerce',
+        type: 'gift_claimed',
+        title: '선물 교환 신청이 왔어요',
+        message:
+          detail.isPhysical === true
+            ? `'${String(detail.giftName ?? '선물')}' 실물 교환 신청이 도착했어요. 배송 정보를 확인하고 발송해주세요 📦`
+            : `'${String(detail.giftName ?? '선물')}' 교환권이 사용됐어요.`,
+      };
+    case 'gift.shipped':
+      return {
+        recipientId: String(detail.userId),
+        category: 'commerce',
+        type: 'gift_shipped',
+        title: '선물이 발송됐어요 📦',
+        message: `'${String(detail.giftName ?? '선물')}'이(가) 발송됐어요. 받으시면 수령 확인을 눌러주세요!`,
+      };
     case 'challenge.disband_requested':
       return {
         recipientId: String(detail.leaderId),
@@ -283,6 +310,11 @@ function buildDeepLink(type: DomainEventType, detail: Record<string, unknown>): 
     case 'ticket.request_rejected':
       return detail.challengeId ? `/challenges/${detail.challengeId}` : undefined;
     case 'ticket.requested':
+      return detail.challengeId ? `/challenge-feed/${detail.challengeId}?tab=ops` : undefined;
+    case 'gift.issued':
+    case 'gift.shipped':
+      return '/me/gifts';
+    case 'gift.claimed':
       return detail.challengeId ? `/challenge-feed/${detail.challengeId}?tab=ops` : undefined;
     default:
       return undefined;

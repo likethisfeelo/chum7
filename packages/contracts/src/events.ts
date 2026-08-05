@@ -189,6 +189,31 @@ export const domainEventSchemas = {
     leaderId: z.string(),
     reason: z.string().optional(),
   }),
+  // 리더가 완주자에게 선물 교환권 발행 — 수신자는 유저.
+  'gift.issued': z.object({
+    voucherId: z.string(),
+    challengeId: z.string(),
+    userId: z.string(),
+    leaderId: z.string(),
+    giftName: z.string(),
+  }),
+  // 유저가 교환권 사용(교환 신청) — 수신자는 리더. 실물이면 배송 준비 신호.
+  'gift.claimed': z.object({
+    voucherId: z.string(),
+    challengeId: z.string(),
+    userId: z.string(),
+    leaderId: z.string(),
+    giftName: z.string(),
+    isPhysical: z.boolean(),
+  }),
+  // 리더가 실물 선물 발송 처리 — 수신자는 유저.
+  'gift.shipped': z.object({
+    voucherId: z.string(),
+    challengeId: z.string(),
+    userId: z.string(),
+    giftName: z.string(),
+    trackingInfo: z.string().optional(),
+  }),
   'order.rejected': z.object({
     orderId: z.string(),
     userId: z.string(),
