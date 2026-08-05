@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { motion } from 'framer-motion';
-import { FiArrowLeft, FiUsers, FiTrendingUp, FiClock, FiHelpCircle } from 'react-icons/fi';
+import { FiArrowLeft, FiUsers, FiTrendingUp, FiClock, FiHelpCircle, FiShare2 } from 'react-icons/fi';
 import { Button } from '@/shared/components/Button';
 import { Loading } from '@/shared/components/Loading';
 import toast from 'react-hot-toast';
@@ -213,6 +213,27 @@ export const ChallengeDetailPage = () => {
   // 표시용 상태는 effectiveLifecycle 우선 — 워커(10분 주기) 전이 지연 흡수 (docs/time-policy.md R4)
   const lifecycle = String(challenge.effectiveLifecycle || challenge.lifecycle || 'draft');
   const isCreator = challenge.createdBy === user?.userId;
+
+  // 공유 — 챌린지별 OG(썸네일·제목·설명)가 잡히는 서버 렌더 공유 페이지 링크.
+  //  앱과 같은 도메인(www)/share/:id → CloudFront가 API로 라우팅. 크롤러는 OG를 읽고,
+  //  사람은 그 페이지에서 SPA 미리보기(/preview/:id)로 자동 이동한다.
+  const handleShare = async () => {
+    const url = `${window.location.origin}/share/${challengeId}`;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: challenge.title, text: `${challenge.title} — chum7에서 함께 도전해요`, url });
+      } catch {
+        /* 사용자가 공유 취소 — 무시 */
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('링크를 복사했어요');
+    } catch {
+      toast.error('링크 복사에 실패했어요');
+    }
+  };
   const requiresPayment = isPaidChallenge(challenge);
 
   // 시작 후(진행/완료)에만 완료 통계가 의미 있음 — 모집중·준비중엔 숨긴다
@@ -401,9 +422,23 @@ export const ChallengeDetailPage = () => {
               {challenge.badgeIcon || '🎯'}
             </div>
             <div className="flex-1">
-              <span className="inline-block px-3 py-1 bg-primary-100 text-primary-700 text-xs font-medium rounded-full mb-2">
-                {SLUG_TO_LABEL[challenge.category] ?? challenge.category}
-              </span>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <span className="inline-block px-3 py-1 bg-primary-100 text-primary-700 text-xs font-medium rounded-full">
+                  {SLUG_TO_LABEL[challenge.category] ?? challenge.category}
+                </span>
+                {/* 공유 — 모집중 챌린지 링크 공유(로그인 전 미리보기로 연결) */}
+                {lifecycle === 'recruiting' && (
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    aria-label="챌린지 공유"
+                    className="flex items-center gap-1 text-xs font-semibold text-primary-600 bg-primary-50 hover:bg-primary-100 border border-primary-200 px-2.5 py-1 rounded-full transition-colors shrink-0"
+                  >
+                    <FiShare2 className="w-3.5 h-3.5" />
+                    공유
+                  </button>
+                )}
+              </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">{challenge.title}</h2>
               <p className="text-sm text-gray-600 flex items-center gap-1">
                 <FiClock className="w-4 h-4" />

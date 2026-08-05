@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
@@ -14,6 +14,7 @@ import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { AuthCallbackPage } from '@/features/auth/pages/AuthCallbackPage';
 import { ChallengesPage } from '@/features/challenge/pages/ChallengesPage';
 import { ChallengeDetailPage } from '@/features/challenge/pages/ChallengeDetailPage';
+import { ChallengePreviewPage } from '@/features/challenge/pages/ChallengePreviewPage';
 import { ChallengeCreatePage } from '@/features/challenge/pages/ChallengeCreatePage';
 import { ChallengeEditPage } from '@/features/challenge/pages/ChallengeEditPage';
 import { ChallengeFeedPage } from '@/features/challenge-feed/pages/ChallengeFeedPage';
@@ -45,7 +46,12 @@ import { ChallengeRecapSheet } from '@/features/challenge/components/ChallengeRe
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!isAuthenticated) {
+    // 로그인 후 원래 가려던 곳으로 복귀할 수 있도록 redirect 파라미터 보존 (공유 링크 참여 플로우)
+    const target = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/login?redirect=${target}`} replace />;
+  }
   return <>{children}</>;
 };
 
@@ -121,6 +127,8 @@ export default function App() {
         />
         {/* 소셜 로그인 팝업 복귀 지점 — 리다이렉트 래퍼 없이(팝업 내부에서만 동작) */}
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        {/* 공개 챌린지 미리보기 — 로그인 전에도 열림(공유 링크). 로그인 상태면 상세로 이동 */}
+        <Route path="/preview/:challengeId" element={<ChallengePreviewPage />} />
 
         {/* 보호된 라우트 (로그인 필요) */}
         <Route

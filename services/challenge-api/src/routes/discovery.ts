@@ -9,6 +9,7 @@ import { getChallenge, queryDiscovery } from '../repo/challenges';
 import { effectiveLifecycleOf } from '../domain/challenge-state';
 import { listChallengeParticipations } from '../repo/participations';
 import { stripKeys } from '../repo/shared';
+import { buildChallengeShareHtml } from './share';
 
 export const discoveryRoutes = new Hono<AppEnv>();
 
@@ -63,6 +64,14 @@ discoveryRoutes.get('/:challengeId', async (c) => {
     return fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다');
   }
   return ok(c, { ...stripKeys(challenge), effectiveLifecycle: effectiveLifecycleOf(challenge, new Date()) });
+});
+
+// 공유 링크 OG 페이지 (api 도메인 직접 접근용 별칭) — 실제 공유 링크는 /share/:id (앱 도메인 라우팅).
+discoveryRoutes.get('/:challengeId/share', async (c) => {
+  const challengeId = c.req.param('challengeId');
+  const challenge = await getChallenge(challengeId).catch(() => null);
+  c.header('Cache-Control', 'public, max-age=300');
+  return c.html(buildChallengeShareHtml(challenge, challengeId));
 });
 
 // 챌린지 통계 (레거시 GET /challenges/{challengeId}/stats — 퍼블릭)
