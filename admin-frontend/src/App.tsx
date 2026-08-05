@@ -14,6 +14,7 @@ import { AdminCategoryBannersPage } from '@/pages/AdminCategoryBannersPage';
 import { AdminPlazaPostPage } from '@/pages/AdminPlazaPostPage';
 import { AdminReportsPage } from '@/pages/AdminReportsPage';
 import { AdminDisbandRequestsPage } from '@/pages/AdminDisbandRequestsPage';
+import { AdminCommerceTicketsPage } from '@/pages/AdminCommerceTicketsPage';
 import { AdminCheerMonitorPage } from '@/pages/AdminCheerMonitorPage';
 import { AdminCommerceCouponsPage } from '@/pages/AdminCommerceCouponsPage';
 import { AdminCommerceOrdersPage } from '@/pages/AdminCommerceOrdersPage';
@@ -138,6 +139,7 @@ const Sidebar = () => {
     nav.push({ path: '/admin/commerce/coupons', label: '🎟️ 쿠폰 관리', section: '커머스' });
     nav.push({ path: '/admin/commerce/orders', label: '💰 주문/입금 관리', section: '커머스' });
     nav.push({ path: '/admin/commerce/settlements', label: '💸 반환/정산 관리', section: '커머스' });
+    nav.push({ path: '/admin/commerce/tickets', label: '🎫 티켓 배부', section: '커머스' });
   }
 
   const handleLogout = () => {
@@ -408,6 +410,17 @@ export default function App() {
               <RoleRoute roles={['admins']}>
                 <Layout>
                   <AdminCommerceSettlementsPage />
+                </Layout>
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/admin/commerce/tickets"
+            element={
+              <RoleRoute roles={['admins']}>
+                <Layout>
+                  <AdminCommerceTicketsPage />
                 </Layout>
               </RoleRoute>
             }

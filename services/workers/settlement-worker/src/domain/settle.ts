@@ -62,8 +62,10 @@ export function planSettlement(params: {
 
   if (pricingType === 'paid_deposit') {
     const completed = new Set(completedUserIds);
-    refundDueOrders = paidOrders.filter((o) => completed.has(o.userId));
-    forfeitedOrders = paidOrders.filter((o) => !completed.has(o.userId));
+    // amount=0 주문(티켓 컴프)은 반환/몰수 대상에서 제외 — 돌려줄/몰수할 보증금이 없다
+    const withAmount = paidOrders.filter((o) => Number(o.amount ?? 0) > 0);
+    refundDueOrders = withAmount.filter((o) => completed.has(o.userId));
+    forfeitedOrders = withAmount.filter((o) => !completed.has(o.userId));
     grossAmount = forfeitedOrders.reduce((sum, o) => sum + Number(o.amount ?? 0), 0);
   } else {
     // 참가비형 — 전 paid 주문이 크리에이터 정산 대상

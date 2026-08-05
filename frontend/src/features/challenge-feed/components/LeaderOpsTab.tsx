@@ -1286,6 +1286,160 @@ function OpsPostsSection({ challengeId }: { challengeId: string }) {
   );
 }
 
+// ── 참여 티켓 운영 (리더, 유료 챌린지 전용) ────────────────────────────────
+//  운영자에게 배부받은 할당량으로 유저에게 티켓 발급(신청 승인 or 직접 부여).
+//  티켓은 결제와 동일 효력 — 유저가 사용하면 amount=0 paid 주문으로 참여한다.
+function TicketSection({ challengeId }: { challengeId: string }) {
+  const queryClient = useQueryClient();
+  const [directUserId, setDirectUserId] = useState('');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['leader-tickets', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/pay/tickets/leader/${challengeId}`);
+      return res.data.data;
+    },
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['leader-tickets', challengeId] });
+
+  const grantMutation = useMutation({
+    mutationFn: ({ toUserId, fromRequest }: { toUserId: string; fromRequest?: boolean }) =>
+      apiClient.post(`/pay/tickets/leader/${challengeId}/grant`, { toUserId, ...(fromRequest ? { fromRequest: true } : {}) }),
+    onSuccess: () => {
+      toast.success('티켓을 발급했어요 🎫');
+      setDirectUserId('');
+      invalidate();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '발급에 실패했어요'),
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: ({ userId, reason }: { userId: string; reason?: string }) =>
+      apiClient.post(`/pay/tickets/leader/${challengeId}/requests/${userId}/reject`, reason ? { reason } : {}),
+    onSuccess: () => {
+      toast.success('신청을 반려했어요');
+      invalidate();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '반려에 실패했어요'),
+  });
+
+  const quota = data?.quota ?? { total: 0, issued: 0, remaining: 0 };
+  const pending = (data?.requests ?? []).filter((r: any) => r.status === 'pending');
+  const issuedTickets = (data?.tickets ?? []) as any[];
+  const busy = grantMutation.isPending || rejectMutation.isPending;
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-gray-900">🎫 참여 티켓</h3>
+        <span className="text-xs text-gray-400">
+          잔여 {quota.remaining} / 배부 {quota.total}
+        </span>
+      </div>
+      <p className="text-[11px] text-gray-400 mt-1">
+        티켓은 결제와 동일한 효력이에요. 유저가 사용하면 무료로 참여가 확정됩니다. 할당량이 부족하면 운영자에게 추가 배부를 요청하세요.
+      </p>
+
+      {isLoading ? (
+        <p className="text-sm text-gray-400 mt-3">불러오는 중...</p>
+      ) : (
+        <>
+          {/* 신청 큐 */}
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-gray-600">
+              티켓 신청 {pending.length > 0 && <span className="text-rose-500">({pending.length})</span>}
+            </p>
+            {pending.length === 0 ? (
+              <p className="text-xs text-gray-400 mt-1.5">대기 중인 신청이 없어요.</p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {pending.map((r: any) => (
+                  <div key={r.userId} className="rounded-xl bg-white/60 border border-gray-100 p-3">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-800">{maskUserId(String(r.userId))}</p>
+                      <span className="ml-auto text-[11px] text-gray-400">
+                        {r.createdAt ? new Date(r.createdAt).toLocaleDateString('ko-KR') : ''}
+                      </span>
+                    </div>
+                    {r.message && <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">{r.message}</p>}
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        type="button"
+                        disabled={busy || quota.remaining <= 0}
+                        onClick={() => grantMutation.mutate({ toUserId: String(r.userId), fromRequest: true })}
+                        className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-primary-600 text-white disabled:opacity-50"
+                        title={quota.remaining <= 0 ? '잔여 할당량이 없어요' : undefined}
+                      >
+                        🎫 티켓 발급
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          const reason = window.prompt('반려 사유 (선택)') ?? undefined;
+                          rejectMutation.mutate({ userId: String(r.userId), reason: reason?.trim() || undefined });
+                        }}
+                        className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 disabled:opacity-50"
+                      >
+                        반려
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 직접 발급 */}
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-600">특정 유저에게 직접 발급</p>
+            <div className="mt-1.5 flex gap-2">
+              <input
+                value={directUserId}
+                onChange={(e) => setDirectUserId(e.target.value)}
+                placeholder="유저 ID"
+                className="flex-1 text-sm px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary-300"
+              />
+              <button
+                type="button"
+                disabled={busy || !directUserId.trim() || quota.remaining <= 0}
+                onClick={() => grantMutation.mutate({ toUserId: directUserId.trim() })}
+                className="px-3 py-2 rounded-lg bg-primary-600 text-white text-xs font-semibold disabled:opacity-50"
+              >
+                발급
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1">유저 ID 확인이 어려우면 유저에게 결제 화면의 '티켓 신청'을 안내하세요.</p>
+          </div>
+
+          {/* 발급 현황 */}
+          {issuedTickets.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-gray-100">
+              <p className="text-xs font-semibold text-gray-600">발급 현황 ({issuedTickets.length})</p>
+              <div className="mt-1.5 space-y-1">
+                {issuedTickets.slice(0, 10).map((t: any) => (
+                  <div key={t.ticketId} className="flex items-center gap-2 text-xs text-gray-600">
+                    <span>{maskUserId(String(t.userId))}</span>
+                    <span
+                      className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                        t.status === 'consumed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      }`}
+                    >
+                      {t.status === 'consumed' ? '사용 완료(참여)' : '미사용'}
+                    </span>
+                  </div>
+                ))}
+                {issuedTickets.length > 10 && <p className="text-[10px] text-gray-400">+{issuedTickets.length - 10}건 더</p>}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 // ── 챌린지 해산 (리더) ─────────────────────────────────────────────────────
 //  무료: 리더가 즉시 해산(2중 확인). 유료(참가비/보증금/티켓): 운영자에게 사유와 함께 해산 신청.
 function DisbandSection({
@@ -1445,6 +1599,8 @@ export function LeaderOpsTab({
         personalQuestEnabled={personalQuestEnabled}
       />
       <OpsPostsSection challengeId={challengeId} />
+
+      {isPaid && <TicketSection challengeId={challengeId} />}
 
       <DisbandSection challengeId={challengeId} isPaid={isPaid} lifecycle={lifecycle} />
 

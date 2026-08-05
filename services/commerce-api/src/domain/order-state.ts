@@ -10,7 +10,8 @@ export type OrderStatus =
   | 'canceled' // 사용자 취소
   | 'expired'; // 기한 만료
 
-export type OrderMethod = 'coupon' | 'manual_deposit';
+// ticket: 리더 발급 유료 조인 티켓 소진 — 즉시 paid, amount=0 (무상 컴프, 정산 모수 제외)
+export type OrderMethod = 'coupon' | 'manual_deposit' | 'ticket';
 
 const TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   awaiting_deposit: ['paid', 'rejected', 'canceled', 'expired'],

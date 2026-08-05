@@ -71,6 +71,23 @@ describe('settle domain', () => {
       expect(plan.grossAmount).toBe(10_000);
     });
 
+    it('ticket comp(amount=0) orders are excluded from refunds and forfeits', () => {
+      const plan = planSettlement({
+        pricingType: 'paid_deposit',
+        orders: [
+          order({ orderId: 'o-1', userId: 'done-1' }),
+          order({ orderId: 't-1', userId: 'done-2', amount: 0 }), // 티켓 완주자 — 반환 없음
+          order({ orderId: 't-2', userId: 'fail-1', amount: 0 }), // 티켓 미완주 — 몰수 없음
+        ],
+        completedUserIds: ['done-1', 'done-2'],
+        feeRate: 0.05,
+      });
+      expect(plan.refundDueOrders.map((o) => o.orderId)).toEqual(['o-1']);
+      expect(plan.forfeitedOrders).toEqual([]);
+      expect(plan.grossAmount).toBe(0);
+      expect(plan.orderCount).toBe(3); // 참여 자격 모수에는 포함
+    });
+
     it('all completed → payout 0, refunds only, still publishes ready', () => {
       const plan = planSettlement({
         pricingType: 'paid_deposit',

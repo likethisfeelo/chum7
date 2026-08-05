@@ -167,6 +167,28 @@ export const domainEventSchemas = {
     challengeId: z.string(),
     amount: z.number().int(),
   }),
+  // 유료 조인 티켓 — 리더가 유저에게 발급(결제 동일 효력). 수신자는 유저.
+  'ticket.granted': z.object({
+    ticketId: z.string(),
+    challengeId: z.string(),
+    userId: z.string(),
+    leaderId: z.string(),
+    challengeTitle: z.string().optional(),
+  }),
+  // 유저가 리더에게 티켓을 신청 — 수신자는 리더.
+  'ticket.requested': z.object({
+    challengeId: z.string(),
+    userId: z.string(),
+    leaderId: z.string(),
+    message: z.string().optional(),
+  }),
+  // 리더가 티켓 신청을 반려 — 수신자는 유저.
+  'ticket.request_rejected': z.object({
+    challengeId: z.string(),
+    userId: z.string(),
+    leaderId: z.string(),
+    reason: z.string().optional(),
+  }),
   'order.rejected': z.object({
     orderId: z.string(),
     userId: z.string(),

@@ -165,6 +165,36 @@ function routeNotification(
             ? '개인 퀘스트를 다시 제출하지 않아 이 챌린지 참여가 제한됐어요.'
             : '개인 퀘스트를 다시 제출하지 않아 기존 제출본으로 진행돼요.',
       };
+    case 'ticket.granted': {
+      const ticketChalTitle = typeof detail.challengeTitle === 'string' && detail.challengeTitle.trim() ? detail.challengeTitle.trim() : '';
+      return {
+        recipientId: String(detail.userId),
+        category: 'commerce',
+        type: 'ticket_granted',
+        title: '참여 티켓이 도착했어요 🎫',
+        message: ticketChalTitle
+          ? `'${ticketChalTitle}' 챌린지 참여 티켓을 받았어요. 티켓으로 바로 참여할 수 있어요!`
+          : '챌린지 참여 티켓을 받았어요. 티켓으로 바로 참여할 수 있어요!',
+      };
+    }
+    case 'ticket.requested':
+      return {
+        recipientId: String(detail.leaderId),
+        category: 'commerce',
+        type: 'ticket_requested',
+        title: '티켓 신청이 도착했어요',
+        message: '참여 티켓 신청이 있어요. 운영 탭에서 확인 후 발급해주세요.',
+      };
+    case 'ticket.request_rejected': {
+      const ticketRejectReason = typeof detail.reason === 'string' && detail.reason.trim() ? detail.reason.trim() : '';
+      return {
+        recipientId: String(detail.userId),
+        category: 'commerce',
+        type: 'ticket_request_rejected',
+        title: '티켓 신청이 반려됐어요',
+        message: ticketRejectReason ? `사유: ${ticketRejectReason}` : '티켓 신청이 반려됐어요.',
+      };
+    }
     case 'challenge.disband_requested':
       return {
         recipientId: String(detail.leaderId),
@@ -249,6 +279,11 @@ function buildDeepLink(type: DomainEventType, detail: Record<string, unknown>): 
     case 'challenge.disband_requested':
     case 'challenge.disband_rejected':
       return detail.challengeId ? `/challenges/${detail.challengeId}` : undefined;
+    case 'ticket.granted':
+    case 'ticket.request_rejected':
+      return detail.challengeId ? `/challenges/${detail.challengeId}` : undefined;
+    case 'ticket.requested':
+      return detail.challengeId ? `/challenge-feed/${detail.challengeId}?tab=ops` : undefined;
     default:
       return undefined;
   }

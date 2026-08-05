@@ -19,7 +19,7 @@ interface PaymentSheetProps {
   joining?: boolean;
 }
 
-type PaymentMode = 'select' | 'coupon' | 'deposit' | 'awaiting';
+type PaymentMode = 'select' | 'coupon' | 'deposit' | 'awaiting' | 'ticket';
 
 const formatPrice = (price?: number) =>
   typeof price === 'number' && price > 0 ? `${price.toLocaleString('ko-KR')}원` : '';
@@ -39,7 +39,49 @@ export const PaymentSheet = ({ isOpen, onClose, challenge, onPaid, joining }: Pa
     setDepositorName('');
     setPendingOrder(null);
     setGuideMessage(null);
+    setTicketMessage('');
   }, [isOpen]);
+
+  // 내 티켓/신청 상태 — 이 챌린지의 미사용 티켓이 있으면 '티켓으로 참여' 노출
+  const { data: myTicketsData } = useQuery({
+    queryKey: ['my-tickets'],
+    enabled: isOpen,
+    queryFn: () => commerceApi.getMyTickets(),
+  });
+  const offeredTicket = (myTicketsData?.tickets ?? []).find(
+    (t) => t.challengeId === challenge.challengeId && t.status === 'offered',
+  );
+  const { data: myTicketRequest } = useQuery({
+    queryKey: ['my-ticket-request', challenge.challengeId],
+    enabled: isOpen && Boolean(challenge.challengeId) && !offeredTicket,
+    queryFn: () => commerceApi.getMyTicketRequest(String(challenge.challengeId)),
+  });
+
+  const useTicketMutation = useMutation({
+    mutationFn: () => commerceApi.useTicket(offeredTicket!.ticketId),
+    onSuccess: ({ orderId }) => {
+      queryClient.invalidateQueries({ queryKey: ['my-tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['my-orders'] });
+      toast.success('티켓을 사용했어요! 참여를 이어갈게요 🎫');
+      onPaid(orderId);
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || '티켓 사용에 실패했습니다');
+    },
+  });
+
+  const [ticketMessage, setTicketMessage] = useState('');
+  const requestTicketMutation = useMutation({
+    mutationFn: () => commerceApi.requestTicket(String(challenge.challengeId), ticketMessage.trim() || undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-ticket-request', challenge.challengeId] });
+      toast.success('티켓 신청을 보냈어요. 리더 승인 후 알림으로 알려드릴게요');
+      setMode('select');
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || '티켓 신청에 실패했습니다');
+    },
+  });
 
   // 입금 대기 주문 상태 폴링 — paid로 바뀌면 참여 완료 버튼 활성화
   const { data: polledOrder } = useQuery({
@@ -126,6 +168,47 @@ export const PaymentSheet = ({ isOpen, onClose, challenge, onPaid, joining }: Pa
 
   const renderSelect = () => (
     <div className="space-y-3">
+      {offeredTicket ? (
+        <button
+          type="button"
+          onClick={() => useTicketMutation.mutate()}
+          disabled={useTicketMutation.isPending || joining}
+          className="w-full flex items-center gap-3 p-4 rounded-2xl border-2 border-primary-300 bg-primary-50 hover:bg-primary-100 text-left transition-colors disabled:opacity-50"
+        >
+          <span className="text-2xl">🎫</span>
+          <div className="flex-1">
+            <p className="font-semibold text-primary-800 text-sm">
+              {useTicketMutation.isPending ? '티켓 사용 중...' : '받은 티켓으로 바로 참여'}
+            </p>
+            <p className="text-xs text-primary-600 mt-0.5">리더가 발급한 참여 티켓이 있어요 (결제와 동일 효력)</p>
+          </div>
+          <span className="text-primary-500">→</span>
+        </button>
+      ) : myTicketRequest?.status === 'pending' ? (
+        <div className="w-full flex items-center gap-3 p-4 rounded-2xl border border-amber-200 bg-amber-50">
+          <span className="text-2xl">🎫</span>
+          <div className="flex-1">
+            <p className="font-semibold text-amber-800 text-sm">티켓 신청 검토 중</p>
+            <p className="text-xs text-amber-600 mt-0.5">리더가 승인하면 알림으로 알려드릴게요</p>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setMode('ticket')}
+          className="w-full flex items-center gap-3 p-4 rounded-2xl border border-gray-200 bg-white hover:bg-gray-50 text-left transition-colors"
+        >
+          <span className="text-2xl">🎫</span>
+          <div className="flex-1">
+            <p className="font-semibold text-gray-900 text-sm">리더에게 티켓 신청</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {myTicketRequest?.status === 'rejected' ? '이전 신청이 반려됐어요. 다시 신청할 수 있어요' : '참여 티켓을 요청해요. 승인되면 무료로 참여할 수 있어요'}
+            </p>
+          </div>
+          <span className="text-gray-400">→</span>
+        </button>
+      )}
+
       <button
         type="button"
         onClick={() => setMode('coupon')}
@@ -151,6 +234,41 @@ export const PaymentSheet = ({ isOpen, onClose, challenge, onPaid, joining }: Pa
         </div>
         <span className="text-gray-400">→</span>
       </button>
+    </div>
+  );
+
+  const renderTicketRequest = () => (
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium text-gray-700 mb-2 block">리더에게 남길 메시지 (선택)</label>
+        <textarea
+          value={ticketMessage}
+          onChange={(e) => setTicketMessage(e.target.value)}
+          rows={3}
+          maxLength={300}
+          placeholder="참여하고 싶은 이유나 나를 알릴 한마디를 남겨보세요"
+          className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm resize-none"
+        />
+        <p className="text-xs text-gray-400 mt-2">리더가 승인하면 티켓이 발급되고 알림으로 알려드려요.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setMode('select')}
+          disabled={requestTicketMutation.isPending}
+          className="px-3 py-3 rounded-xl border border-gray-300 text-sm disabled:opacity-40"
+        >
+          이전
+        </button>
+        <button
+          type="button"
+          onClick={() => requestTicketMutation.mutate()}
+          disabled={requestTicketMutation.isPending}
+          className="px-3 py-3 rounded-xl bg-primary-600 text-white text-sm font-semibold disabled:opacity-40"
+        >
+          {requestTicketMutation.isPending ? '신청 중...' : '티켓 신청하기 🎫'}
+        </button>
+      </div>
     </div>
   );
 
@@ -305,6 +423,7 @@ export const PaymentSheet = ({ isOpen, onClose, challenge, onPaid, joining }: Pa
       <div className="px-6 pb-8">
         {renderHeaderCard()}
         {mode === 'select' && renderSelect()}
+        {mode === 'ticket' && renderTicketRequest()}
         {mode === 'coupon' && renderCoupon()}
         {mode === 'deposit' && renderDeposit()}
         {mode === 'awaiting' && renderAwaiting()}
