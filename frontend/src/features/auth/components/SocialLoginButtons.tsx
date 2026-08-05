@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/authStore';
 import { fetchSocialConfig, openSocialLogin } from '../social';
+import { getPostLoginRedirect } from '@/features/auth/utils/redirect';
 
 /** provider별 버튼 라벨·스타일 */
 const PROVIDER_META: Record<string, { label: string; className: string; mark: string }> = {
@@ -56,7 +57,7 @@ export const SocialLoginButtons = () => {
       }
       // idToken은 aud=clientId라 API Gateway JWT 인증 통과 (이메일/비밀번호 경로와 동일)
       setAuth(user, idToken, refreshToken);
-      navigate('/me');
+      navigate(getPostLoginRedirect());
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '소셜 로그인에 실패했습니다.');
     } finally {

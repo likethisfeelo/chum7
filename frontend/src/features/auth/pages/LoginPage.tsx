@@ -5,6 +5,7 @@ import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/authStore';
 import { SocialLoginButtons } from '@/features/auth/components/SocialLoginButtons';
+import { getPostLoginRedirect } from '@/features/auth/utils/redirect';
 import toast from 'react-hot-toast';
 
 export const LoginPage = () => {
@@ -29,7 +30,7 @@ export const LoginPage = () => {
       }
 
       setAuth(user, accessToken, refreshToken);
-      navigate('/me');
+      navigate(getPostLoginRedirect());
     },
     onError: (error: any) => {
       const serverError = error.response?.data?.error;
