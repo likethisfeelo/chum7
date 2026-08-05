@@ -47,6 +47,7 @@ export const createChallengeSchema = z.object({
 export const updateChallengeSchema = z.object({
   title: z.string().min(2).max(60).optional(),
   description: z.string().min(10).max(2000).optional(),
+  category: z.enum(CHALLENGE_CATEGORIES).optional(),
   targetTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   badgeIcon: z.string().max(10).optional(),
   badgeName: z.string().min(1).max(30).optional(),
