@@ -712,6 +712,18 @@ export const ChallengeFeedPage = () => {
   const todayDay = userChallenge && isActive ? computeTodayChallengeDay(userChallenge) : -1;
   const progressList: any[] = userChallenge?.progress || [];
 
+  // 이미 완료(자동 인정)된 일자 집합 — 요청 탭에서 '인정 요청'을 띄우지 않기 위한 기준
+  const completedDays = useMemo(() => {
+    const set = new Set<number>();
+    for (const p of progressList) {
+      const status = String(p?.status ?? "");
+      if (status === "success" || status === "completed" || status === "remedy") {
+        set.add(Number(p?.day));
+      }
+    }
+    return set;
+  }, [progressList]);
+
   const isTodayAllDone = isMixedChallengeType
     ? allLeaderQuestsDoneToday && (personalQuest === null || iDidTodayPersonalQuestVerification)
     : leaderQuests.length > 0
@@ -1363,6 +1375,7 @@ export const ChallengeFeedPage = () => {
             onLeaderDm={() => leaderDmMutation.mutate()}
             dmPending={leaderDmMutation.isPending}
             hasLeaderDm={Boolean(userChallenge)}
+            completedDays={completedDays}
           />
         ) : (
         <div className="p-4 lg:p-6">

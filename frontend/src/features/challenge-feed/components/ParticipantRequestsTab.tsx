@@ -27,6 +27,7 @@ export function ParticipantRequestsTab({
   onLeaderDm,
   dmPending,
   hasLeaderDm,
+  completedDays,
 }: {
   challengeId: string;
   myVerifications: any[];
@@ -34,6 +35,8 @@ export function ParticipantRequestsTab({
   onLeaderDm: () => void;
   dmPending: boolean;
   hasLeaderDm: boolean;
+  /** 이미 완료(자동 인정)된 일자 — 이 날짜 게시물엔 '인정 요청'을 띄우지 않는다 */
+  completedDays: Set<number>;
 }) {
   const queryClient = useQueryClient();
 
@@ -63,10 +66,11 @@ export function ParticipantRequestsTab({
     onError: (err: any) => toast.error(err?.response?.data?.message || "요청에 실패했어요"),
   });
 
-  // 추가(isExtra)·취소된 게시물은 요청 대상에서 제외 (일자 인증 후보만)
+  // 추가(isExtra)·취소된 게시물, 그리고 '이미 완료(자동 인정)된 일자'의 게시물은 요청 대상에서 제외.
+  //  자동으로 그날 완료된 날짜엔 '인정 요청'이 뜰 필요가 없다 (규칙상 자동 인정이 안 잡힌 날만 후보).
   const requestable = useMemo(
-    () => myVerifications.filter((v) => !v.isExtra && !v.scoreCancelled),
-    [myVerifications],
+    () => myVerifications.filter((v) => !v.isExtra && !v.scoreCancelled && !completedDays.has(Number(v.day))),
+    [myVerifications, completedDays],
   );
 
   return (
