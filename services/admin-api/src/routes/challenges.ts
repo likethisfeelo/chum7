@@ -6,9 +6,10 @@
 import { Hono } from 'hono';
 import { randomUUID } from 'node:crypto';
 import type { AppEnv } from '@chum7/api-kit';
-import { fail, ok, requireGroup } from '@chum7/api-kit';
+import { fail, ok, publishEvent, requireGroup } from '@chum7/api-kit';
 import { canTransition, type ChallengeLifecycle } from '@chum7/core';
-import { createChallengeSchema, lifecycleTransitionSchema, updateChallengeSchema } from '../schemas';
+import { createChallengeSchema, disbandResolveSchema, lifecycleTransitionSchema, updateChallengeSchema } from '../schemas';
+import { listDisbandRequestsByStatus, resolveDisbandRequest } from '../repo/disband-requests';
 import {
   calculateChallengeEndAt,
   initialLifecycle,
@@ -311,4 +312,124 @@ challengeAdminRoutes.post('/:challengeId/confirm-start', async (c) => {
   });
 
   return ok(c, { challengeId, lifecycle: 'active', startConfirmedAt: nowIso, startConfirmedBy: userId }, '챌린지가 시작되었습니다.');
+});
+
+// ── 유료 챌린지 해산 신청 검토 (운영자) ────────────────────────────────────
+const DISBAND_ENDED_LIFECYCLES = new Set(['completed', 'archived']);
+
+/** 해산 실행 (challenge-api executeDisband 동형) — 정산 트리거(challenge.completed) 미발행. 환불은 운영자 수동. */
+async function adminExecuteDisband(
+  challenge: Record<string, any>,
+  challengeId: string,
+  leaderId: string,
+  reason: string | null,
+  nowIso: string,
+): Promise<string[]> {
+  await updateChallengeFields(
+    challengeId,
+    {
+      lifecycle: 'completed',
+      disbanded: true,
+      disbandedAt: nowIso,
+      disbandedBy: leaderId,
+      ...(reason ? { disbandReason: reason } : {}),
+      updatedAt: nowIso,
+    },
+    { lifecycle: challenge.lifecycle, category: challenge.category, challengeStartAt: challenge.challengeStartAt },
+  );
+
+  const participants = await listParticipations(challengeId);
+  const memberIds: string[] = [];
+  for (const p of participants) {
+    const participantId = String(p.userId ?? '');
+    if (!participantId) continue;
+    if (participantId === leaderId) {
+      await updateParticipationFields(challengeId, participantId, {
+        phase: 'gave_up', status: 'gave_up', gaveUpAt: nowIso, updatedAt: nowIso,
+      }).catch(() => undefined);
+      continue;
+    }
+    memberIds.push(participantId);
+  }
+
+  try {
+    await publishEvent('challenge.disbanded', {
+      challengeId,
+      leaderId,
+      title: typeof challenge.title === 'string' ? challenge.title : undefined,
+      memberIds,
+    });
+  } catch (err: any) {
+    console.error('admin disband: publish event error (non-fatal):', err?.message);
+  }
+  return memberIds;
+}
+
+// 해산 신청 큐 목록 — 기본 pending
+challengeAdminRoutes.get('/disband-requests', requireGroup('admins', 'operators'), async (c) => {
+  const status = (c.req.query('status') ?? 'pending').trim();
+  const requests = (await listDisbandRequestsByStatus(status))
+    .map(({ pk, sk, gsi2pk, gsi2sk, ...rest }) => rest)
+    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  return ok(c, { requests, total: requests.length });
+});
+
+// 해산 신청 처리 — approve(해산 실행) / reject(사유 통보)
+challengeAdminRoutes.put('/disband-requests/:requestId', requireGroup('admins', 'operators'), async (c) => {
+  const { userId } = c.get('authUser')!;
+  const requestId = c.req.param('requestId')!;
+  const input = disbandResolveSchema.parse(await c.req.json().catch(() => ({})));
+  const { challengeId } = input;
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  // pending 신청 확인 (challengeId+requestId 매칭)
+  const pending = await listDisbandRequestsByStatus('pending');
+  const reqItem = pending.find((r) => r.requestId === requestId && r.challengeId === challengeId);
+  if (!reqItem) return fail(c, 409, 'ALREADY_RESOLVED_OR_NOT_FOUND', '이미 처리되었거나 존재하지 않는 신청이에요');
+
+  const leaderId = String(reqItem.leaderId ?? '');
+
+  if (input.decision === 'approve') {
+    const challenge = await getChallenge(challengeId);
+    if (!challenge) return fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다');
+    if (DISBAND_ENDED_LIFECYCLES.has(String(challenge.lifecycle))) {
+      // 이미 종료 — 신청만 정리
+      await resolveDisbandRequest({ challengeId, requestId, status: 'approved', reviewerId: userId, reviewReason: input.reason ?? null, nowIso });
+      return fail(c, 409, 'CHALLENGE_ALREADY_ENDED', '이미 종료된 챌린지예요');
+    }
+    const memberIds = await adminExecuteDisband(challenge, challengeId, leaderId, String(reqItem.reason ?? '') || null, nowIso);
+    const resolved = await resolveDisbandRequest({ challengeId, requestId, status: 'approved', reviewerId: userId, reviewReason: input.reason ?? null, nowIso });
+    if (!resolved) return fail(c, 409, 'ALREADY_RESOLVED', '이미 처리된 신청이에요');
+
+    await recordAudit({
+      actorUserId: userId,
+      action: 'challenge.disband-approve',
+      targetType: 'challenge',
+      targetId: challengeId,
+      payload: { requestId, leaderId, memberCount: memberIds.length, reason: reqItem.reason },
+      now,
+    });
+    return ok(c, { challengeId, requestId, status: 'approved', memberCount: memberIds.length },
+      '해산 신청을 승인하고 챌린지를 해산했어요. 환불은 커머스에서 별도 처리해주세요.');
+  }
+
+  // reject
+  const resolved = await resolveDisbandRequest({ challengeId, requestId, status: 'rejected', reviewerId: userId, reviewReason: input.reason ?? null, nowIso });
+  if (!resolved) return fail(c, 409, 'ALREADY_RESOLVED', '이미 처리된 신청이에요');
+
+  try {
+    await publishEvent('challenge.disband_rejected', { challengeId, leaderId, requestId, reason: input.reason ?? undefined });
+  } catch (err: any) {
+    console.error('disband reject: publish event error (non-fatal):', err?.message);
+  }
+  await recordAudit({
+    actorUserId: userId,
+    action: 'challenge.disband-reject',
+    targetType: 'challenge',
+    targetId: challengeId,
+    payload: { requestId, leaderId, reason: input.reason ?? null },
+    now,
+  });
+  return ok(c, { challengeId, requestId, status: 'rejected' }, '해산 신청을 반려했어요. 리더에게 안내가 전송됩니다.');
 });

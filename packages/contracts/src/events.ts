@@ -26,6 +26,29 @@ export const domainEventSchemas = {
     category: z.string(),
     title: z.string(),
   }),
+  // 리더가 챌린지를 해산(전체 종료) — 참여 멤버 전원에게 '리더가 해산했어요' 팬아웃.
+  //  무료: 리더가 즉시 실행 / 유료: 운영자 승인 후 실행. 둘 다 이 이벤트로 통지.
+  'challenge.disbanded': z.object({
+    challengeId: z.string(),
+    leaderId: z.string(),
+    title: z.string().optional(),
+    // 알림 팬아웃 수신자 — 리더 제외한 참여 멤버 userId 목록
+    memberIds: z.array(z.string()),
+  }),
+  // 유료 챌린지 해산 신청(리더→운영자) — 접수 확인을 리더에게 통지.
+  'challenge.disband_requested': z.object({
+    challengeId: z.string(),
+    leaderId: z.string(),
+    requestId: z.string(),
+    reason: z.string(),
+  }),
+  // 운영자가 해산 신청을 반려 — 리더에게 사유와 함께 통지.
+  'challenge.disband_rejected': z.object({
+    challengeId: z.string(),
+    leaderId: z.string(),
+    requestId: z.string(),
+    reason: z.string().optional(),
+  }),
   'comment.created': z.object({
     targetType: z.enum(['plaza', 'board', 'verification', 'bulletin', 'personal']),
     targetId: z.string(),

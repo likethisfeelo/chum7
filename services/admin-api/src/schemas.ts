@@ -83,6 +83,13 @@ export const proposalReviewSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
+/** 유료 챌린지 해산 신청 처리 — approve(해산 실행) / reject(반려, 사유 통보) */
+export const disbandResolveSchema = z.object({
+  challengeId: z.string().min(1),
+  decision: z.enum(['approve', 'reject']),
+  reason: z.string().max(500).optional(),
+});
+
 /** 레거시 admin/category-banners/upsert 스키마 그대로 */
 export const bannerUpsertSchema = z.object({
   imageUrl: z.string().url().optional(),

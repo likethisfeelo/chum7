@@ -1346,6 +1346,13 @@ export const ChallengeFeedPage = () => {
               challengeType={challengeType}
               allowedVerificationTypes={challengeData?.allowedVerificationTypes}
               personalQuestEnabled={challengeData?.personalQuestEnabled}
+              isPaid={
+                challengeData?.pricingType === 'paid_fee' ||
+                challengeData?.pricingType === 'paid_deposit' ||
+                Boolean(challengeData?.isPaid) ||
+                Number(challengeData?.price ?? 0) > 0
+              }
+              lifecycle={challengeData?.effectiveLifecycle || challengeData?.lifecycle}
             />
           </div>
         ) : !isCreator && mainTab === "requests" && userChallenge ? (

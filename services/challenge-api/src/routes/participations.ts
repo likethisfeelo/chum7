@@ -8,8 +8,8 @@ import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import type { AppEnv } from '@chum7/api-kit';
-import { docClient, ok, fail } from '@chum7/api-kit';
-import { joinChallengeSchema, reviewJoinRequestSchema } from '../schemas';
+import { docClient, ok, fail, publishEvent } from '@chum7/api-kit';
+import { joinChallengeSchema, reviewJoinRequestSchema, disbandRequestSchema } from '../schemas';
 import { getProposalDeadline, resolveJoinRequirements, toTime24 } from '../domain/join-requirements';
 import { certDateFromIso, DEFAULT_TIMEZONE, safeTimezone } from '../domain/day-sync';
 import { adjustChallengeStats, getChallenge, updateChallengeFields } from '../repo/challenges';
@@ -21,9 +21,99 @@ import {
   putParticipation,
   updateParticipationFields,
 } from '../repo/participations';
+import {
+  disbandRequestQueuePk,
+  disbandRequestSk,
+  listChallengeDisbandRequests,
+  putDisbandRequest,
+} from '../repo/disband-requests';
 import { stripKeys } from '../repo/shared';
 
 export const participationRoutes = new Hono<AppEnv>();
+
+/** 유료(참가비/보증금/티켓 포함) 챌린지 여부 — join 검증과 동일 규칙 (COMMERCE_V0.md). */
+function isPaidChallenge(challenge: Record<string, any>): boolean {
+  return (
+    challenge.pricingType === 'paid_fee' ||
+    challenge.pricingType === 'paid_deposit' ||
+    Boolean(challenge.isPaid) ||
+    Number(challenge.price ?? 0) > 0
+  );
+}
+
+const ENDED_LIFECYCLES = new Set(['completed', 'archived']);
+
+/** 챌린지의 소유자(리더) userId 해석 — 필드 별칭 흡수. */
+function resolveOwnerId(challenge: Record<string, any>): string {
+  return String(challenge.createdBy || challenge.creatorId || challenge.leaderId || '');
+}
+
+/**
+ * 챌린지 전체 해산 실행 (무료: 리더 즉시 / 유료: 운영자 승인 후).
+ *  - 챌린지 META: lifecycle='completed'(완료 탭 편입) + disbanded 표식. 정산 트리거(challenge.completed
+ *    이벤트)는 발행하지 않으므로 자동 정산/지급은 일어나지 않는다(환불은 운영자 수동 — v0).
+ *  - 리더 참여 레코드(있으면): 중도포기 표기.
+ *  - 멤버 전원(리더 제외): challenge.disbanded 이벤트로 '전체 해산' 알림 팬아웃.
+ * 반환: { memberIds } — 알림 팬아웃 대상.
+ */
+export async function executeDisband(
+  challenge: Record<string, any>,
+  challengeId: string,
+  leaderId: string,
+  reason?: string | null,
+): Promise<{ memberIds: string[] }> {
+  const nowIso = new Date().toISOString();
+
+  await updateChallengeFields(
+    challengeId,
+    {
+      lifecycle: 'completed',
+      disbanded: true,
+      disbandedAt: nowIso,
+      disbandedBy: leaderId,
+      ...(reason ? { disbandReason: reason } : {}),
+      updatedAt: nowIso,
+    },
+    {
+      lifecycle: challenge.lifecycle,
+      category: challenge.category,
+      challengeStartAt: challenge.challengeStartAt,
+    },
+  );
+
+  const participants = await listChallengeParticipations(challengeId);
+  const memberIds: string[] = [];
+  for (const p of participants) {
+    const participantId = String(p.userId ?? '');
+    if (!participantId) continue;
+    if (participantId === leaderId) {
+      // 리더 본인은 중도포기로 표기 (참여 레코드가 있을 때만)
+      await updateParticipationFields(challengeId, participantId, {
+        phase: 'gave_up',
+        status: 'gave_up',
+        gaveUpAt: nowIso,
+        updatedAt: nowIso,
+      }).catch((err: any) =>
+        console.error('disband: mark leader gave_up failed (non-fatal):', err?.message),
+      );
+      continue;
+    }
+    memberIds.push(participantId);
+  }
+
+  try {
+    await publishEvent('challenge.disbanded', {
+      challengeId,
+      leaderId,
+      title: typeof challenge.title === 'string' ? challenge.title : undefined,
+      memberIds,
+    });
+  } catch (err: any) {
+    console.error('disband: publish event error (non-fatal):', err?.message);
+  }
+
+  return { memberIds };
+}
 
 /** 결제 주문 조회 — commerce 테이블 읽기 전용 (COMMERCE_TABLE env, 문서화된 예외) */
 async function getPaidOrderReadonly(
@@ -336,6 +426,97 @@ participationRoutes.post('/user-challenges/:userChallengeId/give-up', async (c) 
   // "포기는쉽다" 뱃지 부여는 gamification 도메인 소유 — 이벤트 계약 필요 (PORTING.md gap 기록)
 
   return ok(c, { userChallengeId, phase: 'gave_up', status: 'gave_up' }, '챌린지를 중도 포기했습니다.');
+});
+
+// ── 챌린지 전체 해산 (리더) ────────────────────────────────────────────────
+//  무료: 리더가 즉시 해산. 유료(참가비/보증금/티켓): 강제 해산 불가 → /disband-request 로 운영자 신청.
+participationRoutes.post('/challenges/:challengeId/disband', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const challengeId = c.req.param('challengeId');
+  const challenge = await getChallenge(challengeId);
+  if (!challenge) return fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다');
+
+  const ownerId = resolveOwnerId(challenge);
+  if (!ownerId || ownerId !== userId) {
+    return fail(c, 403, 'FORBIDDEN', '챌린지 리더만 해산할 수 있어요');
+  }
+  if (ENDED_LIFECYCLES.has(String(challenge.lifecycle))) {
+    return fail(c, 409, 'CHALLENGE_ALREADY_ENDED', '이미 종료된 챌린지예요');
+  }
+  if (isPaidChallenge(challenge)) {
+    return fail(
+      c,
+      409,
+      'PAID_REQUIRES_APPROVAL',
+      '유료 챌린지는 리더가 바로 해산할 수 없어요. 사유와 함께 운영자에게 해산을 신청해주세요',
+    );
+  }
+
+  const { memberIds } = await executeDisband(challenge, challengeId, userId);
+  return ok(
+    c,
+    { challengeId, disbanded: true, lifecycle: 'completed', memberCount: memberIds.length },
+    '챌린지를 해산했어요. 참여자에게 안내가 전송됩니다.',
+  );
+});
+
+// ── 유료 챌린지 해산 신청 (리더 → 운영자) ──────────────────────────────────
+participationRoutes.post('/challenges/:challengeId/disband-request', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const challengeId = c.req.param('challengeId');
+  const challenge = await getChallenge(challengeId);
+  if (!challenge) return fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다');
+
+  const ownerId = resolveOwnerId(challenge);
+  if (!ownerId || ownerId !== userId) {
+    return fail(c, 403, 'FORBIDDEN', '챌린지 리더만 해산을 신청할 수 있어요');
+  }
+  if (ENDED_LIFECYCLES.has(String(challenge.lifecycle))) {
+    return fail(c, 409, 'CHALLENGE_ALREADY_ENDED', '이미 종료된 챌린지예요');
+  }
+  if (!isPaidChallenge(challenge)) {
+    return fail(c, 400, 'NOT_PAID_CHALLENGE', '무료 챌린지는 신청 없이 바로 해산할 수 있어요');
+  }
+
+  const input = disbandRequestSchema.parse(await c.req.json().catch(() => ({})));
+
+  // 중복 신청 방지 — 이미 대기 중(pending)인 신청이 있으면 409
+  const existing = await listChallengeDisbandRequests(challengeId);
+  if (existing.some((r) => r.status === 'pending')) {
+    return fail(c, 409, 'ALREADY_REQUESTED', '이미 검토 대기 중인 해산 신청이 있어요');
+  }
+
+  const requestId = randomUUID();
+  const nowIso = new Date().toISOString();
+  await putDisbandRequest({
+    pk: `CHAL#${challengeId}`,
+    sk: disbandRequestSk(requestId),
+    gsi2pk: disbandRequestQueuePk('pending'),
+    gsi2sk: nowIso,
+    entityType: 'disband_request',
+    requestId,
+    challengeId,
+    challengeTitle: typeof challenge.title === 'string' ? challenge.title : null,
+    leaderId: userId,
+    reason: input.reason,
+    pricingType: challenge.pricingType ?? (Number(challenge.price ?? 0) > 0 ? 'paid_fee' : null),
+    status: 'pending',
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  });
+
+  try {
+    await publishEvent('challenge.disband_requested', { challengeId, leaderId: userId, requestId, reason: input.reason });
+  } catch (err: any) {
+    console.error('disband-request: publish event error (non-fatal):', err?.message);
+  }
+
+  return ok(
+    c,
+    { challengeId, requestId, status: 'pending' },
+    '해산 신청을 접수했어요. 운영자 검토 후 결과를 알려드릴게요.',
+    201,
+  );
 });
 
 // ── 수동 모집 마감 (예약 마감보다 먼저 가능 — docs/time-policy.md R1) ──────────

@@ -18,6 +18,7 @@ import {
   getLatestCompletedProgressEntry,
   getProgressEntryByDay,
   isChallengePeriodCompleted,
+  isDisbandedChallengeState,
   isFailedChallengeState,
   resolveChallengeBucket,
   resolveChallengeDurationDays,
@@ -982,7 +983,8 @@ export const MEPage = () => {
                 ) : completedChallenges.map((challenge: any) => {
                   const bucket = resolveChallengeBucket(challenge);
                   const isGaveUp = bucket === 'gave_up';
-                  const borderColor = isGaveUp ? 'border-gray-200' : isFailedChallengeState(challenge) ? 'border-gray-300' : 'border-emerald-200';
+                  const isDisbanded = !isGaveUp && isDisbandedChallengeState(challenge);
+                  const borderColor = isGaveUp || isDisbanded ? 'border-gray-200' : isFailedChallengeState(challenge) ? 'border-gray-300' : 'border-emerald-200';
                   return (
                     <div
                       key={challenge.userChallengeId || challenge.challengeId}
@@ -994,6 +996,8 @@ export const MEPage = () => {
                           <p className="font-semibold text-gray-900">{challenge.challenge?.title || challenge.title}</p>
                           {isGaveUp ? (
                             <p className="text-xs text-gray-500 mt-0.5">중도 포기 🏳️</p>
+                          ) : isDisbanded ? (
+                            <p className="text-xs text-gray-500 mt-0.5">전체 해산 🏳️</p>
                           ) : isFailedChallengeState(challenge) ? (
                             <p className="text-xs text-gray-600 mt-0.5">종료(미달성)</p>
                           ) : (
