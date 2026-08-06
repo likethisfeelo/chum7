@@ -430,7 +430,7 @@ export function BoldRecruitList({
                     e.stopPropagation();
                     onOpenReward?.(c.challengeId);
                   }}
-                  className="absolute -top-2.5 -right-1 z-10 w-14 h-14 rounded-full border-2 border-white shadow-lg overflow-hidden bg-amber-50 flex items-center justify-center active:scale-95 transition-transform"
+                  className="absolute top-1/2 -translate-y-1/2 right-[28%] z-10 w-28 h-28 rounded-full border-2 border-white shadow-lg overflow-hidden bg-amber-50 flex items-center justify-center hover:scale-110 active:scale-95 transition-transform duration-200"
                 >
                   {rewardProduct.imageUrl ? (
                     <img

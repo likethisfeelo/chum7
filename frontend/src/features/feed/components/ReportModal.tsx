@@ -35,11 +35,19 @@ export function ReportModal({
 
   const mutation = useMutation({
     mutationFn: () => reportApi.submit({ ...target, reason, detail: detail.trim() || undefined }),
-    onSuccess: () => {
-      toast.success(isDeletion ? '삭제 요청을 접수했어요. 관리자가 검토해요.' : '신고가 접수됐어요. 검토 후 조치할게요.');
+    onSuccess: (data) => {
+      // 서버 메시지로 접수/중복/자동숨김을 구분해 안내
+      const fallback = isDeletion ? '삭제 요청을 접수했어요. 관리자가 검토해요.' : '신고가 접수됐어요. 검토 후 조치할게요.';
+      toast.success(data?.message || fallback);
       onClose();
     },
-    onError: () => toast.error(isDeletion ? '삭제 요청에 실패했어요.' : '신고 접수에 실패했어요.'),
+    onError: (err: any) => {
+      if (err?.response?.status === 429) {
+        toast.error(err?.response?.data?.message || '오늘 신고 가능 횟수를 초과했어요.');
+        return;
+      }
+      toast.error(isDeletion ? '삭제 요청에 실패했어요.' : '신고 접수에 실패했어요.');
+    },
   });
 
   return (

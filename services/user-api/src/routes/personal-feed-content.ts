@@ -28,6 +28,7 @@ import {
   presignFeedImagePut,
   signFeedImageUrl,
 } from '../repo/media';
+import { getProfileItem } from '../repo/profile-repo';
 import { postUploadUrlSchema } from '../schemas';
 
 /**
@@ -66,13 +67,25 @@ personalFeedContentRoutes.get('/invite/:token', async (c) => {
     });
   }
 
-  return ok(c, { ownerId: link.ownerId, inviteLinkId: link.inviteLinkId });
+  // 주소 래핑 정책: 랜딩이 원본 userId 대신 @handle 주소로 이동할 수 있게 핸들을 함께 내린다
+  const ownerProfile = await getProfileItem(link.ownerId);
+  const ownerHandle = (ownerProfile?.feedHandle as string | undefined) ?? null;
+  return ok(c, { ownerId: link.ownerId, ownerHandle, inviteLinkId: link.inviteLinkId });
 });
 
 // POST /u/feed/me/invite-links — 초대 링크 생성
 personalFeedContentRoutes.post('/me/invite-links', async (c) => {
   const { userId: me } = c.get('authUser')!;
   const body = (await c.req.json().catch(() => ({}))) as { maxUses?: number; expiresAt?: string };
+
+  // 주소 래핑 정책: 초대 랜딩이 @handle 주소로만 이동하므로 링크 생성 전에 핸들이 필요하다
+  const myProfile = await getProfileItem(me);
+  if (!myProfile?.feedHandle) {
+    return c.json(
+      { error: 'HANDLE_REQUIRED', message: '초대 링크를 만들려면 먼저 @핸들을 설정해주세요' },
+      400,
+    );
+  }
 
   const inviteLinkId = randomUUID();
   const token = randomBytes(16).toString('base64url');

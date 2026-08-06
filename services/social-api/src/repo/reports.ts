@@ -26,6 +26,8 @@ export interface ReportItem {
   reporterId: string;
   targetOwnerId?: string | null;
   contentPreview?: string | null;
+  /** 접수 시 마당 표면 자동숨김이 실제로 적용됐는지 */
+  autoHidden?: boolean;
   createdAt: string;
 }
 
@@ -68,6 +70,45 @@ export async function putReport(item: ReportItem): Promise<void> {
     .catch((err: any) => {
       if (err?.name !== 'ConditionalCheckFailedException') throw err;
     });
+}
+
+/**
+ * 일일 신고 상한 카운터 — pk=`REPORTLIMIT#<userId>`, sk=`<YYYY-MM-DD(KST)>`.
+ *  신고 1회=마당 자동숨김 정책의 남용 안전판. 상한 도달 시 false. TTL 7일.
+ */
+export async function incrementDailyReportCount(
+  reporterId: string,
+  max = 20,
+): Promise<boolean> {
+  const kstDate = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  try {
+    await docClient.send(
+      new UpdateCommand({
+        TableName: tableName(TABLE),
+        Key: { pk: `REPORTLIMIT#${reporterId}`, sk: kstDate },
+        UpdateExpression: 'ADD cnt :one SET expiresAt = if_not_exists(expiresAt, :ttl)',
+        ConditionExpression: 'attribute_not_exists(cnt) OR cnt < :max',
+        ExpressionAttributeValues: {
+          ':one': 1,
+          ':max': max,
+          ':ttl': Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60,
+        },
+      }),
+    );
+    return true;
+  } catch (err: any) {
+    if (err?.name === 'ConditionalCheckFailedException') return false;
+    throw err;
+  }
+}
+
+/** 같은 대상의 pending 신고 전부 — 그룹 일괄 처리용 */
+export async function listPendingReportsByTarget(
+  targetType: string,
+  targetId: string,
+): Promise<Record<string, any>[]> {
+  const pending = await listReports('pending');
+  return pending.filter((r) => r.targetType === targetType && r.targetId === targetId);
 }
 
 /** 신고 목록 — 최신순, status 필터(옵션) */

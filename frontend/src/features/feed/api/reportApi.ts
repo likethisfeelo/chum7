@@ -11,6 +11,7 @@ export interface ReportTarget {
 export const reportApi = {
   submit: async (payload: ReportTarget & { reason: string; detail?: string }) => {
     const res = await apiClient.post('/s/reports', payload);
-    return res.data.data;
+    // {reported, duplicate?, autoHidden?} + 서버 메시지(접수/중복/자동숨김 구분)
+    return { ...res.data.data, message: res.data.message as string | undefined };
   },
 };
