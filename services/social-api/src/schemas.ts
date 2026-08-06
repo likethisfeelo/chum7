@@ -160,6 +160,16 @@ export const verificationCommentSchema = z.object({
   authorMode: z.enum(['leader', 'participant']).optional().default('participant'),
 });
 
+// ── 가이드 게시판 (리더/매니저 작성, 글별 댓글, 공지 고정) ────────────────
+export const guidePostSchema = z.object({
+  title: z.string().trim().max(100).optional(),
+  content: z.string().trim().min(1).max(2000),
+});
+
+export const guideCommentSchema = z.object({
+  content: z.string().trim().min(1).max(300),
+});
+
 export const VERIFICATION_REACTION_EMOJIS = new Set([
   '👍', '🔥', '💪', '👏', '❤️', '🎉', '⭐', '😮', '😂', '🙌', '💡',
 ]);
