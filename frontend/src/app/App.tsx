@@ -79,10 +79,25 @@ function ThemeApplier() {
   return null;
 }
 
+// 배포 반영 확인용 빌드 버전 마커 — 화면 좌하단 고정, 터치 방해 없음
+const BUILD_VERSION = 'v.0806';
+
+function BuildVersionBadge() {
+  return (
+    <div
+      aria-hidden
+      className="fixed bottom-1 left-1 z-[9999] pointer-events-none select-none text-[9px] leading-none text-gray-400/70"
+    >
+      {BUILD_VERSION}
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <ThemeApplier />
+      <BuildVersionBadge />
       <Routes>
         {/* 공개 라우트 */}
         <Route
