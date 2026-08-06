@@ -1689,6 +1689,199 @@ function TicketSection({ challengeId }: { challengeId: string }) {
   );
 }
 
+// ── 완주 보상 상품 카탈로그 (리더/매니저) ──────────────────────────────────
+//  실물/기프티콘/온라인 서비스 분류 + 정사각 이미지·설명 등록.
+//  등록된 상품은 챌린지 리스트 카드의 동그라미와 보상 상세 페이지(/challenges/:id/reward)에 노출된다.
+const REWARD_TYPE_META: Record<string, { label: string; emoji: string }> = {
+  physical: { label: '실물 상품', emoji: '📦' },
+  gifticon: { label: '온라인 상품 (기프티콘)', emoji: '🎟️' },
+  service: { label: '온라인 상품 (서비스)', emoji: '💻' },
+};
+
+type RewardProductDraft = {
+  productId?: string;
+  type: 'physical' | 'gifticon' | 'service';
+  name: string;
+  description: string;
+  imageUrl: string;
+};
+
+function RewardProductsSection({ challengeId }: { challengeId: string }) {
+  const queryClient = useQueryClient();
+  const [drafts, setDrafts] = useState<RewardProductDraft[] | null>(null);
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+
+  const { data: challenge } = useQuery<any>({
+    queryKey: ['challenge-feed', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/public/challenges/${challengeId}`);
+      return res.data?.data;
+    },
+  });
+
+  const products: RewardProductDraft[] =
+    drafts ??
+    ((challenge?.rewardProducts ?? []) as any[]).map((p) => ({
+      productId: p.productId,
+      type: p.type ?? 'physical',
+      name: p.name ?? '',
+      description: p.description ?? '',
+      imageUrl: p.imageUrl ?? '',
+    }));
+
+  const setProducts = (next: RewardProductDraft[]) => setDrafts(next);
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      apiClient.put(`/c/${challengeId}/leader/reward-products`, {
+        products: products
+          .filter((p) => p.name.trim())
+          .map((p) => ({
+            ...(p.productId ? { productId: p.productId } : {}),
+            type: p.type,
+            name: p.name.trim(),
+            ...(p.description.trim() ? { description: p.description.trim() } : {}),
+            ...(p.imageUrl ? { imageUrl: p.imageUrl } : {}),
+          })),
+      }),
+    onSuccess: () => {
+      toast.success('완주 보상 상품을 저장했어요 🎁');
+      setDrafts(null);
+      queryClient.invalidateQueries({ queryKey: ['challenge-feed', challengeId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '저장에 실패했어요'),
+  });
+
+  const uploadImage = async (idx: number, file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('이미지 파일만 업로드할 수 있어요');
+      return;
+    }
+    setUploadingIdx(idx);
+    try {
+      const { data: up } = await apiClient.post(`/c/${challengeId}/leader/reward-products/upload-url`, {
+        fileType: file.type,
+        fileSize: file.size,
+      });
+      await fetch(up.data.uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+      const next = [...products];
+      next[idx] = { ...next[idx], imageUrl: up.data.fileUrl };
+      setProducts(next);
+      toast.success('이미지를 올렸어요. 저장을 눌러 반영하세요');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || '이미지 업로드에 실패했어요');
+    } finally {
+      setUploadingIdx(null);
+    }
+  };
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <h3 className="font-bold text-gray-900">🎁 완주 보상 상품 등록</h3>
+      <p className="text-[11px] text-gray-400 mt-1">
+        실물/기프티콘/온라인 서비스 상품을 등록하면 챌린지 리스트에 <b>동그라미 상품 이미지</b>가 붙고,
+        누르면 상품·조건·참여 버튼이 있는 페이지가 열려요. 이미지는 <b>정사각형</b> 권장.
+      </p>
+
+      <div className="mt-3 space-y-3">
+        {products.map((p, idx) => (
+          <div key={p.productId ?? idx} className="rounded-xl border border-gray-200 bg-white/60 p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              {/* 정사각 이미지 업로드 */}
+              <label className="relative w-16 h-16 rounded-xl overflow-hidden border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center cursor-pointer flex-shrink-0">
+                {p.imageUrl ? (
+                  <img src={resolveMediaUrl(p.imageUrl)} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xl">{REWARD_TYPE_META[p.type]?.emoji ?? '🎁'}</span>
+                )}
+                {uploadingIdx === idx && (
+                  <span className="absolute inset-0 bg-black/40 flex items-center justify-center text-[10px] text-white">업로드중</span>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadImage(idx, f);
+                    e.currentTarget.value = '';
+                  }}
+                />
+              </label>
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <select
+                  value={p.type}
+                  onChange={(e) => {
+                    const next = [...products];
+                    next[idx] = { ...next[idx], type: e.target.value as RewardProductDraft['type'] };
+                    setProducts(next);
+                  }}
+                  className="w-full text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
+                >
+                  <option value="physical">📦 실물 상품</option>
+                  <option value="gifticon">🎟️ 온라인 상품 (기프티콘)</option>
+                  <option value="service">💻 온라인 상품 (서비스)</option>
+                </select>
+                <input
+                  value={p.name}
+                  onChange={(e) => {
+                    const next = [...products];
+                    next[idx] = { ...next[idx], name: e.target.value };
+                    setProducts(next);
+                  }}
+                  maxLength={60}
+                  placeholder="상품 이름"
+                  className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 focus:outline-none focus:border-primary-300"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setProducts(products.filter((_, i) => i !== idx))}
+                className="text-[11px] text-gray-400 hover:text-rose-500 flex-shrink-0"
+              >
+                삭제
+              </button>
+            </div>
+            <textarea
+              value={p.description}
+              onChange={(e) => {
+                const next = [...products];
+                next[idx] = { ...next[idx], description: e.target.value };
+                setProducts(next);
+              }}
+              rows={2}
+              maxLength={500}
+              placeholder="상품 설명 (수량·브랜드·유의사항 등)"
+              className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 focus:outline-none focus:border-primary-300 resize-none"
+            />
+          </div>
+        ))}
+
+        {products.length < 6 && (
+          <button
+            type="button"
+            onClick={() => setProducts([...products, { type: 'physical', name: '', description: '', imageUrl: '' }])}
+            className="w-full py-2 rounded-xl border border-dashed border-gray-300 text-xs font-semibold text-gray-500 hover:border-primary-300 hover:text-primary-600"
+          >
+            + 상품 추가
+          </button>
+        )}
+
+        {(drafts !== null || products.length > 0) && (
+          <button
+            type="button"
+            disabled={saveMutation.isPending || uploadingIdx !== null}
+            onClick={() => saveMutation.mutate()}
+            className="w-full py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold disabled:opacity-50"
+          >
+            {saveMutation.isPending ? '저장 중...' : '보상 상품 저장'}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // ── 완주 선물 발송 (리더) ──────────────────────────────────────────────────
 //  완주자에게 선물 교환권 발송 — 미리 등록(카탈로그)+일괄 발송 또는 즉석 입력 개별 발송.
 //  교환권 만료 기본 30일, 지급(교환 신청) 전까지 수정 가능. 실물은 claim 시 유저가
@@ -2187,6 +2380,7 @@ export function LeaderOpsTab({
         <ManagerSection challengeId={challengeId} managerIds={managerIds} onChanged={onManagersChanged} />
       )}
       {isPaid && <TicketSection challengeId={challengeId} />}
+      <RewardProductsSection challengeId={challengeId} />
       <GiftSection challengeId={challengeId} />
 
       {/* 6) 챌린지 설정 및 종료 — 맨 아래 (리더 전용) */}

@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { extractBoardPreviewText } from '@/features/challenge-board/components/BoardBlocksViewer';
+import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import { BoldRecruitList } from '../components/BoldRecruitList';
 import {
   CHALLENGE_CATEGORIES,
@@ -30,6 +31,14 @@ type CategoryBanner = {
   description?: string;
 };
 
+type RewardProduct = {
+  productId?: string;
+  type?: 'physical' | 'gifticon' | 'service';
+  name?: string;
+  description?: string;
+  imageUrl?: string;
+};
+
 type Challenge = {
   challengeId: string;
   title: string;
@@ -40,6 +49,7 @@ type Challenge = {
   coverImageUrl?: string | null;
   rewardPhysical?: { name: string } | null;
   rewardOnline?: { name: string } | null;
+  rewardProducts?: RewardProduct[] | null;
   stats?: {
     totalParticipants?: number;
     completionRate?: number;
@@ -51,8 +61,18 @@ type Challenge = {
 
 /** 완주 보상(실물/온라인 상품) 보유 여부 — 배지는 기본이라 제외 */
 function hasCompletionReward(c: Challenge): boolean {
-  return Boolean(c.rewardPhysical?.name || c.rewardOnline?.name);
+  return Boolean(
+    c.rewardPhysical?.name || c.rewardOnline?.name || (c.rewardProducts ?? []).some((p) => p?.name),
+  );
 }
+
+/** 리스트 카드 위 동그라미로 보여줄 보상 상품 — 이미지가 있는 첫 상품 우선, 없으면 첫 상품(이모지 폴백) */
+function pickRewardProduct(c: { rewardProducts?: RewardProduct[] | null }): RewardProduct | null {
+  const products = (c.rewardProducts ?? []).filter((p) => p?.name);
+  return products.find((p) => p.imageUrl?.trim()) ?? products[0] ?? null;
+}
+
+const REWARD_TYPE_EMOJI: Record<string, string> = { physical: '📦', gifticon: '🎟️', service: '💻' };
 
 type LifecycleTab = 'recruiting' | 'active';
 
@@ -218,6 +238,7 @@ const ChallengeCard = ({
   onHover,
   onLeave,
   onInterest,
+  onOpenReward,
   isInterested,
 }: {
   challenge: Challenge;
@@ -228,8 +249,11 @@ const ChallengeCard = ({
   onHover: (c: Challenge) => void;
   onLeave: () => void;
   onInterest: (id: string) => void;
+  onOpenReward: (id: string) => void;
   isInterested: boolean;
-}) => (
+}) => {
+  const rewardProduct = pickRewardProduct(challenge);
+  return (
   <motion.div
     key={challenge.challengeId}
     initial={{ opacity: 0, y: 16 }}
@@ -238,8 +262,26 @@ const ChallengeCard = ({
     onClick={() => onNavigate(challenge.challengeId)}
     onMouseEnter={() => onHover(challenge)}
     onMouseLeave={onLeave}
-    className="glass-card rounded-2xl p-5 cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-primary-100/40 active:scale-[0.98]"
+    className="relative glass-card rounded-2xl p-5 cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-primary-100/40 active:scale-[0.98]"
   >
+    {/* 완주 보상 상품 동그라미 — 클릭 시 상품·조건·참여 페이지로 */}
+    {rewardProduct && (
+      <button
+        type="button"
+        title={`완주 보상: ${rewardProduct.name ?? ''}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenReward(challenge.challengeId);
+        }}
+        className="absolute -top-3 -right-2 z-10 w-14 h-14 rounded-full border-2 border-white shadow-lg overflow-hidden bg-amber-50 flex items-center justify-center hover:scale-110 transition-transform"
+      >
+        {rewardProduct.imageUrl ? (
+          <img src={resolveMediaUrl(rewardProduct.imageUrl)} alt={rewardProduct.name ?? '완주 보상'} className="w-full h-full object-cover" />
+        ) : (
+          <span className="text-2xl">{REWARD_TYPE_EMOJI[rewardProduct.type ?? 'physical'] ?? '🎁'}</span>
+        )}
+      </button>
+    )}
     <div className="flex items-start gap-4">
       {/* 보상 아이콘 세로 스택 — 배지(축소) + 실물📦 + 온라인🎁 (최대 3개) */}
       <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
@@ -329,7 +371,8 @@ const ChallengeCard = ({
       )}
     </div>
   </motion.div>
-);
+  );
+};
 
 // ─── Lifecycle Section ───────────────────────────────────────────
 const LifecycleSection = ({
@@ -343,6 +386,7 @@ const LifecycleSection = ({
   onHover,
   onLeave,
   onInterest,
+  onOpenReward,
 }: {
   label: string;
   lifecycle: 'recruiting' | 'active';
@@ -354,6 +398,7 @@ const LifecycleSection = ({
   onHover: (c: Challenge) => void;
   onLeave: () => void;
   onInterest: (id: string) => void;
+  onOpenReward: (id: string) => void;
 }) => (
   <div className="flex flex-col gap-3">
     <div className="flex items-center gap-2">
@@ -384,6 +429,7 @@ const LifecycleSection = ({
           onHover={onHover}
           onLeave={onLeave}
           onInterest={onInterest}
+          onOpenReward={onOpenReward}
           isInterested={interestedIds.has(challenge.challengeId)}
         />
       ))
@@ -823,6 +869,7 @@ export const ChallengesPage = () => {
             <BoldRecruitList
               challenges={mobileChallenges}
               onNavigate={(id) => navigate(`/challenges/${id}`)}
+              onOpenReward={(id) => navigate(`/challenges/${id}/reward`)}
               joinedIds={joinedIds}
             />
           )}
@@ -841,6 +888,7 @@ export const ChallengesPage = () => {
             onHover={handleHover}
             onLeave={handleLeave}
             onInterest={handleInterest}
+            onOpenReward={(id) => navigate(`/challenges/${id}/reward`)}
           />
         </div>
 
@@ -857,6 +905,7 @@ export const ChallengesPage = () => {
             onHover={handleHover}
             onLeave={handleLeave}
             onInterest={handleInterest}
+            onOpenReward={(id) => navigate(`/challenges/${id}/reward`)}
           />
         </div>
 

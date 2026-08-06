@@ -48,6 +48,12 @@ export function buildChallengeShareHtml(
     }
     if (typeof challenge.coverImageUrl === 'string' && challenge.coverImageUrl.trim()) {
       image = challenge.coverImageUrl.trim();
+    } else if (Array.isArray(challenge.rewardProducts)) {
+      // 커버 이미지가 없으면 완주 보상 상품 이미지를 OG 이미지로 폴백
+      const withImage = challenge.rewardProducts.find(
+        (p: any) => typeof p?.imageUrl === 'string' && p.imageUrl.trim(),
+      );
+      if (withImage) image = String(withImage.imageUrl).trim();
     }
   }
 

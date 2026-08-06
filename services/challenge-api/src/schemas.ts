@@ -208,6 +208,27 @@ export const completionResolveSchema = z.object({
 });
 export type CompletionResolveInput = z.infer<typeof completionResolveSchema>;
 
+// 완주 보상 상품 카탈로그 — 실물/기프티콘/온라인 서비스 분류, 정사각 이미지+설명.
+export const rewardProductsSchema = z.object({
+  products: z
+    .array(
+      z.object({
+        productId: z.string().optional(),
+        type: z.enum(['physical', 'gifticon', 'service']),
+        name: z.string().trim().min(1).max(60),
+        description: z.string().trim().max(500).optional(),
+        imageUrl: z.string().trim().max(500).optional(),
+      }),
+    )
+    .max(6),
+});
+export type RewardProductsInput = z.infer<typeof rewardProductsSchema>;
+
+export const rewardProductUploadUrlSchema = z.object({
+  fileType: z.string().regex(/^image\/(jpeg|jpg|png|webp|gif|heic|heif)$/),
+  fileSize: z.number().int().positive().max(10 * 1024 * 1024),
+});
+
 // 유료 챌린지 해산 신청 — 리더가 운영자에게 사유와 함께 제출.
 export const disbandRequestSchema = z.object({
   reason: z.string().trim().min(5, '해산 사유를 5자 이상 입력해주세요').max(500),

@@ -6,6 +6,8 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { AppEnv, ApiContext } from '@chum7/api-kit';
 import { ok, fail, publishEvent } from '@chum7/api-kit';
 import { calendarDay } from '@chum7/core';
@@ -57,6 +59,8 @@ import {
   proposalReviewSchema,
   proposalReRejectSchema,
   completionResolveSchema,
+  rewardProductsSchema,
+  rewardProductUploadUrlSchema,
 } from '../schemas';
 import { stripKeys } from '../repo/shared';
 
@@ -980,6 +984,54 @@ leaderRoutes.put('/participants/:participantId/days/:day/set-state', async (c) =
   const r = await setDayState(guard.challenge!, challengeId, participantId, day, state, leaderId);
   if (!r.ok) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
   return ok(c, { participantId, day, state });
+});
+
+// ── 완주 보상 상품 카탈로그 (리더/매니저) ──────────────────────────────────
+//  실물/기프티콘/온라인 서비스 분류 + 정사각 이미지·설명. 챌린지 META rewardProducts에 저장.
+//  리스트 카드 동그라미·보상 상세 페이지가 이 데이터를 읽는다.
+const rewardS3Client = new S3Client({});
+
+// 상품 이미지 업로드 presign — 정사각 이미지 권장, 10MB 이하
+leaderRoutes.post('/reward-products/upload-url', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const input = rewardProductUploadUrlSchema.parse(await c.req.json().catch(() => ({})));
+
+  if (!process.env.UPLOADS_BUCKET) {
+    return fail(c, 500, 'UPLOADS_BUCKET_NOT_CONFIGURED', '업로드 설정이 올바르지 않습니다');
+  }
+  const ext =
+    input.fileType === 'image/jpeg' || input.fileType === 'image/jpg' ? 'jpg' : input.fileType.split('/')[1];
+  // 키 패턴은 인증 업로드와 동일하게 uploads/ prefix (CloudFront /uploads/* 매핑)
+  const key = `uploads/reward-products/${challengeId}/${randomUUID()}.${ext}`;
+  const uploadUrl = await getSignedUrl(
+    rewardS3Client,
+    new PutObjectCommand({ Bucket: process.env.UPLOADS_BUCKET, Key: key, ContentType: input.fileType }),
+    { expiresIn: 300 },
+  );
+  const stage = process.env.STAGE || 'dev';
+  const cloudfrontDomain = stage === 'prod' ? 'https://www.chum7.com' : 'https://test.chum7.com';
+  return ok(c, { uploadUrl, fileUrl: `${cloudfrontDomain}/${key}`, key, expiresIn: 300 });
+});
+
+// 카탈로그 저장 — 전체 교체 (최대 6개, productId 없으면 서버가 발급)
+leaderRoutes.put('/reward-products', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const input = rewardProductsSchema.parse(await c.req.json().catch(() => ({})));
+
+  const nowIso = new Date().toISOString();
+  const products = input.products.map((p) => ({
+    productId: p.productId || randomUUID(),
+    type: p.type,
+    name: p.name,
+    description: p.description ?? null,
+    imageUrl: p.imageUrl ?? null,
+  }));
+  await updateChallengeFields(challengeId, { rewardProducts: products, updatedAt: nowIso });
+  return ok(c, { products }, '완주 보상 상품을 저장했어요 🎁');
 });
 
 // ── 매니저 지정/해임 (리더 전용) ───────────────────────────────────────────
