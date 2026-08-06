@@ -24,6 +24,29 @@ export async function getChallengeLeaderId(challengeId: string): Promise<string 
   }
 }
 
+/** 리더+매니저 판별 — 가이드 게시판 등 운영진 전용 쓰기 가드용 (GetItem 1회). */
+export async function getChallengeStaff(
+  challengeId: string,
+): Promise<{ leaderId: string; managerIds: string[] } | null> {
+  if (!process.env.CHALLENGES_TABLE || !challengeId) return null;
+  try {
+    const res = await docClient.send(
+      new GetCommand({
+        TableName: tableName('CHALLENGES_TABLE'),
+        Key: { pk: `CHAL#${challengeId}`, sk: 'META' },
+      }),
+    );
+    const item = res.Item;
+    if (!item) return null;
+    const leaderId = (item.leaderId as string) || (item.createdBy as string) || '';
+    const managerIds = Array.isArray(item.managerIds) ? item.managerIds.map(String) : [];
+    if (!leaderId) return null;
+    return { leaderId, managerIds };
+  } catch {
+    return null;
+  }
+}
+
 export interface ChallengeRef {
   leaderId: string;
   category: string;

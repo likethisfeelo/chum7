@@ -13,13 +13,17 @@ import { Hono } from 'hono';
 import type { AppEnv } from '@chum7/api-kit';
 import { ok, fail, publishEvent } from '@chum7/api-kit';
 import { cancelVerificationSchema } from '../schemas';
-import { resolveDurationDays } from '../domain/day-sync';
+import { certDateFromIso, DEFAULT_TIMEZONE, isCompletedProgressStatus, resolveDurationDays } from '../domain/day-sync';
 import { normalizeProgress } from '../domain/progress';
 import { createDayCompletionRules } from '../domain/verification-rules';
 import { getChallenge } from '../repo/challenges';
 import { getParticipation, updateParticipationFields } from '../repo/participations';
 import { listQuests } from '../repo/quests';
-import { findMyVerificationById, updateVerificationFields } from '../repo/verifications';
+import {
+  findMyVerificationById,
+  listParticipantDayVerifications,
+  updateVerificationFields,
+} from '../repo/verifications';
 
 export const verificationCancelRoutes = new Hono<AppEnv>();
 
@@ -164,5 +168,112 @@ verificationCancelRoutes.put('/:verificationId/cancel', async (c) => {
     dayNowIncomplete
       ? '인증을 취소했어요. 해당 일자 점수가 빠지고, 그 날 보완이 특별히 열렸어요.'
       : '인증을 취소했어요.',
+  );
+});
+
+// ── 오늘의 인증 교체 — 추가 기록(isExtra) 게시물을 그날의 대표 인증으로 승격 ──
+//  기존 대표 인증은 '추가 기록'으로 강등(점수·공개상태를 승격 게시물이 승계). 총점·연속일 불변.
+//  퀘스트 기반이면 같은 questId의 대표만 교체 가능(퀘스트 장부 꼬임 방지).
+verificationCancelRoutes.put('/:verificationId/make-today', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const verificationId = c.req.param('verificationId');
+
+  const vf = await findMyVerificationById(userId, verificationId);
+  if (!vf) return fail(c, 404, 'VERIFICATION_NOT_FOUND', '인증을 찾을 수 없습니다');
+  if (vf.isExtra !== true) {
+    return fail(c, 409, 'NOT_EXTRA_POST', '이미 오늘의 인증으로 반영된 게시물이에요');
+  }
+  if (vf.scoreCancelled === true || vf.rejectedByLeader === true || vf.hiddenByAdmin === true) {
+    return fail(c, 409, 'NOT_ELIGIBLE', '취소·반려·숨김된 게시물은 오늘의 인증으로 바꿀 수 없어요');
+  }
+
+  const challengeId = String(vf.challengeId ?? '');
+  const day = Number(vf.day);
+  if (!challengeId || !Number.isFinite(day)) {
+    return fail(c, 400, 'MISSING_CHALLENGE', '챌린지 정보가 없어 변경할 수 없어요');
+  }
+
+  const participation = await getParticipation(challengeId, userId);
+  if (!participation) return fail(c, 404, 'PARTICIPATION_NOT_FOUND', '참여 정보를 찾을 수 없습니다');
+  if (participation.status === 'completed') {
+    return fail(c, 409, 'CHALLENGE_COMPLETED_READONLY', '완주한 챌린지는 인증을 변경할 수 없어요 (조회 전용)');
+  }
+
+  const progress = normalizeProgress(participation.progress);
+  const entry = progress.find((p: any) => Number(p.day) === day);
+  if (!entry || !isCompletedProgressStatus(entry.status)) {
+    return fail(c, 409, 'DAY_NOT_COMPLETED', '이 날은 아직 인증 완료가 아니에요. 관리 탭에서 인정 요청을 이용하세요');
+  }
+
+  // 교체 대상(현재 대표) 찾기 — 같은 날의 비-추가 게시물. 퀘스트 기반이면 같은 questId만.
+  const sameDay = await listParticipantDayVerifications(challengeId, userId, day);
+  const candidates = sameDay.filter(
+    (p) =>
+      String(p.verificationId) !== verificationId &&
+      p.isExtra !== true &&
+      p.scoreCancelled !== true &&
+      p.rejectedByLeader !== true,
+  );
+  const questId = vf.questId ? String(vf.questId) : null;
+  const primary = questId
+    ? candidates.find((p) => String(p.questId ?? '') === questId)
+    : candidates.find((p) => String(p.verificationId) === String((entry as any).verificationId ?? '')) ?? candidates[0];
+  if (!primary) {
+    return fail(
+      c, 409, 'PRIMARY_NOT_FOUND',
+      questId ? '같은 퀘스트로 올린 기존 인증이 없어 교체할 수 없어요' : '교체할 기존 인증을 찾지 못했어요',
+    );
+  }
+
+  const nowIso = new Date().toISOString();
+  const primaryWasPublicFeed = Boolean((primary as any).gsi2pk);
+
+  // 1) 기존 대표 → 추가 기록으로 강등 (공개 피드 인덱스 이탈, 점수 0)
+  await updateVerificationFields(
+    { pk: String(primary.pk), sk: String(primary.sk) },
+    {
+      isExtra: true,
+      isPersonalOnly: true,
+      score: 0,
+      scoreEarned: 0,
+      swappedOutAt: nowIso,
+      swappedForId: verificationId,
+      updatedAt: nowIso,
+    },
+    ['gsi2pk', 'gsi2sk'],
+  );
+
+  // 2) 추가 기록 → 대표로 승격 (기존 대표의 점수·공개상태 승계)
+  const promote: Record<string, unknown> = {
+    isExtra: false,
+    isPersonalOnly: false,
+    isPublic: (primary as any).isPublic ?? 'true',
+    score: Number((primary as any).score ?? 1) || 1,
+    scoreEarned: Number((primary as any).scoreEarned ?? (primary as any).score ?? 1) || 1,
+    swappedInAt: nowIso,
+    updatedAt: nowIso,
+  };
+  if (primaryWasPublicFeed) {
+    const createdAt = String(vf.createdAt ?? nowIso);
+    promote.gsi2pk = `VFPUB#${certDateFromIso(createdAt, DEFAULT_TIMEZONE)}`;
+    promote.gsi2sk = createdAt;
+  }
+  await updateVerificationFields({ pk: String(vf.pk), sk: String(vf.sk) }, promote);
+
+  // 3) 진행 기록 — 그날 포인터를 승격 게시물로 교체 (점수·연속일 불변)
+  const updated = progress.map((p: any) => {
+    if (Number(p.day) !== day) return p;
+    const next: any = { ...p };
+    for (const field of ['verificationId', 'leaderVerificationId', 'personalVerificationId']) {
+      if (String(next[field] ?? '') === String(primary.verificationId)) next[field] = verificationId;
+    }
+    return next;
+  });
+  await updateParticipationFields(challengeId, userId, { progress: updated, updatedAt: nowIso });
+
+  return ok(
+    c,
+    { verificationId, day, replacedVerificationId: String(primary.verificationId) },
+    "오늘의 인증을 이 게시물로 변경했어요. 기존 게시물은 '추가 기록'으로 남아요.",
   );
 });

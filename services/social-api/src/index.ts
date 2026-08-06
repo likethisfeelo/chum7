@@ -12,6 +12,7 @@ import { moderationRoutes } from './routes/moderation';
 import { boardPublicRoutes, boardRoutes } from './routes/board';
 import { challengeFeedRoutes } from './routes/challenge-feed';
 import { bulletinRoutes } from './routes/bulletin';
+import { guideRoutes } from './routes/guide';
 import { hashtagPublicRoutes, hashtagRoutes } from './routes/hashtags';
 import { interestSubscriptionRoutes } from './routes/interest-subscriptions';
 
@@ -33,6 +34,7 @@ app.route('/s/mod', moderationRoutes); // 관리자 신고큐 + 마당/댓글 �
 app.route('/s/board', boardRoutes);
 app.route('/s/challenge-feed', challengeFeedRoutes);
 app.route('/s/bulletin', bulletinRoutes);
+app.route('/s/guide', guideRoutes); // 챌린지 가이드 게시판 (리더/매니저 작성·공지 고정·읽음 추적)
 app.route('/s/hashtags', hashtagRoutes);
 app.route('/s/interest-subscriptions', interestSubscriptionRoutes);
 

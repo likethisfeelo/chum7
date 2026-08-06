@@ -13,7 +13,7 @@ import { resolveMediaUrl } from "@/shared/utils/mediaUrl";
 import { ImageCarousel } from "@/shared/components/ImageCarousel";
 import { InlineVerificationForm } from "@/features/verification/components/InlineVerificationForm";
 import { BottomSheet } from "@/shared/components/BottomSheet";
-import { BoardGuideSection } from "@/features/challenge-board/components/BoardGuideSection";
+import { GuideBoardSection } from "../components/GuideBoardSection";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import { challengeApi } from "@/features/challenge/api/challengeApi";
 import { SLUG_TO_LABEL } from "@/features/challenge/constants/categories";
@@ -395,14 +395,23 @@ export const ChallengeFeedPage = () => {
     if (t === "feed" || t === "challenge") return "challenge";
     return "about";
   });
-  // 헤더 확성기(가이드) 클릭 시 챌린지 가이드 섹션을 강제로 펼치는 신호 + 스크롤 타깃
-  const [guideOpenSignal, setGuideOpenSignal] = useState(0);
+  // 헤더 확성기(가이드) 클릭 — 인증 탭 전환 + 가이드 게시판으로 스크롤
   const guideSectionRef = useRef<HTMLDivElement | null>(null);
   const openGuide = () => {
     setMainTab("about");
-    setGuideOpenSignal((s) => s + 1);
     setTimeout(() => guideSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
   };
+
+  // 가이드 안읽음 — 인증 탭 라벨 점 표시용 (섹션과 캐시 공유, 섹션이 보이면 읽음 처리됨)
+  const { data: guideData } = useQuery<{ posts: any[]; unreadCount: number }>({
+    queryKey: ["guide-posts", challengeId],
+    enabled: Boolean(challengeId),
+    queryFn: async () => {
+      const res = await apiClient.get(`/s/guide/${challengeId}/posts`);
+      return res.data.data ?? { posts: [], unreadCount: 0 };
+    },
+  });
+  const guideUnread = (guideData?.unreadCount ?? 0) > 0;
   const [activeQuestTab, setActiveQuestTab] = useState<"leader" | "personal">("leader");
   // 인증 피드 — 리더/개인 퀘스트 섹션을 각각 펼치고 접는다(아코디언, 독립 토글)
   const [openLeaderFeed, setOpenLeaderFeed] = useState(true);
@@ -769,6 +778,12 @@ export const ChallengeFeedPage = () => {
                     취소됨 · 점수 미반영
                   </span>
                 )}
+                {/* 인증 완료 후 또 올린 게시물 — 점수와 무관한 '추가 기록' */}
+                {item.isExtra && !item.scoreCancelled && (
+                  <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200">
+                    ➕ 추가 기록
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1084,7 +1099,13 @@ export const ChallengeFeedPage = () => {
                           : "border-transparent text-gray-400 font-medium hover:text-gray-600"
                       }`}
                     >
-                      {t.label}
+                      <span className="relative inline-flex items-center">
+                        {t.label}
+                        {/* 안읽은 가이드 점 — 인증 탭 */}
+                        {t.key === "about" && guideUnread && (
+                          <span className="absolute -top-0.5 -right-2 w-1.5 h-1.5 rounded-full bg-blue-500" />
+                        )}
+                      </span>
                     </button>
                   );
                 })}
@@ -1404,7 +1425,12 @@ export const ChallengeFeedPage = () => {
 
           {/* 2) 챌린지 보드 안내 — 인라인 아코디언 확장 + 📌 고정 (전체보기 페이지는 확장 영역 내 링크로 유지) */}
           <div ref={guideSectionRef} className="scroll-mt-24">
-            <BoardGuideSection challengeId={challengeId} openSignal={guideOpenSignal} title="📣 오늘의 가이드" />
+            <GuideBoardSection
+              challengeId={challengeId}
+              canManage={isCreator || isManager}
+              canDelete={isCreator}
+              canComment={Boolean(userChallenge) && !isGaveUp}
+            />
           </div>
 
           {/* 개인 퀘스트 제안 섹션 */}
@@ -1831,9 +1857,35 @@ export const ChallengeFeedPage = () => {
           </>
           )}{/* ===== End ABOUT ===== */}
 
-          {/* ===== 챌린지 탭 — 인증 피드 ===== */}
+          {/* ===== 기록 탭 — 인증 피드 ===== */}
           {mainTab === "challenge" && (
           <>
+
+          {/* 오늘 인증하기 — 최상단 CTA. 오늘 인증을 마쳤으면 완료 표시로 전환 */}
+          {userChallenge && !isGaveUp && isActive && (
+            isTodayAllDone && !hasInvalidMyVideo ? (
+              <section className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 flex items-center gap-3">
+                <span className="text-2xl">✅</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-emerald-800">오늘 인증 완료!</p>
+                  <p className="text-xs text-emerald-700 mt-0.5">아래 기록에서 리액션과 댓글로 서로 힘을 나눠주세요.</p>
+                </div>
+              </section>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setMainTab("about")}
+                className="w-full flex items-center gap-3 rounded-2xl bg-primary-600 hover:bg-primary-700 transition-colors p-4 text-left"
+              >
+                <span className="text-2xl">📸</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-white">오늘 인증하기</p>
+                  <p className="text-xs text-primary-100 mt-0.5">아직 오늘 인증을 하지 않았어요. 인증 탭으로 이동합니다.</p>
+                </div>
+                <span className="text-white text-lg">→</span>
+              </button>
+            )
+          )}
 
           {/* 5) 인증 피드 — 챌린지 유형에 맞는 섹션만, 각 섹션 펼침/접힘(아코디언) */}
           {/*    종료된 챌린지는 참여했던 사람 + 생성자/리더만 열람 가능 — 미참여자에게는 안내 카드 */}

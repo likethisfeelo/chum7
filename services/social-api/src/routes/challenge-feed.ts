@@ -16,13 +16,18 @@ import {
 import { createDailyAnonymousId } from '@chum7/core';
 import { loadAnonSalt } from '../anon-salt';
 import {
+  deleteCommentReaction,
   deleteVerificationComment,
   deleteVerificationReaction,
   findVerificationCommentById,
+  getCommentReaction,
+  listCommentReactionsByVerification,
   listVerificationComments,
   listVerificationReactions,
+  putCommentReaction,
   putVerificationComment,
   putVerificationReaction,
+  softDeleteVerificationComment,
   verCommentSk,
 } from '../repo/verification-social';
 import { verificationPk } from '../repo/shared';
@@ -48,6 +53,10 @@ challengeFeedRoutes.get(`${BASE}/comments`, async (c) => {
       isOwn: item.userId === userId,
       content: item.content,
       createdAt: item.createdAt,
+      // 대댓글 트리 구성용 — depth 1(루트)~5
+      parentCommentId: item.parentCommentId ?? null,
+      depth: Number(item.depth ?? 1),
+      deleted: item.deleted === true,
     };
   });
 
@@ -77,6 +86,18 @@ challengeFeedRoutes.post(`${BASE}/comments`, async (c) => {
   const isLeader = authorMode === 'leader';
   const displayName = isLeader ? '챌린지 리더' : dailyAnonymousId;
 
+  // 대댓글 — 부모 확인 + 깊이 계산 (최대 5단)
+  let parentCommentId: string | null = null;
+  let depth = 1;
+  if (input.parentCommentId) {
+    const parent = await findVerificationCommentById(verificationId, input.parentCommentId);
+    if (!parent) return fail(c, 404, 'PARENT_NOT_FOUND', '답글을 달 댓글을 찾을 수 없습니다');
+    if (parent.deleted === true) return fail(c, 409, 'PARENT_DELETED', '삭제된 댓글에는 답글을 달 수 없어요');
+    depth = Number(parent.depth ?? 1) + 1;
+    if (depth > 5) return fail(c, 409, 'MAX_DEPTH', '답글은 5단까지만 달 수 있어요');
+    parentCommentId = String(parent.commentId);
+  }
+
   const commentId = randomUUID();
   const now = new Date().toISOString();
 
@@ -90,6 +111,8 @@ challengeFeedRoutes.post(`${BASE}/comments`, async (c) => {
     dailyAnonymousId,
     authorMode,
     content: input.content,
+    ...(parentCommentId ? { parentCommentId } : {}),
+    depth,
     createdAt: now,
   });
 
@@ -114,6 +137,9 @@ challengeFeedRoutes.post(`${BASE}/comments`, async (c) => {
       isOwn: true,
       content: input.content,
       createdAt: now,
+      parentCommentId,
+      depth,
+      deleted: false,
     },
   });
 });
@@ -130,7 +156,14 @@ challengeFeedRoutes.delete(`${BASE}/comments/:commentId`, async (c) => {
     return fail(c, 403, 'FORBIDDEN', '본인 댓글만 삭제할 수 있습니다.');
   }
 
-  await deleteVerificationComment(verificationId, existing.sk);
+  // 대댓글이 달린 댓글은 스레드 유지를 위해 소프트 삭제(내용만 '삭제된 댓글입니다')
+  const all = await listVerificationComments(verificationId);
+  const hasReplies = all.some((item) => String(item.parentCommentId ?? '') === commentId);
+  if (hasReplies) {
+    await softDeleteVerificationComment(verificationId, String(existing.sk));
+  } else {
+    await deleteVerificationComment(verificationId, existing.sk);
+  }
   // 관계 아카이브 동기화 — 원장에서 이 댓글 원문 재노출 차단
   await publishEvent('content.deleted', {
     targetType: 'verification',
@@ -138,6 +171,60 @@ challengeFeedRoutes.delete(`${BASE}/comments/:commentId`, async (c) => {
     sourceEntityId: commentId,
   });
   return c.json({ data: { deleted: true, commentId } });
+});
+
+// 댓글 리액션 일괄 조회 — 이 인증의 모든 댓글 리액션을 commentId별 emoji 집계로 반환
+challengeFeedRoutes.get(`${BASE}/comment-reactions`, async (c) => {
+  const { userId } = c.get('authUser')!;
+  const verificationId = c.req.param('verificationId');
+
+  const items = await listCommentReactionsByVerification(verificationId);
+  const byComment = new Map<string, Map<string, { count: number; myReacted: boolean }>>();
+  for (const item of items) {
+    const commentId = String(item.commentId ?? '');
+    const emoji = String(item.emoji ?? '');
+    if (!commentId || !emoji) continue;
+    const emojiMap = byComment.get(commentId) ?? new Map();
+    const cur = emojiMap.get(emoji) ?? { count: 0, myReacted: false };
+    emojiMap.set(emoji, { count: cur.count + 1, myReacted: cur.myReacted || item.userId === userId });
+    byComment.set(commentId, emojiMap);
+  }
+
+  const data: Record<string, Array<{ emoji: string; count: number; myReacted: boolean }>> = {};
+  for (const [commentId, emojiMap] of byComment) {
+    data[commentId] = Array.from(emojiMap.entries()).map(([emoji, v]) => ({ emoji, ...v }));
+  }
+  return c.json({ data });
+});
+
+// 댓글 리액션 토글 — 있으면 제거, 없으면 추가 ([댓글+유저+이모지] 유니크)
+challengeFeedRoutes.post(`${BASE}/comments/:commentId/reactions`, async (c) => {
+  const { userId } = c.get('authUser')!;
+  const challengeId = c.req.param('challengeId');
+  const verificationId = c.req.param('verificationId');
+  const commentId = c.req.param('commentId');
+  const input = verificationReactionSchema.parse(await c.req.json().catch(() => ({})));
+
+  if (!VERIFICATION_REACTION_EMOJIS.has(input.emoji)) {
+    return fail(c, 400, 'INVALID_EMOJI', '허용되지 않은 이모지입니다.');
+  }
+  const comment = await findVerificationCommentById(verificationId, commentId);
+  if (!comment) return fail(c, 404, 'COMMENT_NOT_FOUND', '댓글을 찾을 수 없습니다');
+
+  const existing = await getCommentReaction(verificationId, commentId, userId, input.emoji);
+  if (existing) {
+    await deleteCommentReaction(verificationId, commentId, userId, input.emoji);
+    return c.json({ data: { toggled: 'removed', emoji: input.emoji, commentId } });
+  }
+  await putCommentReaction({
+    verificationId,
+    commentId,
+    challengeId,
+    userId,
+    emoji: input.emoji,
+    now: new Date().toISOString(),
+  });
+  return c.json({ data: { toggled: 'added', emoji: input.emoji, commentId } });
 });
 
 // 리액션 목록 (레거시 GET — emoji별 집계 + myReacted)
