@@ -18,7 +18,7 @@ import {
 } from '../domain/day-sync';
 import { normalizeProgress } from '../domain/progress';
 import { createDayCompletionRules } from '../domain/verification-rules';
-import { getChallenge } from '../repo/challenges';
+import { getChallenge, updateChallengeFields } from '../repo/challenges';
 import {
   getParticipation,
   listChallengeParticipations,
@@ -36,6 +36,7 @@ import {
   countChallengeVerificationsByQuest,
   findChallengeVerificationById,
   listParticipantDayVerifications,
+  listParticipantVerifications,
   updateVerificationFields,
 } from '../repo/verifications';
 import {
@@ -66,13 +67,29 @@ interface LeaderGuardResult {
   challenge?: Record<string, any>;
 }
 
-async function requireLeaderChallenge(c: ApiContext, challengeId: string): Promise<LeaderGuardResult> {
+/**
+ * 리더 가드 — 기본은 리더 + 매니저(challenge.managerIds) 허용.
+ * 파괴적 액션(퀘스트 삭제 등)은 { leaderOnly: true }로 리더만 통과시킨다.
+ */
+async function requireLeaderChallenge(
+  c: ApiContext,
+  challengeId: string,
+  opts?: { leaderOnly?: boolean },
+): Promise<LeaderGuardResult> {
   const challenge = await getChallenge(challengeId);
   if (!challenge) return { error: fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다') };
   const ownerId = challenge.createdBy || challenge.creatorId || challenge.leaderId;
   const { userId } = c.get('authUser')!;
-  if (!ownerId || ownerId !== userId) {
-    return { error: fail(c, 403, 'FORBIDDEN', '챌린지 리더만 사용할 수 있는 기능입니다') };
+  const isOwner = Boolean(ownerId) && ownerId === userId;
+  const managerIds: string[] = Array.isArray(challenge.managerIds) ? challenge.managerIds.map(String) : [];
+  const isManager = !opts?.leaderOnly && managerIds.includes(userId);
+  if (!isOwner && !isManager) {
+    return {
+      error: fail(
+        c, 403, 'FORBIDDEN',
+        opts?.leaderOnly ? '챌린지 리더만 사용할 수 있는 기능입니다' : '챌린지 리더·매니저만 사용할 수 있는 기능입니다',
+      ),
+    };
   }
   return { challenge };
 }
@@ -413,11 +430,11 @@ leaderRoutes.put('/quests/:questId', async (c) => {
   return ok(c, updated ? stripKeys(updated) : null, msg);
 });
 
-// 리더퀘스트 삭제 (리더 — 퀘스트 정의 제거. 기존 제출/인증 이력은 보존)
+// 리더퀘스트 삭제 (리더 전용 — 파괴적. 매니저는 '중단'까지만)
 leaderRoutes.delete('/quests/:questId', async (c) => {
   const challengeId = c.req.param('challengeId')!;
   const questId = c.req.param('questId')!;
-  const guard = await requireLeaderChallenge(c, challengeId);
+  const guard = await requireLeaderChallenge(c, challengeId, { leaderOnly: true });
   if (guard.error) return guard.error;
 
   const existing = await getQuest(challengeId, questId);
@@ -965,6 +982,100 @@ leaderRoutes.put('/participants/:participantId/days/:day/set-state', async (c) =
   return ok(c, { participantId, day, state });
 });
 
+// ── 매니저 지정/해임 (리더 전용) ───────────────────────────────────────────
+//  대상: 이 챌린지 참여 레코드 보유자(중도포기 제외). 최대 3명. 종료 후에도 유지(해임 전까지).
+const MAX_MANAGERS = 3;
+
+leaderRoutes.put('/managers', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const guard = await requireLeaderChallenge(c, challengeId, { leaderOnly: true });
+  if (guard.error) return guard.error;
+  const challenge = guard.challenge!;
+  const { userId: leaderId } = c.get('authUser')!;
+
+  const body = await c.req.json().catch(() => ({} as any));
+  const targetUserId = String(body.userId ?? '');
+  const action = body.action === 'remove' ? 'remove' : 'assign';
+  if (!targetUserId) return fail(c, 400, 'VALIDATION_ERROR', '대상 userId가 필요합니다');
+  if (targetUserId === leaderId) return fail(c, 409, 'LEADER_IS_ALREADY_OWNER', '리더 본인은 매니저로 지정할 수 없어요');
+
+  const current: string[] = Array.isArray(challenge.managerIds) ? challenge.managerIds.map(String) : [];
+  const nowIso = new Date().toISOString();
+
+  if (action === 'assign') {
+    if (current.includes(targetUserId)) return fail(c, 409, 'ALREADY_MANAGER', '이미 매니저예요');
+    if (current.length >= MAX_MANAGERS) {
+      return fail(c, 409, 'MANAGER_LIMIT', `매니저는 최대 ${MAX_MANAGERS}명까지 지정할 수 있어요`);
+    }
+    const participation = await getParticipation(challengeId, targetUserId);
+    if (!participation) return fail(c, 404, 'NOT_A_PARTICIPANT', '이 챌린지에 참여 신청한 사람만 매니저로 지정할 수 있어요');
+    if (participation.status === 'gave_up' || participation.phase === 'gave_up') {
+      return fail(c, 409, 'PARTICIPANT_GAVE_UP', '중도 포기한 참여자는 매니저로 지정할 수 없어요');
+    }
+    const next = [...current, targetUserId];
+    await updateChallengeFields(challengeId, { managerIds: next, updatedAt: nowIso });
+    try {
+      await publishEvent('manager.assigned', {
+        challengeId, userId: targetUserId, leaderId,
+        challengeTitle: typeof challenge.title === 'string' ? challenge.title : undefined,
+      });
+    } catch (err: any) {
+      console.error('manager.assigned publish error (non-fatal):', err?.message);
+    }
+    return ok(c, { challengeId, managerIds: next }, '매니저로 지정했어요 🛡️');
+  }
+
+  if (!current.includes(targetUserId)) return fail(c, 404, 'NOT_A_MANAGER', '매니저가 아니에요');
+  const next = current.filter((id) => id !== targetUserId);
+  await updateChallengeFields(challengeId, { managerIds: next, updatedAt: nowIso });
+  try {
+    await publishEvent('manager.removed', {
+      challengeId, userId: targetUserId, leaderId,
+      challengeTitle: typeof challenge.title === 'string' ? challenge.title : undefined,
+    });
+  } catch (err: any) {
+    console.error('manager.removed publish error (non-fatal):', err?.message);
+  }
+  return ok(c, { challengeId, managerIds: next }, '매니저를 해임했어요');
+});
+
+// 참가자 전체 인증 게시물 요약 — 일자별 썸네일·내용·인증시간 (리더/매니저 운영 그리드용)
+leaderRoutes.get('/participants/:participantId/verifications', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const participantId = c.req.param('participantId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+
+  const [items, quests] = await Promise.all([
+    listParticipantVerifications(challengeId, participantId),
+    listQuests(challengeId),
+  ]);
+  const questTitle = new Map(quests.map((q) => [String(q.questId), q.title as string]));
+  const verifications = items
+    .sort((a, b) => {
+      const dayDiff = Number(a.day ?? 0) - Number(b.day ?? 0);
+      if (dayDiff !== 0) return dayDiff;
+      return String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? ''));
+    })
+    .map((v) => ({
+      verificationId: v.verificationId as string,
+      day: typeof v.day === 'number' ? v.day : null,
+      questId: (v.questId as string) ?? null,
+      questType: (v.questType as string) ?? null,
+      questTitle: v.questId ? questTitle.get(String(v.questId)) ?? null : null,
+      verificationType: (v.verificationType as string) ?? 'text',
+      imageUrl: (v.imageUrl as string) ?? null,
+      todayNote: (v.todayNote as string) ?? null,
+      performedAt: (v.performedAt as string) ?? (v.practiceAt as string) ?? null,
+      createdAt: (v.createdAt as string) ?? null,
+      isExtra: v.isExtra === true,
+      scoreCancelled: v.scoreCancelled === true,
+      rejectedByLeader: v.rejectedByLeader === true,
+      hiddenByAdmin: v.hiddenByAdmin === true,
+    }));
+  return ok(c, { verifications, total: verifications.length });
+});
+
 // 참여자 특정 day의 인증 게시물 목록 — 그리드에서 '일부 기록이 있습니다' 확인용 (리뷰 후 처리)
 leaderRoutes.get('/participants/:participantId/days/:day/verifications', async (c) => {
   const challengeId = c.req.param('challengeId')!;
@@ -991,6 +1102,7 @@ leaderRoutes.get('/participants/:participantId/days/:day/verifications', async (
       verificationType: (v.verificationType as string) ?? 'text',
       imageUrl: (v.imageUrl as string) ?? null,
       todayNote: (v.todayNote as string) ?? null,
+      performedAt: (v.performedAt as string) ?? (v.practiceAt as string) ?? null,
       createdAt: (v.createdAt as string) ?? null,
       isPublic: v.isPublic === 'true' || v.isPublic === true,
       rejectedByLeader: v.rejectedByLeader === true,

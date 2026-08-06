@@ -29,10 +29,13 @@ const readPinned = (challengeId: string): boolean => {
 export const BoardGuideSection = ({
   challengeId,
   openSignal,
+  title = '챌린지 가이드',
 }: {
   challengeId: string;
   /** 값이 바뀌면(0→1→2…) 가이드를 강제로 펼친다 — 헤더 확성기 클릭 연동 */
   openSignal?: number;
+  /** 섹션 헤더 제목 (기본 '챌린지 가이드') */
+  title?: string;
 }) => {
   const navigate = useNavigate();
   const [pinned, setPinned] = useState(() => readPinned(challengeId));
@@ -143,7 +146,7 @@ export const BoardGuideSection = ({
         className="w-full text-left p-5 cursor-pointer hover:bg-white/40 transition-colors"
       >
         <div className="flex items-center justify-between gap-2 mb-2">
-          <h3 className="font-bold text-gray-900">챌린지 가이드</h3>
+          <h3 className="font-bold text-gray-900">{title}</h3>
           <div className="flex items-center gap-1.5">
             {expanded && (
               <button

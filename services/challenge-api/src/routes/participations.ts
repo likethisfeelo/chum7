@@ -461,6 +461,15 @@ participationRoutes.post('/user-challenges/:userChallengeId/give-up', async (c) 
   // '배추한포기' 뱃지 부여 (조건부 — 이미 보유 시 무시, 실패는 non-fatal)
   await grantGiveUpBadge(userId, uc.challengeId);
 
+  // 매니저였다면 자동 해임 — 포기자는 운영 권한을 잃는다
+  const managerIds: string[] = Array.isArray(challenge.managerIds) ? challenge.managerIds.map(String) : [];
+  if (managerIds.includes(userId)) {
+    await updateChallengeFields(uc.challengeId, {
+      managerIds: managerIds.filter((id) => id !== userId),
+      updatedAt: now,
+    }).catch((err: any) => console.error('give-up: manager auto-remove failed (non-fatal):', err?.message));
+  }
+
   return ok(c, { userChallengeId, phase: 'gave_up', status: 'gave_up' }, '챌린지를 중도 포기했습니다. 배추한포기 뱃지가 지급되었어요.');
 });
 

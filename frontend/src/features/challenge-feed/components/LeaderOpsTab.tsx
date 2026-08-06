@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -160,11 +160,21 @@ function BriefingSection({ challengeId }: { challengeId: string }) {
 }
 
 // 참여자 일자별 완료 인정 그리드 — 칸을 누르면 그날 인증 게시물을 보여주고 리더가 확인 후 처리
-function ParticipantDayGrid({ challengeId, participant }: { challengeId: string; participant: LeaderParticipant }) {
+function ParticipantDayGrid({
+  challengeId,
+  participant,
+  pendingRequests = [],
+}: {
+  challengeId: string;
+  participant: LeaderParticipant;
+  /** 이 참여자의 대기 중 인정 요청 — 해당 날짜 칸에 🙋 마커 + 패널에 요청 내용 표시 */
+  pendingRequests?: Array<{ requestId: string; day: number; message?: string | null; verificationId?: string | null }>;
+}) {
   const [open, setOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const days = participant.days ?? [];
+  const requestDays = new Set(pendingRequests.map((r) => Number(r.day)));
 
   // 선택한 날짜의 인증 게시물 조회
   const { data: dayVerifications = [], isLoading: vfLoading } = useQuery<any[]>({
@@ -187,6 +197,19 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
       queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
     },
     onError: (err: any) => toast.error(err?.response?.data?.message || '처리에 실패했어요'),
+  });
+
+  // 인증 게시물 반려 — 피드에서 운영탭으로 일원화된 액션
+  const rejectVfMutation = useMutation({
+    mutationFn: ({ verificationId, reason }: { verificationId: string; reason?: string }) =>
+      challengeApi.rejectVerification(challengeId, verificationId, { reason }),
+    onSuccess: () => {
+      toast.success('인증을 반려했어요. 피드에서 숨겨지고 본인 기록에는 남아요.');
+      queryClient.invalidateQueries({ queryKey: ['leader-day-verifications', challengeId, participant.userId] });
+      queryClient.invalidateQueries({ queryKey: ['leader-participants', challengeId] });
+      queryClient.invalidateQueries({ queryKey: ['challenge-feed-verifications', challengeId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '반려에 실패했어요'),
   });
 
   if (days.length === 0) return null;
@@ -230,6 +253,11 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
                       ✋
                     </span>
                   )}
+                  {requestDays.has(d.day) && (
+                    <span className="absolute -top-1 -left-1 text-[8px] leading-none bg-white text-indigo-700 rounded-full w-3 h-3 flex items-center justify-center border border-indigo-300">
+                      🙋
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -237,7 +265,7 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
           <p className="text-[10px] text-gray-400 mt-1.5">
             <span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500 align-middle" /> 완료 ·
             <span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-200 align-middle ml-1" /> 일부 ·
-            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-100 align-middle ml-1" /> 미완 · ✋ 수동인정. 칸을 눌러 기록 확인 후 처리.
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-100 align-middle ml-1" /> 미완 · ✋ 수동인정 · 🙋 인정요청. 칸을 눌러 기록 확인 후 처리.
           </p>
 
           {/* 선택한 날짜 리뷰 패널 — 인증 게시물 확인 후 처리 */}
@@ -246,6 +274,17 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
               <p className="text-xs font-semibold text-gray-800">
                 {selected.day}일차 · 현재 {curLabel}
               </p>
+
+              {/* 이 날짜에 들어온 인정 요청 — 요청 내용과 함께 확인 */}
+              {pendingRequests
+                .filter((r) => Number(r.day) === selected.day)
+                .map((r) => (
+                  <div key={r.requestId} className="mt-2 rounded-lg bg-indigo-50 border border-indigo-200 px-2.5 py-2">
+                    <p className="text-[11px] font-bold text-indigo-800">🙋 이 날짜로 인증 인정 요청이 와 있어요</p>
+                    {r.message && <p className="text-[11px] text-indigo-700 mt-0.5 whitespace-pre-wrap">"{r.message}"</p>}
+                    <p className="text-[10px] text-indigo-500 mt-0.5">아래 기록 확인 후 '완료 인정'으로 승인하거나, 인정 요청 섹션에서 반려하세요.</p>
+                  </div>
+                ))}
 
               {vfLoading ? (
                 <p className="text-[11px] text-gray-400 mt-2">불러오는 중...</p>
@@ -278,8 +317,22 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
                           </div>
                           {v.todayNote && <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-2 whitespace-pre-wrap">{v.todayNote}</p>}
                           <p className="text-[10px] text-gray-400 mt-0.5">
-                            {v.createdAt ? new Date(v.createdAt).toLocaleString('ko-KR') : ''}
+                            인증시간 {(v.performedAt || v.createdAt) ? new Date(v.performedAt || v.createdAt).toLocaleString('ko-KR') : '-'}
                           </p>
+                          {!v.rejectedByLeader && (
+                            <button
+                              type="button"
+                              disabled={rejectVfMutation.isPending}
+                              onClick={() => {
+                                const reason = window.prompt('이 인증을 반려할까요? 반려 사유(선택)\n피드·마당에서 숨겨지고 그날 완료·점수가 해제돼요.');
+                                if (reason === null) return;
+                                rejectVfMutation.mutate({ verificationId: v.verificationId, reason: reason.trim() || undefined });
+                              }}
+                              className="mt-1 text-[10px] font-semibold text-rose-500 hover:text-rose-700 disabled:opacity-50"
+                            >
+                              🚩 이 인증 반려
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -321,8 +374,64 @@ function ParticipantDayGrid({ challengeId, participant }: { challengeId: string;
   );
 }
 
-function ParticipantsSection({ challengeId }: { challengeId: string }) {
+// 참가자 전체 게시물 요약 — 일자별 썸네일·내용 일부·인증시간 (펼침 시 로드)
+function ParticipantPostsSummary({ challengeId, participantId }: { challengeId: string; participantId: string }) {
+  const { data: posts = [], isLoading } = useQuery<any[]>({
+    queryKey: ['leader-participant-posts', challengeId, participantId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/c/${challengeId}/leader/participants/${participantId}/verifications`);
+      return res.data.data?.verifications ?? [];
+    },
+  });
+
+  if (isLoading) return <p className="text-[11px] text-gray-400 mt-2">게시물을 불러오는 중...</p>;
+  if (posts.length === 0) return <p className="text-[11px] text-gray-400 mt-2">올린 인증 게시물이 없어요.</p>;
+
+  return (
+    <div className="mt-2 space-y-1.5 max-h-64 overflow-y-auto">
+      {posts.map((v) => (
+        <div key={v.verificationId} className="flex items-center gap-2 rounded-lg bg-white border border-gray-100 p-2">
+          <span className="text-[10px] font-bold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded flex-shrink-0">
+            D{v.day ?? '-'}
+          </span>
+          {v.imageUrl ? (
+            <img
+              src={resolveMediaUrl(v.imageUrl)}
+              alt=""
+              className="w-9 h-9 rounded-md object-cover flex-shrink-0"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-md bg-gray-100 flex items-center justify-center text-sm flex-shrink-0">📝</div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-gray-700 truncate">
+              {v.todayNote || v.questTitle || '(내용 없음)'}
+              {v.rejectedByLeader && <span className="ml-1 text-[9px] px-1 rounded bg-rose-100 text-rose-600">반려</span>}
+              {v.scoreCancelled && <span className="ml-1 text-[9px] px-1 rounded bg-gray-200 text-gray-500">취소</span>}
+              {v.isExtra && <span className="ml-1 text-[9px] px-1 rounded bg-gray-100 text-gray-500">추가</span>}
+            </p>
+            <p className="text-[10px] text-gray-400">
+              {(v.performedAt || v.createdAt)
+                ? new Date(v.performedAt || v.createdAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                : ''}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ParticipantsSection({
+  challengeId,
+  managerIds = [],
+}: {
+  challengeId: string;
+  managerIds?: string[];
+}) {
   const navigate = useNavigate();
+  const [openPostsUserId, setOpenPostsUserId] = useState<string | null>(null);
   const { data, isLoading, isError } = useQuery<LeaderParticipantsData>({
     queryKey: ['leader-participants', challengeId],
     queryFn: async () => {
@@ -330,6 +439,22 @@ function ParticipantsSection({ challengeId }: { challengeId: string }) {
       return res.data.data;
     },
   });
+
+  // 대기 중 인정 요청 — 참여자별·날짜별로 그리드에 표시
+  const { data: pendingReqs = [] } = useQuery<any[]>({
+    queryKey: ['leader-completion-requests', challengeId, 'pending'],
+    queryFn: () => challengeApi.getLeaderCompletionRequests(challengeId, 'pending'),
+  });
+  const requestsByUser = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const r of pendingReqs) {
+      if (r.status !== 'pending') continue;
+      const list = map.get(String(r.userId)) ?? [];
+      list.push(r);
+      map.set(String(r.userId), list);
+    }
+    return map;
+  }, [pendingReqs]);
 
   if (isLoading) return <section className="glass-card rounded-2xl p-5"><Loading /></section>;
   if (isError || !data) {
@@ -383,6 +508,14 @@ function ParticipantsSection({ challengeId }: { challengeId: string }) {
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${statusMeta.badgeClass}`}>
                         {statusMeta.label}
                       </span>
+                      {managerIds.includes(String(p.userId)) && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 bg-indigo-100 text-indigo-700">🛡️ 매니저</span>
+                      )}
+                      {(requestsByUser.get(String(p.userId))?.length ?? 0) > 0 && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 bg-indigo-50 text-indigo-600">
+                          🙋 인정요청 {requestsByUser.get(String(p.userId))!.length}
+                        </span>
+                      )}
                     </div>
                     {p.personalGoal && (
                       <p className="text-[11px] text-gray-400 truncate">🎯 {p.personalGoal}</p>
@@ -413,7 +546,24 @@ function ParticipantsSection({ challengeId }: { challengeId: string }) {
                     💬 DM
                   </button>
                 </div>
-                <ParticipantDayGrid challengeId={challengeId} participant={p} />
+                <ParticipantDayGrid
+                  challengeId={challengeId}
+                  participant={p}
+                  pendingRequests={requestsByUser.get(String(p.userId)) ?? []}
+                />
+                {/* 일자별 게시물 요약 — 작은 이미지·내용 일부·인증시간 */}
+                <div className="mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setOpenPostsUserId((cur) => (cur === String(p.userId) ? null : String(p.userId)))}
+                    className="text-[11px] font-semibold text-gray-500 flex items-center gap-1"
+                  >
+                    게시물 요약 {openPostsUserId === String(p.userId) ? '▲' : '▼'}
+                  </button>
+                  {openPostsUserId === String(p.userId) && (
+                    <ParticipantPostsSummary challengeId={challengeId} participantId={String(p.userId)} />
+                  )}
+                </div>
               </div>
             );
           })}
@@ -618,10 +768,12 @@ function LeaderQuestManageSection({
   challengeId,
   challengeType,
   allowedVerificationTypes,
+  managerMode = false,
 }: {
   challengeId: string;
   challengeType: string;
   allowedVerificationTypes?: Array<'image' | 'video' | 'link' | 'text'>;
+  managerMode?: boolean;
 }) {
   const notLeaderChallenge = challengeType === 'personal_only';
   const { data: quests = [], isLoading } = useQuery<any[]>({
@@ -650,6 +802,7 @@ function LeaderQuestManageSection({
               challengeId={challengeId}
               quest={q}
               allowedVerificationTypes={allowedVerificationTypes}
+              managerMode={managerMode}
             />
           ))}
         </div>
@@ -662,10 +815,12 @@ function LeaderQuestManageRow({
   challengeId,
   quest,
   allowedVerificationTypes,
+  managerMode = false,
 }: {
   challengeId: string;
   quest: any;
   allowedVerificationTypes?: Array<'image' | 'video' | 'link' | 'text'>;
+  managerMode?: boolean;
 }) {
   const queryClient = useQueryClient();
   const allowedList = allowedVerificationTypes && allowedVerificationTypes.length
@@ -862,19 +1017,21 @@ function LeaderQuestManageRow({
           >
             {isActive ? '중단' : '재개'}
           </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onDelete}
-            title={verificationCount > 0 ? '인증이 있어 삭제할 수 없어요 (이동/중단 후 가능)' : '삭제'}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 ${
-              verificationCount > 0
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-red-600 text-white hover:bg-red-500'
-            }`}
-          >
-            삭제
-          </button>
+          {!managerMode && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onDelete}
+              title={verificationCount > 0 ? '인증이 있어 삭제할 수 없어요 (이동/중단 후 가능)' : '삭제'}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 ${
+                verificationCount > 0
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-red-600 text-white hover:bg-red-500'
+              }`}
+            >
+              삭제
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -1280,6 +1437,98 @@ function OpsPostsSection({ challengeId }: { challengeId: string }) {
               </div>
             );
           })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ── 매니저 관리 (리더 전용) ────────────────────────────────────────────────
+//  참여 신청 이상인 사람 중 지정(최대 3명). 종료 후에도 유지, 포기/삭제급 권한은 없음.
+function ManagerSection({
+  challengeId,
+  managerIds,
+  onChanged,
+}: {
+  challengeId: string;
+  managerIds: string[];
+  onChanged?: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { data } = useQuery<LeaderParticipantsData>({
+    queryKey: ['leader-participants', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/c/${challengeId}/leader/participants`);
+      return res.data.data;
+    },
+  });
+
+  const manageMutation = useMutation({
+    mutationFn: ({ userId, action }: { userId: string; action: 'assign' | 'remove' }) =>
+      apiClient.put(`/c/${challengeId}/leader/managers`, { userId, action }),
+    onSuccess: (_d, vars) => {
+      toast.success(vars.action === 'assign' ? '매니저로 지정했어요 🛡️' : '매니저를 해임했어요');
+      queryClient.invalidateQueries({ queryKey: ['leader-participants', challengeId] });
+      onChanged?.();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '처리에 실패했어요'),
+  });
+
+  const participants = (data?.participants ?? []).filter(
+    (p) => p.status !== 'gave_up',
+  );
+  const candidates = participants.filter((p) => !managerIds.includes(String(p.userId)));
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-gray-900">🛡️ 매니저 관리</h3>
+        <span className="text-xs text-gray-400">{managerIds.length}/3</span>
+      </div>
+      <p className="text-[11px] text-gray-400 mt-1">
+        참여자 중에서 운영을 도울 매니저를 지정해요. 매니저는 완료 인정·심사·티켓·선물까지 운영할 수 있지만,
+        해산·삭제 같은 결정은 할 수 없어요. 챌린지 종료 후에도 유지됩니다.
+      </p>
+
+      {managerIds.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {managerIds.map((id) => (
+            <div key={id} className="flex items-center gap-2 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
+              <span className="text-sm">🛡️</span>
+              <span className="text-xs font-semibold text-indigo-800 flex-1">{maskUserId(id)}</span>
+              <button
+                type="button"
+                disabled={manageMutation.isPending}
+                onClick={() => {
+                  if (window.confirm('이 매니저를 해임할까요?')) manageMutation.mutate({ userId: id, action: 'remove' });
+                }}
+                className="text-[11px] font-semibold text-gray-400 hover:text-rose-500 disabled:opacity-50"
+              >
+                해임
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {managerIds.length < 3 && candidates.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-gray-600 mb-1.5">참여자에서 지정</p>
+          <div className="space-y-1 max-h-40 overflow-y-auto">
+            {candidates.map((p) => (
+              <div key={p.userChallengeId} className="flex items-center gap-2 rounded-lg bg-white/60 border border-gray-100 px-3 py-1.5">
+                <span className="text-xs text-gray-700 flex-1 truncate">{maskUserId(p.userId)}</span>
+                <button
+                  type="button"
+                  disabled={manageMutation.isPending}
+                  onClick={() => manageMutation.mutate({ userId: String(p.userId), action: 'assign' })}
+                  className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-indigo-600 text-white disabled:opacity-50"
+                >
+                  지정
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </section>
@@ -1878,6 +2127,9 @@ export function LeaderOpsTab({
   personalQuestEnabled,
   isPaid = false,
   lifecycle,
+  managerMode = false,
+  managerIds = [],
+  onManagersChanged,
 }: {
   challengeId: string;
   challengeType?: string;
@@ -1885,13 +2137,33 @@ export function LeaderOpsTab({
   personalQuestEnabled?: boolean;
   isPaid?: boolean;
   lifecycle?: string;
+  /** 매니저로 접근 — 파괴적 섹션(해산·매니저 관리·라이프사이클 컨트롤·삭제) 숨김 */
+  managerMode?: boolean;
+  managerIds?: string[];
+  onManagersChanged?: () => void;
 }) {
   const navigate = useNavigate();
 
   return (
     <div className="space-y-4">
-      <ChallengeControlCard challengeId={challengeId} />
+      {managerMode && (
+        <div className="rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-2.5 flex items-center gap-2">
+          <span className="text-base">🛡️</span>
+          <p className="text-xs font-semibold text-indigo-800">
+            매니저 모드 — 운영을 도울 수 있어요. 해산·삭제 등 결정 권한은 리더에게만 있어요.
+          </p>
+        </div>
+      )}
+      {/* 1) 오늘 참여 현황 */}
       <BriefingSection challengeId={challengeId} />
+
+      {/* 2) 인증 수정 요청 처리 */}
+      <CompletionRequestSection challengeId={challengeId} />
+
+      {/* 3) 참여자 관리 · 리더 DM (참여자별 DM 버튼 포함) */}
+      <ParticipantsSection challengeId={challengeId} managerIds={managerIds} />
+
+      {/* 4) 가이드·미션(리더퀘스트) 관리 */}
       <LeaderQuestCreateSection
         challengeId={challengeId}
         challengeType={challengeType}
@@ -1901,21 +2173,25 @@ export function LeaderOpsTab({
         challengeId={challengeId}
         challengeType={challengeType}
         allowedVerificationTypes={allowedVerificationTypes}
+        managerMode={managerMode}
       />
-      <ParticipantsSection challengeId={challengeId} />
-      <CompletionRequestSection challengeId={challengeId} />
       <ProposalReviewSection
         challengeId={challengeId}
         challengeType={challengeType}
         personalQuestEnabled={personalQuestEnabled}
       />
-      <OpsPostsSection challengeId={challengeId} />
 
+      {/* 5) 운영 도구 — 게시물 댓글·매니저·티켓·선물 */}
+      {!managerMode && <OpsPostsSection challengeId={challengeId} />}
+      {!managerMode && (
+        <ManagerSection challengeId={challengeId} managerIds={managerIds} onChanged={onManagersChanged} />
+      )}
       {isPaid && <TicketSection challengeId={challengeId} />}
-
       <GiftSection challengeId={challengeId} />
 
-      <DisbandSection challengeId={challengeId} isPaid={isPaid} lifecycle={lifecycle} />
+      {/* 6) 챌린지 설정 및 종료 — 맨 아래 (리더 전용) */}
+      {!managerMode && <ChallengeControlCard challengeId={challengeId} />}
+      {!managerMode && <DisbandSection challengeId={challengeId} isPaid={isPaid} lifecycle={lifecycle} />}
 
       {/* 퀘스트 심사 바로가기 */}
       <button

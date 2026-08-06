@@ -102,6 +102,28 @@ export async function listPublicVerificationsByDate(
  * sk 정렬은 userId 기준이라 시간순이 아니므로, 호출부에서 createdAt로 재정렬한다.
  */
 /** 특정 참여자의 특정 day 인증 목록 — 리더 그리드 리뷰용 (sk = VF#<userId>#D<dd>#...) */
+/** 참가자의 챌린지 내 인증 전체 — pk 파티션 VF#<userId># prefix Query (운영 그리드 게시물 요약용) */
+export async function listParticipantVerifications(
+  challengeId: string,
+  userId: string,
+): Promise<Record<string, any>[]> {
+  const items: Record<string, any>[] = [];
+  let lastKey: Record<string, any> | undefined;
+  do {
+    const res = await docClient.send(
+      new QueryCommand({
+        TableName: tableName(TABLE),
+        KeyConditionExpression: 'pk = :pk AND begins_with(sk, :sk)',
+        ExpressionAttributeValues: { ':pk': challengePk(challengeId), ':sk': `VF#${userId}#` },
+        ExclusiveStartKey: lastKey,
+      }),
+    );
+    items.push(...(res.Items ?? []));
+    lastKey = res.LastEvaluatedKey;
+  } while (lastKey);
+  return items;
+}
+
 export async function listParticipantDayVerifications(
   challengeId: string,
   userId: string,
