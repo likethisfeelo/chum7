@@ -71,6 +71,23 @@ describe('settle domain', () => {
       expect(plan.grossAmount).toBe(10_000);
     });
 
+    it('ticket comp(amount=0) orders are excluded from refunds and forfeits', () => {
+      const plan = planSettlement({
+        pricingType: 'paid_deposit',
+        orders: [
+          order({ orderId: 'o-1', userId: 'done-1' }),
+          order({ orderId: 't-1', userId: 'done-2', amount: 0 }), // 티켓 완주자 — 반환 없음
+          order({ orderId: 't-2', userId: 'fail-1', amount: 0 }), // 티켓 미완주 — 몰수 없음
+        ],
+        completedUserIds: ['done-1', 'done-2'],
+        feeRate: 0.05,
+      });
+      expect(plan.refundDueOrders.map((o) => o.orderId)).toEqual(['o-1']);
+      expect(plan.forfeitedOrders).toEqual([]);
+      expect(plan.grossAmount).toBe(0);
+      expect(plan.orderCount).toBe(3); // 참여 자격 모수에는 포함
+    });
+
     it('all completed → payout 0, refunds only, still publishes ready', () => {
       const plan = planSettlement({
         pricingType: 'paid_deposit',
@@ -156,6 +173,12 @@ describe('settle domain', () => {
       expect(first.pk).toBe('SETTLEMENT#chal-1');
       expect(second.pk).toBe(first.pk); // 시각이 달라도 키 동일 → attribute_not_exists로 한 번만 생성
       expect(first.sk).toBe('META');
+
+      // 정산서는 held로 생성 + 종료+7일 holdUntil (환불 보류 버퍼)
+      expect(first.status).toBe('held');
+      expect(first.gsi2pk).toBe('SETTLEMENTSTATUS#held');
+      expect(first.holdUntil).toBe('2026-07-28T00:00:00.000Z');
+      expect(first.notifyOnRelease).toBe(true); // 몰수분 payout>0
 
       const refund = buildRefundItem(order({ orderId: 'o-9' }), '2026-07-21T00:00:00.000Z');
       expect(refund.pk).toBe('REFUND#o-9');

@@ -7,11 +7,12 @@ import { docClient, tableName } from '@chum7/api-kit';
  *    gsi2: REFUNDSTATUS#<status> / createdAt    (어드민 큐)
  *  SETTLEMENT#<challengeId> / META — 챌린지 정산서
  *    gsi2: SETTLEMENTSTATUS#<status> / createdAt (어드민 큐)
- * v0는 수동 지급: 상태 머신 축소 refund_due→completed / ready→paid (PAYMENT_SPEC §6).
+ * v0는 수동 지급: refund_due→completed / held→ready→paid (PAYMENT_SPEC §6).
+ * 정산서는 held(환불 보류)로 생성되고, 보류 경과 후 어드민 release로 ready 전환된다.
  */
 
 export type RefundStatus = 'refund_due' | 'completed';
-export type SettlementStatus = 'ready' | 'paid';
+export type SettlementStatus = 'held' | 'ready' | 'paid';
 
 export interface RefundItem {
   orderId: string;
@@ -38,6 +39,12 @@ export interface SettlementItem {
   payoutAmount: number;
   status: SettlementStatus;
   createdAt: string;
+  /** 환불 보류 해제 예정 시각 (종료+7일) — held 동안 지급 불가 */
+  holdUntil?: string | null;
+  /** 보류 해제 시 settlement.ready 알림 발행 여부 */
+  notifyOnRelease?: boolean;
+  releasedAt?: string | null;
+  releasedBy?: string | null;
   paidAt?: string | null;
   paidBy?: string | null;
   memo?: string | null;

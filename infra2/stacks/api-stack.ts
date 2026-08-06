@@ -147,6 +147,8 @@ export class ApiStack extends cdk.Stack {
         ANON_ID_SALT_SECRET_NAME: stateful.anonSaltSecret.secretName,
         // 조기완료 자동응원 레코드 생성용 — cheer 테이블 쓰기 (문서화된 크로스 도메인 예외)
         CHEER_TABLE: stateful.tables.cheer.tableName,
+        // 중도포기 '배추한포기' 뱃지 조건부 Put — gamification 쓰기 (문서화된 크로스 도메인 예외)
+        GAMIFICATION_TABLE: stateful.tables.gamification.tableName,
       },
     });
     stateful.tables.challenges.grantReadWriteData(this.challengeApi);

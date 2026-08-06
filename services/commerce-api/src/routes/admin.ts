@@ -1,11 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import { PutCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { AppEnv, docClient, fail, ok, publishEvent, tableName } from '@chum7/api-kit';
 import { generateCouponCode } from '../domain/coupon-rules';
 import { OrderStatus } from '../domain/order-state';
 import { CouponItem, listAllCoupons, markCoupon, putCoupon } from '../repo/coupons';
 import { appendLedger, getOrder, listLedger, listOrdersByStatus, transitionOrder } from '../repo/orders';
+import { listBatchesByChallenge, listBatchesByLeader, putTicketBatch } from '../repo/tickets';
 
 /**
  * /pay/admin/* — 슈퍼어드민(admins 그룹) 전용. requireGroup은 index.ts에서 적용.
@@ -32,6 +34,69 @@ export async function audit(actorUserId: string, action: string, targetId: strin
     }),
   );
 }
+
+// ── 티켓 배부 (운영자 → 챌린지 리더) ───────────────────────────────────────
+const issueBatchSchema = z.object({
+  challengeId: z.string().min(1),
+  total: z.number().int().min(1).max(500),
+  memo: z.string().max(200).optional(),
+});
+
+// 배부 생성 — 리더는 challenge.createdBy로 자동 지정
+commerceAdminRoutes.post('/ticket-batches', async (c) => {
+  const { userId: adminId } = c.get('authUser')!;
+  const input = issueBatchSchema.parse(await c.req.json().catch(() => ({})));
+  const res = await docClient.send(
+    new GetCommand({
+      TableName: tableName('CHALLENGES_TABLE'),
+      Key: { pk: `CHAL#${input.challengeId}`, sk: 'META' },
+      ProjectionExpression: 'challengeId, title, pricingType, price, createdBy',
+    }),
+  );
+  const challenge = res.Item as
+    | { challengeId: string; title?: string; pricingType?: string; price?: number; createdBy?: string }
+    | undefined;
+  if (!challenge) return fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다');
+  const paid =
+    challenge.pricingType === 'paid_fee' || challenge.pricingType === 'paid_deposit' || Number(challenge.price ?? 0) > 0;
+  if (!paid) return fail(c, 400, 'NOT_A_PAID_CHALLENGE', '무료 챌린지에는 티켓 배부가 필요 없습니다');
+  const leaderId = String(challenge.createdBy ?? '');
+  if (!leaderId) return fail(c, 400, 'NO_LEADER', '챌린지 리더를 확인할 수 없습니다');
+
+  const nowIso = new Date().toISOString();
+  const batchId = randomUUID();
+  await putTicketBatch({
+    batchId,
+    challengeId: input.challengeId,
+    challengeTitle: challenge.title ?? null,
+    leaderId,
+    total: input.total,
+    issued: 0,
+    createdBy: adminId,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  });
+  await audit(adminId, 'ticket.batch_issue', input.challengeId, {
+    batchId,
+    leaderId,
+    total: input.total,
+    memo: input.memo ?? null,
+  });
+  return ok(c, { batchId, challengeId: input.challengeId, leaderId, total: input.total }, `티켓 ${input.total}장을 리더에게 배부했습니다`, 201);
+});
+
+// 배부 목록 — challengeId 또는 leaderId 필터
+commerceAdminRoutes.get('/ticket-batches', async (c) => {
+  const challengeId = (c.req.query('challengeId') ?? '').trim();
+  const leaderId = (c.req.query('leaderId') ?? '').trim();
+  if (!challengeId && !leaderId) {
+    return fail(c, 400, 'MISSING_FILTER', 'challengeId 또는 leaderId 필터가 필요합니다');
+  }
+  const batches = challengeId
+    ? await listBatchesByChallenge(challengeId)
+    : await listBatchesByLeader(leaderId);
+  return ok(c, { batches, total: batches.length });
+});
 
 // ── 쿠폰 발급/관리 ─────────────────────────────────────────────────────────
 const issueCouponSchema = z.object({

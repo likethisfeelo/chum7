@@ -27,6 +27,16 @@ const BADGE_META: Record<string, { icon: string; name: string; description: stri
     name: '7일 완주 마스터',
     description: '7일 챌린지를 완주했어요',
   },
+  'challenge-hobby': {
+    icon: '🧗',
+    name: '도전이취미',
+    description: '끝까지 도전했어요. 완주는 다음 기회에!',
+  },
+  'cabbage-giveup': {
+    icon: '🥬',
+    name: '배추한포기',
+    description: '이번엔 한 포기. 다음 도전을 응원해요',
+  },
 };
 
 const fallbackMeta = (badgeId: string) => ({

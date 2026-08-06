@@ -28,6 +28,8 @@ const TAB_CONFIG: { key: FeedTab; label: string }[] = [
 const BADGE_META: Record<string, { icon: string; name: string; desc: string }> = {
   '3-day-streak': { icon: '🔥', name: '3일 연속', desc: '3일 연속 퀘스트 완료' },
   '7-day-master': { icon: '⭐', name: '7일 마스터', desc: '7일 연속 퀘스트 완료' },
+  'challenge-hobby': { icon: '🧗', name: '도전이취미', desc: '끝까지 도전 (완주는 다음에)' },
+  'cabbage-giveup': { icon: '🥬', name: '배추한포기', desc: '중도 포기 — 다음 도전 응원' },
 };
 
 const LEADER_BADGE_META: Record<string, { icon: string; name: string; desc: string }> = {

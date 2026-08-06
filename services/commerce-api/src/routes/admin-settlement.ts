@@ -68,13 +68,54 @@ commerceAdminSettlementRoutes.post('/refunds/:orderId/complete', async (c) => {
 
 // ── 크리에이터 정산 ────────────────────────────────────────────────────────
 const listSettlementsSchema = z.object({
-  status: z.enum(['ready', 'paid']).default('ready'),
+  status: z.enum(['held', 'ready', 'paid']).default('held'),
 });
+const releaseSchema = z.object({ memo: z.string().max(200).optional(), force: z.boolean().optional() });
 
 commerceAdminSettlementRoutes.get('/settlements', async (c) => {
   const { status } = listSettlementsSchema.parse({ status: c.req.query('status') ?? undefined });
   const settlements = await listSettlementsByStatus(status as SettlementStatus);
   return ok(c, { settlements, total: settlements.length, status });
+});
+
+// 환불 보류 해제 — held→ready. 보류 기간(holdUntil) 경과 후에만(또는 force 명시 시) 허용.
+commerceAdminSettlementRoutes.post('/settlements/:challengeId/release', async (c) => {
+  const { userId: adminId } = c.get('authUser')!;
+  const input = releaseSchema.parse(await c.req.json().catch(() => ({})));
+  const settlement = await getSettlement(c.req.param('challengeId'));
+  if (!settlement) return fail(c, 404, 'SETTLEMENT_NOT_FOUND', '정산서를 찾을 수 없습니다');
+  if (settlement.status !== 'held') {
+    return fail(c, 409, 'INVALID_STATE', '보류(held) 상태의 정산서만 해제할 수 있습니다');
+  }
+  const holdUntilMs = settlement.holdUntil ? new Date(settlement.holdUntil).getTime() : 0;
+  if (!input.force && holdUntilMs > Date.now()) {
+    return fail(c, 409, 'HOLD_NOT_ELAPSED',
+      `환불 보류 기간이 아직 지나지 않았습니다 (해제 예정: ${settlement.holdUntil}). 조기 해제하려면 force로 진행하세요`);
+  }
+
+  const nowIso = new Date().toISOString();
+  const done = await transitionSettlement(settlement.challengeId, 'held', 'ready', {
+    releasedAt: nowIso,
+    releasedBy: adminId,
+    memo: input.memo ?? null,
+  });
+  if (!done) return fail(c, 409, 'INVALID_STATE', '이미 처리된 정산서입니다');
+
+  await audit(adminId, 'settlement.release', settlement.challengeId, {
+    creatorId: settlement.creatorId,
+    holdUntil: settlement.holdUntil ?? null,
+    force: Boolean(input.force),
+    memo: input.memo ?? null,
+  });
+  // 보류 해제 시점에 크리에이터에게 정산서 도착 알림 (지급액·반환 건 있을 때만)
+  if (settlement.notifyOnRelease !== false) {
+    await publishEvent('settlement.ready', {
+      challengeId: settlement.challengeId,
+      creatorId: settlement.creatorId,
+      payoutAmount: settlement.payoutAmount,
+    });
+  }
+  return ok(c, { challengeId: settlement.challengeId, status: 'ready' }, '환불 보류를 해제하고 지급 대기로 전환했습니다');
 });
 
 commerceAdminSettlementRoutes.post('/settlements/:challengeId/mark-paid', async (c) => {

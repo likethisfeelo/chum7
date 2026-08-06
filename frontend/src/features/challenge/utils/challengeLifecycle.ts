@@ -163,6 +163,8 @@ export function getChallengeStatusLabel(item: any): string {
   // 리더 본인(gave_up)은 '중도포기', 그 외 멤버는 리더 해산 시 '전체 해산'
   if (bucket === 'gave_up') return '중도포기';
   if (isDisbandedChallengeState(item)) return '전체 해산';
+  // 끝까지 참여했으나 목표 미달(failed) — '완주'와 구분해 '도전하는 자'로 표기
+  if (isFailedChallengeState(item)) return '도전하는 자';
   if (bucket === 'completed') return '완주';
   return '진행중';
 }

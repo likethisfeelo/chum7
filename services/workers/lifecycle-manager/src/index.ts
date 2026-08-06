@@ -1,5 +1,5 @@
 /**
- * lifecycle-manager — 챌린지 라이프사이클 워커 (EventBridge 매 1시간, plain Lambda handler).
+ * lifecycle-manager — 챌린지 라이프사이클 워커 (EventBridge 10분 주기, plain Lambda handler).
  * 레거시 backend/services/challenge/lifecycle-manager 이식 (상세: PORTING.md).
  *
  *  1. gsi1 `LC#<lifecycle>#CAT#<category>` Query (recruiting/preparing/active × 8 카테고리)
@@ -217,6 +217,26 @@ async function completeChallenge(challenge: ChallengeLike, now: Date, summary: R
       status: final.finalStatus,
       updatedAt: nowIso,
     });
+  }
+
+  // 미달성(failed) 참여자 — '도전이취미' 뱃지. 끝까지 남아 도전한 사람만 대상
+  // (중도포기 gave_up·해산 멤버는 finalize 대상(phase=active)이 아니라 자연 제외).
+  for (const final of finals) {
+    if (final.finalStatus !== 'failed') continue;
+    try {
+      const item = buildSpecificBadgeItem(
+        {
+          badgeId: 'challenge-hobby',
+          userId: final.userId,
+          challengeId: challenge.challengeId,
+          metadata: { source: 'finalize', completedDays: final.completedDays },
+        },
+        now,
+      );
+      await repo.putBadgeIfAbsent(item);
+    } catch (err: any) {
+      console.error(JSON.stringify({ level: 'error', message: 'challenge-hobby badge grant failed', userId: final.userId, challengeId: challenge.challengeId, error: err?.message ?? String(err) }));
+    }
   }
 
   for (const userId of completedUserIds) {

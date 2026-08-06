@@ -133,7 +133,7 @@ export class WorkersStack extends cdk.Stack {
       targets: [new eventsTargets.LambdaFunction(cheerScheduler)],
     });
 
-    // --- lifecycle-manager: 매시 라이프사이클 전환·완주 판정·뱃지/캐릭터 부여 ---
+    // --- lifecycle-manager: 10분 주기 라이프사이클 전환·완주 판정·뱃지/캐릭터 부여 ---
     const lifecycleManager = new NodejsFunction(this, 'LifecycleManager', {
       functionName: `${config.prefix}-lifecycle-manager`,
       entry: join(__dirname, '../../services/workers/lifecycle-manager/src/index.ts'),
