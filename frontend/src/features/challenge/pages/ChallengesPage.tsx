@@ -273,7 +273,7 @@ const ChallengeCard = ({
           e.stopPropagation();
           onOpenReward(challenge.challengeId);
         }}
-        className="absolute -top-3 -right-2 z-10 w-14 h-14 rounded-full border-2 border-white shadow-lg overflow-hidden bg-amber-50 flex items-center justify-center hover:scale-110 transition-transform"
+        className="absolute top-1/2 -translate-y-1/2 right-4 z-10 w-24 h-24 rounded-full border-2 border-white shadow-lg overflow-hidden bg-amber-50 flex items-center justify-center hover:scale-110 transition-transform duration-200"
       >
         {rewardProduct.imageUrl ? (
           <img src={resolveMediaUrl(rewardProduct.imageUrl)} alt={rewardProduct.name ?? '완주 보상'} className="w-full h-full object-cover" />
