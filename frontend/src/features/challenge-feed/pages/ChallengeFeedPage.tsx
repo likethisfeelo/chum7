@@ -1831,9 +1831,35 @@ export const ChallengeFeedPage = () => {
           </>
           )}{/* ===== End ABOUT ===== */}
 
-          {/* ===== 챌린지 탭 — 인증 피드 ===== */}
+          {/* ===== 기록 탭 — 인증 피드 ===== */}
           {mainTab === "challenge" && (
           <>
+
+          {/* 오늘 인증하기 — 최상단 CTA. 오늘 인증을 마쳤으면 완료 표시로 전환 */}
+          {userChallenge && !isGaveUp && isActive && (
+            isTodayAllDone && !hasInvalidMyVideo ? (
+              <section className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 flex items-center gap-3">
+                <span className="text-2xl">✅</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-emerald-800">오늘 인증 완료!</p>
+                  <p className="text-xs text-emerald-700 mt-0.5">아래 기록에서 리액션과 댓글로 서로 힘을 나눠주세요.</p>
+                </div>
+              </section>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setMainTab("about")}
+                className="w-full flex items-center gap-3 rounded-2xl bg-primary-600 hover:bg-primary-700 transition-colors p-4 text-left"
+              >
+                <span className="text-2xl">📸</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-white">오늘 인증하기</p>
+                  <p className="text-xs text-primary-100 mt-0.5">아직 오늘 인증을 하지 않았어요. 인증 탭으로 이동합니다.</p>
+                </div>
+                <span className="text-white text-lg">→</span>
+              </button>
+            )
+          )}
 
           {/* 5) 인증 피드 — 챌린지 유형에 맞는 섹션만, 각 섹션 펼침/접힘(아코디언) */}
           {/*    종료된 챌린지는 참여했던 사람 + 생성자/리더만 열람 가능 — 미참여자에게는 안내 카드 */}
