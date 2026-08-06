@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api-client";
@@ -10,10 +10,20 @@ export type FeedComment = {
   isOwn: boolean;
   content: string;
   createdAt: string;
+  parentCommentId?: string | null;
+  depth?: number;
+  deleted?: boolean;
 };
 
+type CommentReaction = { emoji: string; count: number; myReacted: boolean };
+
+// 피드 게시물 리액션과 동일한 노출 목록 (서버 허용 목록의 부분집합)
+const COMMENT_REACTION_EMOJIS = ["👍", "❤️", "🔥", "👏", "🎉", "😂"] as const;
+
+const MAX_DEPTH = 5;
+
 /**
- * 인증 게시물 댓글 컴포넌트.
+ * 인증 게시물 댓글 컴포넌트 — 대댓글(최대 5단) + 댓글별 이모지 리액션.
  * authorMode 로 작성 신원을 고정한다:
  *  - 'participant' (기본): 피드 — 리더 포함 항상 일일 익명명으로 게시
  *  - 'leader': 운영탭 — 챌린지 리더 신원으로 게시 (서버가 리더 여부 재검증)
@@ -36,6 +46,11 @@ export function VerificationComments({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
+  // 답글 대상 — 열려 있는 답글 입력창의 부모 댓글
+  const [replyTo, setReplyTo] = useState<FeedComment | null>(null);
+  const [replyText, setReplyText] = useState("");
+  // 이모지 피커가 열린 댓글
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isLeaderMode = authorMode === "leader";
 
@@ -51,17 +66,40 @@ export function VerificationComments({
     staleTime: 15_000,
   });
 
+  // 댓글 리액션 — 인증 단위 일괄 조회 (commentId → 집계)
+  const { data: reactionsByComment = {} } = useQuery<Record<string, CommentReaction[]>>({
+    queryKey: ["verification-comment-reactions", verificationId],
+    queryFn: async () => {
+      const res = await apiClient.get(
+        `/s/challenge-feed/${challengeId}/verifications/${verificationId}/comment-reactions`,
+      );
+      return res.data.data ?? {};
+    },
+    enabled: open,
+    staleTime: 15_000,
+  });
+
+  const invalidateComments = () =>
+    queryClient.invalidateQueries({ queryKey: ["verification-comments", verificationId] });
+  const invalidateReactions = () =>
+    queryClient.invalidateQueries({ queryKey: ["verification-comment-reactions", verificationId] });
+
   const addMutation = useMutation({
-    mutationFn: async (content: string) =>
+    mutationFn: async (vars: { content: string; parentCommentId?: string }) =>
       apiClient.post(
         `/s/challenge-feed/${challengeId}/verifications/${verificationId}/comments`,
-        { content, authorMode },
+        { content: vars.content, authorMode, ...(vars.parentCommentId ? { parentCommentId: vars.parentCommentId } : {}) },
       ),
-    onSuccess: () => {
-      setText("");
-      queryClient.invalidateQueries({ queryKey: ["verification-comments", verificationId] });
+    onSuccess: (_d, vars) => {
+      if (vars.parentCommentId) {
+        setReplyText("");
+        setReplyTo(null);
+      } else {
+        setText("");
+      }
+      invalidateComments();
     },
-    onError: () => toast.error("댓글 작성에 실패했어요"),
+    onError: (err: any) => toast.error(err?.response?.data?.message || "댓글 작성에 실패했어요"),
   });
 
   const deleteMutation = useMutation({
@@ -69,9 +107,39 @@ export function VerificationComments({
       apiClient.delete(
         `/s/challenge-feed/${challengeId}/verifications/${verificationId}/comments/${commentId}`,
       ),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["verification-comments", verificationId] }),
+    onSuccess: () => invalidateComments(),
   });
+
+  const reactionMutation = useMutation({
+    mutationFn: async (vars: { commentId: string; emoji: string }) =>
+      apiClient.post(
+        `/s/challenge-feed/${challengeId}/verifications/${verificationId}/comments/${vars.commentId}/reactions`,
+        { emoji: vars.emoji },
+      ),
+    onSuccess: () => {
+      setPickerFor(null);
+      invalidateReactions();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || "반응에 실패했어요"),
+  });
+
+  // 트리 구성 — parentCommentId 기준 children 맵 (작성순 유지)
+  const { roots, childrenMap } = useMemo(() => {
+    const childrenMap = new Map<string, FeedComment[]>();
+    const roots: FeedComment[] = [];
+    const ids = new Set(comments.map((c) => c.commentId));
+    for (const c of comments) {
+      const pid = c.parentCommentId ?? null;
+      if (pid && ids.has(pid)) {
+        const list = childrenMap.get(pid) ?? [];
+        list.push(c);
+        childrenMap.set(pid, list);
+      } else {
+        roots.push(c); // 부모 없는(또는 부모가 조회 밖인) 댓글은 루트로
+      }
+    }
+    return { roots, childrenMap };
+  }, [comments]);
 
   const handleOpen = useCallback(() => {
     setOpen((v) => {
@@ -83,8 +151,178 @@ export function VerificationComments({
   const handleSubmit = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed || addMutation.isPending) return;
-    addMutation.mutate(trimmed);
+    addMutation.mutate({ content: trimmed });
   }, [text, addMutation]);
+
+  const handleReplySubmit = useCallback(() => {
+    const trimmed = replyText.trim();
+    if (!trimmed || !replyTo || addMutation.isPending) return;
+    addMutation.mutate({ content: trimmed, parentCommentId: replyTo.commentId });
+  }, [replyText, replyTo, addMutation]);
+
+  // 댓글 1개 렌더 (재귀 — depth 들여쓰기, 최대 5단)
+  const renderComment = (c: FeedComment): JSX.Element => {
+    const displayName = c.displayName || "익명";
+    const depth = Math.min(Number(c.depth ?? 1), MAX_DEPTH);
+    const children = childrenMap.get(c.commentId) ?? [];
+    const reactions = (reactionsByComment[c.commentId] ?? []).filter((r) => r.count > 0);
+    const canReply = canComment && depth < MAX_DEPTH && !c.deleted;
+
+    return (
+      <div key={c.commentId}>
+        <div
+          className={depth > 1 ? "border-l-2 border-gray-100 pl-2.5" : undefined}
+          style={depth > 1 ? { marginLeft: (depth - 1) * 10 } : undefined}
+        >
+          <div className="flex items-start gap-2">
+            {/* 아바타 */}
+            <div
+              className={[
+                "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0",
+                c.deleted
+                  ? "bg-gray-100 text-gray-400"
+                  : c.isLeader
+                  ? "bg-yellow-100 text-yellow-700"
+                  : c.isOwn
+                  ? "bg-primary-100 text-primary-700"
+                  : "bg-gray-100 text-gray-600",
+              ].join(" ")}
+            >
+              {c.deleted ? "×" : c.isLeader ? "👑" : displayName[0]?.toUpperCase() ?? "?"}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              {c.deleted ? (
+                <p className="text-xs text-gray-400 italic py-0.5">삭제된 댓글입니다</p>
+              ) : (
+                <>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] font-semibold text-gray-700">
+                      {c.isLeader && <span className="mr-0.5">👑</span>}
+                      {displayName}
+                    </span>
+                    {c.isOwn && (
+                      <span className="text-[10px] px-1 rounded bg-primary-100 text-primary-700 font-medium">
+                        나
+                      </span>
+                    )}
+                    <span className="text-[10px] text-gray-400">
+                      {new Date(c.createdAt).toLocaleDateString("ko-KR", {
+                        month: "2-digit",
+                        day: "2-digit",
+                      })}
+                    </span>
+                    {c.isOwn && (
+                      <button
+                        onClick={() => deleteMutation.mutate(c.commentId)}
+                        disabled={deleteMutation.isPending}
+                        className="text-[10px] text-gray-400 hover:text-red-500 transition-colors ml-auto"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-600 mt-0.5 leading-relaxed break-words">
+                    {c.content}
+                  </p>
+
+                  {/* 리액션 칩 + 피커 + 답글 */}
+                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                    {reactions.map((r) => (
+                      <button
+                        key={r.emoji}
+                        type="button"
+                        disabled={reactionMutation.isPending}
+                        onClick={() => reactionMutation.mutate({ commentId: c.commentId, emoji: r.emoji })}
+                        className={[
+                          "flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] border transition-colors",
+                          r.myReacted
+                            ? "bg-primary-50 border-primary-300 text-primary-700"
+                            : "bg-white border-gray-200 text-gray-600 hover:border-gray-300",
+                        ].join(" ")}
+                      >
+                        <span>{r.emoji}</span>
+                        <span className="font-semibold">{r.count}</span>
+                      </button>
+                    ))}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setPickerFor((cur) => (cur === c.commentId ? null : c.commentId))}
+                        className="px-1.5 py-0.5 rounded-full text-[11px] border border-dashed border-gray-300 text-gray-400 hover:text-gray-600 hover:border-gray-400 transition-colors"
+                        aria-label="이모지 반응 추가"
+                      >
+                        😊+
+                      </button>
+                      {pickerFor === c.commentId && (
+                        <div className="absolute bottom-full left-0 mb-1 z-20 flex gap-0.5 bg-white border border-gray-200 rounded-xl shadow-lg px-1.5 py-1">
+                          {COMMENT_REACTION_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              disabled={reactionMutation.isPending}
+                              onClick={() => reactionMutation.mutate({ commentId: c.commentId, emoji })}
+                              className="text-base hover:scale-125 transition-transform px-0.5"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {canReply && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReplyTo((cur) => (cur?.commentId === c.commentId ? null : c));
+                          setReplyText("");
+                        }}
+                        className="text-[10px] text-gray-400 hover:text-primary-600 transition-colors ml-1"
+                      >
+                        답글
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 답글 입력창 */}
+                  {replyTo?.commentId === c.commentId && (
+                    <div className="flex gap-1.5 mt-1.5">
+                      <input
+                        autoFocus
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleReplySubmit();
+                          }
+                        }}
+                        placeholder={`${displayName}님에게 답글... (Enter)`}
+                        maxLength={300}
+                        className="flex-1 text-xs px-2.5 py-1.5 rounded-lg bg-white/70 border border-gray-200 focus:outline-none focus:border-primary-300 placeholder-gray-400"
+                      />
+                      <button
+                        onClick={handleReplySubmit}
+                        disabled={!replyText.trim() || addMutation.isPending}
+                        className="px-2.5 py-1.5 rounded-lg bg-primary-500 text-white text-[11px] font-semibold disabled:opacity-40 hover:bg-primary-600 transition-colors"
+                      >
+                        게시
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 대댓글 */}
+        {children.length > 0 && (
+          <div className="mt-2 space-y-2">{children.map((child) => renderComment(child))}</div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -112,7 +350,7 @@ export function VerificationComments({
 
       {open && (
         <div className="mt-3 space-y-3">
-          {/* 댓글 목록 */}
+          {/* 댓글 트리 */}
           {isLoading ? (
             <p className="text-xs text-gray-400 py-1">불러오는 중...</p>
           ) : comments.length === 0 ? (
@@ -120,62 +358,7 @@ export function VerificationComments({
               {canComment ? "아직 댓글이 없어요. 첫 댓글을 남겨보세요!" : "아직 댓글이 없어요."}
             </p>
           ) : (
-            <div className="space-y-2.5">
-              {comments.map((c) => {
-                /* 게시물과 동일하게 항상 일일 활동명(수달N)/리더 표시. 본인은 "나" 배지로만 구분 */
-                const displayName = c.displayName || "익명";
-
-                return (
-                  <div key={c.commentId} className="flex items-start gap-2">
-                    {/* 아바타 */}
-                    <div
-                      className={[
-                        "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0",
-                        c.isLeader
-                          ? "bg-yellow-100 text-yellow-700"
-                          : c.isOwn
-                          ? "bg-primary-100 text-primary-700"
-                          : "bg-gray-100 text-gray-600",
-                      ].join(" ")}
-                    >
-                      {c.isLeader ? "👑" : displayName[0]?.toUpperCase() ?? "?"}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[11px] font-semibold text-gray-700">
-                          {c.isLeader && <span className="mr-0.5">👑</span>}
-                          {displayName}
-                        </span>
-                        {c.isOwn && (
-                          <span className="text-[10px] px-1 rounded bg-primary-100 text-primary-700 font-medium">
-                            나
-                          </span>
-                        )}
-                        <span className="text-[10px] text-gray-400">
-                          {new Date(c.createdAt).toLocaleDateString("ko-KR", {
-                            month: "2-digit",
-                            day: "2-digit",
-                          })}
-                        </span>
-                        {c.isOwn && (
-                          <button
-                            onClick={() => deleteMutation.mutate(c.commentId)}
-                            disabled={deleteMutation.isPending}
-                            className="text-[10px] text-gray-400 hover:text-red-500 transition-colors ml-auto"
-                          >
-                            삭제
-                          </button>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-600 mt-0.5 leading-relaxed break-words">
-                        {c.content}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <div className="space-y-2.5">{roots.map((c) => renderComment(c))}</div>
           )}
 
           {/* 입력창 or 비활성 안내 */}

@@ -154,6 +154,8 @@ export const leaderDmSchema = z.object({
 export const verificationCommentSchema = z.object({
   content: z.string().trim().min(1).max(300),
   verificationOwnerId: z.string().optional(),
+  // 대댓글 — 부모 댓글 ID. 깊이는 서버가 부모 depth+1로 계산(최대 5단)
+  parentCommentId: z.string().optional(),
   // 리더는 댓글마다 역할 선택: leader(챌린지 리더) / participant(일일 활동명). 기본 participant.
   authorMode: z.enum(['leader', 'participant']).optional().default('participant'),
 });
