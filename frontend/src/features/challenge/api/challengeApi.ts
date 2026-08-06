@@ -355,6 +355,15 @@ export const challengeApi = {
     return res.data.data;
   },
 
+  // 오늘의 인증 교체 — 추가 기록(isExtra) 게시물을 그날의 대표 인증으로 승격.
+  //  기존 대표는 '추가 기록'으로 강등, 점수·연속일은 불변.
+  makeTodayVerification: async (
+    verificationId: string,
+  ): Promise<{ verificationId: string; day: number; replacedVerificationId: string }> => {
+    const res = await apiClient.put(`/c/verifications/${verificationId}/make-today`);
+    return res.data.data;
+  },
+
   // 인증 게시물 1건 반려 — 그날 인증만 반려(피드/마당에서 숨김, 본인 기록엔 남김, 점수 되돌림)
   rejectVerification: async (
     challengeId: string,

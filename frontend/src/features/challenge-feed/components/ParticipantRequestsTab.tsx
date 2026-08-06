@@ -73,6 +73,18 @@ export function ParticipantRequestsTab({
     return map;
   }, [myRequests]);
 
+  // 오늘의 인증 교체 — 추가 기록을 그날의 대표 인증으로 승격 (기존 대표는 추가 기록으로)
+  const makeTodayMutation = useMutation({
+    mutationFn: (verificationId: string) => challengeApi.makeTodayVerification(verificationId),
+    onSuccess: () => {
+      toast.success("오늘의 인증을 이 게시물로 변경했어요. 기존 게시물은 '추가 기록'으로 남아요.");
+      queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
+      queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
+      queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || "변경에 실패했어요"),
+  });
+
   const requestMutation = useMutation({
     mutationFn: (vars: { verificationId: string; day: number; message?: string }) =>
       challengeApi.requestCompletion(challengeId, {
@@ -178,7 +190,7 @@ export function ParticipantRequestsTab({
                                 {typeIcon(v.verificationType)}
                                 {v.questTitle ? ` ${v.questTitle}` : v.questType === "personal" ? " 개인 퀘스트" : " 인증"}
                               </p>
-                              {v.isExtra && <span className="text-[9px] px-1 rounded bg-gray-100 text-gray-500">추가</span>}
+                              {v.isExtra && <span className="text-[9px] px-1 rounded bg-amber-50 text-amber-700 border border-amber-200">➕ 추가 기록</span>}
                               {v.scoreCancelled && <span className="text-[9px] px-1 rounded bg-gray-200 text-gray-500">취소됨</span>}
                               {v.rejectedByLeader && <span className="text-[9px] px-1 rounded bg-rose-100 text-rose-600">반려됨</span>}
                             </div>
@@ -206,6 +218,25 @@ export function ParticipantRequestsTab({
                                   className="text-[11px] font-medium px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:text-rose-600 hover:border-rose-200"
                                 >
                                   인증 취소
+                                </button>
+                              )}
+                              {/* 추가 기록 — 오늘 몫은 이미 완료. 원하면 이 게시물로 대표 인증 교체 */}
+                              {v.isExtra && !v.scoreCancelled && !v.rejectedByLeader && dayDone && canCancel && (
+                                <button
+                                  type="button"
+                                  disabled={makeTodayMutation.isPending}
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        "오늘의 인증을 이 게시물로 변경할까요?\n기존 인증 게시물은 '추가 기록'으로 바뀌고, 점수·연속일은 그대로예요.",
+                                      )
+                                    ) {
+                                      makeTodayMutation.mutate(v.verificationId);
+                                    }
+                                  }}
+                                  className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                                >
+                                  오늘의 인증으로 변경
                                 </button>
                               )}
                             </div>

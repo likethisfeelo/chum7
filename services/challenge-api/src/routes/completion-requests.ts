@@ -9,8 +9,11 @@ import { Hono } from 'hono';
 import type { AppEnv } from '@chum7/api-kit';
 import { ok, fail, publishEvent } from '@chum7/api-kit';
 import { completionRequestSchema } from '../schemas';
+import { isCompletedProgressStatus } from '../domain/day-sync';
+import { normalizeProgress } from '../domain/progress';
 import { getChallenge } from '../repo/challenges';
 import { getParticipation } from '../repo/participations';
+import { findMyVerificationById } from '../repo/verifications';
 import {
   completionRequestSk,
   listMyCompletionRequests,
@@ -35,6 +38,27 @@ completionRequestRoutes.post('/', async (c) => {
   if (!challenge) return fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다');
   const participation = await getParticipation(challengeId, userId);
   if (!participation) return fail(c, 403, 'NOT_PARTICIPANT', '참여자만 요청할 수 있어요');
+
+  // ── 꼬임 방지 가드 — 이미 완료된 날/추가 기록 게시물로는 인정 요청 불가 ──
+  const vf = await findMyVerificationById(userId, input.verificationId);
+  if (!vf || String(vf.challengeId ?? '') !== challengeId) {
+    return fail(c, 404, 'VERIFICATION_NOT_FOUND', '내 인증 게시물을 찾을 수 없어요');
+  }
+  if (vf.isExtra === true) {
+    return fail(
+      c, 409, 'EXTRA_RECORD_POST',
+      `이 게시물의 퀘스트는 오늘 이미 인증 완료된 뒤 올라온 '추가 기록'이에요. 점수와 무관하게 피드·개인 프로필에 남아요. 이 게시물을 오늘의 인증으로 쓰고 싶다면 '오늘의 인증으로 변경'을 이용하세요.`,
+    );
+  }
+  const progressEntry = normalizeProgress(participation.progress).find(
+    (p: any) => Number(p.day) === input.day,
+  );
+  if (progressEntry && isCompletedProgressStatus(progressEntry.status)) {
+    return fail(
+      c, 409, 'DAY_ALREADY_COMPLETED',
+      `${input.day}일차는 이미 인증 완료된 날이에요. 이 게시물은 '추가 기록'으로 남아 개인 프로필과 피드에서 확인할 수 있어요.`,
+    );
+  }
 
   const leaderId = String(challenge.createdBy || challenge.creatorId || challenge.leaderId || '');
   const requestId = randomUUID();

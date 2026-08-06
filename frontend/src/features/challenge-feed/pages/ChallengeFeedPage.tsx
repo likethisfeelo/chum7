@@ -769,6 +769,12 @@ export const ChallengeFeedPage = () => {
                     취소됨 · 점수 미반영
                   </span>
                 )}
+                {/* 인증 완료 후 또 올린 게시물 — 점수와 무관한 '추가 기록' */}
+                {item.isExtra && !item.scoreCancelled && (
+                  <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200">
+                    ➕ 추가 기록
+                  </span>
+                )}
               </div>
             </div>
           </div>
