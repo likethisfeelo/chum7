@@ -99,17 +99,38 @@ export async function getPost(plazaPostId: string): Promise<Record<string, any> 
   return res.Item ?? null;
 }
 
-/** 게시물 노출 토글 — isActive=false 로 내리면 피드/상세에서 제외 (운영자 게시물 회수용) */
-export async function setPostActive(plazaPostId: string, isActive: boolean): Promise<void> {
-  await docClient.send(
-    new UpdateCommand({
-      TableName: tableName(TABLE),
-      Key: { pk: postPk(plazaPostId), sk: 'META' },
-      UpdateExpression: 'SET isActive = :active',
-      ConditionExpression: 'attribute_exists(pk)',
-      ExpressionAttributeValues: { ':active': isActive },
-    }),
-  );
+/**
+ * 게시물 노출 토글 — isActive=false 로 내리면 피드/상세에서 제외.
+ *  autoHiddenByReport: 신고 접수 자동숨김 마커. 마커 숨김은 이미 숨겨진(관리자 숨김) 글을
+ *  덮어쓰지 않고 조용히 건너뛴다(반려 복원이 관리자 숨김을 되살리는 사고 방지).
+ *  마커 없는 호출(관리자 확정/수동/복원)은 항상 마커를 REMOVE 해 확정 상태로 만든다.
+ *  반환: 실제로 적용됐으면 true, 대상이 없거나 조건 미충족이면 false.
+ */
+export async function setPostActive(
+  plazaPostId: string,
+  isActive: boolean,
+  opts?: { autoHiddenByReport?: boolean },
+): Promise<boolean> {
+  const auto = opts?.autoHiddenByReport === true && !isActive;
+  try {
+    await docClient.send(
+      new UpdateCommand({
+        TableName: tableName(TABLE),
+        Key: { pk: postPk(plazaPostId), sk: 'META' },
+        UpdateExpression: auto
+          ? 'SET isActive = :active, autoHiddenByReport = :true'
+          : 'SET isActive = :active REMOVE autoHiddenByReport',
+        ConditionExpression: auto
+          ? 'attribute_exists(pk) AND (attribute_not_exists(isActive) OR isActive = :true)'
+          : 'attribute_exists(pk)',
+        ExpressionAttributeValues: auto ? { ':active': isActive, ':true': true } : { ':active': isActive },
+      }),
+    );
+    return true;
+  } catch (err: any) {
+    if (err?.name === 'ConditionalCheckFailedException') return false;
+    throw err;
+  }
 }
 
 // ── 운영자 게시물 관리 인덱스 ────────────────────────────────────────────
@@ -319,20 +340,43 @@ export async function listPostComments(
   return { items: res.Items ?? [], lastKey: res.LastEvaluatedKey };
 }
 
-/** 관리자 댓글 숨김/복원 — hiddenByAdmin 플래그 */
+/** 댓글 단건 조회 — 신고 미리보기/작성자 확인용 */
+export async function getComment(
+  plazaPostId: string,
+  commentSkValue: string,
+): Promise<Record<string, any> | null> {
+  const res = await docClient.send(
+    new GetCommand({ TableName: tableName(TABLE), Key: { pk: postPk(plazaPostId), sk: commentSkValue } }),
+  );
+  return res.Item ?? null;
+}
+
+/**
+ * 관리자 댓글 숨김/복원 — hiddenByAdmin 플래그.
+ *  autoHiddenByReport 마커 규칙은 setPostActive와 동일: 마커 숨김은 이미 숨겨진 댓글을
+ *  건너뛰고, 마커 없는 호출은 마커를 REMOVE 해 확정한다.
+ */
 export async function setCommentHidden(
   plazaPostId: string,
   commentSkValue: string,
   hidden: boolean,
+  opts?: { autoHiddenByReport?: boolean },
 ): Promise<boolean> {
+  const auto = opts?.autoHiddenByReport === true && hidden;
   try {
     await docClient.send(
       new UpdateCommand({
         TableName: tableName(TABLE),
         Key: { pk: postPk(plazaPostId), sk: commentSkValue },
-        UpdateExpression: 'SET hiddenByAdmin = :h, hiddenAt = :t',
-        ConditionExpression: 'attribute_exists(pk)',
-        ExpressionAttributeValues: { ':h': hidden, ':t': new Date().toISOString() },
+        UpdateExpression: auto
+          ? 'SET hiddenByAdmin = :h, hiddenAt = :t, autoHiddenByReport = :true'
+          : 'SET hiddenByAdmin = :h, hiddenAt = :t REMOVE autoHiddenByReport',
+        ConditionExpression: auto
+          ? 'attribute_exists(pk) AND (attribute_not_exists(hiddenByAdmin) OR hiddenByAdmin = :false)'
+          : 'attribute_exists(pk)',
+        ExpressionAttributeValues: auto
+          ? { ':h': hidden, ':t': new Date().toISOString(), ':true': true, ':false': false }
+          : { ':h': hidden, ':t': new Date().toISOString() },
       }),
     );
     return true;

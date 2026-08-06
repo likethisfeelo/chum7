@@ -43,8 +43,46 @@ type Report = {
   reason: string;
   detail?: string | null;
   reporterId: string;
+  targetOwnerId?: string | null;
+  contentPreview?: string | null;
+  autoHidden?: boolean;
   createdAt: string;
 };
+
+/** 같은 대상(targetType#targetId)의 신고를 한 카드로 묶는다 */
+type ReportGroup = {
+  key: string;
+  targetType: Report['targetType'];
+  targetId: string;
+  reports: Report[]; // 최신순
+  latest: Report;
+  reasons: string[];
+  autoHidden: boolean;
+};
+
+function groupReports(reports: Report[]): ReportGroup[] {
+  const map = new Map<string, ReportGroup>();
+  for (const r of reports) {
+    const key = `${r.targetType}#${r.targetId}`;
+    const g = map.get(key);
+    if (g) {
+      g.reports.push(r);
+      if (!g.reasons.includes(r.reason)) g.reasons.push(r.reason);
+      g.autoHidden = g.autoHidden || r.autoHidden === true;
+    } else {
+      map.set(key, {
+        key,
+        targetType: r.targetType,
+        targetId: r.targetId,
+        reports: [r],
+        latest: r,
+        reasons: [r.reason],
+        autoHidden: r.autoHidden === true,
+      });
+    }
+  }
+  return [...map.values()];
+}
 
 export const AdminReportsPage = () => {
   const [statusFilter, setStatusFilter] = useState<string>('pending');
@@ -59,47 +97,62 @@ export const AdminReportsPage = () => {
     },
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-reports'] });
+  const groups = groupReports(reports);
 
-  // 대상 콘텐츠 숨기기 (타입별 디스패치)
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-reports'] });
+  const flash = (text: string) => {
+    setMsg(text);
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  // 숨김 확정 — 인증은 챌린지 피드 원본도 숨긴 뒤(챌린지API), 그룹 전체를 actioned로 일괄 종결
   const hideMutation = useMutation({
-    mutationFn: async (r: Report) => {
-      if (r.targetType === 'verification') {
-        await apiClient.put(`/c/mod/verifications/${r.targetId}/hide`, { challengeId: r.challengeId });
-      } else if (r.targetType === 'plaza') {
-        await apiClient.post(`/s/mod/plaza/${r.targetId}/hide`);
-      } else {
-        await apiClient.post('/s/mod/comments/hide', {
-          plazaPostId: r.plazaPostId,
-          commentId: r.targetId,
-          commentCreatedAt: r.commentCreatedAt,
+    mutationFn: async (g: ReportGroup) => {
+      if (g.targetType === 'verification') {
+        await apiClient.put(`/c/mod/verifications/${g.targetId}/hide`, {
+          challengeId: g.latest.challengeId,
         });
       }
-      await apiClient.put(`/s/mod/reports/${r.reportId}`, { createdAt: r.createdAt, status: 'actioned' });
+      const res = await apiClient.put('/s/mod/reports/resolve-by-target', {
+        targetType: g.targetType,
+        targetId: g.targetId,
+        ...(g.targetType === 'comment'
+          ? { plazaPostId: g.latest.plazaPostId, commentCreatedAt: g.latest.commentCreatedAt }
+          : {}),
+        status: 'actioned',
+      });
+      return res.data;
     },
-    onSuccess: () => {
-      setMsg('콘텐츠를 숨기고 신고를 처리했어요.');
-      setTimeout(() => setMsg(''), 3000);
+    onSuccess: (data) => {
+      flash(data?.message || '콘텐츠를 숨기고 신고를 처리했어요.');
       invalidate();
     },
-    onError: () => setMsg('처리에 실패했어요. 권한/입력을 확인하세요.'),
+    onError: () => flash('처리에 실패했어요. 권한/입력을 확인하세요.'),
   });
 
+  // 반려 — 그룹 전체 dismissed + 접수 시 자동숨김분은 마당에 자동 복원
   const dismissMutation = useMutation({
-    mutationFn: async (r: Report) => {
-      await apiClient.put(`/s/mod/reports/${r.reportId}`, { createdAt: r.createdAt, status: 'dismissed' });
+    mutationFn: async (g: ReportGroup) => {
+      const res = await apiClient.put('/s/mod/reports/resolve-by-target', {
+        targetType: g.targetType,
+        targetId: g.targetId,
+        ...(g.targetType === 'comment'
+          ? { plazaPostId: g.latest.plazaPostId, commentCreatedAt: g.latest.commentCreatedAt }
+          : {}),
+        status: 'dismissed',
+      });
+      return res.data;
     },
-    onSuccess: () => {
-      setMsg('신고를 반려했어요.');
-      setTimeout(() => setMsg(''), 3000);
+    onSuccess: (data) => {
+      flash(data?.message || '신고를 반려했어요.');
       invalidate();
     },
-    onError: () => setMsg('처리에 실패했어요.'),
+    onError: () => flash('처리에 실패했어요.'),
   });
 
-  const busyId =
-    (hideMutation.isPending && hideMutation.variables?.reportId) ||
-    (dismissMutation.isPending && dismissMutation.variables?.reportId) ||
+  const busyKey =
+    (hideMutation.isPending && hideMutation.variables?.key) ||
+    (dismissMutation.isPending && dismissMutation.variables?.key) ||
     null;
 
   return (
@@ -107,7 +160,8 @@ export const AdminReportsPage = () => {
       <div className="mb-4">
         <h1 className="text-2xl font-bold text-gray-900">신고 관리</h1>
         <p className="text-sm text-gray-500 mt-1">
-          사용자 신고를 검토하고 콘텐츠를 숨깁니다. 숨겨도 게시자 본인 프로필/기록에는 남습니다.
+          마당 콘텐츠(마당글·댓글·마당에 공유된 인증)는 신고 접수 즉시 마당에서 자동숨김됩니다.
+          반려하면 마당에 복원되고, 숨김 확정 시 그대로 유지됩니다. 숨겨도 게시자 본인 프로필/기록에는 남습니다.
         </p>
       </div>
 
@@ -128,49 +182,81 @@ export const AdminReportsPage = () => {
       {msg && <p className="text-sm text-emerald-600 font-medium mb-3">{msg}</p>}
       {isLoading && <p className="text-sm text-gray-500">불러오는 중...</p>}
       {isError && <p className="text-sm text-red-500">목록을 불러오지 못했습니다.</p>}
-      {!isLoading && reports.length === 0 && (
+      {!isLoading && groups.length === 0 && (
         <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-6 text-center text-sm text-gray-400">
           신고가 없습니다.
         </div>
       )}
 
       <div className="space-y-3">
-        {reports.map((r) => {
-          const busy = busyId === r.reportId;
+        {groups.map((g) => {
+          const busy = busyKey === g.key;
+          const pendingCount = g.reports.filter((r) => r.status === 'pending').length;
           return (
-            <div key={r.reportId} className="bg-white border border-gray-200 rounded-xl p-4">
+            <div key={g.key} className="bg-white border border-gray-200 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_BADGE[r.status] ?? 'bg-gray-100'}`}>
-                  {FILTER_TABS.find((t) => t.key === r.status)?.label ?? r.status}
+                <span
+                  className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_BADGE[g.latest.status] ?? 'bg-gray-100'}`}
+                >
+                  {FILTER_TABS.find((t) => t.key === g.latest.status)?.label ?? g.latest.status}
                 </span>
-                <span className="text-xs font-semibold text-gray-700">{TARGET_LABEL[r.targetType] ?? r.targetType}</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600">
-                  {REASON_LABEL[r.reason] ?? r.reason}
+                <span className="text-xs font-semibold text-gray-700">{TARGET_LABEL[g.targetType] ?? g.targetType}</span>
+                {g.reports.length > 1 && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                    🚩 {g.reports.length}건
+                  </span>
+                )}
+                {g.autoHidden && g.latest.status === 'pending' && (
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                    마당 자동숨김됨
+                  </span>
+                )}
+                <span className="ml-auto text-[11px] text-gray-400">
+                  {new Date(g.latest.createdAt).toLocaleString('ko-KR')}
                 </span>
-                <span className="ml-auto text-[11px] text-gray-400">{new Date(r.createdAt).toLocaleString('ko-KR')}</span>
               </div>
-              {r.detail && <p className="text-sm text-gray-700 whitespace-pre-wrap">{r.detail}</p>}
+
+              <div className="flex gap-1.5 flex-wrap mt-1">
+                {g.reasons.map((reason) => (
+                  <span key={reason} className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600">
+                    {REASON_LABEL[reason] ?? reason}
+                  </span>
+                ))}
+              </div>
+
+              {g.latest.contentPreview && (
+                <p className="text-sm text-gray-800 mt-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 whitespace-pre-wrap">
+                  {g.latest.contentPreview}
+                </p>
+              )}
+              {g.latest.detail && (
+                <p className="text-sm text-gray-600 mt-1.5 whitespace-pre-wrap">신고 사유: {g.latest.detail}</p>
+              )}
               <p className="text-[11px] text-gray-400 mt-1 break-all">
-                대상 ID: {r.targetId}
-                {r.challengeId ? ` · challenge: ${r.challengeId}` : ''}
+                대상 ID: {g.targetId}
+                {g.latest.challengeId ? ` · challenge: ${g.latest.challengeId}` : ''}
+                {g.latest.targetOwnerId ? ` · 작성자: ${g.latest.targetOwnerId}` : ''}
               </p>
 
-              {r.status === 'pending' && (
-                <div className="flex gap-2 mt-3">
+              {pendingCount > 0 && (
+                <div className="flex gap-2 mt-3 items-center">
                   <button
-                    onClick={() => hideMutation.mutate(r)}
+                    onClick={() => hideMutation.mutate(g)}
                     disabled={busy}
                     className="py-1.5 px-3 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-500 disabled:opacity-50"
                   >
-                    숨기기 + 처리완료
+                    숨김 확정 + 처리완료
                   </button>
                   <button
-                    onClick={() => dismissMutation.mutate(r)}
+                    onClick={() => dismissMutation.mutate(g)}
                     disabled={busy}
                     className="py-1.5 px-3 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
                   >
-                    반려
+                    반려{g.autoHidden ? ' (마당 복원)' : ''}
                   </button>
+                  {pendingCount > 1 && (
+                    <span className="text-[11px] text-gray-400">대기 {pendingCount}건 일괄 처리</span>
+                  )}
                 </div>
               )}
             </div>
