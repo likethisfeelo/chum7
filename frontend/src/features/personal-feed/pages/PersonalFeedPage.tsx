@@ -66,14 +66,15 @@ function FollowButton({ profile, targetUserId, effectiveLayer }: { profile: Feed
   const requestMutation = useMutation({
     mutationFn: () => personalFeedApi.sendFollowRequest(targetUserId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['personal-feed-profile', targetUserId] });
+      // @handle 주소로 열람 중일 수 있어 프리픽스 전체 무효화
+      queryClient.invalidateQueries({ queryKey: ['personal-feed-profile'] });
     },
   });
 
   const unfollowMutation = useMutation({
     mutationFn: () => personalFeedApi.unfollow(targetUserId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['personal-feed-profile', targetUserId] });
+      queryClient.invalidateQueries({ queryKey: ['personal-feed-profile'] });
     },
   });
 
@@ -973,22 +974,25 @@ export function PersonalFeedPage() {
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
 
   const resolvedUserId = userIdParam ?? 'me';
-  // 퍼블릭 표면(/public/users/...)은 'me' 별칭이 없어 실제 userId 로 호출해야 한다
-  // (gamification-api PORTING.md §7 · challenge-api PORTING.md §7-a/b).
+  // 퍼블릭 표면(/public/users/...)은 'me' 별칭이 없어 실제 userId 또는 @handle 로 호출한다
+  // (@handle은 서버가 해석 — 주소 래핑 정책. 타인 프로필은 @handle 주소만 유효).
   const publicUserId = resolvedUserId !== 'me' ? resolvedUserId : (user?.userId ?? '');
   const fromInvite = (location.state as { fromInvite?: boolean } | null)?.fromInvite === true;
-
-  const blockMutation = useMutation({
-    mutationFn: () => personalFeedApi.blockUser(resolvedUserId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['personal-feed-profile', resolvedUserId] });
-      navigate(-1);
-    },
-  });
 
   const { data: profile } = useQuery({
     queryKey: ['personal-feed-profile', resolvedUserId],
     queryFn: () => personalFeedApi.getProfile(resolvedUserId),
+  });
+
+  // 팔로우/차단 등 액션 API는 실제 userId 키 — @handle 주소로 왔을 땐 프로필 응답의 userId 사용
+  const actionUserId = profile?.userId ?? resolvedUserId;
+
+  const blockMutation = useMutation({
+    mutationFn: () => personalFeedApi.blockUser(actionUserId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['personal-feed-profile', resolvedUserId] });
+      navigate(-1);
+    },
   });
 
   const { data: achievements, isLoading: achievementsLoading } = useQuery({
@@ -1069,7 +1073,7 @@ export function PersonalFeedPage() {
             )}
           </div>
           {!isOwn && profile && (
-            <FollowButton profile={profile} targetUserId={resolvedUserId} effectiveLayer={currentLayer} />
+            <FollowButton profile={profile} targetUserId={actionUserId} effectiveLayer={currentLayer} />
           )}
         </div>
       </div>

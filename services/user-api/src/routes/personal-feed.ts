@@ -28,6 +28,7 @@ import {
   getProfileItemByHandle,
   setFeedHandle,
   setFeedSettings,
+  setPublicProfile,
 } from '../repo/profile-repo';
 
 /**
@@ -48,8 +49,17 @@ async function followStatusOf(followeeId: string, followerId: string): Promise<F
   return deriveFollowStatus(!!follow, !!request);
 }
 
-/** 프로필 + 레이어 판정 공통 코어 (보호 라우트·퍼블릭 라우트 공용) */
-async function feedProfileResponse(c: ApiContext, requesterId: string | null, rawParam: string) {
+/**
+ * 프로필 + 레이어 판정 공통 코어 (보호 라우트·퍼블릭 라우트 공용).
+ * publicSurface=true(비로그인 /public/users/:handle): 원본 userId를 응답에서 제거하고
+ * 공개 프로필(publicProfile)을 함께 내린다 — 주소 래핑 정책(핸들만이 공개 식별자).
+ */
+async function feedProfileResponse(
+  c: ApiContext,
+  requesterId: string | null,
+  rawParam: string,
+  opts?: { publicSurface?: boolean },
+) {
   // @handle 형식이면 users gsi1(HANDLE#<handle>) 로 조회
   let user: Record<string, unknown> | undefined;
   let targetUserId: string;
@@ -110,6 +120,35 @@ async function feedProfileResponse(c: ApiContext, requesterId: string | null, ra
     return c.json({ error: 'BLOCKED' }, 403);
   }
 
+  const publicProfileRaw = (user.publicProfile as Record<string, unknown> | undefined) ?? null;
+  const publicProfileEnabled = publicProfileRaw?.enabled === true;
+  const publicProfile = publicProfileEnabled
+    ? {
+        enabled: true,
+        displayName: (publicProfileRaw?.displayName as string | null) ?? null,
+        bio: (publicProfileRaw?.bio as string | null) ?? null,
+        featuredIds: Array.isArray(publicProfileRaw?.featuredIds)
+          ? (publicProfileRaw!.featuredIds as string[]).slice(0, 6)
+          : [],
+      }
+    : null;
+
+  if (opts?.publicSurface) {
+    // 비로그인 공개 표면: 원본 userId 미노출, 공개 닉네임이 있으면 가입명 대신 사용
+    return ok(c, {
+      feedHandle: (user.feedHandle as string | undefined) ?? null,
+      displayName: (publicProfile?.displayName || (user.name as string)) ?? null,
+      animalIcon: user.animalIcon ?? '🐰',
+      isOwn: false,
+      currentLayer: layer,
+      followStatus,
+      isMutual,
+      isFriend,
+      feedSettings: { isPublic, tab02Public },
+      publicProfile,
+    });
+  }
+
   return ok(c, {
     userId: user.userId,
     feedHandle: (user.feedHandle as string | undefined) ?? null,
@@ -121,6 +160,8 @@ async function feedProfileResponse(c: ApiContext, requesterId: string | null, ra
     isMutual,
     isFriend,
     feedSettings: { isPublic, tab02Public },
+    // 본인에게만 공개 프로필 설정 원본을 내린다 (설정 UI용 — enabled=false여도 저장값 확인 가능)
+    ...(isOwn ? { publicProfile: publicProfileRaw ?? null } : {}),
   });
 }
 
@@ -317,11 +358,45 @@ personalFeedRoutes.delete('/:userId/block', async (c) => {
   return ok(c);
 });
 
-// GET /u/feed/:userId — 피드 프로필 + 레이어 (userId | 'me' | '@handle')
+// GET /u/feed/:userId — 피드 프로필 + 레이어 ('me' | '@handle' | 본인 userId)
+// 주소 래핑 정책: 타인 프로필은 @handle로만 열람 가능 — 원본 userId 요청은 404.
+// (userId는 운영탭·DM 등에서 노출될 수 있어, userId→실명 프로필 역추적을 차단한다)
 personalFeedRoutes.get('/:userId', async (c) => {
   const { userId: me } = c.get('authUser')!;
   const raw = c.req.param('userId');
+  if (raw !== 'me' && !raw.startsWith('@') && raw !== me) {
+    return c.json({ error: 'USE_HANDLE', message: '프로필은 @핸들 주소로만 열람할 수 있어요' }, 404);
+  }
   return feedProfileResponse(c, me, raw === 'me' ? me : raw);
+});
+
+// PUT /u/feed/me/public-profile — 공개 프로필 저장 (리더 모객 페이지 /p/@handle 데이터)
+personalFeedRoutes.put('/me/public-profile', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const body = (await c.req.json().catch(() => ({}))) as {
+    enabled?: boolean;
+    displayName?: string | null;
+    bio?: string | null;
+    featuredIds?: string[];
+  };
+
+  const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 30) : null;
+  const bio = typeof body.bio === 'string' ? body.bio.trim().slice(0, 500) : null;
+  const featuredIds = Array.isArray(body.featuredIds)
+    ? [...new Set(body.featuredIds.filter((id) => typeof id === 'string' && id).map(String))].slice(0, 6)
+    : [];
+
+  const publicProfile = {
+    enabled: body.enabled === true,
+    displayName: displayName || null,
+    bio: bio || null,
+    featuredIds,
+  };
+  await setPublicProfile(userId, publicProfile);
+
+  // 공개 페이지 주소는 핸들 기반 — 핸들이 없으면 안내를 위해 함께 내림
+  const profile = await getProfileItem(userId);
+  return ok(c, { publicProfile, feedHandle: (profile?.feedHandle as string | undefined) ?? null });
 });
 
 /**
@@ -330,8 +405,8 @@ personalFeedRoutes.get('/:userId', async (c) => {
  */
 export const publicUsersRoutes = new Hono<AppEnv>();
 
-// GET /public/users/:handle — 퍼블릭 프로필 (@ 프리픽스 유무 모두 허용)
+// GET /public/users/:handle — 퍼블릭 프로필 (@ 프리픽스 유무 모두 허용, userId 미노출)
 publicUsersRoutes.get('/:handle', async (c) => {
   const raw = c.req.param('handle');
-  return feedProfileResponse(c, null, raw.startsWith('@') ? raw : `@${raw}`);
+  return feedProfileResponse(c, null, raw.startsWith('@') ? raw : `@${raw}`, { publicSurface: true });
 });

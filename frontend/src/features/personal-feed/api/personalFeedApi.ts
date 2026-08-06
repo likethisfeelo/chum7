@@ -1,7 +1,15 @@
 import { apiClient } from '@/lib/api-client';
 
+export interface PublicProfileSettings {
+  enabled: boolean;
+  displayName: string | null;
+  bio: string | null;
+  featuredIds: string[];
+}
+
 export interface FeedProfile {
-  userId: string;
+  /** 비로그인 공개 표면(/public/users/:handle)에서는 미노출 — 주소 래핑 정책 */
+  userId?: string;
   feedHandle: string | null;
   displayName: string;
   animalIcon: string;
@@ -14,6 +22,25 @@ export interface FeedProfile {
     isPublic: boolean;
     tab02Public: boolean;
   };
+  /** 본인 조회(설정 UI) 또는 공개 표면(enabled 시)에만 존재 */
+  publicProfile?: PublicProfileSettings | null;
+}
+
+/** 공개 프로필의 리더/매니저 챌린지 카드 (/public/users/:handle/led-challenges) */
+export interface LedChallengeCard {
+  role: 'leader' | 'manager';
+  challengeId: string;
+  title: string;
+  description: string;
+  category: string | null;
+  badgeIcon: string | null;
+  badgeName: string | null;
+  lifecycle: string | null;
+  disbanded: boolean;
+  durationDays: number | null;
+  challengeStartAt: string | null;
+  stats?: { totalParticipants?: number; completionRate?: number } | null;
+  rewardProducts?: { productId?: string; type?: string; name?: string; imageUrl?: string }[] | null;
 }
 
 export interface FeedAchievements {
@@ -254,7 +281,9 @@ export const personalFeedApi = {
     await apiClient.delete(`/u/feed/me/invite-links/${linkId}`);
   },
 
-  resolveInviteToken: async (token: string): Promise<{ ownerId: string; inviteLinkId: string }> => {
+  resolveInviteToken: async (
+    token: string,
+  ): Promise<{ ownerId: string; ownerHandle: string | null; inviteLinkId: string }> => {
     const res = await apiClient.get(`/u/feed/invite/${token}`);
     return res.data.data;
   },
@@ -262,6 +291,34 @@ export const personalFeedApi = {
   // ── Feed Settings ───────────────────────────────────────────────────
   updateFeedSettings: async (settings: { isPublic?: boolean; tab02Public?: boolean }): Promise<void> => {
     await apiClient.put('/u/feed/me/settings', settings);
+  },
+
+  // ── 공개 프로필 (리더 모객 페이지 /p/@handle) ────────────────────────
+  updatePublicProfile: async (
+    settings: PublicProfileSettings,
+  ): Promise<{ publicProfile: PublicProfileSettings; feedHandle: string | null }> => {
+    const res = await apiClient.put('/u/feed/me/public-profile', settings);
+    return res.data.data;
+  },
+
+  // 비로그인 허용 — 공개 프로필 페이지 데이터 3종
+  getPublicProfile: async (handle: string): Promise<FeedProfile> => {
+    const res = await apiClient.get(`/public/users/${encodeURIComponent(handle)}`);
+    return res.data.data;
+  },
+
+  getLedChallenges: async (
+    handleOrId: string,
+  ): Promise<{ recruiting: LedChallengeCard[]; active: LedChallengeCard[]; past: LedChallengeCard[]; total: number }> => {
+    const res = await apiClient.get(`/public/users/${encodeURIComponent(handleOrId)}/led-challenges`);
+    return res.data.data;
+  },
+
+  getFeaturedVerifications: async (
+    handleOrId: string,
+  ): Promise<{ items: VerificationFeedItem[] }> => {
+    const res = await apiClient.get(`/public/users/${encodeURIComponent(handleOrId)}/featured`);
+    return res.data.data;
   },
 
   // ── Personal Posts ──────────────────────────────────────────────────

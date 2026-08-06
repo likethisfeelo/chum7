@@ -11,8 +11,9 @@ import type { AppEnv } from '@chum7/api-kit';
 import { ok, fail } from '@chum7/api-kit';
 import { extractImageS3Key, isLikelySignedAssetUrl } from '../domain/media-key';
 import { buildChallengeHistoryItem } from '../domain/public-history';
-import { getChallengesBatch } from '../repo/challenges';
+import { getChallengesBatch, listByCreator } from '../repo/challenges';
 import { listMyParticipations } from '../repo/participations';
+import { getPublicProfileMeta, resolveUserParam } from '../repo/users-readonly';
 import { listMyVerifications } from '../repo/verifications';
 import { parseNextToken, toNextToken } from '../repo/shared';
 
@@ -49,9 +50,27 @@ function isPublicVerification(v: Record<string, any>): boolean {
   return isPublic && v.isPersonalOnly !== true && v.hiddenByAdmin !== true;
 }
 
+/** 공개 인증 1건 → 응답 아이템 (verifications·featured 공용) */
+async function toPublicVerificationItem(v: Record<string, any>) {
+  return {
+    verificationId: v.verificationId as string,
+    challengeId: (v.challengeId as string) ?? null,
+    challengeTitle: (v.challengeTitle as string) ?? null,
+    challengeCategory: (v.challengeCategory as string) ?? null,
+    day: typeof v.day === 'number' ? v.day : null,
+    score: typeof v.score === 'number' ? v.score : 0,
+    verificationType: (v.verificationType as string) ?? 'text',
+    imageUrl: await signMediaUrl(v.imageUrl as string | null),
+    todayNote: (v.todayNote as string) ?? null,
+    createdAt: (v.createdAt as string) ?? null,
+  };
+}
+
 // 공개 인증 목록 (레거시 GET /personal-feed/{userId}/verifications — 퍼블릭 전환에 따라 isPublic 만 노출)
+// :userId 는 원본 userId 또는 @handle (핸들 공유 링크·공개 프로필 페이지 대응)
 publicUserRoutes.get('/:userId/verifications', async (c) => {
-  const targetUserId = c.req.param('userId');
+  const targetUserId = await resolveUserParam(c.req.param('userId'));
+  if (!targetUserId) return fail(c, 404, 'HANDLE_NOT_FOUND', '사용자를 찾을 수 없습니다');
   const limit = Math.min(Math.max(Number(c.req.query('limit') || DEFAULT_LIMIT), 1), 50);
 
   let startKey: Record<string, any> | undefined;
@@ -72,27 +91,15 @@ publicUserRoutes.get('/:userId/verifications', async (c) => {
   }
 
   const page = merged.slice(0, limit);
-  const items = await Promise.all(
-    page.map(async (v) => ({
-      verificationId: v.verificationId as string,
-      challengeId: (v.challengeId as string) ?? null,
-      challengeTitle: (v.challengeTitle as string) ?? null,
-      challengeCategory: (v.challengeCategory as string) ?? null,
-      day: typeof v.day === 'number' ? v.day : null,
-      score: typeof v.score === 'number' ? v.score : 0,
-      verificationType: (v.verificationType as string) ?? 'text',
-      imageUrl: await signMediaUrl(v.imageUrl as string | null),
-      todayNote: (v.todayNote as string) ?? null,
-      createdAt: (v.createdAt as string) ?? null,
-    })),
-  );
+  const items = await Promise.all(page.map(toPublicVerificationItem));
 
   return ok(c, { items, nextToken: toNextToken(cursor) });
 });
 
 // 완주 이력 (레거시 GET /personal-feed/{userId}/challenges — 퍼블릭 표면은 완주분만 노출)
 publicUserRoutes.get('/:userId/challenge-history', async (c) => {
-  const targetUserId = c.req.param('userId');
+  const targetUserId = await resolveUserParam(c.req.param('userId'));
+  if (!targetUserId) return fail(c, 404, 'HANDLE_NOT_FOUND', '사용자를 찾을 수 없습니다');
 
   const userChallenges = await listMyParticipations(targetUserId);
   if (userChallenges.length === 0) {
@@ -113,4 +120,111 @@ publicUserRoutes.get('/:userId/challenge-history', async (c) => {
     .sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? ''));
 
   return ok(c, { challenges, total: challenges.length });
+});
+
+// ── 공개 프로필 표면 (핸들 래핑 정책 — /p/@handle 페이지) ────────────────
+
+/** 챌린지 META → 공개 카드 필드 (내부 키·민감 필드 제외) */
+function toPublicChallengeCard(ch: Record<string, any>, role: 'leader' | 'manager') {
+  return {
+    role,
+    challengeId: ch.challengeId as string,
+    title: (ch.title as string) ?? '',
+    description: (ch.description as string) ?? '',
+    category: (ch.category as string) ?? null,
+    badgeIcon: (ch.badgeIcon as string) ?? null,
+    badgeName: (ch.badgeName as string) ?? null,
+    lifecycle: (ch.lifecycle as string) ?? null,
+    disbanded: ch.disbanded === true,
+    durationDays: typeof ch.durationDays === 'number' ? ch.durationDays : null,
+    challengeStartAt: (ch.challengeStartAt as string) ?? null,
+    stats: ch.stats ?? null,
+    rewardProducts: Array.isArray(ch.rewardProducts) ? ch.rewardProducts : null,
+  };
+}
+
+/**
+ * 리더/매니저로 연 챌린지 목록 — 공개 프로필의 "여는 챌린지" 섹션.
+ *  리더 = 챌린지 생성자(gsi2 CREATOR#), 매니저 = 참여 챌린지 중 managerIds 포함.
+ *  버킷: recruiting(모집중) / active(진행중) / past(진행했던 — completed·archived·해산).
+ */
+publicUserRoutes.get('/:userId/led-challenges', async (c) => {
+  const targetUserId = await resolveUserParam(c.req.param('userId'));
+  if (!targetUserId) return fail(c, 404, 'HANDLE_NOT_FOUND', '사용자를 찾을 수 없습니다');
+
+  const [created, participations] = await Promise.all([
+    listByCreator(targetUserId),
+    listMyParticipations(targetUserId),
+  ]);
+
+  // 매니저 챌린지 — 참여 레코드에서 후보를 모아 META의 managerIds로 판정
+  const createdIds = new Set(created.map((ch) => String(ch.challengeId)));
+  const candidateIds = [
+    ...new Set(
+      participations
+        .map((uc) => String(uc.challengeId ?? ''))
+        .filter((id) => id && !createdIds.has(id)),
+    ),
+  ];
+  const candidates = candidateIds.length > 0 ? await getChallengesBatch(candidateIds) : [];
+  const managed = candidates.filter(
+    (ch) => Array.isArray(ch.managerIds) && ch.managerIds.includes(targetUserId),
+  );
+
+  const cards = [
+    ...created.map((ch) => toPublicChallengeCard(ch, 'leader')),
+    ...managed.map((ch) => toPublicChallengeCard(ch, 'manager')),
+  ];
+
+  const recruiting = cards.filter((ch) => ch.lifecycle === 'recruiting' && !ch.disbanded);
+  const active = cards.filter((ch) => ch.lifecycle === 'active' && !ch.disbanded);
+  const past = cards.filter(
+    (ch) => ch.disbanded || ch.lifecycle === 'completed' || ch.lifecycle === 'archived',
+  );
+  const byStartDesc = (a: { challengeStartAt: string | null }, b: { challengeStartAt: string | null }) =>
+    (b.challengeStartAt ?? '').localeCompare(a.challengeStartAt ?? '');
+  recruiting.sort(byStartDesc);
+  active.sort(byStartDesc);
+  past.sort(byStartDesc);
+
+  return ok(c, { recruiting, active, past, total: cards.length });
+});
+
+/**
+ * 대표 게시물 — 본인이 프로필 피드에서 고른 최대 6개(publicProfile.featuredIds).
+ *  읽기 시점에 공개 인증 필터(isPublicVerification)를 적용해 반려·숨김·비공개 전환분을 걸러낸다.
+ */
+publicUserRoutes.get('/:userId/featured', async (c) => {
+  const targetUserId = await resolveUserParam(c.req.param('userId'));
+  if (!targetUserId) return fail(c, 404, 'HANDLE_NOT_FOUND', '사용자를 찾을 수 없습니다');
+
+  const meta = await getPublicProfileMeta(targetUserId);
+  const publicProfile = (meta?.publicProfile ?? null) as Record<string, any> | null;
+  const featuredIds: string[] = Array.isArray(publicProfile?.featuredIds)
+    ? publicProfile!.featuredIds.map(String).slice(0, 6)
+    : [];
+  if (publicProfile?.enabled !== true || featuredIds.length === 0) {
+    return ok(c, { items: [] });
+  }
+
+  // 본인 인증 파티션(gsi1 VFUSER#)을 드레인하며 지정 id + 공개분만 수집
+  const wanted = new Set(featuredIds);
+  const found: Record<string, any>[] = [];
+  let cursor: Record<string, any> | undefined;
+  for (let i = 0; i < 8 && found.length < wanted.size; i += 1) {
+    const result = await listMyVerifications(targetUserId, 100, cursor);
+    for (const v of result.items) {
+      if (wanted.has(String(v.verificationId)) && isPublicVerification(v)) found.push(v);
+    }
+    cursor = result.lastKey;
+    if (!cursor) break;
+  }
+
+  // 본인이 고른 순서 유지
+  const order = new Map(featuredIds.map((id, idx) => [id, idx]));
+  found.sort(
+    (a, b) => (order.get(String(a.verificationId)) ?? 99) - (order.get(String(b.verificationId)) ?? 99),
+  );
+  const items = await Promise.all(found.map(toPublicVerificationItem));
+  return ok(c, { items });
 });

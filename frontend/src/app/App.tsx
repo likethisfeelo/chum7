@@ -16,6 +16,7 @@ import { ChallengesPage } from '@/features/challenge/pages/ChallengesPage';
 import { ChallengeDetailPage } from '@/features/challenge/pages/ChallengeDetailPage';
 import { ChallengePreviewPage } from '@/features/challenge/pages/ChallengePreviewPage';
 import { RewardProductPage } from '@/features/challenge/pages/RewardProductPage';
+import { PublicProfilePage } from '@/features/personal-feed/pages/PublicProfilePage';
 import { ChallengeCreatePage } from '@/features/challenge/pages/ChallengeCreatePage';
 import { ChallengeEditPage } from '@/features/challenge/pages/ChallengeEditPage';
 import { ChallengeFeedPage } from '@/features/challenge-feed/pages/ChallengeFeedPage';
@@ -146,6 +147,8 @@ export default function App() {
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         {/* 공개 챌린지 미리보기 — 로그인 전에도 열림(공유 링크). 로그인 상태면 상세로 이동 */}
         <Route path="/preview/:challengeId" element={<ChallengePreviewPage />} />
+        {/* 공개 프로필(리더 모객 랜딩) — 비로그인 열람 허용, @핸들 주소만 사용 */}
+        <Route path="/p/:handle" element={<PublicProfilePage />} />
 
         {/* 보호된 라우트 (로그인 필요) */}
         <Route

@@ -149,9 +149,12 @@ export class ApiStack extends cdk.Stack {
         CHEER_TABLE: stateful.tables.cheer.tableName,
         // 중도포기 '배추한포기' 뱃지 조건부 Put — gamification 쓰기 (문서화된 크로스 도메인 예외)
         GAMIFICATION_TABLE: stateful.tables.gamification.tableName,
+        // @handle → userId 해석 + 공개 프로필(featured) 조회 — users 읽기 (문서화된 크로스 도메인 예외)
+        USERS_TABLE: stateful.tables.users.tableName,
       },
     });
     stateful.tables.challenges.grantReadWriteData(this.challengeApi);
+    stateful.tables.users.grantReadData(this.challengeApi); // @handle 해석·featured 목록 read-only
     stateful.uploadsBucket.grantPut(this.challengeApi); // presigned PUT 서명용
     stateful.uploadsBucket.grantRead(this.challengeApi);
     stateful.anonSaltSecret.grantRead(this.challengeApi); // 인증글 일일 활동명 생성
@@ -219,13 +222,41 @@ export class ApiStack extends cdk.Stack {
         GAMIFICATION_TABLE: stateful.tables.gamification.tableName,
         CONTENT_TABLE: stateful.tables.content.tableName,
         CHALLENGES_TABLE: stateful.tables.challenges.tableName,
+        // @handle → userId 해석 — users 읽기 (문서화된 크로스 도메인 예외)
+        USERS_TABLE: stateful.tables.users.tableName,
       },
     });
     stateful.tables.gamification.grantReadWriteData(this.gamificationApi);
     stateful.tables.content.grantReadData(this.gamificationApi);
     // 문서화된 크로스 도메인 예외: world-summary 당일 공개 인증 집계 (porting-guide §4)
     stateful.tables.challenges.grantReadData(this.gamificationApi);
+    stateful.tables.users.grantReadData(this.gamificationApi); // @handle 해석 read-only
     eventBus.grantPutEventsTo(this.gamificationApi);
+
+    // ── /public/users/* 콘텐츠 표면 라우팅 분기 ──────────────────────────
+    // 프리픽스 /public/users 는 user-api 소유(프로필 메타)지만, 인증/이력/업적 등
+    // 콘텐츠 표면은 challenge/gamification-api 소유다. HTTP API는 구체 경로가
+    // {proxy+}보다 우선 매칭되므로 세부 경로를 해당 서비스 통합으로 직접 등록한다.
+    // 전부 읽기 표면이라 GET만 등록(라우트×메서드당 Lambda 권한 문장 누적 방지).
+    const challengePublicUsers = new HttpLambdaIntegration(
+      'ChallengePublicUsersIntegration',
+      this.challengeApi,
+    );
+    for (const sub of ['verifications', 'challenge-history', 'led-challenges', 'featured']) {
+      this.httpApi.addRoutes({
+        path: `/public/users/{userId}/${sub}`,
+        methods: [apigwv2.HttpMethod.GET],
+        integration: challengePublicUsers,
+      });
+    }
+    this.httpApi.addRoutes({
+      path: '/public/users/{userId}/achievements',
+      methods: [apigwv2.HttpMethod.GET],
+      integration: new HttpLambdaIntegration(
+        'GamificationPublicUsersIntegration',
+        this.gamificationApi,
+      ),
+    });
 
     // --- admin-api: /adm (운영 콘솔 — admins/operators/creators 그룹 격리) ---
     const adminApi = this.addDomainApi({

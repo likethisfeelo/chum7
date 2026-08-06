@@ -103,6 +103,30 @@ export async function setFeedHandle(userId: string, handle: string, nowIso: stri
   );
 }
 
+/**
+ * 공개 프로필 저장 — PROFILE 아이템의 publicProfile 맵 전체 교체.
+ *  { enabled, displayName|null, bio|null, featuredIds[] (≤6) }
+ *  리더 모객용 공개 페이지(/p/@handle) 데이터. challenge-api가 read-only로 읽는다.
+ */
+export async function setPublicProfile(
+  userId: string,
+  publicProfile: {
+    enabled: boolean;
+    displayName: string | null;
+    bio: string | null;
+    featuredIds: string[];
+  },
+): Promise<void> {
+  await docClient.send(
+    new UpdateCommand({
+      TableName: tableName(TABLE),
+      Key: profileKey(userId),
+      UpdateExpression: 'SET publicProfile = :pp',
+      ExpressionAttributeValues: { ':pp': publicProfile },
+    }),
+  );
+}
+
 /** 피드 공개 설정 저장 (레거시 personal-feed/settings 병합 결과 전체 교체) */
 export async function setFeedSettings(
   userId: string,
