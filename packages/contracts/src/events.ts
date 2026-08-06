@@ -189,6 +189,19 @@ export const domainEventSchemas = {
     leaderId: z.string(),
     reason: z.string().optional(),
   }),
+  // 리더가 챌린지 매니저를 지정/해임 — 수신자는 대상 유저.
+  'manager.assigned': z.object({
+    challengeId: z.string(),
+    userId: z.string(),
+    leaderId: z.string(),
+    challengeTitle: z.string().optional(),
+  }),
+  'manager.removed': z.object({
+    challengeId: z.string(),
+    userId: z.string(),
+    leaderId: z.string(),
+    challengeTitle: z.string().optional(),
+  }),
   // 리더가 완주자에게 선물 교환권 발행 — 수신자는 유저.
   'gift.issued': z.object({
     voucherId: z.string(),

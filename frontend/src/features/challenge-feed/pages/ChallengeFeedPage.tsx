@@ -560,21 +560,7 @@ export const ChallengeFeedPage = () => {
     onError: (err: any) => toast.error(err?.response?.data?.message || "취소에 실패했어요"),
   });
 
-  // 리더의 인증 게시물 반려 (그날 인증만 반려 — 피드/마당에서 숨김, 본인 기록엔 유지, 점수 되돌림)
-  const [rejectingVfId, setRejectingVfId] = useState<string | null>(null);
-  const [rejectVfReason, setRejectVfReason] = useState("");
-  const rejectVerificationMutation = useMutation({
-    mutationFn: (vars: { verificationId: string; reason?: string }) =>
-      challengeApi.rejectVerification(challengeId!, vars.verificationId, { reason: vars.reason }),
-    onSuccess: () => {
-      toast.success("인증을 반려했어요. 피드에서 숨겨지고 본인 기록에는 남아요.");
-      setRejectingVfId(null);
-      setRejectVfReason("");
-      queryClient.invalidateQueries({ queryKey: ["challenge-feed-verifications", challengeId] });
-      queryClient.invalidateQueries({ queryKey: ["challenge-feed-my-verifications", challengeId] });
-    },
-    onError: (err: any) => toast.error(err?.response?.data?.message || "반려에 실패했어요"),
-  });
+  // 인증 게시물 반려/완료인정은 피드 카드에서 제거 — 운영 탭 그리드에서 상태를 보며 처리한다.
 
   const moveQuestMutation = useMutation({
     mutationFn: (vars: { verificationId: string; toQuestId: string }) =>
@@ -586,20 +572,6 @@ export const ChallengeFeedPage = () => {
       queryClient.invalidateQueries({ queryKey: ["leader-quests-manage", challengeId] });
     },
     onError: (err: any) => toast.error(err?.response?.data?.message || "이동에 실패했어요"),
-  });
-
-  const grantCompleteMutation = useMutation({
-    mutationFn: (vars: { verificationId: string; revoke?: boolean }) =>
-      vars.revoke
-        ? challengeApi.revokeVerificationComplete(challengeId!, vars.verificationId)
-        : challengeApi.grantVerificationComplete(challengeId!, vars.verificationId),
-    onSuccess: (_d, vars) => {
-      toast.success(vars.revoke ? "완료 인정을 취소했어요" : "이 날을 완료 인정했어요 (+1점)");
-      queryClient.invalidateQueries({ queryKey: ["leader-participants", challengeId] });
-      queryClient.invalidateQueries({ queryKey: ["leader-briefing", challengeId] });
-      queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
-    },
-    onError: (err: any) => toast.error(err?.response?.data?.message || "처리에 실패했어요"),
   });
 
   const challengeVerifications = useMemo(() => verificationData || [], [verificationData]);
@@ -709,6 +681,9 @@ export const ChallengeFeedPage = () => {
   const challengeEnded = lifecycleNow === "completed" || lifecycleNow === "archived";
   // 리더 운영 탭 노출 조건 — 챌린지 생성자 본인 (PRODUCT_SPEC §4.12-A)
   const isCreator = Boolean(challengeData?.createdBy) && challengeData?.createdBy === user?.userId;
+  // 매니저 — 리더가 지정한 운영 보조 (challenge.managerIds). 파괴적 액션 제외 운영 탭 사용 가능
+  const managerIds: string[] = Array.isArray(challengeData?.managerIds) ? challengeData.managerIds.map(String) : [];
+  const isManager = !isCreator && Boolean(user?.userId) && managerIds.includes(String(user?.userId));
   // 완주(뱃지 발급) 이후에는 챌린지 피드가 조회 전용 — 인증 취소·요청 등 변경 액션 비활성 (스펙 09 §4-b)
   const isCompletedByMe = userChallenge?.status === "completed";
   const isGaveUp = userChallenge?.phase === "gave_up" || userChallenge?.status === "gave_up";
@@ -960,75 +935,8 @@ export const ChallengeFeedPage = () => {
           </div>
         )}
 
-        {/* 리더 전용 — 완료 인정(보수): 규칙상 완료가 안 잡힌 날을 수동으로 완료 처리 */}
-        {isCreator && (
-          <div className="mt-2 pt-2 border-t border-white/40 flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              disabled={grantCompleteMutation.isPending}
-              onClick={() => grantCompleteMutation.mutate({ verificationId: item.verificationId })}
-              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-            >
-              ✅ 이 날 완료 인정 (+1점)
-            </button>
-            <button
-              type="button"
-              disabled={grantCompleteMutation.isPending}
-              onClick={() => grantCompleteMutation.mutate({ verificationId: item.verificationId, revoke: true })}
-              className="text-[11px] font-medium text-gray-400 hover:text-gray-600 disabled:opacity-50"
-            >
-              인정 취소
-            </button>
-          </div>
-        )}
-
-        {/* 리더 전용 — 인증 게시물 반려 (본인 게시물 제외) */}
-        {isCreator && !item.isMine && (
-          <div className="mt-2 pt-2 border-t border-white/40">
-            {rejectingVfId === item.verificationId ? (
-              <div className="space-y-2">
-                <p className="text-[11px] text-rose-600 bg-rose-50 rounded-lg px-2 py-1.5">
-                  이 인증을 반려하면 <b>피드·마당에서 숨겨지고</b> 해당 날짜 완료·점수가 해제돼요.
-                  (참여자 본인 기록에는 남아요.)
-                </p>
-                <input
-                  value={rejectVfReason}
-                  onChange={(e) => setRejectVfReason(e.target.value)}
-                  placeholder="반려 사유(선택)"
-                  maxLength={500}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-rose-300"
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={rejectVerificationMutation.isPending}
-                    onClick={() => rejectVerificationMutation.mutate({ verificationId: item.verificationId, reason: rejectVfReason.trim() || undefined })}
-                    className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 text-white disabled:opacity-50"
-                  >
-                    반려 확정
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setRejectingVfId(null); setRejectVfReason(""); }}
-                    className="flex-1 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white"
-                  >
-                    취소
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => { setRejectingVfId(item.verificationId); setRejectVfReason(""); }}
-                className="text-[11px] font-medium text-rose-500 hover:text-rose-700 transition-colors"
-              >
-                🚩 이 인증 반려
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* 인증 인정 요청은 카드가 아니라 참여자 '요청' 탭으로 이동 (자동 인증과 혼동·중복 방지) */}
+        {/* 완료 인정·인정 취소·인증 반려는 운영 탭 그리드로 일원화 (상태가 보이는 곳에서 처리) */}
+        {/* 인증 인정 요청은 카드가 아니라 참여자 '관리' 탭으로 이동 (자동 인증과 혼동·중복 방지) */}
 
         {/* 신고 — 본인/리더 외 참여자 */}
         {!item.isMine && !isCreator && (
@@ -1129,7 +1037,7 @@ export const ChallengeFeedPage = () => {
               { key: "about", label: "ABOUT" },
               { key: "challenge", label: "챌린지" },
               ...(showManage
-                ? [{ key: "manage" as const, label: isCreator ? "운영" : "관리" }]
+                ? [{ key: "manage" as const, label: isCreator || isManager ? "운영" : "관리" }]
                 : []),
             ];
             return (
@@ -1360,7 +1268,7 @@ export const ChallengeFeedPage = () => {
         )}
 
         {mainTab === "manage" ? (
-          isCreator ? (
+          isCreator || isManager ? (
             <div className="p-4 lg:p-6 mx-auto w-full max-w-2xl">
               <LeaderOpsTab
                 challengeId={challengeId}
@@ -1374,7 +1282,32 @@ export const ChallengeFeedPage = () => {
                   Number(challengeData?.price ?? 0) > 0
                 }
                 lifecycle={challengeData?.effectiveLifecycle || challengeData?.lifecycle}
+                managerMode={isManager}
+                managerIds={managerIds}
+                onManagersChanged={() => queryClient.invalidateQueries({ queryKey: ["challenge-feed", challengeId] })}
               />
+              {/* 매니저는 참여자이기도 함 — 본인 인정요청·인증취소·포기는 아래 '내 참여 관리'에서 */}
+              {isManager && userChallenge && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <h3 className="px-1 text-sm font-bold text-gray-700 mb-2">🙋 내 참여 관리</h3>
+                  <ParticipantRequestsTab
+                    challengeId={challengeId}
+                    myVerifications={myChallengeVerifications}
+                    canRequest={isActive && !isCompletedByMe && !isGaveUp}
+                    onLeaderDm={() => leaderDmMutation.mutate()}
+                    dmPending={leaderDmMutation.isPending}
+                    hasLeaderDm={Boolean(userChallenge)}
+                    completedDays={completedDays}
+                    canCancel={!isCompletedByMe && !isGaveUp}
+                    onCancelVerification={(verificationId, day) => {
+                      setCancelStep(1);
+                      setCancelHideFeed(false);
+                      setCancelHideOwner(false);
+                      setCancelModal({ verificationId, day });
+                    }}
+                  />
+                </div>
+              )}
             </div>
           ) : userChallenge ? (
             <div className="mx-auto w-full max-w-2xl">
@@ -1386,6 +1319,13 @@ export const ChallengeFeedPage = () => {
                 dmPending={leaderDmMutation.isPending}
                 hasLeaderDm={Boolean(userChallenge)}
                 completedDays={completedDays}
+                canCancel={!isCompletedByMe && !isGaveUp}
+                onCancelVerification={(verificationId, day) => {
+                  setCancelStep(1);
+                  setCancelHideFeed(false);
+                  setCancelHideOwner(false);
+                  setCancelModal({ verificationId, day });
+                }}
               />
               {/* 챌린지 포기 — 관리 탭 하단 */}
               {(canGiveUp || isGaveUp) && (

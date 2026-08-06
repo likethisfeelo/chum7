@@ -195,6 +195,26 @@ function routeNotification(
         message: ticketRejectReason ? `사유: ${ticketRejectReason}` : '티켓 신청이 반려됐어요.',
       };
     }
+    case 'manager.assigned': {
+      const mTitle = typeof detail.challengeTitle === 'string' && detail.challengeTitle.trim() ? detail.challengeTitle.trim() : '';
+      return {
+        recipientId: String(detail.userId),
+        category: 'challenge',
+        type: 'manager_assigned',
+        title: '매니저로 지정됐어요 🛡️',
+        message: mTitle
+          ? `'${mTitle}' 챌린지의 매니저가 됐어요. 운영 탭에서 리더를 도와 운영할 수 있어요!`
+          : '챌린지 매니저가 됐어요. 운영 탭에서 리더를 도와 운영할 수 있어요!',
+      };
+    }
+    case 'manager.removed':
+      return {
+        recipientId: String(detail.userId),
+        category: 'challenge',
+        type: 'manager_removed',
+        title: '매니저에서 해임됐어요',
+        message: '챌린지 매니저 권한이 해제됐어요.',
+      };
     case 'gift.issued':
       return {
         recipientId: String(detail.userId),
@@ -310,6 +330,8 @@ function buildDeepLink(type: DomainEventType, detail: Record<string, unknown>): 
     case 'ticket.request_rejected':
       return detail.challengeId ? `/challenges/${detail.challengeId}` : undefined;
     case 'ticket.requested':
+      return detail.challengeId ? `/challenge-feed/${detail.challengeId}?tab=ops` : undefined;
+    case 'manager.assigned':
       return detail.challengeId ? `/challenge-feed/${detail.challengeId}?tab=ops` : undefined;
     case 'gift.issued':
     case 'gift.shipped':

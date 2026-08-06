@@ -40,17 +40,17 @@ const grantSchema = z.object({
 
 const rejectSchema = z.object({ reason: z.string().trim().max(300).optional() });
 
-/** 챌린지 META 읽기 전용 — 소유자·유료 여부 확인 (routes/orders.ts 패턴) */
+/** 챌린지 META 읽기 전용 — 소유자·매니저·유료 여부 확인 (routes/orders.ts 패턴) */
 async function getChallengeMeta(challengeId: string) {
   const res = await docClient.send(
     new GetCommand({
       TableName: tableName('CHALLENGES_TABLE'),
       Key: { pk: `CHAL#${challengeId}`, sk: 'META' },
-      ProjectionExpression: 'challengeId, title, pricingType, price, lifecycle, createdBy',
+      ProjectionExpression: 'challengeId, title, pricingType, price, lifecycle, createdBy, managerIds',
     }),
   );
   return res.Item as
-    | { challengeId: string; title?: string; pricingType?: string; price?: number; lifecycle?: string; createdBy?: string }
+    | { challengeId: string; title?: string; pricingType?: string; price?: number; lifecycle?: string; createdBy?: string; managerIds?: string[] }
     | undefined;
 }
 
@@ -180,8 +180,9 @@ async function requireChallengeLeader(c: any, challengeId: string): Promise<Lead
   const challenge = await getChallengeMeta(challengeId);
   if (!challenge) return { error: fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다') };
   const { userId } = c.get('authUser')!;
-  if (String(challenge.createdBy ?? '') !== userId) {
-    return { error: fail(c, 403, 'FORBIDDEN', '챌린지 리더만 사용할 수 있어요') };
+  const managerIds = Array.isArray(challenge.managerIds) ? challenge.managerIds.map(String) : [];
+  if (String(challenge.createdBy ?? '') !== userId && !managerIds.includes(userId)) {
+    return { error: fail(c, 403, 'FORBIDDEN', '챌린지 리더·매니저만 사용할 수 있어요') };
   }
   return { challenge };
 }

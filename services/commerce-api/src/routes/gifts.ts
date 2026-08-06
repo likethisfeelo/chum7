@@ -67,17 +67,17 @@ const shipSchema = z.object({ trackingInfo: z.string().trim().max(200).optional(
 const defaultExpiry = (nowIso: string): string =>
   new Date(new Date(nowIso).getTime() + VOUCHER_DEFAULT_EXPIRY_DAYS * 86_400_000).toISOString();
 
-/** 챌린지 META 읽기 전용 — 소유자 확인 (routes/tickets.ts 패턴) */
+/** 챌린지 META 읽기 전용 — 소유자·매니저 확인 (routes/tickets.ts 패턴) */
 async function getChallengeMeta(challengeId: string) {
   const res = await docClient.send(
     new GetCommand({
       TableName: tableName('CHALLENGES_TABLE'),
       Key: { pk: `CHAL#${challengeId}`, sk: 'META' },
-      ProjectionExpression: 'challengeId, title, createdBy, lifecycle',
+      ProjectionExpression: 'challengeId, title, createdBy, lifecycle, managerIds',
     }),
   );
   return res.Item as
-    | { challengeId: string; title?: string; createdBy?: string; lifecycle?: string }
+    | { challengeId: string; title?: string; createdBy?: string; lifecycle?: string; managerIds?: string[] }
     | undefined;
 }
 
@@ -118,12 +118,19 @@ interface LeaderGuard {
   challenge?: NonNullable<Awaited<ReturnType<typeof getChallengeMeta>>>;
 }
 
-async function requireChallengeLeader(c: any, challengeId: string): Promise<LeaderGuard> {
+async function requireChallengeLeader(
+  c: any,
+  challengeId: string,
+  opts?: { leaderOnly?: boolean },
+): Promise<LeaderGuard> {
   const challenge = await getChallengeMeta(challengeId);
   if (!challenge) return { error: fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다') };
   const { userId } = c.get('authUser')!;
-  if (String(challenge.createdBy ?? '') !== userId) {
-    return { error: fail(c, 403, 'FORBIDDEN', '챌린지 리더만 사용할 수 있어요') };
+  const managerIds = Array.isArray(challenge.managerIds) ? challenge.managerIds.map(String) : [];
+  const isOwner = String(challenge.createdBy ?? '') === userId;
+  const isManager = !opts?.leaderOnly && managerIds.includes(userId);
+  if (!isOwner && !isManager) {
+    return { error: fail(c, 403, 'FORBIDDEN', opts?.leaderOnly ? '챌린지 리더만 사용할 수 있어요' : '챌린지 리더·매니저만 사용할 수 있어요') };
   }
   return { challenge };
 }
@@ -280,7 +287,8 @@ giftRoutes.post('/leader/:challengeId/catalog', async (c) => {
 
 giftRoutes.delete('/leader/:challengeId/catalog/:giftId', async (c) => {
   const challengeId = c.req.param('challengeId');
-  const guard = await requireChallengeLeader(c, challengeId);
+  // 삭제 계열은 리더 전용 (매니저 불가)
+  const guard = await requireChallengeLeader(c, challengeId, { leaderOnly: true });
   if (guard.error) return guard.error;
   await deleteGiftCatalogItem(challengeId, c.req.param('giftId'));
   return ok(c, { deleted: true }, '선물을 삭제했어요');
