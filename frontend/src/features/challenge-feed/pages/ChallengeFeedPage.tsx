@@ -1850,6 +1850,27 @@ export const ChallengeFeedPage = () => {
                   <span>온라인 보상 — {challengeData.rewardOnline.name}</span>
                 </div>
               )}
+              {/* 완주 보상 상품 카탈로그 (실물/기프티콘/온라인 서비스) — 운영탭에서 리더가 등록 */}
+              {((challengeData?.rewardProducts ?? []) as any[])
+                .filter((p) => p?.name)
+                .map((p, i) => (
+                  <div key={p.productId ?? i} className="flex items-center gap-2">
+                    {p.imageUrl ? (
+                      <img
+                        src={resolveMediaUrl(p.imageUrl)}
+                        alt={p.name}
+                        className="w-7 h-7 rounded-lg object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <span className="text-base">
+                        {p.type === 'gifticon' ? '🎟️' : p.type === 'service' ? '💻' : '📦'}
+                      </span>
+                    )}
+                    <span>
+                      {p.type === 'gifticon' ? '온라인 상품(기프티콘)' : p.type === 'service' ? '온라인 상품(서비스)' : '실물 상품'} — {p.name}
+                    </span>
+                  </div>
+                ))}
               <p className="text-[11px] text-gray-400 pt-1">완주 보상 교환권은 챌린지 종료 후 선물 교환권함으로 발송돼요.</p>
             </div>
           </section>

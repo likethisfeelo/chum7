@@ -13,6 +13,14 @@ const SEAM_GRADIENT = `linear-gradient(95deg, ${PAPER} 0%, ${PAPER} 46%, ${PAPER
 // 레퍼런스(Charmi) 스타일의 컬러풀 대형 모집 카드 + 스크롤 무브 인터랙션 + 탭 시 전체화면 상세 확장.
 // 색/이모지는 카테고리 상수 재사용(SLUG_TO_HEX/SLUG_TO_EMOJI).
 
+export interface BoldRewardProduct {
+  productId?: string;
+  type?: 'physical' | 'gifticon' | 'service';
+  name?: string;
+  description?: string;
+  imageUrl?: string;
+}
+
 export interface BoldChallenge {
   challengeId: string;
   title: string;
@@ -24,7 +32,16 @@ export interface BoldChallenge {
   challengeStartAt?: string;
   rewardPhysical?: { name: string } | null;
   rewardOnline?: { name: string } | null;
+  rewardProducts?: BoldRewardProduct[] | null;
   stats?: { totalParticipants?: number; completionRate?: number };
+}
+
+const REWARD_TYPE_EMOJI: Record<string, string> = { physical: '📦', gifticon: '🎟️', service: '💻' };
+
+/** 카드 위 동그라미로 보여줄 보상 상품 — 이미지가 있는 첫 상품 우선 */
+function pickRewardProduct(c: BoldChallenge): BoldRewardProduct | null {
+  const products = (c.rewardProducts ?? []).filter((p) => p?.name);
+  return products.find((p) => p.imageUrl?.trim()) ?? products[0] ?? null;
 }
 
 function metricLabel(c: BoldChallenge): string {
@@ -294,10 +311,37 @@ function ChallengeQuickView({
           </div>
 
           {/* 완주 보상 */}
-          {(challenge.rewardPhysical?.name || challenge.rewardOnline?.name || challenge.badgeName) && (
+          {(challenge.rewardPhysical?.name ||
+            challenge.rewardOnline?.name ||
+            challenge.badgeName ||
+            (challenge.rewardProducts ?? []).some((p) => p?.name)) && (
             <div className="mt-6">
               <h3 className="text-sm font-bold text-gray-900 mb-2">완주 보상</h3>
               <div className="space-y-2">
+                {(challenge.rewardProducts ?? [])
+                  .filter((p) => p?.name)
+                  .map((p, i) => (
+                    <div
+                      key={p.productId ?? i}
+                      className="flex items-center gap-2.5 bg-amber-50 rounded-xl px-3 py-2.5 border border-amber-100"
+                    >
+                      {p.imageUrl ? (
+                        <img
+                          src={resolveMediaUrl(p.imageUrl)}
+                          alt={p.name}
+                          className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <span className="text-lg">{REWARD_TYPE_EMOJI[p.type ?? 'physical'] ?? '🎁'}</span>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-800">{p.name}</p>
+                        {p.description && (
+                          <p className="text-xs text-gray-500 line-clamp-1">{p.description}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 {challenge.badgeName && (
                   <div className="flex items-center gap-2.5 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
                     <span className="text-lg">🏅</span>
@@ -351,11 +395,13 @@ function ChallengeQuickView({
 export function BoldRecruitList({
   challenges,
   onNavigate,
+  onOpenReward,
   joinedIds,
   joinedLabel = '참여신청완료',
 }: {
   challenges: BoldChallenge[];
   onNavigate: (id: string) => void;
+  onOpenReward?: (id: string) => void;
   joinedIds?: Set<string>;
   joinedLabel?: string;
 }) {
@@ -365,15 +411,41 @@ export function BoldRecruitList({
   return (
     <>
       <div className="space-y-4">
-        {challenges.map((c) => (
-          <BoldRecruitCard
-            key={c.challengeId}
-            challenge={c}
-            onOpen={setSelected}
-            joined={isJoined(c.challengeId)}
-            joinedLabel={joinedLabel}
-          />
-        ))}
+        {challenges.map((c) => {
+          // 완주 보상 상품 동그라미 — 카드가 overflow-hidden이라 형제 요소로 겹쳐 올린다
+          const rewardProduct = onOpenReward ? pickRewardProduct(c) : null;
+          return (
+            <div key={c.challengeId} className="relative">
+              <BoldRecruitCard
+                challenge={c}
+                onOpen={setSelected}
+                joined={isJoined(c.challengeId)}
+                joinedLabel={joinedLabel}
+              />
+              {rewardProduct && (
+                <button
+                  type="button"
+                  title={`완주 보상: ${rewardProduct.name ?? ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenReward?.(c.challengeId);
+                  }}
+                  className="absolute -top-2.5 -right-1 z-10 w-14 h-14 rounded-full border-2 border-white shadow-lg overflow-hidden bg-amber-50 flex items-center justify-center active:scale-95 transition-transform"
+                >
+                  {rewardProduct.imageUrl ? (
+                    <img
+                      src={resolveMediaUrl(rewardProduct.imageUrl)}
+                      alt={rewardProduct.name ?? '완주 보상'}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-2xl">{REWARD_TYPE_EMOJI[rewardProduct.type ?? 'physical'] ?? '🎁'}</span>
+                  )}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <AnimatePresence>

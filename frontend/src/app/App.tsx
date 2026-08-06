@@ -15,6 +15,7 @@ import { AuthCallbackPage } from '@/features/auth/pages/AuthCallbackPage';
 import { ChallengesPage } from '@/features/challenge/pages/ChallengesPage';
 import { ChallengeDetailPage } from '@/features/challenge/pages/ChallengeDetailPage';
 import { ChallengePreviewPage } from '@/features/challenge/pages/ChallengePreviewPage';
+import { RewardProductPage } from '@/features/challenge/pages/RewardProductPage';
 import { ChallengeCreatePage } from '@/features/challenge/pages/ChallengeCreatePage';
 import { ChallengeEditPage } from '@/features/challenge/pages/ChallengeEditPage';
 import { ChallengeFeedPage } from '@/features/challenge-feed/pages/ChallengeFeedPage';
@@ -170,6 +171,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ChallengeDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/challenges/:challengeId/reward"
+          element={
+            <ProtectedRoute>
+              <RewardProductPage />
             </ProtectedRoute>
           }
         />
