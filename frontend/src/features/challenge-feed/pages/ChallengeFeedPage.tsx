@@ -726,8 +726,9 @@ export const ChallengeFeedPage = () => {
   const todayDay = userChallenge && isActive ? computeTodayChallengeDay(userChallenge) : -1;
   const progressList: any[] = userChallenge?.progress || [];
 
-  // 이미 완료(자동 인정)된 일자 집합 — 요청 탭에서 '인정 요청'을 띄우지 않기 위한 기준
-  const completedDays = useMemo(() => {
+  // 이미 완료(자동 인정)된 일자 집합 — 요청 탭에서 '인정 요청'을 띄우지 않기 위한 기준.
+  // 주의: 이 지점은 로딩 조기 return 뒤라 훅(useMemo) 사용 금지 — 렌더마다 계산해도 충분히 가볍다.
+  const completedDays = (() => {
     const set = new Set<number>();
     for (const p of progressList) {
       const status = String(p?.status ?? "");
@@ -736,7 +737,7 @@ export const ChallengeFeedPage = () => {
       }
     }
     return set;
-  }, [progressList]);
+  })();
 
   const isTodayAllDone = isMixedChallengeType
     ? allLeaderQuestsDoneToday && (personalQuest === null || iDidTodayPersonalQuestVerification)
