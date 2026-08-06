@@ -936,7 +936,18 @@ export const ChallengeFeedPage = () => {
         )}
 
         {/* 완료 인정·인정 취소·인증 반려는 운영 탭 그리드로 일원화 (상태가 보이는 곳에서 처리) */}
-        {/* 인증 인정 요청은 카드가 아니라 참여자 '관리' 탭으로 이동 (자동 인증과 혼동·중복 방지) */}
+        {/* 내 게시물 — 수정(인정 요청·인증 취소)은 관리 탭에서. 진입 링크만 제공 */}
+        {item.isMine && userChallenge && (
+          <div className="mt-2 pt-2 border-t border-white/40 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setMainTab("manage")}
+              className="text-[11px] font-medium text-gray-400 hover:text-primary-600 transition-colors"
+            >
+              ✏️ 이 게시물 수정 요청 (관리 탭) →
+            </button>
+          </div>
+        )}
 
         {/* 신고 — 본인/리더 외 참여자 */}
         {!item.isMine && !isCreator && (
@@ -984,7 +995,25 @@ export const ChallengeFeedPage = () => {
               {kind === "leader" ? "아직 올라온 리더퀘스트 인증이 없습니다." : "아직 올라온 개인퀘스트 인증이 없습니다."}
             </p>
           ) : (
-            list.map(renderVerificationCard)
+            // 최신순 누적 + 날짜(Day)별 구분선
+            list.map((item: any, idx: number) => {
+              const prevDay = idx > 0 ? Number(list[idx - 1]?.day ?? -1) : null;
+              const curDay = Number(item?.day ?? -1);
+              const showDivider = prevDay === null || prevDay !== curDay;
+              return (
+                <div key={item.verificationId}>
+                  {showDivider && (
+                    <div className="flex items-center gap-2 pt-1 pb-2">
+                      <span className="text-[11px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                        Day {curDay > 0 ? curDay : "-"}
+                      </span>
+                      <div className="flex-1 h-px bg-gray-100" />
+                    </div>
+                  )}
+                  {renderVerificationCard(item)}
+                </div>
+              );
+            })
           )}
         </div>
       )}
@@ -1034,8 +1063,8 @@ export const ChallengeFeedPage = () => {
           {(() => {
             const showManage = isCreator || Boolean(userChallenge);
             const tabs: Array<{ key: "about" | "challenge" | "manage"; label: string }> = [
-              { key: "about", label: "ABOUT" },
-              { key: "challenge", label: "챌린지" },
+              { key: "about", label: "인증" },
+              { key: "challenge", label: "기록" },
               ...(showManage
                 ? [{ key: "manage" as const, label: isCreator || isManager ? "운영" : "관리" }]
                 : []),
@@ -1355,141 +1384,11 @@ export const ChallengeFeedPage = () => {
             <div className="p-8 text-center text-sm text-gray-400">관전 중이에요. 참여하면 관리 기능이 열려요.</div>
           )
         ) : (
-        <div className="p-4 lg:p-6">
-          <div className={mainTab === "about" ? "lg:grid lg:grid-cols-[300px_1fr] lg:gap-6 lg:items-start" : ""}>
+        <div className="p-4 lg:p-6 mx-auto w-full max-w-3xl">
 
-          {/* ── Left Sidebar (ABOUT 전용) ── */}
-          {mainTab === "about" && (
-          <div className="space-y-4 lg:sticky lg:top-20">
-
-          {/* 1) 카테고리 + 설명(좌) · 참여자/완료율 미니 카드(우) — 배경 없음 */}
-          <section className="px-1 pt-1">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                {challengeData?.category && (
-                  <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                    {SLUG_TO_LABEL[challengeData.category] ?? challengeData.category}
-                  </span>
-                )}
-                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                  {challengeData?.description || "챌린지 소개를 불러오지 못했습니다."}
-                </p>
-              </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <div className="w-16 h-16 rounded-xl bg-gray-50 border border-gray-100 flex flex-col items-center justify-center">
-                  <p className="text-lg font-bold text-gray-800 leading-none">
-                    {challengeData?.stats?.totalParticipants || challengeData?.participantCount || 0}
-                  </p>
-                  <p className="text-[10px] text-gray-400 mt-1">참여자</p>
-                </div>
-                <div className="w-16 h-16 rounded-xl bg-gray-50 border border-gray-100 flex flex-col items-center justify-center">
-                  <p className="text-lg font-bold text-gray-800 leading-none">
-                    {challengeData?.stats?.completionRate || 0}%
-                  </p>
-                  <p className="text-[10px] text-gray-400 mt-1">완료율</p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* 3) 퀘스트 기간 진행 현황 (1~durationDays 체크) */}
-          {userChallenge && (
-            <section className="glass-card rounded-2xl p-5">
-              <h3 className="font-bold text-gray-900 mb-3">진행 현황</h3>
-              <div className="flex flex-wrap gap-2">
-                {Array.from({ length: durationDays }, (_, i) => i + 1).map((day) => {
-                  const p = progressList.find((pr: any) => Number(pr?.day) === day);
-                  const isToday = day === todayDay;
-                  const isDone = isMixedChallengeType
-                    ? Boolean(p?.leaderQuestDone && p?.personalQuestDone) ||
-                      (isToday && allLeaderQuestsDoneToday && (personalQuest === null || iDidTodayPersonalQuestVerification))
-                    : p?.status === "success" || p?.status === "completed" || p?.status === "remedy" ||
-                      (isToday && (leaderQuests.length > 0 ? allLeaderQuestsDoneToday : iDidTodayVerification));
-                  const isPartial = isMixedChallengeType
-                    ? Boolean(p && !isDone && (p?.leaderQuestDone || p?.personalQuestDone)) ||
-                      (isToday && !isDone && (someLeaderQuestsDoneToday || iDidTodayPersonalQuestVerification))
-                    : p?.status === "partial" ||
-                      (isToday && !isDone && leaderQuests.length > 0 && someLeaderQuestsDoneToday);
-                  const isPastMissed = day < todayDay && !isDone;
-
-                  return (
-                    <div
-                      key={day}
-                      title={
-                        isDone && isToday ? `Day ${day} 완료 (오늘)` :
-                        isDone ? `Day ${day} 완료` :
-                        isToday ? "오늘" :
-                        isPastMissed ? `Day ${day} 미인증` :
-                        `Day ${day}`
-                      }
-                      className={[
-                        "w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-colors",
-                        isDone && isToday
-                          ? "bg-emerald-500 text-white ring-2 ring-offset-1 ring-blue-400"
-                          : isDone
-                          ? "bg-emerald-500 text-white"
-                          : isPartial
-                          ? "bg-yellow-300 text-yellow-800"
-                          : isToday
-                          ? "bg-gray-100 text-gray-600 ring-2 ring-blue-400"
-                          : isPastMissed
-                          ? "bg-red-50 text-red-300 border border-red-100"
-                          : "bg-gray-100 text-gray-400",
-                      ].join(" ")}
-                    >
-                      {isDone ? "✓" : day}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" /> 인증완료</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-100 ring-1 ring-blue-400 inline-block" /> 오늘</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-emerald-500 ring-1 ring-blue-400 ring-offset-1 inline-block" /> 오늘+완료</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-50 border border-red-100 inline-block" /> 미인증</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-100 inline-block" /> 예정</span>
-                {isMixedChallengeType && <span className="text-gray-400">· 리더+개인 퀘스트 모두 완료해야 ✓</span>}
-              </div>
-            </section>
-          )}
-
-          {/* 8) 오늘 인증완료 / 전체 참여자 — left sidebar desktop */}
-          <section className="hidden lg:grid grid-cols-2 gap-2">
-            <div className="glass-card rounded-2xl p-4">
-              <p className="text-xs text-gray-500">오늘 인증</p>
-              <p className="mt-1 text-xl font-bold text-gray-900">{todayCompletedCount}명</p>
-            </div>
-            <div className="glass-card rounded-2xl p-4">
-              <p className="text-xs text-gray-500">내 인증</p>
-              <p className="mt-1 text-xl font-bold text-gray-900">{myTotalCount}회</p>
-            </div>
-          </section>
-
-          {/* My record — left sidebar desktop */}
-          {userChallenge && (
-            <section className="hidden lg:block glass-card rounded-2xl p-5">
-              <h3 className="font-bold text-gray-900 mb-3">내 기록</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="glass-card rounded-xl p-3">
-                  <p className="text-xs text-gray-500">총 인증</p>
-                  <p className="text-lg font-bold text-gray-900 mt-0.5">{myTotalCount}회</p>
-                </div>
-                <div className="glass-card rounded-xl p-3">
-                  <p className="text-xs text-gray-500">연속 인증</p>
-                  <p className="text-lg font-bold text-gray-900 mt-0.5">{userChallenge?.consecutiveDays ?? 0}일</p>
-                </div>
-              </div>
-              <div className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium ${canCheerNow ? "bg-primary-50 text-primary-700" : "bg-gray-50 text-gray-500"}`}>
-                {canCheerNow ? "피드에서 다른 참여자들의 인증 게시물에 리액션과 댓글로 서로 힘을 나눠주세요." : "오늘 인증 후 응원 기능이 열립니다."}
-              </div>
-            </section>
-          )}
-
-          </div>
-          )}{/* ── End Left Sidebar (ABOUT 전용) ── */}
 
           {/* ── Right Main Content ── */}
-          <div className="space-y-4 mt-4 lg:mt-0">
+          <div className="space-y-4">
 
           {/* ===== ABOUT 탭 — 소개 하위·가이드·개인퀘스트 제안·인증 입력 ===== */}
           {mainTab === "about" && (
@@ -1505,7 +1404,7 @@ export const ChallengeFeedPage = () => {
 
           {/* 2) 챌린지 보드 안내 — 인라인 아코디언 확장 + 📌 고정 (전체보기 페이지는 확장 영역 내 링크로 유지) */}
           <div ref={guideSectionRef} className="scroll-mt-24">
-            <BoardGuideSection challengeId={challengeId} openSignal={guideOpenSignal} />
+            <BoardGuideSection challengeId={challengeId} openSignal={guideOpenSignal} title="📣 오늘의 가이드" />
           </div>
 
           {/* 개인 퀘스트 제안 섹션 */}
@@ -1784,6 +1683,151 @@ export const ChallengeFeedPage = () => {
             </section>
           )}
 
+          {/* 내 진행 현황 (1~durationDays 체크) */}
+          {userChallenge && (
+            <section className="glass-card rounded-2xl p-5">
+              <h3 className="font-bold text-gray-900 mb-3">진행 현황</h3>
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: durationDays }, (_, i) => i + 1).map((day) => {
+                  const p = progressList.find((pr: any) => Number(pr?.day) === day);
+                  const isToday = day === todayDay;
+                  const isDone = isMixedChallengeType
+                    ? Boolean(p?.leaderQuestDone && p?.personalQuestDone) ||
+                      (isToday && allLeaderQuestsDoneToday && (personalQuest === null || iDidTodayPersonalQuestVerification))
+                    : p?.status === "success" || p?.status === "completed" || p?.status === "remedy" ||
+                      (isToday && (leaderQuests.length > 0 ? allLeaderQuestsDoneToday : iDidTodayVerification));
+                  const isPartial = isMixedChallengeType
+                    ? Boolean(p && !isDone && (p?.leaderQuestDone || p?.personalQuestDone)) ||
+                      (isToday && !isDone && (someLeaderQuestsDoneToday || iDidTodayPersonalQuestVerification))
+                    : p?.status === "partial" ||
+                      (isToday && !isDone && leaderQuests.length > 0 && someLeaderQuestsDoneToday);
+                  const isPastMissed = day < todayDay && !isDone;
+
+                  return (
+                    <div
+                      key={day}
+                      title={
+                        isDone && isToday ? `Day ${day} 완료 (오늘)` :
+                        isDone ? `Day ${day} 완료` :
+                        isToday ? "오늘" :
+                        isPastMissed ? `Day ${day} 미인증` :
+                        `Day ${day}`
+                      }
+                      className={[
+                        "w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-colors",
+                        isDone && isToday
+                          ? "bg-emerald-500 text-white ring-2 ring-offset-1 ring-blue-400"
+                          : isDone
+                          ? "bg-emerald-500 text-white"
+                          : isPartial
+                          ? "bg-yellow-300 text-yellow-800"
+                          : isToday
+                          ? "bg-gray-100 text-gray-600 ring-2 ring-blue-400"
+                          : isPastMissed
+                          ? "bg-red-50 text-red-300 border border-red-100"
+                          : "bg-gray-100 text-gray-400",
+                      ].join(" ")}
+                    >
+                      {isDone ? "✓" : day}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" /> 인증완료</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-100 ring-1 ring-blue-400 inline-block" /> 오늘</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-emerald-500 ring-1 ring-blue-400 ring-offset-1 inline-block" /> 오늘+완료</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-50 border border-red-100 inline-block" /> 미인증</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-100 inline-block" /> 예정</span>
+                {isMixedChallengeType && <span className="text-gray-400">· 리더+개인 퀘스트 모두 완료해야 ✓</span>}
+              </div>
+            </section>
+          )}
+
+          {/* My record — left sidebar desktop */}
+          {userChallenge && (
+            <section className="glass-card rounded-2xl p-5">
+              <h3 className="font-bold text-gray-900 mb-3">내 기록</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="glass-card rounded-xl p-3">
+                  <p className="text-xs text-gray-500">총 인증</p>
+                  <p className="text-lg font-bold text-gray-900 mt-0.5">{myTotalCount}회</p>
+                </div>
+                <div className="glass-card rounded-xl p-3">
+                  <p className="text-xs text-gray-500">연속 인증</p>
+                  <p className="text-lg font-bold text-gray-900 mt-0.5">{userChallenge?.consecutiveDays ?? 0}일</p>
+                </div>
+              </div>
+              <div className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium ${canCheerNow ? "bg-primary-50 text-primary-700" : "bg-gray-50 text-gray-500"}`}>
+                {canCheerNow ? "피드에서 다른 참여자들의 인증 게시물에 리액션과 댓글로 서로 힘을 나눠주세요." : "오늘 인증 후 응원 기능이 열립니다."}
+              </div>
+            </section>
+          )}
+
+          {/* 챌린지 소개 — 카테고리 + 설명(좌) · 참여자/완료율 미니 카드(우) — 배경 없음 */}
+          <section className="px-1 pt-1">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                {challengeData?.category && (
+                  <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                    {SLUG_TO_LABEL[challengeData.category] ?? challengeData.category}
+                  </span>
+                )}
+                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                  {challengeData?.description || "챌린지 소개를 불러오지 못했습니다."}
+                </p>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <div className="w-16 h-16 rounded-xl bg-gray-50 border border-gray-100 flex flex-col items-center justify-center">
+                  <p className="text-lg font-bold text-gray-800 leading-none">
+                    {challengeData?.stats?.totalParticipants || challengeData?.participantCount || 0}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-1">참여자</p>
+                </div>
+                <div className="w-16 h-16 rounded-xl bg-gray-50 border border-gray-100 flex flex-col items-center justify-center">
+                  <p className="text-lg font-bold text-gray-800 leading-none">
+                    {challengeData?.stats?.completionRate || 0}%
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-1">완료율</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 완주 조건 및 보상 */}
+          <section className="glass-card rounded-2xl p-5">
+            <h3 className="font-bold text-gray-900 mb-3">🏁 완주 조건 및 보상</h3>
+            <div className="space-y-2 text-sm text-gray-700">
+              <div className="flex items-center gap-2">
+                <span className="text-base">✅</span>
+                <span>{durationDays}일 동안 매일 인증을 완료하면 완주예요.</span>
+              </div>
+              {challengeData?.pricingType === "paid_deposit" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-base">💰</span>
+                  <span>완주하면 보증금이 전액 반환돼요.</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-base">{challengeData?.badgeIcon || "🏆"}</span>
+                <span>완주 배지{challengeData?.badgeName ? ` — ${challengeData.badgeName}` : ""} 지급</span>
+              </div>
+              {challengeData?.rewardPhysical?.name && (
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🎁</span>
+                  <span>실물 보상 — {challengeData.rewardPhysical.name}</span>
+                </div>
+              )}
+              {challengeData?.rewardOnline?.name && (
+                <div className="flex items-center gap-2">
+                  <span className="text-base">💳</span>
+                  <span>온라인 보상 — {challengeData.rewardOnline.name}</span>
+                </div>
+              )}
+              <p className="text-[11px] text-gray-400 pt-1">완주 보상 교환권은 챌린지 종료 후 선물 교환권함으로 발송돼요.</p>
+            </div>
+          </section>
+
           </>
           )}{/* ===== End ABOUT ===== */}
 
@@ -1929,8 +1973,7 @@ export const ChallengeFeedPage = () => {
             );
           })()}
 
-          </div>{/* ── End Right Main ── */}
-          </div>{/* ── End Grid ── */}
+          </div>{/* ── End Main ── */}
         </div>
         )}
       </div>

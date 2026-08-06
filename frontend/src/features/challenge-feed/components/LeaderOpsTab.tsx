@@ -2154,8 +2154,16 @@ export function LeaderOpsTab({
           </p>
         </div>
       )}
-      {!managerMode && <ChallengeControlCard challengeId={challengeId} />}
+      {/* 1) 오늘 참여 현황 */}
       <BriefingSection challengeId={challengeId} />
+
+      {/* 2) 인증 수정 요청 처리 */}
+      <CompletionRequestSection challengeId={challengeId} />
+
+      {/* 3) 참여자 관리 · 리더 DM (참여자별 DM 버튼 포함) */}
+      <ParticipantsSection challengeId={challengeId} managerIds={managerIds} />
+
+      {/* 4) 가이드·미션(리더퀘스트) 관리 */}
       <LeaderQuestCreateSection
         challengeId={challengeId}
         challengeType={challengeType}
@@ -2167,23 +2175,22 @@ export function LeaderOpsTab({
         allowedVerificationTypes={allowedVerificationTypes}
         managerMode={managerMode}
       />
-      <ParticipantsSection challengeId={challengeId} managerIds={managerIds} />
-      <CompletionRequestSection challengeId={challengeId} />
       <ProposalReviewSection
         challengeId={challengeId}
         challengeType={challengeType}
         personalQuestEnabled={personalQuestEnabled}
       />
-      {!managerMode && <OpsPostsSection challengeId={challengeId} />}
 
+      {/* 5) 운영 도구 — 게시물 댓글·매니저·티켓·선물 */}
+      {!managerMode && <OpsPostsSection challengeId={challengeId} />}
       {!managerMode && (
         <ManagerSection challengeId={challengeId} managerIds={managerIds} onChanged={onManagersChanged} />
       )}
-
       {isPaid && <TicketSection challengeId={challengeId} />}
-
       <GiftSection challengeId={challengeId} />
 
+      {/* 6) 챌린지 설정 및 종료 — 맨 아래 (리더 전용) */}
+      {!managerMode && <ChallengeControlCard challengeId={challengeId} />}
       {!managerMode && <DisbandSection challengeId={challengeId} isPaid={isPaid} lifecycle={lifecycle} />}
 
       {/* 퀘스트 심사 바로가기 */}
