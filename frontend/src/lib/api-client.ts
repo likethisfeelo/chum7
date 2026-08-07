@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearAuthStorage } from './auth-storage';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://dev.chum7.com';
 
@@ -101,7 +102,7 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
-        localStorage.clear();
+        clearAuthStorage();
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }

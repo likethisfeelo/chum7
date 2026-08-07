@@ -46,6 +46,7 @@ import { CharacterViewerPage } from '@/features/character/pages/CharacterViewerP
 import { HashtagPage } from '@/features/hashtag/pages/HashtagPage';
 import { PushPermissionSheet } from '@/features/notifications/components/PushPermissionSheet';
 import { ChallengeRecapSheet } from '@/features/challenge/components/ChallengeRecapSheet';
+import { RemedyPromptSheet } from '@/features/challenge/components/RemedyPromptSheet';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -424,6 +425,8 @@ export default function App() {
       <PushPermissionSheet />
       {/* 챌린지 종료 리캡 — 최근 종료·미열람 챌린지 자동 1회 노출 */}
       <ChallengeRecapSheet />
+      {/* 보완인증 유도 — 어제 미인증 활성 챌린지 감지 시 최대 2회 노출 */}
+      <RemedyPromptSheet />
     </BrowserRouter>
   );
 }
