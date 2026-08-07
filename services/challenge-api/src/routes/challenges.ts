@@ -95,6 +95,8 @@ challengeRoutes.post('/', async (c) => {
     requireStartConfirmation: input.requireStartConfirmation,
     joinApprovalRequired: input.joinApprovalRequired,
     allowedVerificationTypes: input.allowedVerificationTypes,
+    // 참여자 식별 방식(운영탭 전용 표시) — 생성 시 리더 확정, 피드·마당 익명은 유지
+    leaderIdentityMode: input.leaderIdentityMode,
     stats: initialStats,
     participantCount: input.participateAsCreator ? 1 : 0,
     createdAt: now,

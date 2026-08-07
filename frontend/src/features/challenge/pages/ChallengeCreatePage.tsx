@@ -34,6 +34,7 @@ interface FormState {
   challengeType: ChallengeType;
   joinApprovalRequired: boolean;
   personalQuestAutoApprove: boolean;
+  leaderIdentityMode: 'realname' | 'handle' | 'custom';
 
   // Step 4
   participateAsCreator: boolean;
@@ -61,8 +62,16 @@ const INITIAL_FORM: FormState = {
   challengeType: 'leader_personal',
   joinApprovalRequired: false,
   personalQuestAutoApprove: true,
+  leaderIdentityMode: 'realname',
   participateAsCreator: true,
 };
+
+// 참여자 식별 방식 — 리더/매니저 운영탭에서만 표시 (피드·마당 활동은 계속 익명)
+const IDENTITY_MODE_OPTIONS: { value: FormState['leaderIdentityMode']; label: string; desc: string }[] = [
+  { value: 'realname', label: '실명(가입명)', desc: '가입할 때 등록한 이름이 보여요' },
+  { value: 'handle',   label: '@핸들',        desc: '참여자의 고유 핸들이 보여요 (없으면 가입명)' },
+  { value: 'custom',   label: '직접 입력',     desc: '참여할 때 이 챌린지에서 쓸 이름을 입력받아요' },
+];
 
 const VERIFICATION_TYPES = [
   { key: 'image' as const, label: '사진', emoji: '📸' },
@@ -449,6 +458,31 @@ function Step3({ form, onChange }: { form: FormState; onChange: (patch: Partial<
         </button>
       </div>
 
+      {/* 참여자 식별 방식 — 운영탭(리더·매니저) 전용 표시, 피드·마당 익명은 유지 */}
+      <div className="p-4 bg-gray-50 rounded-xl">
+        <p className="text-sm font-semibold text-gray-700">참여자 식별 방식</p>
+        <p className="text-[11px] text-gray-500 mt-0.5 mb-3">
+          운영탭에서 참여자를 어떤 이름으로 볼지 정해요. 리더·매니저에게만 보이고, 피드·마당 활동은 계속 익명이에요.
+        </p>
+        <div className="space-y-2">
+          {IDENTITY_MODE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange({ leaderIdentityMode: opt.value })}
+              className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
+                form.leaderIdentityMode === opt.value ? 'border-primary-400 bg-primary-50' : 'border-gray-100 bg-white'
+              }`}
+            >
+              <p className={`text-sm font-medium ${form.leaderIdentityMode === opt.value ? 'text-primary-700' : 'text-gray-800'}`}>
+                {opt.label}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-0.5">{opt.desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* 개인 퀘스트 승인 방식 (leader_only 제외) */}
       {form.challengeType !== 'leader_only' && (
         <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
@@ -570,6 +604,7 @@ export function ChallengeCreatePage() {
         allowedVerificationTypes: form.allowedVerificationTypes,
         participateAsCreator: form.participateAsCreator,
         personalQuestAutoApprove: form.personalQuestAutoApprove,
+        leaderIdentityMode: form.leaderIdentityMode,
         rewardPhysical:
           form.hasPhysicalReward && form.physicalRewardName.trim()
             ? { name: form.physicalRewardName.trim() }

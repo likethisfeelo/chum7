@@ -41,6 +41,11 @@ export const createChallengeSchema = z.object({
   joinApprovalRequired: z.boolean().default(false),
   allowedVerificationTypes: z.array(z.enum(['image', 'text', 'link', 'video'])).min(1).default(['image', 'text', 'link', 'video']),
 
+  // 참여자 식별 방식 — 생성 시 리더가 확정. 운영탭(리더·매니저)에서만 표시되고
+  // 피드·마당 등 활동 표면의 익명(랜덤 활동명)은 그대로 유지된다.
+  //  realname: 가입명(실명인증 도입 전) / handle: @핸들 / custom: 참여 시 챌린지 전용 이름 입력
+  leaderIdentityMode: z.enum(['realname', 'handle', 'custom']).default('realname'),
+
   participateAsCreator: z.boolean().default(false),
 });
 
@@ -74,6 +79,8 @@ export const joinChallengeSchema = z.object({
   personalTarget: personalTargetSchema.optional(),
   /** 유료 챌린지: paid 상태 주문 ID 필수 (커머스 v0 — COMMERCE_V0.md) */
   orderId: z.string().min(1).optional(),
+  /** leaderIdentityMode=custom 챌린지: 리더에게만 보일 이름 (운영탭 전용) */
+  leaderVisibleName: z.string().trim().min(1).max(20).optional(),
 });
 
 export const reviewJoinRequestSchema = z.object({
@@ -228,6 +235,14 @@ export const rewardProductUploadUrlSchema = z.object({
   fileType: z.string().regex(/^image\/(jpeg|jpg|png|webp|gif|heic|heif)$/),
   fileSize: z.number().int().positive().max(10 * 1024 * 1024),
 });
+
+// 완주자 랜덤 추첨 — 서버 crypto 난수 추첨 + 이력 기록 (조작 시비 방지)
+export const drawCreateSchema = z.object({
+  winnerCount: z.number().int().min(1).max(100),
+  title: z.string().trim().max(100).optional(),
+  excludePreviousWinners: z.boolean().optional(),
+});
+export type DrawCreateInput = z.infer<typeof drawCreateSchema>;
 
 // 유료 챌린지 해산 신청 — 리더가 운영자에게 사유와 함께 제출.
 export const disbandRequestSchema = z.object({

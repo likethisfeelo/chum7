@@ -74,5 +74,9 @@ export function maybeOpenRecap(items: any[]): void {
     })
     .sort((a, b) => endTime(b) - endTime(a))[0];
 
-  if (top) useRecapStore.getState().openRecap(top);
+  if (top) {
+    // 자동 노출은 정확히 1회 — 닫기 전에 이탈해도 다음 로그인에 다시 뜨지 않도록 열 때 기록
+    markRecapSeen(String(top.challengeId));
+    useRecapStore.getState().openRecap(top);
+  }
 }

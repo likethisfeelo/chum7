@@ -238,6 +238,11 @@ participationRoutes.post('/challenges/:challengeId/join', async (c) => {
   if (requirePersonalTargetOnJoin && !input.personalTarget) {
     return fail(c, 400, 'PERSONAL_TARGET_REQUIRED', '이 챌린지는 참여 시 개인 목표시간 입력이 필요합니다');
   }
+  // custom 식별 챌린지: 리더에게만 보일 이름 필수 (운영탭 전용 — 피드·마당 익명 유지)
+  if (challenge.leaderIdentityMode === 'custom' && !input.leaderVisibleName?.trim()) {
+    return fail(c, 400, 'LEADER_VISIBLE_NAME_REQUIRED',
+      '이 챌린지는 참여 시 리더에게 보일 이름 입력이 필요합니다');
+  }
 
   // 이미 참여 중인지 확인 — (challengeId, userId) 자연 키 Get (failed면 재참여 허용, 레거시 승계)
   const existing = await getParticipation(challengeId, userId);
@@ -284,6 +289,7 @@ participationRoutes.post('/challenges/:challengeId/join', async (c) => {
     groupId,
     personalGoal: input.personalGoal ?? null,
     personalTarget,
+    leaderVisibleName: input.leaderVisibleName?.trim() || null,
     joinStatus: requiresApproval ? 'requested' : 'approved',
     paymentStatus: paid ? (requiresApproval ? 'paid_pending_approval' : 'paid_confirmed') : 'free',
     refundStatus: 'none',
@@ -425,6 +431,30 @@ participationRoutes.post('/challenges/:challengeId/join-requests/:userChallengeI
     }
     throw error;
   }
+});
+
+// 리더 표시 이름 설정/변경 — leaderIdentityMode=custom 챌린지에서 기존 참여자가 뒤늦게 입력하거나 수정
+participationRoutes.put('/user-challenges/:userChallengeId/leader-visible-name', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const userChallengeId = c.req.param('userChallengeId');
+
+  const body = await c.req.json().catch(() => ({} as any));
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 20) : '';
+  if (!name) return fail(c, 400, 'VALIDATION_ERROR', '이름을 입력해주세요 (최대 20자)');
+
+  const uc = await findMyParticipationByUcId(userId, userChallengeId);
+  if (!uc) return fail(c, 404, 'NOT_FOUND', '참여 정보를 찾을 수 없습니다');
+
+  const challenge = await getChallenge(uc.challengeId);
+  if (challenge?.leaderIdentityMode !== 'custom') {
+    return fail(c, 409, 'NOT_CUSTOM_IDENTITY', '이 챌린지는 리더 표시 이름을 직접 입력하지 않아요');
+  }
+
+  await updateParticipationFields(uc.challengeId, userId, {
+    leaderVisibleName: name,
+    updatedAt: new Date().toISOString(),
+  });
+  return ok(c, { userChallengeId, leaderVisibleName: name }, '리더에게 보일 이름을 저장했어요');
 });
 
 // 챌린지 중도 포기 (레거시 POST /user-challenges/{ucId}/give-up)

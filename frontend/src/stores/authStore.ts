@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { clearAuthStorage } from '@/lib/auth-storage';
 
 interface User {
   userId: string;
@@ -51,7 +52,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        localStorage.clear();
+        clearAuthStorage();
         set({
           user: null,
           accessToken: null,

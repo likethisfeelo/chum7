@@ -6,6 +6,7 @@ import Heading from '@tiptap/extension-heading';
 import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import TextAlign from '@tiptap/extension-text-align';
+import { interceptAnchorClick, openExternalUrl } from '@/shared/utils/externalLink';
 import '../styles/tiptap.css';
 
 /**
@@ -56,7 +57,16 @@ export const LegacyBlockViewer = ({ blocks }: { blocks: any[] }) => (
       if (block.type === 'image') return <img key={block.id} src={block.url} alt="board" className="w-full rounded-xl border border-gray-100" />;
       if (block.type === 'video') return <VideoBlock key={block.id} url={block.url} />;
       if (block.type === 'link') return (
-        <a key={block.id} href={block.url} target="_blank" rel="noreferrer" className="block text-sm text-blue-600 underline break-all hover:text-blue-800">{block.label || block.url}</a>
+        <a
+          key={block.id}
+          href={block.url}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => { e.preventDefault(); openExternalUrl(block.url); }}
+          className="block text-sm text-blue-600 underline break-all hover:text-blue-800"
+        >
+          {block.label || block.url}
+        </a>
       );
       return (
         <div key={block.id} className={`rounded-xl p-3 ${block.type === 'quote' ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-100'}`}>
@@ -82,7 +92,12 @@ export const TIPTAP_EXTENSIONS = [
 
 export const RichTextViewer = ({ content }: { content: any }) => {
   const viewEditor = useEditor({ extensions: TIPTAP_EXTENSIONS, content, editable: false, immediatelyRender: false });
-  return <EditorContent editor={viewEditor} />;
+  // 가이드 내 모든 링크는 openExternalUrl 경유 — 웹 새 탭 / 네이티브 셸에선 인앱 브라우저 브리지
+  return (
+    <div onClickCapture={interceptAnchorClick}>
+      <EditorContent editor={viewEditor} />
+    </div>
+  );
 };
 
 // ─── 통합 블록 뷰어 (읽기 전용) ──────────────────────────────────────────────

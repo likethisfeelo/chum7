@@ -24,6 +24,7 @@ interface LeaderBriefing {
   incompleteUsers: Array<{
     userId: string;
     userChallengeId: string;
+    leaderVisibleName?: string | null;
     personalGoal: string | null;
     consecutiveDays: number;
     status: string | null;
@@ -35,6 +36,7 @@ interface LeaderBriefing {
 interface LeaderParticipant {
   userChallengeId: string;
   userId: string;
+  leaderVisibleName?: string | null;
   status: string;
   currentDay: number;
   durationDays: number;
@@ -69,6 +71,29 @@ const PARTICIPANT_STATUS_META: Record<string, { label: string; badgeClass: strin
 
 const maskUserId = (userId: string) =>
   userId.length > 8 ? `${userId.slice(0, 8)}…` : userId;
+
+/**
+ * 참여자 식별 표시명 — 챌린지 생성 시 리더가 확정한 leaderIdentityMode(실명/핸들/전용 이름)를
+ * 참여자 목록 응답(leaderVisibleName)에서 읽어 userId→표시명 매핑을 만든다.
+ * 미해석(미입력·프로필 없음)은 기존 마스킹 폴백. 운영탭 전용 — 피드·마당 익명은 유지.
+ */
+function useLeaderNameMap(challengeId: string) {
+  const { data } = useQuery<LeaderParticipantsData>({
+    queryKey: ['leader-participants', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/c/${challengeId}/leader/participants`);
+      return res.data.data;
+    },
+  });
+  const map = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of data?.participants ?? []) {
+      if (p.leaderVisibleName) m.set(String(p.userId), p.leaderVisibleName);
+    }
+    return m;
+  }, [data]);
+  return (userId: string) => map.get(String(userId)) ?? maskUserId(String(userId));
+}
 
 function BriefingSection({ challengeId }: { challengeId: string }) {
   const { data: briefing, isLoading, isError } = useQuery<LeaderBriefing>({
@@ -144,7 +169,7 @@ function BriefingSection({ challengeId }: { challengeId: string }) {
                   {u.userId?.[0]?.toUpperCase() ?? '?'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-800 truncate">{maskUserId(u.userId)}</p>
+                  <p className="text-sm text-gray-800 truncate">{u.leaderVisibleName ?? maskUserId(u.userId)}</p>
                   {u.personalGoal && (
                     <p className="text-[11px] text-gray-400 truncate">🎯 {u.personalGoal}</p>
                   )}
@@ -504,7 +529,7 @@ function ParticipantsSection({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-medium text-gray-800 truncate">{maskUserId(p.userId)}</p>
+                      <p className="text-sm font-medium text-gray-800 truncate">{p.leaderVisibleName ?? maskUserId(p.userId)}</p>
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${statusMeta.badgeClass}`}>
                         {statusMeta.label}
                       </span>
@@ -1046,6 +1071,7 @@ const PROPOSAL_STATUS_META: Record<string, { label: string; cls: string }> = {
 
 // 인증 완료 인정 요청 심사 — 사용자가 '이 게시물을 N일차 인증으로 인정해달라'고 보낸 요청 처리
 function CompletionRequestSection({ challengeId }: { challengeId: string }) {
+  const labelOf = useLeaderNameMap(challengeId);
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<'pending' | 'all'>('pending');
 
@@ -1100,7 +1126,7 @@ function CompletionRequestSection({ challengeId }: { challengeId: string }) {
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-sm font-semibold text-gray-800">{r.day}일차</span>
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
-                  <span className="ml-auto text-[11px] text-gray-400">{maskUserId(r.userId)}</span>
+                  <span className="ml-auto text-[11px] text-gray-400">{labelOf(r.userId)}</span>
                 </div>
                 {r.message && <p className="text-[12px] text-gray-600 mt-1 whitespace-pre-wrap">{r.message}</p>}
                 <p className="text-[10px] text-gray-400 mt-0.5">{r.createdAt ? new Date(r.createdAt).toLocaleString('ko-KR') : ''}</p>
@@ -1144,6 +1170,7 @@ function ProposalReviewSection({
   personalQuestEnabled?: boolean;
 }) {
   const queryClient = useQueryClient();
+  const labelOf = useLeaderNameMap(challengeId);
   const [tab, setTab] = useState<'pending' | 'all'>('pending');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
@@ -1247,7 +1274,7 @@ function ProposalReviewSection({
                         {meta.label}
                       </span>
                     </div>
-                    <p className="text-[11px] text-gray-400">{maskUserId(p.userId)}</p>
+                    <p className="text-[11px] text-gray-400">{labelOf(p.userId)}</p>
                     {p.description && (
                       <p className="text-xs text-gray-600 mt-1 leading-relaxed whitespace-pre-wrap break-words">{p.description}</p>
                     )}
@@ -1455,6 +1482,7 @@ function ManagerSection({
   onChanged?: () => void;
 }) {
   const queryClient = useQueryClient();
+  const labelOf = useLeaderNameMap(challengeId);
   const { data } = useQuery<LeaderParticipantsData>({
     queryKey: ['leader-participants', challengeId],
     queryFn: async () => {
@@ -1495,7 +1523,7 @@ function ManagerSection({
           {managerIds.map((id) => (
             <div key={id} className="flex items-center gap-2 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
               <span className="text-sm">🛡️</span>
-              <span className="text-xs font-semibold text-indigo-800 flex-1">{maskUserId(id)}</span>
+              <span className="text-xs font-semibold text-indigo-800 flex-1">{labelOf(id)}</span>
               <button
                 type="button"
                 disabled={manageMutation.isPending}
@@ -1517,7 +1545,7 @@ function ManagerSection({
           <div className="space-y-1 max-h-40 overflow-y-auto">
             {candidates.map((p) => (
               <div key={p.userChallengeId} className="flex items-center gap-2 rounded-lg bg-white/60 border border-gray-100 px-3 py-1.5">
-                <span className="text-xs text-gray-700 flex-1 truncate">{maskUserId(p.userId)}</span>
+                <span className="text-xs text-gray-700 flex-1 truncate">{p.leaderVisibleName ?? maskUserId(p.userId)}</span>
                 <button
                   type="button"
                   disabled={manageMutation.isPending}
@@ -1539,6 +1567,7 @@ function ManagerSection({
 //  운영자에게 배부받은 할당량으로 유저에게 티켓 발급(신청 승인 or 직접 부여).
 //  티켓은 결제와 동일 효력 — 유저가 사용하면 amount=0 paid 주문으로 참여한다.
 function TicketSection({ challengeId }: { challengeId: string }) {
+  const labelOf = useLeaderNameMap(challengeId);
   const queryClient = useQueryClient();
   const [directUserId, setDirectUserId] = useState('');
 
@@ -1606,7 +1635,7 @@ function TicketSection({ challengeId }: { challengeId: string }) {
                 {pending.map((r: any) => (
                   <div key={r.userId} className="rounded-xl bg-white/60 border border-gray-100 p-3">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-gray-800">{maskUserId(String(r.userId))}</p>
+                      <p className="text-sm font-medium text-gray-800">{labelOf(String(r.userId))}</p>
                       <span className="ml-auto text-[11px] text-gray-400">
                         {r.createdAt ? new Date(r.createdAt).toLocaleDateString('ko-KR') : ''}
                       </span>
@@ -1669,7 +1698,7 @@ function TicketSection({ challengeId }: { challengeId: string }) {
               <div className="mt-1.5 space-y-1">
                 {issuedTickets.slice(0, 10).map((t: any) => (
                   <div key={t.ticketId} className="flex items-center gap-2 text-xs text-gray-600">
-                    <span>{maskUserId(String(t.userId))}</span>
+                    <span>{labelOf(String(t.userId))}</span>
                     <span
                       className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
                         t.status === 'consumed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
@@ -1882,12 +1911,205 @@ function RewardProductsSection({ challengeId }: { challengeId: string }) {
   );
 }
 
+// ── 완주자 랜덤 추첨 (리더/매니저) ─────────────────────────────────────────
+//  상품 증정 대상자를 완주자 중에서 서버가 crypto 난수로 추첨(조작 시비 방지)하고
+//  이력을 기록한다. 발송은 아래 🎁 완주 선물 섹션의 교환권 흐름을 그대로 사용.
+interface DrawWinnerView {
+  userId: string;
+  userChallengeId: string | null;
+  leaderVisibleName?: string | null;
+  personalGoal: string | null;
+  completedDays: number;
+  score: number;
+}
+
+interface DrawRecordView {
+  drawId: string;
+  title: string | null;
+  winnerCount: number;
+  eligibleCount: number;
+  excludePreviousWinners: boolean;
+  winners: DrawWinnerView[];
+  executedByRole: 'leader' | 'manager';
+  createdAt: string;
+}
+
+function DrawSection({ challengeId, managerMode }: { challengeId: string; managerMode?: boolean }) {
+  const queryClient = useQueryClient();
+  const labelOf = useLeaderNameMap(challengeId);
+  const [title, setTitle] = useState('');
+  const [winnerCount, setWinnerCount] = useState('1');
+  const [excludePrevious, setExcludePrevious] = useState(false);
+  const [lastDraw, setLastDraw] = useState<DrawRecordView | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const { data } = useQuery({
+    queryKey: ['leader-draws', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/c/${challengeId}/leader/draws`);
+      return res.data.data as { draws: DrawRecordView[]; total: number };
+    },
+  });
+
+  const drawMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post(`/c/${challengeId}/leader/draws`, {
+        winnerCount: Math.max(1, Number(winnerCount) || 1),
+        ...(title.trim() ? { title: title.trim() } : {}),
+        ...(excludePrevious ? { excludePreviousWinners: true } : {}),
+      });
+      return res.data;
+    },
+    onSuccess: (res: any) => {
+      setLastDraw(res?.data as DrawRecordView);
+      toast.success(res?.message || '추첨 완료 🎉');
+      queryClient.invalidateQueries({ queryKey: ['leader-draws', challengeId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '추첨에 실패했어요'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (drawId: string) => apiClient.delete(`/c/${challengeId}/leader/draws/${drawId}`),
+    onSuccess: (_res, drawId) => {
+      if (lastDraw?.drawId === drawId) setLastDraw(null);
+      queryClient.invalidateQueries({ queryKey: ['leader-draws', challengeId] });
+      toast.success('추첨 기록을 삭제했어요');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '삭제에 실패했어요'),
+  });
+
+  const draws = data?.draws ?? [];
+
+  const WinnerRow = ({ w, index }: { w: DrawWinnerView; index: number }) => (
+    <div
+      className="flex items-center gap-2 rounded-lg bg-white border border-amber-100 px-2.5 py-2 animate-[fadeIn_0.4s_ease-out_both]"
+      style={{ animationDelay: `${index * 0.35}s` }}
+    >
+      <span className="text-sm">🏆</span>
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-gray-800">{w.leaderVisibleName ?? labelOf(w.userId)}</p>
+        {w.personalGoal && <p className="text-[10px] text-gray-400 truncate">{w.personalGoal}</p>}
+      </div>
+      <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
+        {w.completedDays}일 완료 · {w.score}점
+      </span>
+    </div>
+  );
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <h3 className="font-bold text-gray-900">🎲 완주자 랜덤 추첨</h3>
+      <p className="text-[11px] text-gray-400 mt-1">
+        완주자 중 당첨자를 서버가 무작위(crypto 난수)로 뽑고 이력을 남겨요. 당첨자 발송은 아래 🎁 완주 선물에서 하세요.
+      </p>
+
+      <div className="mt-3 space-y-2">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={100}
+          placeholder="추첨 이름 (예: 스타벅스 기프티콘 3명)"
+          className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 bg-white focus:outline-none focus:border-primary-400"
+        />
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-600 whitespace-nowrap">당첨 인원</label>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={winnerCount}
+            onChange={(e) => setWinnerCount(e.target.value)}
+            className="w-20 text-xs px-2 py-2 rounded-lg border border-gray-200 bg-white text-center focus:outline-none focus:border-primary-400"
+          />
+          <label className="ml-auto flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={excludePrevious}
+              onChange={(e) => setExcludePrevious(e.target.checked)}
+            />
+            이전 당첨자 제외
+          </label>
+        </div>
+        <button
+          type="button"
+          disabled={drawMutation.isPending}
+          onClick={() => drawMutation.mutate()}
+          className="w-full py-2.5 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 disabled:opacity-50 transition-colors"
+        >
+          {drawMutation.isPending ? '추첨 중... 🎲' : '추첨하기 🎲'}
+        </button>
+      </div>
+
+      {/* 직전 추첨 결과 — 순차 리빌 */}
+      {lastDraw && (
+        <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3">
+          <p className="text-xs font-bold text-amber-800">
+            🎉 {lastDraw.title || '추첨 결과'} — 완주자 {lastDraw.eligibleCount}명 중 {lastDraw.winners.length}명
+          </p>
+          <div className="mt-2 space-y-1" key={lastDraw.drawId}>
+            {lastDraw.winners.map((w, i) => (
+              <WinnerRow key={w.userId} w={w} index={i} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 추첨 이력 */}
+      {draws.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((v) => !v)}
+            className="text-xs font-semibold text-gray-600 hover:text-gray-800"
+          >
+            추첨 이력 ({draws.length}) {historyOpen ? '▲' : '▼'}
+          </button>
+          {historyOpen && (
+            <div className="mt-2 space-y-2">
+              {draws.map((d) => (
+                <div key={d.drawId} className="rounded-lg bg-white/60 border border-gray-100 p-2.5">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold text-gray-800 truncate">
+                      {d.title || '추첨'} · {d.winners.length}명
+                      {d.excludePreviousWinners ? ' · 이전 당첨 제외' : ''}
+                    </p>
+                    <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
+                      {new Date(d.createdAt).toLocaleDateString('ko-KR')}
+                      {d.executedByRole === 'manager' ? ' · 매니저' : ''}
+                    </span>
+                    {!managerMode && (
+                      <button
+                        type="button"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm('이 추첨 기록을 삭제할까요?')) deleteMutation.mutate(d.drawId);
+                        }}
+                        className="text-[10px] text-red-400 hover:text-red-600 font-semibold whitespace-nowrap"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    {d.winners.map((w) => w.leaderVisibleName ?? labelOf(w.userId)).join(', ')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ── 완주 선물 발송 (리더) ──────────────────────────────────────────────────
 //  완주자에게 선물 교환권 발송 — 미리 등록(카탈로그)+일괄 발송 또는 즉석 입력 개별 발송.
 //  교환권 만료 기본 30일, 지급(교환 신청) 전까지 수정 가능. 실물은 claim 시 유저가
 //  배송 정보를 입력하고, 리더가 발송 처리(ship)한다.
 function GiftSection({ challengeId }: { challengeId: string }) {
   const queryClient = useQueryClient();
+  const labelOf = useLeaderNameMap(challengeId);
   const [giftName, setGiftName] = useState('');
   const [giftDesc, setGiftDesc] = useState('');
   const [giftType, setGiftType] = useState<'digital' | 'physical'>('digital');
@@ -2007,7 +2229,7 @@ function GiftSection({ challengeId }: { challengeId: string }) {
               {claimedPhysical.map((v) => (
                 <div key={v.voucherId} className="rounded-lg bg-white border border-amber-100 p-2.5">
                   <p className="text-xs font-semibold text-gray-800">
-                    {v.giftName} → {maskUserId(String(v.userId))}
+                    {v.giftName} → {labelOf(String(v.userId))}
                   </p>
                   {v.recipient && (
                     <p className="text-[11px] text-gray-600 mt-0.5">
@@ -2110,7 +2332,7 @@ function GiftSection({ challengeId }: { challengeId: string }) {
                           checked={selectedUsers.has(String(p.userId))}
                           onChange={() => toggleUser(String(p.userId))}
                         />
-                        <span className="text-xs font-medium text-gray-800">{maskUserId(String(p.userId))}</span>
+                        <span className="text-xs font-medium text-gray-800">{labelOf(String(p.userId))}</span>
                         <span className="ml-auto text-[10px] text-gray-400">
                           {sent.length > 0
                             ? sent.map((v) => VOUCHER_STATUS_LABEL[v.status] ?? v.status).join(' · ')
@@ -2158,7 +2380,7 @@ function GiftSection({ challengeId }: { challengeId: string }) {
                 {vouchers.slice(0, 15).map((v) => (
                   <div key={v.voucherId} className="flex items-center gap-2 text-xs text-gray-600">
                     <span className="truncate">
-                      {v.giftName} → {maskUserId(String(v.userId))}
+                      {v.giftName} → {labelOf(String(v.userId))}
                     </span>
                     <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
                       {VOUCHER_STATUS_LABEL[v.status] ?? v.status}
@@ -2381,6 +2603,7 @@ export function LeaderOpsTab({
       )}
       {isPaid && <TicketSection challengeId={challengeId} />}
       <RewardProductsSection challengeId={challengeId} />
+      <DrawSection challengeId={challengeId} managerMode={managerMode} />
       <GiftSection challengeId={challengeId} />
 
       {/* 6) 챌린지 설정 및 종료 — 맨 아래 (리더 전용) */}

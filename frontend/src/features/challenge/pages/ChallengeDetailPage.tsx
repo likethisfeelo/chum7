@@ -26,6 +26,7 @@ const parseTargetTimeToFormState = (targetTime?: string): WizardFormState => {
     questTitle: '',
     questDescription: '',
     questAllowedVerificationTypes: ['image', 'text', 'link', 'video'],
+    leaderVisibleName: '',
   };
 
   if (!targetTime) return fallback;
@@ -126,6 +127,10 @@ export const ChallengeDetailPage = () => {
         },
         // 유료 챌린지는 paid 주문 필수 (커머스 v0 — 402 ORDER_REQUIRED/ORDER_NOT_PAID)
         ...(orderId ? { orderId } : {}),
+        // custom 식별 챌린지 — 리더에게만 보일 이름 (운영탭 전용)
+        ...(formState.leaderVisibleName?.trim()
+          ? { leaderVisibleName: formState.leaderVisibleName.trim() }
+          : {}),
       });
 
       return {

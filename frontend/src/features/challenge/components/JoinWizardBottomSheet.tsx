@@ -127,6 +127,7 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
     questTitle: '',
     questDescription: '',
     questAllowedVerificationTypes: [...allowedTypes],
+    leaderVisibleName: '',
   });
 
   useEffect(() => {
@@ -140,6 +141,7 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
       questTitle: '',
       questDescription: '',
       questAllowedVerificationTypes: [...allowedTypes],
+      leaderVisibleName: '',
     }));
   }, [isOpen, challenge.targetTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -151,10 +153,17 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
   const isQuestRequired = challenge.challengeType === 'personal_only';
   const showQuestDetailFields = Boolean(challenge.personalQuestEnabled);
 
+  const needsLeaderVisibleName = challenge.leaderIdentityMode === 'custom';
+
   const goNext = () => {
     const error = currentConfig.validate(formState);
     if (error) {
       toast.error(error);
+      return;
+    }
+    // custom 식별 챌린지 — 첫 스텝에서 리더 표시 이름 필수 (서버 400 선제 차단)
+    if (currentConfig.id === 'time' && needsLeaderVisibleName && !formState.leaderVisibleName.trim()) {
+      toast.error('리더에게 보일 이름을 입력해주세요');
       return;
     }
 
@@ -220,6 +229,25 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
 
           <p className="text-sm text-gray-600">매일 이 시간에 챌린지를 실천합니다</p>
           <p className="text-xs text-gray-400">표시 시간대: {userTimezone}</p>
+
+          {needsLeaderVisibleName && (
+            <div className="pt-2 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-700">리더에게 보일 이름</label>
+                <span className="text-xs text-gray-400">{formState.leaderVisibleName.length}/20</span>
+              </div>
+              <input
+                value={formState.leaderVisibleName}
+                maxLength={20}
+                onChange={(e) => setFormState((prev) => ({ ...prev, leaderVisibleName: e.target.value }))}
+                placeholder="예: 홍길동, 3반 민지"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl"
+              />
+              <p className="text-xs text-gray-400 mt-1.5">
+                이 챌린지의 리더·매니저 운영 화면에서만 보여요. 피드·마당 활동은 계속 익명이에요.
+              </p>
+            </div>
+          )}
         </div>
       );
     }
@@ -341,6 +369,13 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
             <span className="text-gray-500">실천 시간</span>
             <span className="font-semibold text-gray-900">{formatTime(formState.hour12, formState.minute, formState.meridiem)}</span>
           </div>
+
+          {needsLeaderVisibleName && !!formState.leaderVisibleName.trim() && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-500">리더에게 보일 이름</span>
+              <span className="font-semibold text-gray-900">{formState.leaderVisibleName.trim()}</span>
+            </div>
+          )}
 
           {!!formState.questTitle.trim() && (
             <>

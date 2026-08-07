@@ -172,3 +172,15 @@
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
+
+/* 추첨 당첨자 순차 리빌 (LeaderOpsTab DrawSection — animate-[fadeIn_...]) */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
