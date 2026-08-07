@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -17,6 +17,61 @@ import {
   remedyPolicyOf,
 } from '@/features/challenge/utils/remedyStatus';
 
+type RemedyMediaType = 'image' | 'text' | 'link' | 'video';
+
+const TYPE_META: Record<RemedyMediaType, { label: string; emoji: string }> = {
+  image: { label: '사진', emoji: '📸' },
+  text: { label: '텍스트', emoji: '✍️' },
+  link: { label: '링크', emoji: '🔗' },
+  video: { label: '영상', emoji: '🎥' },
+};
+
+const MAX_REMEDY_IMAGES = 5;
+const MAX_VIDEO_SEC = 60;
+
+/** presigned PUT 업로드 (InlineVerificationForm 패턴 축약) */
+async function uploadViaPresign(
+  file: File,
+  meta: { challengeId: string; userChallengeId: string; mediaKind: 'image' | 'video'; videoDurationSec?: number },
+): Promise<string> {
+  const { data: up } = await apiClient.post('/c/verifications/upload-url', {
+    fileName: file.name,
+    fileType: file.type,
+    fileSize: file.size,
+    challengeId: meta.challengeId,
+    userChallengeId: meta.userChallengeId,
+    mediaKind: meta.mediaKind,
+    ...(meta.mediaKind === 'video'
+      ? { videoDurationSec: meta.videoDurationSec, trimStartSec: 0, trimEndSec: meta.videoDurationSec }
+      : {}),
+  });
+  const res = await fetch(up.data.uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type },
+    body: file,
+  });
+  if (!res.ok) throw new Error(`UPLOAD_PUT_FAILED_${res.status}`);
+  return up.data.fileUrl as string;
+}
+
+function readVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      const duration = Number(video.duration || 0);
+      URL.revokeObjectURL(url);
+      resolve(duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('VIDEO_DURATION_READ_FAILED'));
+    };
+    video.src = url;
+  });
+}
+
 export const RemedyPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -30,6 +85,11 @@ export const RemedyPage = () => {
     todayNote: '',
     practiceAt: new Date().toISOString().slice(0, 16),
   });
+  // 인증 형식 — 챌린지가 허용한 방식만 (일반 인증과 동일 계약. 서버도 검증한다)
+  const [selectedType, setSelectedType] = useState<RemedyMediaType>('text');
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [linkUrl, setLinkUrl] = useState('');
 
   const { data: myChallengesData, isLoading: isLoadingChallenges } = useQuery({
     queryKey: ['my-challenges', 'remedy-page'],
@@ -52,6 +112,20 @@ export const RemedyPage = () => {
     return (currentChallenge?.progress || []).filter((p: any) => days.has(Number(p.day)));
   }, [currentChallenge]);
 
+  // 챌린지가 허용한 인증 방식 — 보완도 일반 인증과 같은 형식 제약을 따른다
+  const allowedTypes = useMemo<RemedyMediaType[]>(() => {
+    const raw = currentChallenge?.challenge?.allowedVerificationTypes;
+    const list = Array.isArray(raw) && raw.length > 0 ? raw : ['image', 'text', 'link', 'video'];
+    return (['image', 'text', 'link', 'video'] as RemedyMediaType[]).filter((t) => list.includes(t));
+  }, [currentChallenge]);
+
+  // 허용 목록이 로드되면 첫 번째 허용 방식을 기본 선택 (텍스트 미허용 챌린지 대응)
+  useEffect(() => {
+    if (allowedTypes.length > 0 && !allowedTypes.includes(selectedType)) {
+      setSelectedType(allowedTypes[0]);
+    }
+  }, [allowedTypes, selectedType]);
+
   // 정책은 참여 레코드가 아닌 챌린지 META에서 폴백 해석 (참여 레벨 값은 대부분 null)
   const remedyPolicy = remedyPolicyOf(currentChallenge);
   const remainingRemedy = getRemainingRemedyCount(remedyPolicy, currentChallenge?.progress || []);
@@ -65,7 +139,34 @@ export const RemedyPage = () => {
 
   const remedyMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiClient.post('/c/verifications/remedy', data);
+      const challengeId = currentChallenge?.challengeId ?? currentChallenge?.challenge?.challengeId;
+      const uploadMeta = { challengeId: String(challengeId), userChallengeId: String(userChallengeId) };
+
+      // 형식별 콘텐츠 준비 — 사진/영상은 presigned PUT 업로드 후 URL 첨부
+      const content: Record<string, unknown> = {};
+      if (selectedType === 'image') {
+        const urls: string[] = [];
+        for (const file of imageFiles) {
+          urls.push(await uploadViaPresign(file, { ...uploadMeta, mediaKind: 'image' }));
+        }
+        content.imageUrls = urls;
+        content.imageUrl = urls[0];
+      } else if (selectedType === 'video' && videoFile) {
+        const duration = Math.min(await readVideoDuration(videoFile), MAX_VIDEO_SEC);
+        content.videoUrl = await uploadViaPresign(videoFile, {
+          ...uploadMeta,
+          mediaKind: 'video',
+          videoDurationSec: Math.round(duration),
+        });
+      } else if (selectedType === 'link') {
+        content.linkUrl = linkUrl.trim();
+      }
+
+      const response = await apiClient.post('/c/verifications/remedy', {
+        ...data,
+        verificationType: selectedType,
+        ...content,
+      });
       return response.data;
     },
     onSuccess: (data) => {
@@ -92,15 +193,28 @@ export const RemedyPage = () => {
       return;
     }
 
-    if (!formData.todayNote.trim()) {
+    // 형식별 필수 콘텐츠 검증 (서버 MISSING_CONTENT 선제 차단)
+    if (selectedType === 'text' && !formData.todayNote.trim()) {
       toast.error('오늘의 실천을 작성해주세요');
+      return;
+    }
+    if (selectedType === 'image' && imageFiles.length === 0) {
+      toast.error('사진을 1장 이상 첨부해주세요');
+      return;
+    }
+    if (selectedType === 'video' && !videoFile) {
+      toast.error('영상을 첨부해주세요');
+      return;
+    }
+    if (selectedType === 'link' && !/^https:\/\//i.test(linkUrl.trim())) {
+      toast.error('https:// 로 시작하는 링크를 입력해주세요');
       return;
     }
 
     remedyMutation.mutate({
       userChallengeId,
       originalDay: selectedDay,
-      todayNote: formData.todayNote.trim(),
+      ...(formData.todayNote.trim() ? { todayNote: formData.todayNote.trim() } : {}),
       practiceAt: new Date(formData.practiceAt).toISOString(),
     });
   };
@@ -209,13 +323,109 @@ export const RemedyPage = () => {
             {failedDays.length === 0 && <p className="text-xs text-gray-500 mt-2">보완 가능한 실패 Day가 없습니다.</p>}
           </div>
 
+          {/* 인증 형식 — 챌린지 허용 방식만 (2개 이상일 때만 선택 칩 노출) */}
+          {allowedTypes.length > 1 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">인증 방식</label>
+              <div className="flex flex-wrap gap-2">
+                {allowedTypes.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setSelectedType(t)}
+                    className={`px-3 py-2 rounded-lg text-sm border ${
+                      selectedType === t
+                        ? 'bg-purple-600 text-white border-purple-600'
+                        : 'bg-white text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    {TYPE_META[t].emoji} {TYPE_META[t].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 형식별 콘텐츠 입력 */}
+          {selectedType === 'image' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">사진 첨부 📸 (최대 {MAX_REMEDY_IMAGES}장)</label>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []).slice(0, MAX_REMEDY_IMAGES);
+                  setImageFiles(files);
+                }}
+                className="w-full text-sm text-gray-600 file:mr-3 file:px-4 file:py-2 file:rounded-xl file:border-0 file:bg-purple-100 file:text-purple-700 file:text-sm file:font-semibold"
+              />
+              {imageFiles.length > 0 && (
+                <div className="mt-2 flex gap-2 flex-wrap">
+                  {imageFiles.map((f, i) => (
+                    <div key={`${f.name}-${i}`} className="relative">
+                      <img src={URL.createObjectURL(f)} alt="" className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
+                      <button
+                        type="button"
+                        onClick={() => setImageFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-800 text-white text-[10px] flex items-center justify-center"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedType === 'video' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">영상 첨부 🎥 (최대 {MAX_VIDEO_SEC}초)</label>
+              <input
+                type="file"
+                accept="video/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  if (!file) { setVideoFile(null); return; }
+                  try {
+                    const duration = await readVideoDuration(file);
+                    if (duration > MAX_VIDEO_SEC + 1) {
+                      toast.error(`영상은 ${MAX_VIDEO_SEC}초 이하만 올릴 수 있어요`);
+                      e.target.value = '';
+                      return;
+                    }
+                  } catch {
+                    // 길이 판독 실패 시 서버 검증에 맡긴다
+                  }
+                  setVideoFile(file);
+                }}
+                className="w-full text-sm text-gray-600 file:mr-3 file:px-4 file:py-2 file:rounded-xl file:border-0 file:bg-purple-100 file:text-purple-700 file:text-sm file:font-semibold"
+              />
+              {videoFile && <p className="text-xs text-gray-500 mt-1.5">🎬 {videoFile.name}</p>}
+            </div>
+          )}
+
+          {selectedType === 'link' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">링크 🔗</label>
+              <input
+                type="url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https:// 로 시작하는 인증 링크"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+          )}
+
           <Textarea
-            label="오늘의 실천 ✨"
+            label={selectedType === 'text' ? '오늘의 실천 ✨' : '한 줄 메모 (선택)'}
             value={formData.todayNote}
             onChange={(e) => setFormData({ ...formData, todayNote: e.target.value })}
             placeholder="오늘은 어떻게 다시 실천했나요?"
-            rows={4}
-            required
+            rows={selectedType === 'text' ? 4 : 2}
+            required={selectedType === 'text'}
           />
 
           <div>
