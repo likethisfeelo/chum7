@@ -17,7 +17,12 @@ import {
   putChallenge,
   updateChallengeFields,
 } from '../repo/challenges';
-import { participationKeys, putParticipation } from '../repo/participations';
+import {
+  listChallengeParticipations,
+  participationKeys,
+  putParticipation,
+  updateParticipationFields,
+} from '../repo/participations';
 import { stripKeys } from '../repo/shared';
 
 export const challengeRoutes = new Hono<AppEnv>();
@@ -227,6 +232,34 @@ challengeRoutes.patch('/:challengeId', async (c) => {
   for (const [key, value] of Object.entries(updates)) {
     if (value === undefined) continue;
     attrs[key] = value;
+  }
+
+  // 보완 정책 변경 — 횟수 상한 검증 + 정규 인증일 수가 바뀌면(anytime계열↔last_day)
+  // 기존 참여자의 진행표를 재구성한다 (시작 전이라 진행 데이터가 없어 안전).
+  if (updates.defaultRemedyPolicy) {
+    const durationDays = Number(challenge.durationDays ?? 7);
+    const newPolicy = updates.defaultRemedyPolicy;
+    if (newPolicy.type !== 'disabled' && newPolicy.maxRemedyDays !== null && newPolicy.maxRemedyDays > durationDays - 1) {
+      return fail(c, 400, 'INVALID_MAX_REMEDY_DAYS',
+        `최대 보완 횟수는 챌린지 기간 - 1(${durationDays - 1})을 초과할 수 없습니다`);
+    }
+    attrs.defaultRemedyPolicy = {
+      type: newPolicy.type,
+      maxRemedyDays: newPolicy.type === 'disabled' ? null : newPolicy.maxRemedyDays,
+    };
+
+    const oldType = challenge.defaultRemedyPolicy?.type ?? 'anytime';
+    const oldRegular = oldType === 'last_day' ? Math.max(durationDays - 1, 1) : durationDays;
+    const newRegular = newPolicy.type === 'last_day' ? Math.max(durationDays - 1, 1) : durationDays;
+    if (oldRegular !== newRegular) {
+      const participants = await listChallengeParticipations(challengeId);
+      const freshProgress = Array.from({ length: newRegular }, (_, i) => ({ day: i + 1, status: null }));
+      for (const p of participants) {
+        const pUserId = String(p.userId ?? '');
+        if (!pUserId) continue;
+        await updateParticipationFields(challengeId, pUserId, { progress: freshProgress, updatedAt: now });
+      }
+    }
   }
 
   await updateChallengeFields(challengeId, attrs, {

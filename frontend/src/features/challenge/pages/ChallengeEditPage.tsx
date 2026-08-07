@@ -6,6 +6,14 @@ import { FiArrowLeft } from 'react-icons/fi';
 import { Loading } from '@/shared/components/Loading';
 import { CoverImagePicker } from '../components/CoverImagePicker';
 import { CHALLENGE_CATEGORIES } from '../constants/categories';
+import {
+  IDENTITY_MODE_OPTIONS,
+  REMEDY_CHOICE_OPTIONS,
+  fromRemedyPolicy,
+  toRemedyPolicy,
+  type LeaderIdentityMode,
+  type RemedyChoice,
+} from '../constants/remedyPolicy';
 import toast from 'react-hot-toast';
 
 function toLocalDateTimeInputValue(isoStr?: string): string {
@@ -51,6 +59,8 @@ export const ChallengeEditPage = () => {
     physicalRewardName: string;
     hasOnlineReward: boolean;
     onlineRewardName: string;
+    leaderIdentityMode: LeaderIdentityMode;
+    remedyChoice: RemedyChoice;
   } | null>(null);
 
   // challenge 로드 후 한 번만 초기화
@@ -71,6 +81,8 @@ export const ChallengeEditPage = () => {
       physicalRewardName: challenge.rewardPhysical?.name || '',
       hasOnlineReward: Boolean(challenge.rewardOnline?.name),
       onlineRewardName: challenge.rewardOnline?.name || '',
+      leaderIdentityMode: (challenge.leaderIdentityMode as LeaderIdentityMode) || 'realname',
+      remedyChoice: fromRemedyPolicy(challenge.defaultRemedyPolicy),
     });
   }
 
@@ -98,6 +110,9 @@ export const ChallengeEditPage = () => {
         form.hasOnlineReward && form.onlineRewardName.trim()
           ? { name: form.onlineRewardName.trim() }
           : null;
+      // 시작 전 한정 정책 변경 — 서버가 draft·recruiting 외에는 거부한다
+      payload.leaderIdentityMode = form.leaderIdentityMode;
+      payload.defaultRemedyPolicy = toRemedyPolicy(form.remedyChoice);
       return apiClient.patch(`/c/challenges/${challengeId}`, payload);
     },
     onSuccess: () => {
@@ -300,6 +315,67 @@ export const ChallengeEditPage = () => {
             onChange={set('challengeStartAt')}
             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
           />
+        </div>
+
+        {/* 참여자 식별 방식 — 시작 전에만 변경 가능 (운영탭 전용 표시) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">참여자 식별 방식</label>
+          <p className="text-[11px] text-gray-400 mb-2">
+            운영탭에서 참여자를 어떤 이름으로 볼지 정해요. 피드·마당 활동은 계속 익명이에요.
+          </p>
+          <div className="space-y-2">
+            {IDENTITY_MODE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setForm((f) => (f ? { ...f, leaderIdentityMode: opt.value } : f))}
+                className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
+                  form.leaderIdentityMode === opt.value ? 'border-primary-400 bg-primary-50' : 'border-gray-100 bg-white'
+                }`}
+              >
+                <p className={`text-sm font-medium ${form.leaderIdentityMode === opt.value ? 'text-primary-700' : 'text-gray-800'}`}>
+                  {opt.label}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{opt.desc}</p>
+              </button>
+            ))}
+          </div>
+          {form.leaderIdentityMode === 'custom' && challenge.leaderIdentityMode !== 'custom' && (
+            <p className="mt-2 text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              이미 참여한 사람은 이름을 입력하지 않아 마스킹으로 보일 수 있어요.
+            </p>
+          )}
+        </div>
+
+        {/* 보완 정책 — 시작 전에만 변경 가능 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">보완 정책</label>
+          <p className="text-[11px] text-gray-400 mb-2">
+            인증을 놓친 날을 참여자가 복구(보완)할 수 있는 방식이에요. 보완 점수는 기본 점수의 70%예요.
+          </p>
+          <div className="space-y-2">
+            {REMEDY_CHOICE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setForm((f) => (f ? { ...f, remedyChoice: opt.value } : f))}
+                className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
+                  form.remedyChoice === opt.value ? 'border-primary-400 bg-primary-50' : 'border-gray-100 bg-white'
+                }`}
+              >
+                <p className={`text-sm font-medium ${form.remedyChoice === opt.value ? 'text-primary-700' : 'text-gray-800'}`}>
+                  {opt.label}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{opt.desc}</p>
+              </button>
+            ))}
+          </div>
+          {form.remedyChoice === 'last_day' && (
+            <p className="mt-2 text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              {Number(challenge.durationDays || 7)}일 챌린지라면 실제 인증일은{' '}
+              {Math.max(Number(challenge.durationDays || 7) - 1, 1)}일이고, 마지막 하루는 보완 전용일이 돼요.
+            </p>
+          )}
         </div>
 
         <div>
