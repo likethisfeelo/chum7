@@ -10,7 +10,11 @@ import { Loading } from '@/shared/components/Loading';
 import toast from 'react-hot-toast';
 import { getRemainingRemedyCount, getRemedyLabel, getRemedyType } from '@/features/challenge/utils/flowPolicy';
 import { haptic } from '@/shared/utils/haptics';
-import { durationDaysOf, missedDaysOf } from '@/features/challenge/utils/remedyStatus';
+import {
+  computeTodayChallengeDay,
+  durationDaysOf,
+  missedDaysOf,
+} from '@/features/challenge/utils/remedyStatus';
 
 export const RemedyPage = () => {
   const navigate = useNavigate();
@@ -103,6 +107,27 @@ export const RemedyPage = () => {
       <div className="min-h-screen p-6 text-center text-gray-600">
         <p>유효한 챌린지 참여 정보를 찾을 수 없습니다.</p>
         <button onClick={() => navigate('/me')} className="mt-4 px-4 py-2 rounded-xl bg-primary-600 text-white">ME로 이동</button>
+      </div>
+    );
+  }
+
+  // 종료된 챌린지는 보완 불가 — 기간이 끝나면 점수·완주가 확정된다 (서버도 동일하게 막는다)
+  if (computeTodayChallengeDay(currentChallenge) > durationDays) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
+        <p className="text-4xl mb-3">🏁</p>
+        <p className="text-base font-semibold text-gray-800">이미 종료된 챌린지예요</p>
+        <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
+          보완은 챌린지가 진행 중일 때만 할 수 있어요.
+          <br />
+          다음 챌린지에서 다시 이어가요.
+        </p>
+        <button
+          onClick={() => navigate('/me')}
+          className="mt-6 px-5 py-2.5 rounded-full bg-primary-600 text-white text-sm font-semibold"
+        >
+          내 챌린지로
+        </button>
       </div>
     );
   }

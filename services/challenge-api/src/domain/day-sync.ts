@@ -192,6 +192,15 @@ export function calculateEffectiveCurrentDay(
   return Math.max(storedCurrentDay, syncedCurrentDay);
 }
 
+/**
+ * 보완 창이 닫혔는지 — 챌린지 기간이 지나면 보완할 수 없다.
+ * 종료 시점에 점수·완주 판정이 확정되므로, 이후 보완으로 결과가 바뀌면 안 된다
+ * (인증 취소로 특별 개방된 일자도 동일하게 닫힌다).
+ */
+export function isRemedyWindowClosed(effectiveCurrentDay: number, durationDays: number): boolean {
+  return effectiveCurrentDay > normalizeDurationDays(durationDays);
+}
+
 export function isChallengePeriodEnded(
   effectiveCurrentDay: number,
   durationDays: number,

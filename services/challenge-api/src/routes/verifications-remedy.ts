@@ -2,6 +2,7 @@
  * 보완(remedy) 인증 라우트 — POST /c/verifications/remedy
  * 레거시: backend/services/verification/remedy/index.ts
  * 정책: anytime(Day 2+, 이전 실패일만) / last_day(마지막 날 전용, maxRemedyDays 제한) / disabled.
+ * 공통 창: 챌린지 기간 내에서만 — 종료(기간 경과)·중도 포기 후에는 보완 불가.
  * 보완 성공 시 해당 progress 항목 status:'success', remedied:true 마킹.
  */
 import { randomUUID } from 'node:crypto';
@@ -9,7 +10,13 @@ import { Hono } from 'hono';
 import type { AppEnv, ApiContext } from '@chum7/api-kit';
 import { ok, fail } from '@chum7/api-kit';
 import { remedyVerificationSchema } from '../schemas';
-import { calculateChallengeDay, certDateFromIso, remedyScore, safeTimezone } from '../domain/day-sync';
+import {
+  calculateChallengeDay,
+  certDateFromIso,
+  isRemedyWindowClosed,
+  remedyScore,
+  safeTimezone,
+} from '../domain/day-sync';
 import { normalizeProgress } from '../domain/progress';
 import { resolveAllowedTypes, resolvePerformedAt, resolveVerificationType } from '../domain/verification-rules';
 import { getChallenge } from '../repo/challenges';
@@ -67,6 +74,15 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
     } catch {
       // fallback to stored value
     }
+  }
+
+  // 종료된 챌린지는 보완 불가 — 기간이 지나면 점수·완주 판정이 확정된다.
+  // 취소로 특별 개방(remedyUnlocked)된 일자도 종료 후에는 함께 닫힌다.
+  if (isRemedyWindowClosed(effectiveCurrentDay, durationDays)) {
+    return fail(c, 400, 'REMEDY_WINDOW_CLOSED', '종료된 챌린지는 보완할 수 없어요');
+  }
+  if (userChallenge.status === 'gave_up' || userChallenge.phase === 'gave_up') {
+    return fail(c, 400, 'REMEDY_GAVE_UP', '중도 포기한 챌린지는 보완할 수 없어요');
   }
 
   if (!remedyUnlocked) {

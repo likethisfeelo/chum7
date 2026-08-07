@@ -75,9 +75,9 @@ describe('missedDaysOf', () => {
     expect(missedDaysOf(item)).not.toContain(5);
   });
 
-  test('종료 다음날에는 마지막 날도 보완 대상에 포함된다', () => {
+  test('종료 후에는 대상이 없다 — 기간이 끝나면 점수가 확정된다', () => {
     const item = participation({ durationDays: 5, todayDay: 6, successDays: [1, 2, 3, 4] });
-    expect(missedDaysOf(item)).toEqual([5]);
+    expect(missedDaysOf(item)).toEqual([]);
   });
 
   test('이미 보완한 Day는 제외한다', () => {
@@ -87,22 +87,17 @@ describe('missedDaysOf', () => {
 });
 
 describe('collectMissedChallenges', () => {
-  test('마지막 날을 놓쳐 failed로 확정돼도 종료 유예 안에서는 보완 대상', () => {
+  test('마지막 날에는 그 이전 미인증일이 보완 대상 (마지막 날 당일은 일반 인증)', () => {
+    const item = participation({ durationDays: 5, todayDay: 5, successDays: [1, 2] });
+    const result = collectMissedChallenges([item]);
+    expect(result).toHaveLength(1);
+    expect(result[0].missedDays).toEqual([3, 4]);
+  });
+
+  test('종료 직후부터 목록에서 빠진다 — 유예 없음', () => {
     const item = participation({
       durationDays: 5,
       todayDay: 6,
-      successDays: [1, 2, 3, 4],
-      status: 'failed',
-    });
-    const result = collectMissedChallenges([item]);
-    expect(result).toHaveLength(1);
-    expect(result[0].missedDays).toEqual([5]);
-  });
-
-  test('종료 이틀 뒤부터는 목록에서 빠진다', () => {
-    const item = participation({
-      durationDays: 5,
-      todayDay: 7,
       successDays: [1, 2, 3, 4],
       status: 'failed',
     });

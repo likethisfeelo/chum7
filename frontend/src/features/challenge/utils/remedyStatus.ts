@@ -51,12 +51,11 @@ export function durationDaysOf(item: any): number {
 /**
  * 지나간 날짜 중 미완료·미보완 Day 목록.
  * 오늘은 제외 — 아직 일반 인증으로 채울 수 있는 날이라 보완 대상이 아니다.
- * 종료 다음날(todayDay = durationDays+1)에는 마지막 날까지 포함되어,
- * 마지막 날을 놓쳐도 하루의 유예 안에서 복구할 수 있다.
+ * 기간이 끝나면 점수·완주 판정이 확정되므로 그 뒤로는 대상이 없다(서버 규칙과 동일).
  */
 export function missedDaysOf(item: any): number[] {
   const todayDay = computeTodayChallengeDay(item);
-  const bound = Math.min(todayDay, durationDaysOf(item) + 1);
+  const bound = Math.min(todayDay, durationDaysOf(item));
   return (Array.isArray(item?.progress) ? item.progress : [])
     .filter((p: any) => Number(p?.day) < bound && p?.status !== 'success' && !p?.remedied)
     .map((p: any) => Number(p.day))
@@ -75,9 +74,9 @@ export interface MissedChallenge {
 
 /**
  * "지금 보완 가능한" 챌린지 목록 (정책·잔여 횟수 반영, 놓친 날 많은 순).
- * 상태로 거르지 않고 기간으로 거른다 — 마지막 날을 놓치면 참여 상태가 failed로
- * 자동 확정되지만, 종료 다음날까지는 보완해서 완주로 되돌릴 수 있어야 하기 때문.
- * (중도 포기·해산은 제외, 종료 이틀 뒤부터는 목록에서 빠진다.)
+ * 서버 보완 창과 동일한 기준으로 거른다 — 진행 중(기간 내)이고, 중도 포기·해산·
+ * 보완 불가 정책이 아닌 참여만. 종료된 챌린지는 즉시 제외된다.
+ * (상태가 아닌 기간으로 판정 — 저장 status는 갱신이 밀릴 수 있다.)
  */
 export function collectMissedChallenges(items: any[]): MissedChallenge[] {
   const result: MissedChallenge[] = [];
@@ -88,8 +87,8 @@ export function collectMissedChallenges(items: any[]): MissedChallenge[] {
     if (remedyType === 'disabled') continue;
     const todayDay = computeTodayChallengeDay(item);
     const durationDays = durationDaysOf(item);
-    if (todayDay > durationDays + 1) continue; // 종료 후 유예(하루) 경과
-    // 마지막날 전용 정책은 서버가 그 날 하루만 창을 여니 유예를 적용하지 않는다
+    if (todayDay > durationDays) continue; // 종료 — 보완 창이 닫혔다
+    // 마지막날 전용 정책은 서버가 그 날 하루만 창을 연다
     if (remedyType === 'last_day' && todayDay !== durationDays) continue;
     const remaining = getRemainingRemedyCount(item?.remedyPolicy, item?.progress || []);
     if (remaining !== null && remaining <= 0) continue;
