@@ -7,7 +7,7 @@ import { format, isToday } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { worldApi, WorldLayer } from '../api/worldApi';
-import { buildCreatures, SpiritCreature, JellyCreature } from './WorldPage';
+import { buildCreatures, SpiritCreature, JellyCreature, type Creature } from './WorldPage';
 import { DEFAULT_BANNERS } from '@/features/challenge/constants/categories';
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏'] as const;
@@ -283,11 +283,43 @@ function WorldWheel({
   );
 }
 
+// ── 빛방울 (퀘스트 점수 기반 — 초반 정원에 생기를 주는 작은 입자) ──────
+function LightDroplet({ c, color }: { c: Creature; color: string }) {
+  return (
+    <motion.div
+      key={c.id}
+      className="absolute rounded-full pointer-events-none"
+      style={{
+        left: `${c.x}%`,
+        top: `${c.y}%`,
+        width: `${c.size * 4}px`,
+        height: `${c.size * 4}px`,
+        backgroundColor: '#ffffff',
+        boxShadow: `0 0 ${c.size * 5}px ${color}`,
+        opacity: 0.7,
+      }}
+      animate={{
+        y: [0, -12, -4, -14, 0],
+        x: [0, 4, -4, 2, 0],
+        opacity: [0.35, 0.8, 0.5, 0.75, 0.35],
+        scale: [1, 1.15, 1, 1.1, 1],
+      }}
+      transition={{ duration: 5 + c.delay, repeat: Infinity, delay: c.delay, ease: 'easeInOut' }}
+    />
+  );
+}
+
 // ── 젤리 정원 (선택 영역 인라인 펼침) ─────────────────────────────────
 function JellyGarden({ area, layer }: { area: WorldArea; layer?: WorldLayer }) {
   const spirits = buildCreatures(layer?.cheerScore ?? 0, 0, `sp-${area.slug}`);
   const jellies = buildCreatures(layer?.thankScore ?? 0, 0, `jl-${area.slug}`);
   const questScore = layer?.questScore ?? 0;
+  // 퀘스트 1~10점: 점수만큼 작은 빛방울 (buildCreatures는 3점당 1개 → ×3으로 1점=1방울)
+  const droplets = questScore > 0 && questScore <= 10
+    ? buildCreatures(questScore * 3, 0, `qd-${area.slug}`)
+    : [];
+  // 가이드 문구는 초반(퀘스트 10점 이하)에만 — 11점부터는 표시하지 않음 (이후 콘텐츠로 대체 예정)
+  const showGuide = questScore <= 10;
   return (
     <div>
       {/* 월드 정보 — 색 카드 위(캐럿 바로 아래), 텍스트/바 동일 인셋 정렬 */}
@@ -316,16 +348,19 @@ function JellyGarden({ area, layer }: { area: WorldArea; layer?: WorldLayer }) {
           background: `linear-gradient(160deg, ${tint(area.color, 0.55)}, ${tint(area.color, 0.15)})`,
         }}
       >
+        {droplets.map((c) => (
+          <LightDroplet key={c.id} c={c} color={area.jelly} />
+        ))}
         {spirits.map((c) => (
           <SpiritCreature key={c.id} c={c} color={area.color} />
         ))}
         {jellies.map((c) => (
           <JellyCreature key={c.id} c={c} color={area.jelly} />
         ))}
-        {spirits.length === 0 && jellies.length === 0 && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+        {showGuide && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center pointer-events-none">
             <span className="mb-1.5 text-2xl">🌱</span>
-            <p className="font-me-title text-base text-gray-600">아직 조용한 정원이에요</p>
+            <p className="font-me-title text-base text-gray-600">아직 고요한 정원이에요</p>
             <p className="font-me-title mt-1 text-xs leading-relaxed text-gray-500">
               인증하고 응원을 주고받으면
               <br />
