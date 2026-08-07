@@ -10,6 +10,7 @@ import { Loading } from '@/shared/components/Loading';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ProfileOrb } from '@/shared/components/ProfileOrb';
 import { InstallAppButton } from '@/shared/components/InstallAppButton';
+import { RemedyHubButton } from '@/features/challenge/components/RemedyHubButton';
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
 import { ProgressDayCircles } from '@/features/challenge/components/ProgressDayCircles';
 import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
@@ -574,6 +575,8 @@ export const MEPage = () => {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <InstallAppButton />
+            {/* 보완 허브 — 밀린 인증이 있을 때만 표시 */}
+            <RemedyHubButton />
             <button
               onClick={() => navigate('/personal-feed/notifications')}
               aria-label="알림"

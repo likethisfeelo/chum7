@@ -5,13 +5,7 @@ import { apiClient } from '@/lib/api-client';
 import { BottomSheet } from '@/shared/components/BottomSheet';
 import { useAuthStore } from '@/stores/authStore';
 import { useRecapStore } from '../recapStore';
-import {
-  getProgressEntryByDay,
-  isCompletedVerificationStatus,
-  resolveChallengeDay,
-  resolveChallengeDurationDays,
-} from '../utils/challengeLifecycle';
-import { getRemainingRemedyCount, getRemedyType } from '../utils/flowPolicy';
+import { collectMissedChallenges } from '../utils/remedyStatus';
 
 /**
  * 보완인증 유도 바텀시트 — 어제 인증을 빼먹은 활성 챌린지가 있으면
@@ -51,40 +45,29 @@ interface MissedCandidate {
   missedDay: number;
   currentDay: number;
   durationDays: number;
+  /** 이 외에 보완할 날이 있는 다른 챌린지 수 (다중 진행 시 안내용 — 시트는 1개만 띄운다) */
+  otherMissedCount: number;
 }
 
 function findMissedYesterday(items: any[]): MissedCandidate | null {
-  for (const item of items || []) {
-    if (String(item?.status) !== 'active') continue;
-    const durationDays = resolveChallengeDurationDays(item);
-    const currentDay = resolveChallengeDay(item);
-    const missedDay = currentDay - 1;
-    if (missedDay < 1 || missedDay > durationDays) continue;
-
-    // 어제가 이미 인증/보완 완료면 스킵
-    const entry = getProgressEntryByDay(item?.progress, missedDay);
-    if (isCompletedVerificationStatus(entry?.status) || entry?.remedied === true) continue;
-
-    // 보완이 실제로 가능한 챌린지만 — disabled 제외, last_day는 보완 전용일에만
-    const remedyType = getRemedyType(item?.remedyPolicy);
-    if (remedyType === 'disabled') continue;
-    if (remedyType === 'last_day' && currentDay < durationDays) continue;
-    const remaining = getRemainingRemedyCount(item?.remedyPolicy, item?.progress || []);
-    if (remaining !== null && remaining <= 0) continue;
-
-    if (shownCount(String(item.userChallengeId), missedDay) >= MAX_SHOWS) continue;
-
-    return {
-      userChallengeId: String(item.userChallengeId),
-      challengeId: String(item.challengeId),
-      title: String(item?.challenge?.title || '챌린지'),
-      badgeIcon: String(item?.challenge?.badgeIcon || '🎯'),
-      missedDay,
-      currentDay,
-      durationDays,
-    };
-  }
-  return null;
+  // 보완 가능 + 놓친 날 존재 챌린지 전체 (KST 달력 기준 — remedyStatus 공용 계산)
+  const missedAll = collectMissedChallenges(items || []);
+  // 자동 시트는 "어제를 갓 놓친" 챌린지에만 — 오래 밀린 건 ME 보완 아이콘이 담당
+  const fresh = missedAll.filter(
+    (m) => m.missedDays.includes(m.todayDay - 1) && shownCount(m.userChallengeId, m.todayDay - 1) < MAX_SHOWS,
+  );
+  const top = fresh[0];
+  if (!top) return null;
+  return {
+    userChallengeId: top.userChallengeId,
+    challengeId: top.challengeId,
+    title: top.title,
+    badgeIcon: top.badgeIcon,
+    missedDay: top.todayDay - 1,
+    currentDay: top.todayDay,
+    durationDays: top.durationDays,
+    otherMissedCount: missedAll.filter((m) => m.userChallengeId !== top.userChallengeId).length,
+  };
 }
 
 export function RemedyPromptSheet() {
@@ -133,6 +116,11 @@ export function RemedyPromptSheet() {
         <p className="mt-2 text-[11px] text-gray-400">
           오늘 Day {candidate.currentDay} / 총 {candidate.durationDays}일
         </p>
+        {candidate.otherMissedCount > 0 && (
+          <p className="mt-1.5 text-[11px] text-gray-400">
+            다른 챌린지 {candidate.otherMissedCount}개에도 보완할 날이 있어요 — ME의 ⛅ 아이콘에서 한눈에 볼 수 있어요
+          </p>
+        )}
 
         <div className="mt-5 space-y-2">
           <button
