@@ -61,13 +61,22 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
   }
 
   // effectiveCurrentDay = max(stored currentDay, 캘린더 계산 day)
+  // 시작일은 참여 startDate만 믿지 않는다 — 값이 비었거나 어긋난 참여에서 Day 1로
+  // 오판해 "Day 2부터" 오류가 나던 문제. 프론트 계산(remedyStatus)과 동일한
+  // 우선순위로 챌린지 실제 시작시각까지 폴백한다.
   const nowIso = new Date().toISOString();
   const timezone = userTimezone(c, userChallenge.timezone);
   let effectiveCurrentDay = Number(userChallenge.currentDay || 1);
-  if (userChallenge.startDate) {
+  const startCandidate = [
+    challenge.actualStartAt,
+    challenge.startConfirmedAt,
+    userChallenge.startDate,
+    challenge.challengeStartAt,
+  ].find((v) => typeof v === 'string' && v.length > 0) as string | undefined;
+  if (startCandidate) {
     try {
       const certDate = certDateFromIso(nowIso, timezone);
-      const calendarDay = calculateChallengeDay(userChallenge.startDate, certDate, timezone);
+      const calendarDay = calculateChallengeDay(startCandidate, certDate, timezone);
       if (Number.isFinite(calendarDay)) {
         effectiveCurrentDay = Math.max(effectiveCurrentDay, calendarDay);
       }
