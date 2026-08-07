@@ -2,6 +2,7 @@ import {
   collectMissedChallenges,
   computeTodayChallengeDay,
   missedDaysOf,
+  remedyPolicyOf,
 } from '../../frontend/src/features/challenge/utils/remedyStatus';
 
 /**
@@ -27,10 +28,16 @@ interface FixtureOptions {
   storedCurrentDay?: number;
   status?: string;
   remedyPolicy?: { type: string; maxRemedyDays?: number | null };
+  /**
+   * 실서비스 응답 형태 재현 — join은 참여 레코드에 remedyPolicy를 저장하지 않아
+   * 최상위는 null이고 정책은 challenge.remedyPolicy(defaultRemedyPolicy)에만 있다.
+   */
+  policyOnChallengeOnly?: boolean;
 }
 
 function participation(opts: FixtureOptions) {
-  const progressLength = opts.remedyPolicy?.type === 'last_day' ? opts.durationDays - 1 : opts.durationDays;
+  const policy = opts.remedyPolicy ?? { type: 'anytime', maxRemedyDays: null };
+  const progressLength = policy.type === 'last_day' ? opts.durationDays - 1 : opts.durationDays;
   return {
     userChallengeId: `uc-${opts.todayDay}`,
     challengeId: 'ch-1',
@@ -39,7 +46,7 @@ function participation(opts: FixtureOptions) {
     currentDay: opts.storedCurrentDay ?? 1,
     durationDays: opts.durationDays,
     startDate: kstDateStringDaysAgo(opts.todayDay - 1),
-    remedyPolicy: opts.remedyPolicy ?? { type: 'anytime', maxRemedyDays: null },
+    remedyPolicy: opts.policyOnChallengeOnly ? null : policy,
     progress: Array.from({ length: progressLength }, (_, i) => {
       const day = i + 1;
       return {
@@ -48,7 +55,12 @@ function participation(opts: FixtureOptions) {
         remedied: opts.remediedDays?.includes(day) ?? false,
       };
     }),
-    challenge: { title: '테스트 챌린지', badgeIcon: '🎯', durationDays: opts.durationDays },
+    challenge: {
+      title: '테스트 챌린지',
+      badgeIcon: '🎯',
+      durationDays: opts.durationDays,
+      remedyPolicy: opts.policyOnChallengeOnly ? policy : null,
+    },
   };
 }
 
@@ -148,5 +160,84 @@ describe('collectMissedChallenges', () => {
     const many = participation({ durationDays: 5, todayDay: 5, successDays: [] });
     const result = collectMissedChallenges([few, many]);
     expect(result[0].missedDays.length).toBeGreaterThan(result[1].missedDays.length);
+  });
+});
+
+describe('remedyPolicyOf — 정책 소스 폴백', () => {
+  test('참여 레코드에 정책이 없으면 challenge.remedyPolicy로 폴백한다', () => {
+    const item = participation({
+      durationDays: 7,
+      todayDay: 3,
+      successDays: [1],
+      remedyPolicy: { type: 'disabled' },
+      policyOnChallengeOnly: true,
+    });
+    expect(item.remedyPolicy).toBeNull(); // 실서비스 형태 검증
+    expect(remedyPolicyOf(item)).toEqual({ type: 'disabled' });
+  });
+
+  test('[회귀] challenge 쪽에만 있는 disabled 정책도 허브에서 제외된다', () => {
+    const item = participation({
+      durationDays: 5,
+      todayDay: 4,
+      successDays: [],
+      remedyPolicy: { type: 'disabled' },
+      policyOnChallengeOnly: true,
+    });
+    expect(collectMissedChallenges([item])).toHaveLength(0);
+  });
+
+  test('[회귀] challenge 쪽에만 있는 last_day 정책도 마지막 날 전에는 제외된다', () => {
+    const item = participation({
+      durationDays: 7,
+      todayDay: 4,
+      successDays: [1],
+      remedyPolicy: { type: 'last_day', maxRemedyDays: 2 },
+      policyOnChallengeOnly: true,
+    });
+    expect(collectMissedChallenges([item])).toHaveLength(0);
+  });
+});
+
+describe('기간별 매트릭스 (3·5·7일)', () => {
+  test.each([
+    [3, 2, [1]], // 3일: Day 2에 Day 1 보완 가능
+    [5, 3, [1, 2]], // 5일: Day 3에 Day 1~2
+    [7, 6, [1, 2, 3, 4, 5]], // 7일: Day 6에 Day 1~5
+  ])('anytime %i일 챌린지 — Day %i에 놓친 %p 보완 대상', (duration, today, expected) => {
+    const item = participation({ durationDays: duration, todayDay: today, successDays: [] });
+    expect(missedDaysOf(item)).toEqual(expected);
+  });
+
+  test.each([
+    [3, 4],
+    [5, 6],
+    [7, 8],
+  ])('%i일 챌린지는 Day %i(종료 후)부터 보완 창이 닫힌다', (duration, dayAfterEnd) => {
+    const item = participation({ durationDays: duration, todayDay: dayAfterEnd, successDays: [] });
+    expect(missedDaysOf(item)).toEqual([]);
+    expect(collectMissedChallenges([item])).toHaveLength(0);
+  });
+
+  test.each([
+    [3, [1, 2]],
+    [5, [1, 2, 3, 4]],
+    [7, [1, 2, 3, 4, 5, 6]],
+  ])('last_day %i일 챌린지 — 마지막 날에 정규일 %p 전체가 대상', (duration, expected) => {
+    const item = participation({
+      durationDays: duration,
+      todayDay: duration,
+      successDays: [],
+      remedyPolicy: { type: 'last_day', maxRemedyDays: null },
+      policyOnChallengeOnly: true,
+    });
+    const result = collectMissedChallenges([item]);
+    expect(result).toHaveLength(1);
+    expect(result[0].missedDays).toEqual(expected);
+  });
+
+  test('anytime Day 1에는 대상이 없다 (서버 Day 2 개방과 일치)', () => {
+    const item = participation({ durationDays: 3, todayDay: 1, successDays: [] });
+    expect(missedDaysOf(item)).toEqual([]);
   });
 });

@@ -41,6 +41,15 @@ export function computeTodayChallengeDay(userChallenge: any): number {
   return Math.max(1, elapsed + 1);
 }
 
+/**
+ * 참여 아이템에서 보완 정책 해석 — 참여 레코드(remedyPolicy)는 join 시 저장되지 않아
+ * 대부분 null이므로, 챌린지 META(challenge.remedyPolicy = defaultRemedyPolicy)로 폴백한다.
+ * (참여 레벨 값만 읽으면 last_day/disabled 챌린지가 전부 anytime으로 오판된다)
+ */
+export function remedyPolicyOf(item: any): any {
+  return item?.remedyPolicy ?? item?.challenge?.remedyPolicy ?? null;
+}
+
 export function durationDaysOf(item: any): number {
   return (
     Number(item?.durationDays || item?.challenge?.durationDays || 0) ||
@@ -55,7 +64,9 @@ export function durationDaysOf(item: any): number {
  */
 export function missedDaysOf(item: any): number[] {
   const todayDay = computeTodayChallengeDay(item);
-  const bound = Math.min(todayDay, durationDaysOf(item));
+  const durationDays = durationDaysOf(item);
+  if (todayDay > durationDays) return []; // 종료 — 보완 창이 닫혀 대상 없음
+  const bound = Math.min(todayDay, durationDays);
   return (Array.isArray(item?.progress) ? item.progress : [])
     .filter((p: any) => Number(p?.day) < bound && p?.status !== 'success' && !p?.remedied)
     .map((p: any) => Number(p.day))
@@ -83,14 +94,16 @@ export function collectMissedChallenges(items: any[]): MissedChallenge[] {
   for (const item of items || []) {
     if (String(item?.status) === 'gave_up' || String(item?.phase) === 'gave_up') continue;
     if (item?.challenge?.disbanded === true) continue;
-    const remedyType = getRemedyType(item?.remedyPolicy);
+    const policy = remedyPolicyOf(item);
+    const remedyType = getRemedyType(policy);
     if (remedyType === 'disabled') continue;
     const todayDay = computeTodayChallengeDay(item);
     const durationDays = durationDaysOf(item);
     if (todayDay > durationDays) continue; // 종료 — 보완 창이 닫혔다
     // 마지막날 전용 정책은 서버가 그 날 하루만 창을 연다
     if (remedyType === 'last_day' && todayDay !== durationDays) continue;
-    const remaining = getRemainingRemedyCount(item?.remedyPolicy, item?.progress || []);
+    // anytime은 Day 2부터 창이 열린다 (서버 REMEDY_WRONG_DAY와 일치 — Day 1엔 놓친 날도 없다)
+    const remaining = getRemainingRemedyCount(policy, item?.progress || []);
     if (remaining !== null && remaining <= 0) continue;
     const missedDays = missedDaysOf(item);
     if (missedDays.length === 0) continue;

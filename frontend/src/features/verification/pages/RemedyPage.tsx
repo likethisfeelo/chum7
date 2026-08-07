@@ -14,6 +14,7 @@ import {
   computeTodayChallengeDay,
   durationDaysOf,
   missedDaysOf,
+  remedyPolicyOf,
 } from '@/features/challenge/utils/remedyStatus';
 
 export const RemedyPage = () => {
@@ -51,10 +52,16 @@ export const RemedyPage = () => {
     return (currentChallenge?.progress || []).filter((p: any) => days.has(Number(p.day)));
   }, [currentChallenge]);
 
-  const remainingRemedy = getRemainingRemedyCount(currentChallenge?.remedyPolicy, currentChallenge?.progress || []);
-  const remedyType = getRemedyType(currentChallenge?.remedyPolicy);
+  // 정책은 참여 레코드가 아닌 챌린지 META에서 폴백 해석 (참여 레벨 값은 대부분 null)
+  const remedyPolicy = remedyPolicyOf(currentChallenge);
+  const remainingRemedy = getRemainingRemedyCount(remedyPolicy, currentChallenge?.progress || []);
+  const remedyType = getRemedyType(remedyPolicy);
   const durationDays = durationDaysOf(currentChallenge);
-  const canSubmitRemedy = remedyType !== 'disabled' && (remainingRemedy === null || remainingRemedy > 0);
+  const todayDay = currentChallenge ? computeTodayChallengeDay(currentChallenge) : 1;
+  // last_day 정책은 마지막 날에만 서버 창이 열린다 — 미리 막아 헛제출을 방지
+  const lastDayLocked = remedyType === 'last_day' && todayDay !== durationDays;
+  const canSubmitRemedy =
+    remedyType !== 'disabled' && !lastDayLocked && (remainingRemedy === null || remainingRemedy > 0);
 
   const remedyMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -170,7 +177,7 @@ export const RemedyPage = () => {
             </div>
           </div>
           <div className="space-y-2 text-sm text-purple-700">
-            <p>정책: <span className="font-semibold">{getRemedyLabel(currentChallenge?.remedyPolicy)}</span></p>
+            <p>정책: <span className="font-semibold">{getRemedyLabel(remedyPolicy)}</span></p>
             <p>남은 보완 횟수: <span className="font-semibold">{remainingRemedy === null ? '제한 없음' : `${remainingRemedy}회`}</span></p>
             <p>보완 점수: 기본 점수의 70%</p>
           </div>
@@ -178,7 +185,9 @@ export const RemedyPage = () => {
 
         {!canSubmitRemedy && (
           <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 mb-4">
-            현재 정책에서는 보완 인증을 진행할 수 없습니다.
+            {lastDayLocked
+              ? `이 챌린지는 마지막 날(Day ${durationDays})에 보완 창이 열려요. 오늘은 Day ${todayDay} — 오늘의 인증에 집중해요!`
+              : '현재 정책에서는 보완 인증을 진행할 수 없습니다.'}
           </div>
         )}
 

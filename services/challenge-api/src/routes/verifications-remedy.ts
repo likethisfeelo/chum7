@@ -152,6 +152,12 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
   if (new Date(performedAt).getTime() > new Date(nowIso).getTime()) {
     return fail(c, 400, 'FUTURE_PRACTICE_TIME', 'practiceAt이 현재 시간보다 미래입니다');
   }
+  // 실천 시각은 현재 기준 4시간 이내 — 안내 문구로만 존재하던 규칙을 실제로 강제한다
+  // ("오늘 다시 실천했다"가 보완의 전제. 과거 임의 시각 백필 방지)
+  const PRACTICE_WINDOW_MS = 4 * 60 * 60 * 1000;
+  if (new Date(nowIso).getTime() - new Date(performedAt).getTime() > PRACTICE_WINDOW_MS) {
+    return fail(c, 400, 'PRACTICE_TIME_TOO_OLD', '실천 시각은 현재 기준 4시간 이내여야 합니다');
+  }
   const certDate = certDateFromIso(nowIso, timezone);
 
   const verificationId = randomUUID();
@@ -227,7 +233,8 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
   if (remedyPolicyType === 'last_day' && remedyPolicy.maxRemedyDays !== null && remedyPolicy.maxRemedyDays !== undefined) {
     remainingRemedyDays = Math.max(remedyPolicy.maxRemedyDays - (alreadyRemediedCount + 1), 0);
   } else {
-    remainingRemedyDays = Math.max(failedDays.length - (alreadyRemediedCount + 1), 0);
+    // failedDays는 미보완 실패일만 담고 있으므로(보완된 날은 status success) 이번 대상 1건만 뺀다
+    remainingRemedyDays = Math.max(failedDays.length - 1, 0);
   }
 
   return ok(c, {
