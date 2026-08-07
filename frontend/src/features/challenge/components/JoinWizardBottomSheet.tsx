@@ -244,7 +244,9 @@ export const JoinWizardBottomSheet = ({ isOpen, onClose, challenge, loading, onS
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl"
               />
               <p className="text-xs text-gray-400 mt-1.5">
-                이 챌린지의 리더·매니저 운영 화면에서만 보여요. 피드·마당 활동은 계속 익명이에요.
+                피드의 활동명은 매일 바뀌어서, 리더·매니저가 나를 알아볼 고정 이름이 필요해요.
+                <br />
+                운영 화면에서만 보이고 피드·마당 활동은 계속 익명이에요.
               </p>
             </div>
           )}

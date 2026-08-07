@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { challengeApi, CreateChallengeParams, ChallengeCategory, ChallengeType } from '../api/challengeApi';
 import { CHALLENGE_CATEGORIES } from '../constants/categories';
-import { IDENTITY_MODE_OPTIONS, REMEDY_CHOICE_OPTIONS, toRemedyPolicy } from '../constants/remedyPolicy';
+import {
+  IDENTITY_MODE_OPTIONS,
+  IDENTITY_SECTION_GUIDE,
+  REMEDY_CHOICE_OPTIONS,
+  toRemedyPolicy,
+} from '../constants/remedyPolicy';
 import { CoverImagePicker } from '../components/CoverImagePicker';
 
 // ─── 폼 상태 타입 ────────────────────────────────────────────────────
@@ -488,9 +493,7 @@ function Step3({ form, onChange }: { form: FormState; onChange: (patch: Partial<
       {/* 참여자 식별 방식 — 운영탭(리더·매니저) 전용 표시, 피드·마당 익명은 유지 */}
       <div className="p-4 bg-gray-50 rounded-xl">
         <p className="text-sm font-semibold text-gray-700">참여자 식별 방식</p>
-        <p className="text-[11px] text-gray-500 mt-0.5 mb-3">
-          운영탭에서 참여자를 어떤 이름으로 볼지 정해요. 리더·매니저에게만 보이고, 피드·마당 활동은 계속 익명이에요.
-        </p>
+        <p className="text-[11px] text-gray-500 mt-0.5 mb-3">{IDENTITY_SECTION_GUIDE}</p>
         <div className="space-y-2">
           {IDENTITY_MODE_OPTIONS.map((opt) => (
             <button
