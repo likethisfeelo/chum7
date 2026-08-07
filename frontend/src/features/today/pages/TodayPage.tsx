@@ -22,13 +22,15 @@ interface WorldArea {
 }
 
 const WORLD_AREAS: WorldArea[] = [
+  { key: 'build',      name: 'BUILD',      slug: 'build',       color: '#7D8FC9', jelly: '#C3CCE8' },
   { key: 'confidence', name: 'CONFIDENCE', slug: 'expand',      color: '#7BAA7A', jelly: '#BEDBBD' },
   { key: 'attitude',   name: 'ATTITUDE',   slug: 'attitude', color: '#E39A69', jelly: '#F3CDB4' },
   { key: 'selflove',   name: 'SELFLOVE',   slug: 'selflove',      color: '#D46A6A', jelly: '#EBB4B4' },
   { key: 'discipline', name: 'DISCIPLINE', slug: 'discipline',       color: '#D8B36A', jelly: '#ECD9B4' },
   { key: 'create',     name: 'CREATE',     slug: 'explore',  color: '#9D8CCF', jelly: '#CEC5E7' },
+  { key: 'impact',     name: 'IMPACT',     slug: 'impact',      color: '#6FAE8F', jelly: '#B9DCC9' },
 ];
-const DEFAULT_AREA_INDEX = 2; // SELFLOVE
+const DEFAULT_AREA_INDEX = 3; // SELFLOVE
 
 // hex 색을 검정과 섞어 어둡게
 function shade(hex: string, amount: number): string {
@@ -84,6 +86,20 @@ const WHEEL_ICON_PATHS: Record<string, JSX.Element> = {
     <>
       <circle cx="12" cy="12" r="8.4" />
       <path d="M12 6 L13.5 10.5 L18 12 L13.5 13.5 L12 18 L10.5 13.5 L6 12 L10.5 10.5 Z" />
+    </>
+  ),
+  build: ( // 쌓아 올린 블록
+    <>
+      <rect x="9" y="3.5" width="6" height="4.6" rx="1" />
+      <rect x="6.5" y="9.7" width="11" height="4.6" rx="1" />
+      <rect x="4" y="15.9" width="16" height="4.6" rx="1" />
+    </>
+  ),
+  impact: ( // 로켓
+    <>
+      <path d="M12 2.8 C15 5.2 16.2 8.8 16.2 12 L14.6 16.5 H9.4 L7.8 12 C7.8 8.8 9 5.2 12 2.8 Z" />
+      <circle cx="12" cy="10" r="1.9" />
+      <path d="M9.4 16.5 L8.2 20.5 M12 16.5 V21 M14.6 16.5 L15.8 20.5" />
     </>
   ),
 };
