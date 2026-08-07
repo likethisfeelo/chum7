@@ -9,6 +9,7 @@ import { Textarea } from '@/shared/components/Textarea';
 import { Loading } from '@/shared/components/Loading';
 import toast from 'react-hot-toast';
 import { getRemainingRemedyCount, getRemedyType } from '@/features/challenge/utils/flowPolicy';
+import { haptic } from '@/shared/utils/haptics';
 
 export const RemedyPage = () => {
   const navigate = useNavigate();
@@ -18,10 +19,9 @@ export const RemedyPage = () => {
   const queryClient = useQueryClient();
 
   const [selectedDay, setSelectedDay] = useState<number>(Number(dayFromQuery || 0));
+  // 입력 부담 최소화 — 오늘의 실천만 필수 (회고·다짐 필드 제거)
   const [formData, setFormData] = useState({
-    reflectionNote: '',
     todayNote: '',
-    tomorrowPromise: '',
     practiceAt: new Date().toISOString().slice(0, 16),
   });
 
@@ -38,9 +38,14 @@ export const RemedyPage = () => {
     [myChallengesData?.challenges, userChallengeId],
   );
 
+  // 지나간 날짜 중 미완료·미보완분 (레거시 7일 기준 p.day<=5 하드코딩 제거 — 기간 가변 대응)
+  const currentDay = Number(currentChallenge?.currentDay || 0);
   const failedDays = useMemo(
-    () => (currentChallenge?.progress || []).filter((p: any) => p.day <= 5 && p.status !== 'success' && !p.remedied),
-    [currentChallenge?.progress],
+    () =>
+      (currentChallenge?.progress || []).filter(
+        (p: any) => p.status !== 'success' && !p.remedied && (currentDay <= 0 || p.day < currentDay),
+      ),
+    [currentChallenge?.progress, currentDay],
   );
 
   const remainingRemedy = getRemainingRemedyCount(currentChallenge?.remedyPolicy, currentChallenge?.progress || []);
@@ -53,6 +58,7 @@ export const RemedyPage = () => {
       return response.data;
     },
     onSuccess: (data) => {
+      haptic('success'); // 지원 기기(Android·앱 셸)에서 완료 진동
       queryClient.invalidateQueries({ queryKey: ['my-challenges'] });
       const remaining = data?.data?.remainingRemedyDays;
       if (remaining !== undefined && remaining !== null) {
@@ -75,17 +81,15 @@ export const RemedyPage = () => {
       return;
     }
 
-    if (formData.reflectionNote.length < 10) {
-      toast.error('회고를 10자 이상 작성해주세요');
+    if (!formData.todayNote.trim()) {
+      toast.error('오늘의 실천을 작성해주세요');
       return;
     }
 
     remedyMutation.mutate({
       userChallengeId,
       originalDay: selectedDay,
-      reflectionNote: formData.reflectionNote,
-      todayNote: formData.todayNote,
-      tomorrowPromise: formData.tomorrowPromise,
+      todayNote: formData.todayNote.trim(),
       practiceAt: new Date(formData.practiceAt).toISOString(),
     });
   };
@@ -110,7 +114,7 @@ export const RemedyPage = () => {
           <FiArrowLeft className="w-5 h-5" />
         </button>
         <div className="min-w-0">
-          <h1 className="text-lg font-bold leading-tight">Day 6 보완하기</h1>
+          <h1 className="text-lg font-bold leading-tight">보완 인증하기</h1>
           {/* 여러 챌린지 동시 진행 시 어떤 챌린지의 보완인지 명시 */}
           <p className="text-xs text-gray-500 truncate">
             {currentChallenge.challenge?.badgeIcon || '🎯'} {currentChallenge.challenge?.title || '챌린지'}
@@ -132,8 +136,8 @@ export const RemedyPage = () => {
               <p className="text-xs font-semibold text-purple-500 truncate">
                 {currentChallenge.challenge?.badgeIcon || '🎯'} {currentChallenge.challenge?.title || '챌린지'}
               </p>
-              <h3 className="font-bold text-purple-900 mb-1">Day 6 보완 기회</h3>
-              <p className="text-sm text-purple-700">실패한 Day 1~5를 정책 범위 내에서 복구할 수 있어요.</p>
+              <h3 className="font-bold text-purple-900 mb-1">보완 기회</h3>
+              <p className="text-sm text-purple-700">놓친 Day를 정책 범위 내에서 복구할 수 있어요.</p>
             </div>
           </div>
           <div className="space-y-2 text-sm text-purple-700">
@@ -168,16 +172,6 @@ export const RemedyPage = () => {
           </div>
 
           <Textarea
-            label="회고: 왜 실패했나요? 📝"
-            value={formData.reflectionNote}
-            onChange={(e) => setFormData({ ...formData, reflectionNote: e.target.value })}
-            placeholder="솔직하게 되돌아보세요. 어떤 이유로 인증을 놓쳤나요?"
-            rows={4}
-            required
-            helperText="최소 10자 이상 작성해주세요"
-          />
-
-          <Textarea
             label="오늘의 실천 ✨"
             value={formData.todayNote}
             onChange={(e) => setFormData({ ...formData, todayNote: e.target.value })}
@@ -198,20 +192,14 @@ export const RemedyPage = () => {
             <p className="text-xs text-gray-500 mt-1">현재 시각 기준 4시간 이내만 제출할 수 있어요.</p>
           </div>
 
-          <Textarea
-            label="다짐 (선택)"
-            value={formData.tomorrowPromise}
-            onChange={(e) => setFormData({ ...formData, tomorrowPromise: e.target.value })}
-            placeholder="앞으로 어떻게 할 건가요?"
-            rows={3}
-          />
-
           <Button type="submit" fullWidth size="lg" loading={remedyMutation.isPending} disabled={!canSubmitRemedy || failedDays.length === 0}>
             다시 연결하기 ✨
           </Button>
         </form>
 
-        <p className="text-xs text-gray-500 text-center mt-4">💡 보완 인증은 Day 6에만 가능합니다</p>
+        {remedyType === 'last_day' && (
+          <p className="text-xs text-gray-500 text-center mt-4">💡 이 챌린지는 마지막 날에만 보완할 수 있어요</p>
+        )}
       </div>
     </div>
   );

@@ -24,8 +24,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: payload.body,
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    icon: '/icons/icon-512.png',
+    badge: '/icons/icon-512.png',
     // 묶음 태그(<category>:<targetId>)가 있으면 같은 묶음의 이전 알림을 교체,
     // 없으면 기존처럼 카테고리 단위로 교체 (폭주 방지)
     tag: payload.tag || payload.category,
