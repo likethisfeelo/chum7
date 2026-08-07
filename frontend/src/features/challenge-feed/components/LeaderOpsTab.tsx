@@ -1882,6 +1882,196 @@ function RewardProductsSection({ challengeId }: { challengeId: string }) {
   );
 }
 
+// ── 완주자 랜덤 추첨 (리더/매니저) ─────────────────────────────────────────
+//  상품 증정 대상자를 완주자 중에서 서버가 crypto 난수로 추첨(조작 시비 방지)하고
+//  이력을 기록한다. 발송은 아래 🎁 완주 선물 섹션의 교환권 흐름을 그대로 사용.
+interface DrawWinnerView {
+  userId: string;
+  userChallengeId: string | null;
+  personalGoal: string | null;
+  completedDays: number;
+  score: number;
+}
+
+interface DrawRecordView {
+  drawId: string;
+  title: string | null;
+  winnerCount: number;
+  eligibleCount: number;
+  excludePreviousWinners: boolean;
+  winners: DrawWinnerView[];
+  executedByRole: 'leader' | 'manager';
+  createdAt: string;
+}
+
+function DrawSection({ challengeId, managerMode }: { challengeId: string; managerMode?: boolean }) {
+  const queryClient = useQueryClient();
+  const [title, setTitle] = useState('');
+  const [winnerCount, setWinnerCount] = useState('1');
+  const [excludePrevious, setExcludePrevious] = useState(false);
+  const [lastDraw, setLastDraw] = useState<DrawRecordView | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const { data } = useQuery({
+    queryKey: ['leader-draws', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/c/${challengeId}/leader/draws`);
+      return res.data.data as { draws: DrawRecordView[]; total: number };
+    },
+  });
+
+  const drawMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post(`/c/${challengeId}/leader/draws`, {
+        winnerCount: Math.max(1, Number(winnerCount) || 1),
+        ...(title.trim() ? { title: title.trim() } : {}),
+        ...(excludePrevious ? { excludePreviousWinners: true } : {}),
+      });
+      return res.data;
+    },
+    onSuccess: (res: any) => {
+      setLastDraw(res?.data as DrawRecordView);
+      toast.success(res?.message || '추첨 완료 🎉');
+      queryClient.invalidateQueries({ queryKey: ['leader-draws', challengeId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '추첨에 실패했어요'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (drawId: string) => apiClient.delete(`/c/${challengeId}/leader/draws/${drawId}`),
+    onSuccess: (_res, drawId) => {
+      if (lastDraw?.drawId === drawId) setLastDraw(null);
+      queryClient.invalidateQueries({ queryKey: ['leader-draws', challengeId] });
+      toast.success('추첨 기록을 삭제했어요');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '삭제에 실패했어요'),
+  });
+
+  const draws = data?.draws ?? [];
+
+  const WinnerRow = ({ w, index }: { w: DrawWinnerView; index: number }) => (
+    <div
+      className="flex items-center gap-2 rounded-lg bg-white border border-amber-100 px-2.5 py-2 animate-[fadeIn_0.4s_ease-out_both]"
+      style={{ animationDelay: `${index * 0.35}s` }}
+    >
+      <span className="text-sm">🏆</span>
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-gray-800">{maskUserId(w.userId)}</p>
+        {w.personalGoal && <p className="text-[10px] text-gray-400 truncate">{w.personalGoal}</p>}
+      </div>
+      <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
+        {w.completedDays}일 완료 · {w.score}점
+      </span>
+    </div>
+  );
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <h3 className="font-bold text-gray-900">🎲 완주자 랜덤 추첨</h3>
+      <p className="text-[11px] text-gray-400 mt-1">
+        완주자 중 당첨자를 서버가 무작위(crypto 난수)로 뽑고 이력을 남겨요. 당첨자 발송은 아래 🎁 완주 선물에서 하세요.
+      </p>
+
+      <div className="mt-3 space-y-2">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={100}
+          placeholder="추첨 이름 (예: 스타벅스 기프티콘 3명)"
+          className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 bg-white focus:outline-none focus:border-primary-400"
+        />
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-600 whitespace-nowrap">당첨 인원</label>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={winnerCount}
+            onChange={(e) => setWinnerCount(e.target.value)}
+            className="w-20 text-xs px-2 py-2 rounded-lg border border-gray-200 bg-white text-center focus:outline-none focus:border-primary-400"
+          />
+          <label className="ml-auto flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={excludePrevious}
+              onChange={(e) => setExcludePrevious(e.target.checked)}
+            />
+            이전 당첨자 제외
+          </label>
+        </div>
+        <button
+          type="button"
+          disabled={drawMutation.isPending}
+          onClick={() => drawMutation.mutate()}
+          className="w-full py-2.5 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 disabled:opacity-50 transition-colors"
+        >
+          {drawMutation.isPending ? '추첨 중... 🎲' : '추첨하기 🎲'}
+        </button>
+      </div>
+
+      {/* 직전 추첨 결과 — 순차 리빌 */}
+      {lastDraw && (
+        <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3">
+          <p className="text-xs font-bold text-amber-800">
+            🎉 {lastDraw.title || '추첨 결과'} — 완주자 {lastDraw.eligibleCount}명 중 {lastDraw.winners.length}명
+          </p>
+          <div className="mt-2 space-y-1" key={lastDraw.drawId}>
+            {lastDraw.winners.map((w, i) => (
+              <WinnerRow key={w.userId} w={w} index={i} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 추첨 이력 */}
+      {draws.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((v) => !v)}
+            className="text-xs font-semibold text-gray-600 hover:text-gray-800"
+          >
+            추첨 이력 ({draws.length}) {historyOpen ? '▲' : '▼'}
+          </button>
+          {historyOpen && (
+            <div className="mt-2 space-y-2">
+              {draws.map((d) => (
+                <div key={d.drawId} className="rounded-lg bg-white/60 border border-gray-100 p-2.5">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold text-gray-800 truncate">
+                      {d.title || '추첨'} · {d.winners.length}명
+                      {d.excludePreviousWinners ? ' · 이전 당첨 제외' : ''}
+                    </p>
+                    <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
+                      {new Date(d.createdAt).toLocaleDateString('ko-KR')}
+                      {d.executedByRole === 'manager' ? ' · 매니저' : ''}
+                    </span>
+                    {!managerMode && (
+                      <button
+                        type="button"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm('이 추첨 기록을 삭제할까요?')) deleteMutation.mutate(d.drawId);
+                        }}
+                        className="text-[10px] text-red-400 hover:text-red-600 font-semibold whitespace-nowrap"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    {d.winners.map((w) => maskUserId(w.userId)).join(', ')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ── 완주 선물 발송 (리더) ──────────────────────────────────────────────────
 //  완주자에게 선물 교환권 발송 — 미리 등록(카탈로그)+일괄 발송 또는 즉석 입력 개별 발송.
 //  교환권 만료 기본 30일, 지급(교환 신청) 전까지 수정 가능. 실물은 claim 시 유저가
@@ -2381,6 +2571,7 @@ export function LeaderOpsTab({
       )}
       {isPaid && <TicketSection challengeId={challengeId} />}
       <RewardProductsSection challengeId={challengeId} />
+      <DrawSection challengeId={challengeId} managerMode={managerMode} />
       <GiftSection challengeId={challengeId} />
 
       {/* 6) 챌린지 설정 및 종료 — 맨 아래 (리더 전용) */}

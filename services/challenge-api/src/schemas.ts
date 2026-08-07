@@ -229,6 +229,14 @@ export const rewardProductUploadUrlSchema = z.object({
   fileSize: z.number().int().positive().max(10 * 1024 * 1024),
 });
 
+// 완주자 랜덤 추첨 — 서버 crypto 난수 추첨 + 이력 기록 (조작 시비 방지)
+export const drawCreateSchema = z.object({
+  winnerCount: z.number().int().min(1).max(100),
+  title: z.string().trim().max(100).optional(),
+  excludePreviousWinners: z.boolean().optional(),
+});
+export type DrawCreateInput = z.infer<typeof drawCreateSchema>;
+
 // 유료 챌린지 해산 신청 — 리더가 운영자에게 사유와 함께 제출.
 export const disbandRequestSchema = z.object({
   reason: z.string().trim().min(5, '해산 사유를 5자 이상 입력해주세요').max(500),

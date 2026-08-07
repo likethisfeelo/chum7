@@ -4,7 +4,7 @@
  *  GET participants : 참여자 목록 (진행률 포함)
  * 리마인드 발송·메시지 템플릿·시즌 복제는 v2 — PORTING.md TODO 기록.
  */
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -59,9 +59,11 @@ import {
   proposalReviewSchema,
   proposalReRejectSchema,
   completionResolveSchema,
+  drawCreateSchema,
   rewardProductsSchema,
   rewardProductUploadUrlSchema,
 } from '../schemas';
+import { deleteDrawById, drawToResponse, listDraws, putDraw, type DrawWinner } from '../repo/draws';
 import { stripKeys } from '../repo/shared';
 
 export const leaderRoutes = new Hono<AppEnv>();
@@ -1032,6 +1034,118 @@ leaderRoutes.put('/reward-products', async (c) => {
   }));
   await updateChallengeFields(challengeId, { rewardProducts: products, updatedAt: nowIso });
   return ok(c, { products }, '완주 보상 상품을 저장했어요 🎁');
+});
+
+// ── 완주자 랜덤 추첨 (리더/매니저) ─────────────────────────────────────────
+//  상품 증정 대상자를 완주자 중에서 서버 crypto 난수로 추첨하고 이력을 기록한다
+//  (클라이언트 추첨 금지 — 조작 시비 방지). 발송은 기존 완주 선물(교환권) 흐름 사용.
+
+/** 완주자 판정 — 참여 status가 completed 이거나 진행 기록상 전 일자 완료 */
+function isCompleter(p: Record<string, any>, challengeDurationDays: unknown): boolean {
+  if (p.status === 'gave_up' || p.phase === 'gave_up') return false;
+  if (p.status === 'completed' || p.phase === 'completed') return true;
+  const progress = normalizeProgress(p.progress);
+  const durationDays = resolveDurationDays(challengeDurationDays, progress);
+  const completedDays = progress.filter((entry) => isCompletedProgressStatus(entry.status)).length;
+  return durationDays > 0 && completedDays >= durationDays;
+}
+
+/** crypto 난수 Fisher-Yates 셔플 (Math.random 금지) */
+function cryptoShuffle<T>(input: T[]): T[] {
+  const arr = [...input];
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = randomInt(i + 1);
+    const tmp = arr[i]!;
+    arr[i] = arr[j]!;
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
+// 추첨 실행 — body {winnerCount, title?, excludePreviousWinners?}
+leaderRoutes.post('/draws', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+  const challenge = guard.challenge!;
+  const { userId } = c.get('authUser')!;
+
+  const input = drawCreateSchema.parse(await c.req.json().catch(() => ({})));
+
+  const participants = await listChallengeParticipations(challengeId);
+  let eligible = participants.filter((p) => isCompleter(p, challenge.durationDays));
+
+  // 이전 당첨자 제외 옵션 — 이 챌린지의 과거 추첨에서 이미 당첨된 사람 제거
+  if (input.excludePreviousWinners) {
+    const previous = await listDraws(challengeId);
+    const wonUserIds = new Set(
+      previous.flatMap((d) => (Array.isArray(d.winners) ? d.winners.map((w: any) => String(w.userId)) : [])),
+    );
+    eligible = eligible.filter((p) => !wonUserIds.has(String(p.userId)));
+  }
+
+  if (eligible.length === 0) {
+    return fail(c, 409, 'NO_ELIGIBLE_COMPLETERS',
+      input.excludePreviousWinners
+        ? '추첨 대상 완주자가 없어요 (이전 당첨자 제외)'
+        : '아직 완주자가 없어요. 챌린지 종료 후 이용하세요.');
+  }
+  if (input.winnerCount > eligible.length) {
+    return fail(c, 400, 'WINNER_COUNT_EXCEEDS_ELIGIBLE',
+      `추첨 인원(${input.winnerCount}명)이 대상 완주자(${eligible.length}명)보다 많아요`);
+  }
+
+  const winners: DrawWinner[] = cryptoShuffle(eligible)
+    .slice(0, input.winnerCount)
+    .map((p) => {
+      const progress = normalizeProgress(p.progress);
+      return {
+        userId: String(p.userId),
+        userChallengeId: p.userChallengeId ? String(p.userChallengeId) : null,
+        personalGoal: typeof p.personalGoal === 'string' ? p.personalGoal : null,
+        completedDays: progress.filter((entry) => isCompletedProgressStatus(entry.status)).length,
+        score: Number(p.score) || 0,
+      };
+    });
+
+  const ownerId = challenge.createdBy || challenge.creatorId || challenge.leaderId;
+  const record = {
+    drawId: randomUUID(),
+    challengeId,
+    title: input.title?.trim() || null,
+    winnerCount: input.winnerCount,
+    eligibleCount: eligible.length,
+    excludePreviousWinners: input.excludePreviousWinners === true,
+    winners,
+    executedBy: userId,
+    executedByRole: (ownerId === userId ? 'leader' : 'manager') as 'leader' | 'manager',
+    createdAt: new Date().toISOString(),
+  };
+  await putDraw(record);
+
+  return ok(c, record, `완주자 ${eligible.length}명 중 ${winners.length}명을 추첨했어요 🎉`, 201);
+});
+
+// 추첨 이력 — 최신순
+leaderRoutes.get('/draws', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const guard = await requireLeaderChallenge(c, challengeId);
+  if (guard.error) return guard.error;
+
+  const draws = (await listDraws(challengeId)).map(drawToResponse);
+  return ok(c, { draws, total: draws.length });
+});
+
+// 추첨 기록 삭제 (리더 전용 — 잘못 돌린 추첨 정리. 이력 조작 여지가 있어 매니저 불가)
+leaderRoutes.delete('/draws/:drawId', async (c) => {
+  const challengeId = c.req.param('challengeId')!;
+  const drawId = c.req.param('drawId')!;
+  const guard = await requireLeaderChallenge(c, challengeId, { leaderOnly: true });
+  if (guard.error) return guard.error;
+
+  const deleted = await deleteDrawById(challengeId, drawId);
+  if (!deleted) return fail(c, 404, 'DRAW_NOT_FOUND', '추첨 기록을 찾을 수 없습니다');
+  return ok(c, { drawId, deleted: true }, '추첨 기록을 삭제했어요');
 });
 
 // ── 매니저 지정/해임 (리더 전용) ───────────────────────────────────────────
