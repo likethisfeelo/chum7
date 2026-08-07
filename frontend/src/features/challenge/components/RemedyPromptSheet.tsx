@@ -82,7 +82,7 @@ export function RemedyPromptSheet() {
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const response = await apiClient.get('/c/challenges/my?status=active');
+      const response = await apiClient.get('/c/challenges/my?status=all');
       return response.data.data;
     },
   });

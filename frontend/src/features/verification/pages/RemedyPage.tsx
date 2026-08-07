@@ -8,9 +8,9 @@ import { Button } from '@/shared/components/Button';
 import { Textarea } from '@/shared/components/Textarea';
 import { Loading } from '@/shared/components/Loading';
 import toast from 'react-hot-toast';
-import { getRemainingRemedyCount, getRemedyType } from '@/features/challenge/utils/flowPolicy';
+import { getRemainingRemedyCount, getRemedyLabel, getRemedyType } from '@/features/challenge/utils/flowPolicy';
 import { haptic } from '@/shared/utils/haptics';
-import { missedDaysOf } from '@/features/challenge/utils/remedyStatus';
+import { durationDaysOf, missedDaysOf } from '@/features/challenge/utils/remedyStatus';
 
 export const RemedyPage = () => {
   const navigate = useNavigate();
@@ -29,7 +29,8 @@ export const RemedyPage = () => {
   const { data: myChallengesData, isLoading: isLoadingChallenges } = useQuery({
     queryKey: ['my-challenges', 'remedy-page'],
     queryFn: async () => {
-      const response = await apiClient.get('/c/challenges/my?status=active');
+      // status=all — 종료 유예(마지막 날 보완) 중인 참여도 조회되어야 한다
+      const response = await apiClient.get('/c/challenges/my?status=all');
       return response.data.data;
     },
   });
@@ -48,6 +49,7 @@ export const RemedyPage = () => {
 
   const remainingRemedy = getRemainingRemedyCount(currentChallenge?.remedyPolicy, currentChallenge?.progress || []);
   const remedyType = getRemedyType(currentChallenge?.remedyPolicy);
+  const durationDays = durationDaysOf(currentChallenge);
   const canSubmitRemedy = remedyType !== 'disabled' && (remainingRemedy === null || remainingRemedy > 0);
 
   const remedyMutation = useMutation({
@@ -135,11 +137,15 @@ export const RemedyPage = () => {
                 {currentChallenge.challenge?.badgeIcon || '🎯'} {currentChallenge.challenge?.title || '챌린지'}
               </p>
               <h3 className="font-bold text-purple-900 mb-1">보완 기회</h3>
-              <p className="text-sm text-purple-700">놓친 Day를 정책 범위 내에서 복구할 수 있어요.</p>
+              <p className="text-sm text-purple-700">
+                {remedyType === 'last_day'
+                  ? `마지막 날(Day ${durationDays})에 지난 인증을 한 번에 복구할 수 있어요.`
+                  : '지나간 날 중 놓친 인증을 언제든 복구할 수 있어요.'}
+              </p>
             </div>
           </div>
           <div className="space-y-2 text-sm text-purple-700">
-            <p>정책: <span className="font-semibold">{remedyType}</span></p>
+            <p>정책: <span className="font-semibold">{getRemedyLabel(currentChallenge?.remedyPolicy)}</span></p>
             <p>남은 보완 횟수: <span className="font-semibold">{remainingRemedy === null ? '제한 없음' : `${remainingRemedy}회`}</span></p>
             <p>보완 점수: 기본 점수의 70%</p>
           </div>
@@ -196,7 +202,9 @@ export const RemedyPage = () => {
         </form>
 
         {remedyType === 'last_day' && (
-          <p className="text-xs text-gray-500 text-center mt-4">💡 이 챌린지는 마지막 날에만 보완할 수 있어요</p>
+          <p className="text-xs text-gray-500 text-center mt-4">
+            💡 이 챌린지는 마지막 날(Day {durationDays})에만 보완할 수 있어요
+          </p>
         )}
       </div>
     </div>

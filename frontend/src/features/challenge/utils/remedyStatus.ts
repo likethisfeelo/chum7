@@ -41,12 +41,22 @@ export function computeTodayChallengeDay(userChallenge: any): number {
   return Math.max(1, elapsed + 1);
 }
 
-/** 지나간 날짜 중 미완료·미보완 Day 목록 (오늘·미래 제외, 기간 내로 한정) */
+export function durationDaysOf(item: any): number {
+  return (
+    Number(item?.durationDays || item?.challenge?.durationDays || 0) ||
+    (Array.isArray(item?.progress) ? item.progress.length : 7)
+  );
+}
+
+/**
+ * 지나간 날짜 중 미완료·미보완 Day 목록.
+ * 오늘은 제외 — 아직 일반 인증으로 채울 수 있는 날이라 보완 대상이 아니다.
+ * 종료 다음날(todayDay = durationDays+1)에는 마지막 날까지 포함되어,
+ * 마지막 날을 놓쳐도 하루의 유예 안에서 복구할 수 있다.
+ */
 export function missedDaysOf(item: any): number[] {
   const todayDay = computeTodayChallengeDay(item);
-  const durationDays = Number(item?.durationDays || item?.challenge?.durationDays || 0) ||
-    (Array.isArray(item?.progress) ? item.progress.length : 7);
-  const bound = Math.min(todayDay, durationDays + 1);
+  const bound = Math.min(todayDay, durationDaysOf(item) + 1);
   return (Array.isArray(item?.progress) ? item.progress : [])
     .filter((p: any) => Number(p?.day) < bound && p?.status !== 'success' && !p?.remedied)
     .map((p: any) => Number(p.day))
@@ -63,16 +73,24 @@ export interface MissedChallenge {
   durationDays: number;
 }
 
-/** 활성 참여 중 "지금 보완 가능한" 챌린지 목록 (정책·잔여 횟수 반영, 놓친 날 많은 순) */
+/**
+ * "지금 보완 가능한" 챌린지 목록 (정책·잔여 횟수 반영, 놓친 날 많은 순).
+ * 상태로 거르지 않고 기간으로 거른다 — 마지막 날을 놓치면 참여 상태가 failed로
+ * 자동 확정되지만, 종료 다음날까지는 보완해서 완주로 되돌릴 수 있어야 하기 때문.
+ * (중도 포기·해산은 제외, 종료 이틀 뒤부터는 목록에서 빠진다.)
+ */
 export function collectMissedChallenges(items: any[]): MissedChallenge[] {
   const result: MissedChallenge[] = [];
   for (const item of items || []) {
-    if (String(item?.status) !== 'active') continue;
+    if (String(item?.status) === 'gave_up' || String(item?.phase) === 'gave_up') continue;
+    if (item?.challenge?.disbanded === true) continue;
     const remedyType = getRemedyType(item?.remedyPolicy);
     if (remedyType === 'disabled') continue;
     const todayDay = computeTodayChallengeDay(item);
-    const durationDays = Number(item?.durationDays || item?.challenge?.durationDays || 0) || 7;
-    if (remedyType === 'last_day' && todayDay < durationDays) continue;
+    const durationDays = durationDaysOf(item);
+    if (todayDay > durationDays + 1) continue; // 종료 후 유예(하루) 경과
+    // 마지막날 전용 정책은 서버가 그 날 하루만 창을 여니 유예를 적용하지 않는다
+    if (remedyType === 'last_day' && todayDay !== durationDays) continue;
     const remaining = getRemainingRemedyCount(item?.remedyPolicy, item?.progress || []);
     if (remaining !== null && remaining <= 0) continue;
     const missedDays = missedDaysOf(item);

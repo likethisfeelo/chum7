@@ -15,11 +15,12 @@ export function RemedyHubButton() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
+  // status=all — 마지막 날을 놓쳐 failed로 확정된 참여도 종료 유예 안에서는 보완 대상
   const { data } = useQuery({
     queryKey: ['my-challenges', 'remedy-prompt'],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const response = await apiClient.get('/c/challenges/my?status=active');
+      const response = await apiClient.get('/c/challenges/my?status=all');
       return response.data.data;
     },
   });
