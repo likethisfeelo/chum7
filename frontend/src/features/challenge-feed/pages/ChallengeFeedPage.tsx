@@ -16,6 +16,7 @@ import { BottomSheet } from "@/shared/components/BottomSheet";
 import { GuideBoardSection } from "../components/GuideBoardSection";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import { challengeApi } from "@/features/challenge/api/challengeApi";
+import { computeTodayChallengeDay } from "@/features/challenge/utils/remedyStatus";
 import { SLUG_TO_LABEL } from "@/features/challenge/constants/categories";
 import { ChallengeChatPanel } from "@/features/challenge-chat/components/ChallengeChatPanel";
 import { ReportButton, ReportModal } from "@/features/feed/components/ReportModal";
@@ -269,38 +270,7 @@ function isSameKstDate(iso?: string | null): boolean {
   return toKstKey(d) === toKstKey(now);
 }
 
-function getKstDateOnly(): Date {
-  const now = new Date();
-  const kstMs = now.getTime() + 9 * 60 * 60 * 1000;
-  const kst = new Date(kstMs);
-  return new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()));
-}
-
-function computeTodayChallengeDay(userChallenge: any): number {
-  const start =
-    userChallenge?.challenge?.actualStartAt ||
-    userChallenge?.challenge?.startConfirmedAt ||
-    userChallenge?.startDate ||
-    userChallenge?.challenge?.startDate ||
-    userChallenge?.challenge?.startAt;
-  if (!start) return Math.max(1, Number(userChallenge?.currentDay || 1));
-
-  const dateOnlyMatch = (typeof start === "string") && start.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  let startDate: Date;
-  if (dateOnlyMatch) {
-    const [, y, m, d] = dateOnlyMatch;
-    startDate = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
-  } else {
-    const parsed = new Date(start);
-    if (Number.isNaN(parsed.getTime())) return Math.max(1, Number(userChallenge?.currentDay || 1));
-    const kstMs = parsed.getTime() + 9 * 60 * 60 * 1000;
-    const kst = new Date(kstMs);
-    startDate = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()));
-  }
-  const today = getKstDateOnly();
-  const elapsed = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-  return Math.max(1, elapsed + 1);
-}
+// getKstDateOnly / computeTodayChallengeDay 는 remedyStatus 유틸로 이관 (보완 표면과 공용)
 
 export const ChallengeFeedPage = () => {
   const { challengeId } = useParams();

@@ -10,6 +10,7 @@ import { Loading } from '@/shared/components/Loading';
 import toast from 'react-hot-toast';
 import { getRemainingRemedyCount, getRemedyType } from '@/features/challenge/utils/flowPolicy';
 import { haptic } from '@/shared/utils/haptics';
+import { missedDaysOf } from '@/features/challenge/utils/remedyStatus';
 
 export const RemedyPage = () => {
   const navigate = useNavigate();
@@ -38,15 +39,12 @@ export const RemedyPage = () => {
     [myChallengesData?.challenges, userChallengeId],
   );
 
-  // 지나간 날짜 중 미완료·미보완분 (레거시 7일 기준 p.day<=5 하드코딩 제거 — 기간 가변 대응)
-  const currentDay = Number(currentChallenge?.currentDay || 0);
-  const failedDays = useMemo(
-    () =>
-      (currentChallenge?.progress || []).filter(
-        (p: any) => p.status !== 'success' && !p.remedied && (currentDay <= 0 || p.day < currentDay),
-      ),
-    [currentChallenge?.progress, currentDay],
-  );
+  // 지나간 날짜 중 미완료·미보완분 — 서버 저장 currentDay는 갱신 지연이 있어
+  // 시작일 기준 KST 달력 계산(missedDaysOf)을 쓴다 (진행현황 그리드와 동일 기준)
+  const failedDays = useMemo(() => {
+    const days = new Set(missedDaysOf(currentChallenge));
+    return (currentChallenge?.progress || []).filter((p: any) => days.has(Number(p.day)));
+  }, [currentChallenge]);
 
   const remainingRemedy = getRemainingRemedyCount(currentChallenge?.remedyPolicy, currentChallenge?.progress || []);
   const remedyType = getRemedyType(currentChallenge?.remedyPolicy);
