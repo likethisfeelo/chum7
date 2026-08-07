@@ -56,6 +56,8 @@ export interface CreateChallengeParams {
   rewardOnline?: { name: string } | null;
   /** 대표 이미지(배너 카드) URL — 없으면 카테고리 컬러 카드 */
   coverImageUrl?: string | null;
+  /** 참여자 식별 방식 — 운영탭 전용 표시 (realname=가입명 | handle=@핸들 | custom=참여 시 입력) */
+  leaderIdentityMode?: 'realname' | 'handle' | 'custom';
 }
 
 export interface InterestStatus {

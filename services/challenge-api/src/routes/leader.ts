@@ -64,6 +64,7 @@ import {
   rewardProductUploadUrlSchema,
 } from '../schemas';
 import { deleteDrawById, drawToResponse, listDraws, putDraw, type DrawWinner } from '../repo/draws';
+import { getProfileNamesBatch } from '../repo/users-readonly';
 import { stripKeys } from '../repo/shared';
 
 export const leaderRoutes = new Hono<AppEnv>();
@@ -171,6 +172,41 @@ async function recomputeProgressUpgradeOnly(challenge: Record<string, any>, chal
   }
 }
 
+/**
+ * 참여자 식별 표시명 해석 — 챌린지 생성 시 리더가 확정한 leaderIdentityMode 기준.
+ *  realname: 가입명(실명인증 도입 전) / handle: @핸들(없으면 가입명 폴백) /
+ *  custom: 참여 시 입력한 leaderVisibleName. 미해석 항목은 맵에서 빠진다(프론트 마스킹 폴백).
+ * 운영탭(리더·매니저) 전용 — 피드·마당 등 활동 표면의 익명은 유지된다.
+ */
+async function resolveLeaderVisibleNames(
+  challenge: Record<string, any>,
+  participants: Record<string, any>[],
+): Promise<Map<string, string>> {
+  const mode = String(challenge.leaderIdentityMode || '');
+  const map = new Map<string, string>();
+  if (mode === 'custom') {
+    for (const p of participants) {
+      if (typeof p.leaderVisibleName === 'string' && p.leaderVisibleName) {
+        map.set(String(p.userId), p.leaderVisibleName);
+      }
+    }
+    return map;
+  }
+  if (mode !== 'realname' && mode !== 'handle') return map;
+  try {
+    const profiles = await getProfileNamesBatch(participants.map((p) => String(p.userId ?? '')));
+    for (const p of participants) {
+      const prof = profiles.get(String(p.userId));
+      if (!prof) continue;
+      const label = mode === 'handle' ? (prof.feedHandle ? `@${prof.feedHandle}` : prof.name) : prof.name;
+      if (label) map.set(String(p.userId), label);
+    }
+  } catch (err: any) {
+    console.error('resolveLeaderVisibleNames failed (non-fatal):', err?.message);
+  }
+  return map;
+}
+
 // 오늘의 리더 브리핑
 leaderRoutes.get('/briefing', async (c) => {
   const challengeId = c.req.param('challengeId')!;
@@ -209,6 +245,7 @@ leaderRoutes.get('/briefing', async (c) => {
 
   const participants = await listChallengeParticipations(challengeId);
   const activeParticipants = participants.filter((p) => p.status === 'active');
+  const visibleNames = await resolveLeaderVisibleNames(challenge, activeParticipants);
 
   const incompleteUsers: Array<Record<string, unknown>> = [];
   let verifiedCount = 0;
@@ -221,6 +258,7 @@ leaderRoutes.get('/briefing', async (c) => {
       incompleteUsers.push({
         userId: p.userId,
         userChallengeId: p.userChallengeId,
+        leaderVisibleName: visibleNames.get(String(p.userId)) ?? null,
         personalGoal: p.personalGoal ?? null,
         consecutiveDays: p.consecutiveDays ?? 0,
         status: todayEntry?.status ?? null,
@@ -253,6 +291,7 @@ leaderRoutes.get('/participants', async (c) => {
 
   const nowIso = new Date().toISOString();
   const participants = await listChallengeParticipations(challengeId);
+  const visibleNames = await resolveLeaderVisibleNames(challenge, participants);
 
   const enriched = participants.map((p) => {
     const durationDays = resolveDurationDays(challenge.durationDays, p.progress);
@@ -279,6 +318,7 @@ leaderRoutes.get('/participants', async (c) => {
     return {
       userChallengeId: p.userChallengeId,
       userId: p.userId,
+      leaderVisibleName: visibleNames.get(String(p.userId)) ?? null,
       status: p.status,
       phase: p.phase,
       joinStatus: p.joinStatus ?? null,
@@ -303,6 +343,7 @@ leaderRoutes.get('/participants', async (c) => {
   return ok(c, {
     participants: enriched,
     total: enriched.length,
+    leaderIdentityMode: (challenge.leaderIdentityMode as string) ?? null,
     summary: {
       active: enriched.filter((p) => p.status === 'active').length,
       pending: enriched.filter((p) => p.status === 'pending').length,
@@ -1095,18 +1136,19 @@ leaderRoutes.post('/draws', async (c) => {
       `추첨 인원(${input.winnerCount}명)이 대상 완주자(${eligible.length}명)보다 많아요`);
   }
 
-  const winners: DrawWinner[] = cryptoShuffle(eligible)
-    .slice(0, input.winnerCount)
-    .map((p) => {
-      const progress = normalizeProgress(p.progress);
-      return {
-        userId: String(p.userId),
-        userChallengeId: p.userChallengeId ? String(p.userChallengeId) : null,
-        personalGoal: typeof p.personalGoal === 'string' ? p.personalGoal : null,
-        completedDays: progress.filter((entry) => isCompletedProgressStatus(entry.status)).length,
-        score: Number(p.score) || 0,
-      };
-    });
+  const chosen = cryptoShuffle(eligible).slice(0, input.winnerCount);
+  const visibleNames = await resolveLeaderVisibleNames(challenge, chosen);
+  const winners: DrawWinner[] = chosen.map((p) => {
+    const progress = normalizeProgress(p.progress);
+    return {
+      userId: String(p.userId),
+      userChallengeId: p.userChallengeId ? String(p.userChallengeId) : null,
+      leaderVisibleName: visibleNames.get(String(p.userId)) ?? null,
+      personalGoal: typeof p.personalGoal === 'string' ? p.personalGoal : null,
+      completedDays: progress.filter((entry) => isCompletedProgressStatus(entry.status)).length,
+      score: Number(p.score) || 0,
+    };
+  });
 
   const ownerId = challenge.createdBy || challenge.creatorId || challenge.leaderId;
   const record = {

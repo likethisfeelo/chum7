@@ -10,6 +10,8 @@ export interface WizardFormState {
   questDescription: string;
   questAllowedVerificationTypes: QuestVerificationType[];
   questVerificationType?: QuestVerificationType;
+  /** leaderIdentityMode=custom 챌린지: 리더에게만 보일 이름 (운영탭 전용, 피드 익명 유지) */
+  leaderVisibleName: string;
 }
 
 export interface WizardStepConfig {
@@ -36,4 +38,6 @@ export interface JoinWizardChallenge {
   recruitEndAt?: string;
   recruitmentEndAt?: string;
   allowedVerificationTypes?: string[];
+  /** 참여자 식별 방식 — 생성 시 리더 확정 (realname | handle | custom) */
+  leaderIdentityMode?: string | null;
 }

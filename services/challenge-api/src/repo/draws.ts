@@ -10,6 +10,8 @@ import { TABLE, challengePk, stripKeys } from './shared';
 export interface DrawWinner {
   userId: string;
   userChallengeId: string | null;
+  /** 추첨 시점의 운영탭 표시명 스냅샷 (leaderIdentityMode 해석 결과, 없으면 null) */
+  leaderVisibleName: string | null;
   personalGoal: string | null;
   completedDays: number;
   score: number;

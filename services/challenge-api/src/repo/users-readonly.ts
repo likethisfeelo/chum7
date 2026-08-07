@@ -5,10 +5,46 @@
  *  - 핸들 조회: users gsi1pk=`HANDLE#<handle>` (user-api repo/profile-repo.ts와 동일 키)
  *  - 프로필: pk=`USER#<userId>`, sk=`PROFILE`
  */
-import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { BatchGetCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 
 const USERS_TABLE = 'USERS_TABLE';
+
+export interface ProfileNameEntry {
+  name: string | null;
+  feedHandle: string | null;
+}
+
+/**
+ * 프로필 이름/핸들 배치 조회 — 운영탭 참여자 식별 표시(leaderIdentityMode) 해석용.
+ * BatchGet 100개 단위, 실패 항목은 맵에서 빠진다(호출부에서 폴백 처리).
+ */
+export async function getProfileNamesBatch(userIds: string[]): Promise<Map<string, ProfileNameEntry>> {
+  const map = new Map<string, ProfileNameEntry>();
+  const unique = [...new Set(userIds.filter(Boolean))];
+  const table = tableName(USERS_TABLE);
+  for (let i = 0; i < unique.length; i += 100) {
+    const chunk = unique.slice(i, i + 100);
+    const res = await docClient.send(
+      new BatchGetCommand({
+        RequestItems: {
+          [table]: {
+            Keys: chunk.map((id) => ({ pk: `USER#${id}`, sk: 'PROFILE' })),
+            ProjectionExpression: 'userId, #n, feedHandle',
+            ExpressionAttributeNames: { '#n': 'name' },
+          },
+        },
+      }),
+    );
+    for (const item of res.Responses?.[table] ?? []) {
+      map.set(String(item.userId), {
+        name: typeof item.name === 'string' ? item.name : null,
+        feedHandle: typeof item.feedHandle === 'string' ? item.feedHandle : null,
+      });
+    }
+  }
+  return map;
+}
 
 /** @handle(또는 handle) → userId. 없으면 null. */
 export async function resolveHandleToUserId(handleRaw: string): Promise<string | null> {
