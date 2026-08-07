@@ -8,6 +8,7 @@ import { CoverImagePicker } from '../components/CoverImagePicker';
 import { CHALLENGE_CATEGORIES } from '../constants/categories';
 import {
   IDENTITY_MODE_OPTIONS,
+  IDENTITY_SECTION_GUIDE,
   REMEDY_CHOICE_OPTIONS,
   fromRemedyPolicy,
   toRemedyPolicy,
@@ -320,9 +321,7 @@ export const ChallengeEditPage = () => {
         {/* 참여자 식별 방식 — 시작 전에만 변경 가능 (운영탭 전용 표시) */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">참여자 식별 방식</label>
-          <p className="text-[11px] text-gray-400 mb-2">
-            운영탭에서 참여자를 어떤 이름으로 볼지 정해요. 피드·마당 활동은 계속 익명이에요.
-          </p>
+          <p className="text-[11px] text-gray-400 mb-2">{IDENTITY_SECTION_GUIDE}</p>
           <div className="space-y-2">
             {IDENTITY_MODE_OPTIONS.map((opt) => (
               <button

@@ -35,5 +35,13 @@ export type LeaderIdentityMode = 'realname' | 'handle' | 'custom';
 export const IDENTITY_MODE_OPTIONS: { value: LeaderIdentityMode; label: string; desc: string }[] = [
   { value: 'realname', label: '실명(가입명)', desc: '가입할 때 등록한 이름이 보여요' },
   { value: 'handle',   label: '@핸들',        desc: '참여자의 고유 핸들이 보여요 (없으면 가입명)' },
-  { value: 'custom',   label: '직접 입력',     desc: '참여할 때 이 챌린지에서 쓸 이름을 입력받아요' },
+  {
+    value: 'custom',
+    label: '직접 입력',
+    desc: '참여할 때 이 챌린지에서 쓸 이름을 정해요. 매일 바뀌는 활동명 대신 서로를 알아볼 고정 이름이에요',
+  },
 ];
+
+/** 식별 방식 섹션 공통 안내 — 익명 활동명이 매일 바뀌어 식별용 고정 이름이 필요한 맥락 */
+export const IDENTITY_SECTION_GUIDE =
+  '피드의 활동명은 매일 바뀌는 익명이라, 리더·매니저가 참여자를 알아보고 소통하려면 고정된 이름이 필요해요. 운영탭에서만 보이고 피드·마당 활동은 계속 익명이에요.';
