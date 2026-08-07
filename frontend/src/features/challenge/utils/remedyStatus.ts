@@ -41,12 +41,32 @@ export function computeTodayChallengeDay(userChallenge: any): number {
   return Math.max(1, elapsed + 1);
 }
 
-/** 지나간 날짜 중 미완료·미보완 Day 목록 (오늘·미래 제외, 기간 내로 한정) */
+/**
+ * 참여 아이템에서 보완 정책 해석 — 참여 레코드(remedyPolicy)는 join 시 저장되지 않아
+ * 대부분 null이므로, 챌린지 META(challenge.remedyPolicy = defaultRemedyPolicy)로 폴백한다.
+ * (참여 레벨 값만 읽으면 last_day/disabled 챌린지가 전부 anytime으로 오판된다)
+ */
+export function remedyPolicyOf(item: any): any {
+  return item?.remedyPolicy ?? item?.challenge?.remedyPolicy ?? null;
+}
+
+export function durationDaysOf(item: any): number {
+  return (
+    Number(item?.durationDays || item?.challenge?.durationDays || 0) ||
+    (Array.isArray(item?.progress) ? item.progress.length : 7)
+  );
+}
+
+/**
+ * 지나간 날짜 중 미완료·미보완 Day 목록.
+ * 오늘은 제외 — 아직 일반 인증으로 채울 수 있는 날이라 보완 대상이 아니다.
+ * 기간이 끝나면 점수·완주 판정이 확정되므로 그 뒤로는 대상이 없다(서버 규칙과 동일).
+ */
 export function missedDaysOf(item: any): number[] {
   const todayDay = computeTodayChallengeDay(item);
-  const durationDays = Number(item?.durationDays || item?.challenge?.durationDays || 0) ||
-    (Array.isArray(item?.progress) ? item.progress.length : 7);
-  const bound = Math.min(todayDay, durationDays + 1);
+  const durationDays = durationDaysOf(item);
+  if (todayDay > durationDays) return []; // 종료 — 보완 창이 닫혀 대상 없음
+  const bound = Math.min(todayDay, durationDays);
   return (Array.isArray(item?.progress) ? item.progress : [])
     .filter((p: any) => Number(p?.day) < bound && p?.status !== 'success' && !p?.remedied)
     .map((p: any) => Number(p.day))
@@ -63,17 +83,27 @@ export interface MissedChallenge {
   durationDays: number;
 }
 
-/** 활성 참여 중 "지금 보완 가능한" 챌린지 목록 (정책·잔여 횟수 반영, 놓친 날 많은 순) */
+/**
+ * "지금 보완 가능한" 챌린지 목록 (정책·잔여 횟수 반영, 놓친 날 많은 순).
+ * 서버 보완 창과 동일한 기준으로 거른다 — 진행 중(기간 내)이고, 중도 포기·해산·
+ * 보완 불가 정책이 아닌 참여만. 종료된 챌린지는 즉시 제외된다.
+ * (상태가 아닌 기간으로 판정 — 저장 status는 갱신이 밀릴 수 있다.)
+ */
 export function collectMissedChallenges(items: any[]): MissedChallenge[] {
   const result: MissedChallenge[] = [];
   for (const item of items || []) {
-    if (String(item?.status) !== 'active') continue;
-    const remedyType = getRemedyType(item?.remedyPolicy);
+    if (String(item?.status) === 'gave_up' || String(item?.phase) === 'gave_up') continue;
+    if (item?.challenge?.disbanded === true) continue;
+    const policy = remedyPolicyOf(item);
+    const remedyType = getRemedyType(policy);
     if (remedyType === 'disabled') continue;
     const todayDay = computeTodayChallengeDay(item);
-    const durationDays = Number(item?.durationDays || item?.challenge?.durationDays || 0) || 7;
-    if (remedyType === 'last_day' && todayDay < durationDays) continue;
-    const remaining = getRemainingRemedyCount(item?.remedyPolicy, item?.progress || []);
+    const durationDays = durationDaysOf(item);
+    if (todayDay > durationDays) continue; // 종료 — 보완 창이 닫혔다
+    // 마지막날 전용 정책은 서버가 그 날 하루만 창을 연다
+    if (remedyType === 'last_day' && todayDay !== durationDays) continue;
+    // anytime은 Day 2부터 창이 열린다 (서버 REMEDY_WRONG_DAY와 일치 — Day 1엔 놓친 날도 없다)
+    const remaining = getRemainingRemedyCount(policy, item?.progress || []);
     if (remaining !== null && remaining <= 0) continue;
     const missedDays = missedDaysOf(item);
     if (missedDays.length === 0) continue;

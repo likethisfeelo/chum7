@@ -6,19 +6,19 @@ export function getRemedyType(remedyPolicy: any): 'disabled' | 'last_day' | 'any
 
 export function getRemedyLabel(remedyPolicy: any): string {
   const type = getRemedyType(remedyPolicy);
+  const max = remedyPolicy?.maxRemedyDays;
   if (type === 'disabled') return '보완 불가';
   if (type === 'last_day') {
-    const max = remedyPolicy?.maxRemedyDays;
     return max != null ? `마지막날 보완 (최대 ${max}회)` : '마지막날 보완 (전체 실패일)';
   }
-  return '보완 자유';
+  return max != null ? `보완 ${max}회` : '보완 자유';
 }
 
+/** 잔여 보완 횟수 — maxRemedyDays가 있으면 유형 무관 적용 (anytime '기간 중 1회만' 포함). null=무제한 */
 export function getRemainingRemedyCount(remedyPolicy: any, progress: any[]): number | null {
   const type = getRemedyType(remedyPolicy);
   const remediedCount = (progress || []).filter((p: any) => p?.remedied).length;
 
-  if (type === 'anytime') return null;
   if (type === 'disabled') return 0;
 
   const max = remedyPolicy?.maxRemedyDays;

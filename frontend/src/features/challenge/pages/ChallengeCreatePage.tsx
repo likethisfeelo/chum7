@@ -35,6 +35,7 @@ interface FormState {
   joinApprovalRequired: boolean;
   personalQuestAutoApprove: boolean;
   leaderIdentityMode: 'realname' | 'handle' | 'custom';
+  remedyChoice: 'free' | 'once' | 'last_day' | 'disabled';
 
   // Step 4
   participateAsCreator: boolean;
@@ -63,8 +64,24 @@ const INITIAL_FORM: FormState = {
   joinApprovalRequired: false,
   personalQuestAutoApprove: true,
   leaderIdentityMode: 'realname',
+  remedyChoice: 'free',
   participateAsCreator: true,
 };
+
+// 보완(놓친 날 복구) 정책 — 서버 defaultRemedyPolicy로 매핑
+const REMEDY_CHOICE_OPTIONS: { value: FormState['remedyChoice']; label: string; desc: string }[] = [
+  { value: 'free',     label: '자유 보완',        desc: '놓친 날을 언제든, 횟수 제한 없이 복구할 수 있어요' },
+  { value: 'once',     label: '기간 중 1회만',     desc: '챌린지 전체에서 딱 한 번만 보완할 수 있어요' },
+  { value: 'last_day', label: '마지막 날에 몰아서', desc: '마지막 날이 보완 전용일이 돼요 (실제 인증일은 기간-1일)' },
+  { value: 'disabled', label: '보완 불가',        desc: '놓치면 복구할 수 없어요. 빡세게 가는 챌린지' },
+];
+
+function toRemedyPolicy(choice: FormState['remedyChoice']): { type: 'anytime' | 'last_day' | 'disabled'; maxRemedyDays: number | null } {
+  if (choice === 'once') return { type: 'anytime', maxRemedyDays: 1 };
+  if (choice === 'last_day') return { type: 'last_day', maxRemedyDays: null };
+  if (choice === 'disabled') return { type: 'disabled', maxRemedyDays: null };
+  return { type: 'anytime', maxRemedyDays: null };
+}
 
 // 참여자 식별 방식 — 리더/매니저 운영탭에서만 표시 (피드·마당 활동은 계속 익명)
 const IDENTITY_MODE_OPTIONS: { value: FormState['leaderIdentityMode']; label: string; desc: string }[] = [
@@ -458,6 +475,36 @@ function Step3({ form, onChange }: { form: FormState; onChange: (patch: Partial<
         </button>
       </div>
 
+      {/* 보완 정책 — 놓친 날을 어떻게 복구할 수 있는지 (defaultRemedyPolicy) */}
+      <div className="p-4 bg-gray-50 rounded-xl">
+        <p className="text-sm font-semibold text-gray-700">보완 정책</p>
+        <p className="text-[11px] text-gray-500 mt-0.5 mb-3">
+          인증을 놓친 날을 참여자가 복구(보완)할 수 있는 방식이에요. 보완 점수는 기본 점수의 70%예요.
+        </p>
+        <div className="space-y-2">
+          {REMEDY_CHOICE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange({ remedyChoice: opt.value })}
+              className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
+                form.remedyChoice === opt.value ? 'border-primary-400 bg-primary-50' : 'border-gray-100 bg-white'
+              }`}
+            >
+              <p className={`text-sm font-medium ${form.remedyChoice === opt.value ? 'text-primary-700' : 'text-gray-800'}`}>
+                {opt.label}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-0.5">{opt.desc}</p>
+            </button>
+          ))}
+        </div>
+        {form.remedyChoice === 'last_day' && (
+          <p className="mt-2 text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+            {form.durationDays}일 챌린지라면 실제 인증일은 {Math.max(form.durationDays - 1, 1)}일이고, 마지막 하루는 보완 전용일이 돼요.
+          </p>
+        )}
+      </div>
+
       {/* 참여자 식별 방식 — 운영탭(리더·매니저) 전용 표시, 피드·마당 익명은 유지 */}
       <div className="p-4 bg-gray-50 rounded-xl">
         <p className="text-sm font-semibold text-gray-700">참여자 식별 방식</p>
@@ -605,6 +652,7 @@ export function ChallengeCreatePage() {
         participateAsCreator: form.participateAsCreator,
         personalQuestAutoApprove: form.personalQuestAutoApprove,
         leaderIdentityMode: form.leaderIdentityMode,
+        defaultRemedyPolicy: toRemedyPolicy(form.remedyChoice),
         rewardPhysical:
           form.hasPhysicalReward && form.physicalRewardName.trim()
             ? { name: form.physicalRewardName.trim() }

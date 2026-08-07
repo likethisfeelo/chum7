@@ -2,6 +2,7 @@ import {
   calculateChallengeEndAt,
   calculateEffectiveCurrentDay,
   isCompletedProgressStatus,
+  isRemedyWindowClosed,
   resolveChallengeActualStartAt,
 } from './day-sync';
 
@@ -75,5 +76,23 @@ describe('isCompletedProgressStatus', () => {
   test('does not treat failed/pending as completed progress', () => {
     expect(isCompletedProgressStatus('failed')).toBe(false);
     expect(isCompletedProgressStatus('pending')).toBe(false);
+  });
+});
+
+describe('isRemedyWindowClosed', () => {
+  test('기간 내(마지막 날 포함)에는 보완 창이 열려 있다', () => {
+    expect(isRemedyWindowClosed(1, 5)).toBe(false);
+    expect(isRemedyWindowClosed(4, 5)).toBe(false);
+    expect(isRemedyWindowClosed(5, 5)).toBe(false);
+  });
+
+  test('기간이 지나면 즉시 닫힌다 — 유예 없음', () => {
+    expect(isRemedyWindowClosed(6, 5)).toBe(true);
+    expect(isRemedyWindowClosed(30, 5)).toBe(true);
+  });
+
+  test('durationDays가 비정상이면 기본 7일 기준으로 판정한다', () => {
+    expect(isRemedyWindowClosed(7, 0)).toBe(false);
+    expect(isRemedyWindowClosed(8, undefined as unknown as number)).toBe(true);
   });
 });

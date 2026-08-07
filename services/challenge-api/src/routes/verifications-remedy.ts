@@ -2,6 +2,7 @@
  * 보완(remedy) 인증 라우트 — POST /c/verifications/remedy
  * 레거시: backend/services/verification/remedy/index.ts
  * 정책: anytime(Day 2+, 이전 실패일만) / last_day(마지막 날 전용, maxRemedyDays 제한) / disabled.
+ * 공통 창: 챌린지 기간 내에서만 — 종료(기간 경과)·중도 포기 후에는 보완 불가.
  * 보완 성공 시 해당 progress 항목 status:'success', remedied:true 마킹.
  */
 import { randomUUID } from 'node:crypto';
@@ -9,7 +10,13 @@ import { Hono } from 'hono';
 import type { AppEnv, ApiContext } from '@chum7/api-kit';
 import { ok, fail } from '@chum7/api-kit';
 import { remedyVerificationSchema } from '../schemas';
-import { calculateChallengeDay, certDateFromIso, remedyScore, safeTimezone } from '../domain/day-sync';
+import {
+  calculateChallengeDay,
+  certDateFromIso,
+  isRemedyWindowClosed,
+  remedyScore,
+  safeTimezone,
+} from '../domain/day-sync';
 import { normalizeProgress } from '../domain/progress';
 import { resolveAllowedTypes, resolvePerformedAt, resolveVerificationType } from '../domain/verification-rules';
 import { getChallenge } from '../repo/challenges';
@@ -69,6 +76,15 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
     }
   }
 
+  // 종료된 챌린지는 보완 불가 — 기간이 지나면 점수·완주 판정이 확정된다.
+  // 취소로 특별 개방(remedyUnlocked)된 일자도 종료 후에는 함께 닫힌다.
+  if (isRemedyWindowClosed(effectiveCurrentDay, durationDays)) {
+    return fail(c, 400, 'REMEDY_WINDOW_CLOSED', '종료된 챌린지는 보완할 수 없어요');
+  }
+  if (userChallenge.status === 'gave_up' || userChallenge.phase === 'gave_up') {
+    return fail(c, 400, 'REMEDY_GAVE_UP', '중도 포기한 챌린지는 보완할 수 없어요');
+  }
+
   if (!remedyUnlocked) {
     if (remedyPolicyType === 'last_day') {
       // 마지막 날(durationDays)에만 보완 가능 (Day 1..durationDays-1 대상)
@@ -102,11 +118,11 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
     return fail(c, 409, 'REMEDY_TARGET_ALREADY_DONE', '이미 보완한 day입니다');
   }
 
+  // 횟수 제한 — maxRemedyDays가 설정된 정책이면 유형 무관 적용 (anytime '기간 중 1회만' 포함)
   const alreadyRemediedCount = progress.filter((p) => p.remedied === true).length;
-  if (remedyPolicyType === 'last_day' && remedyPolicy.maxRemedyDays !== null && remedyPolicy.maxRemedyDays !== undefined) {
-    if (alreadyRemediedCount >= remedyPolicy.maxRemedyDays) {
-      return fail(c, 409, 'REMEDY_MAX_REACHED', `최대 보완 횟수(${remedyPolicy.maxRemedyDays}회)에 도달했습니다`);
-    }
+  const maxRemedyDays = remedyPolicy.maxRemedyDays ?? null;
+  if (maxRemedyDays !== null && alreadyRemediedCount >= maxRemedyDays) {
+    return fail(c, 409, 'REMEDY_MAX_REACHED', `최대 보완 횟수(${maxRemedyDays}회)에 도달했습니다`);
   }
 
   const allowedTypes = resolveAllowedTypes(challenge.allowedVerificationTypes);
@@ -135,6 +151,12 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
   const performedAt = resolvePerformedAt(input.practiceAt || input.completedAt || nowIso, nowIso);
   if (new Date(performedAt).getTime() > new Date(nowIso).getTime()) {
     return fail(c, 400, 'FUTURE_PRACTICE_TIME', 'practiceAt이 현재 시간보다 미래입니다');
+  }
+  // 실천 시각은 현재 기준 4시간 이내 — 안내 문구로만 존재하던 규칙을 실제로 강제한다
+  // ("오늘 다시 실천했다"가 보완의 전제. 과거 임의 시각 백필 방지)
+  const PRACTICE_WINDOW_MS = 4 * 60 * 60 * 1000;
+  if (new Date(nowIso).getTime() - new Date(performedAt).getTime() > PRACTICE_WINDOW_MS) {
+    return fail(c, 400, 'PRACTICE_TIME_TOO_OLD', '실천 시각은 현재 기준 4시간 이내여야 합니다');
   }
   const certDate = certDateFromIso(nowIso, timezone);
 
@@ -208,10 +230,11 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
   });
 
   let remainingRemedyDays: number;
-  if (remedyPolicyType === 'last_day' && remedyPolicy.maxRemedyDays !== null && remedyPolicy.maxRemedyDays !== undefined) {
-    remainingRemedyDays = Math.max(remedyPolicy.maxRemedyDays - (alreadyRemediedCount + 1), 0);
+  if (maxRemedyDays !== null) {
+    remainingRemedyDays = Math.max(maxRemedyDays - (alreadyRemediedCount + 1), 0);
   } else {
-    remainingRemedyDays = Math.max(failedDays.length - (alreadyRemediedCount + 1), 0);
+    // failedDays는 미보완 실패일만 담고 있으므로(보완된 날은 status success) 이번 대상 1건만 뺀다
+    remainingRemedyDays = Math.max(failedDays.length - 1, 0);
   }
 
   return ok(c, {

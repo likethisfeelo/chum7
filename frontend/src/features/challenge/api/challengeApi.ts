@@ -58,6 +58,8 @@ export interface CreateChallengeParams {
   coverImageUrl?: string | null;
   /** 참여자 식별 방식 — 운영탭 전용 표시 (realname=가입명 | handle=@핸들 | custom=참여 시 입력) */
   leaderIdentityMode?: 'realname' | 'handle' | 'custom';
+  /** 보완 정책 — anytime(+maxRemedyDays=횟수 제한) | last_day(마지막 날 전용) | disabled */
+  defaultRemedyPolicy?: { type: 'anytime' | 'last_day' | 'disabled'; maxRemedyDays: number | null };
 }
 
 export interface InterestStatus {
