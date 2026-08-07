@@ -29,9 +29,9 @@ challengeRoutes.post('/', async (c) => {
   const { userId } = c.get('authUser')!;
   const input = createChallengeSchema.parse(await c.req.json().catch(() => ({})));
 
-  // last_day 정책: maxRemedyDays는 durationDays - 1을 초과할 수 없음
+  // 보완 횟수 제한: 보완 대상은 지나간 날뿐이므로 durationDays - 1을 초과할 수 없음
   const rp = input.defaultRemedyPolicy;
-  if (rp.type === 'last_day' && rp.maxRemedyDays !== null && rp.maxRemedyDays > input.durationDays - 1) {
+  if (rp.type !== 'disabled' && rp.maxRemedyDays !== null && rp.maxRemedyDays > input.durationDays - 1) {
     return fail(c, 400, 'INVALID_MAX_REMEDY_DAYS',
       `최대 보완 횟수는 챌린지 기간 - 1(${input.durationDays - 1})을 초과할 수 없습니다`);
   }
@@ -88,7 +88,9 @@ challengeRoutes.post('/', async (c) => {
     layerPolicy: normalizedLayerPolicy,
     defaultRemedyPolicy: {
       type: input.defaultRemedyPolicy.type,
-      maxRemedyDays: input.defaultRemedyPolicy.type === 'last_day' ? input.defaultRemedyPolicy.maxRemedyDays : null,
+      // anytime도 횟수 제한 가능 (생성 UI '기간 중 1회만' = anytime + maxRemedyDays:1)
+      maxRemedyDays:
+        input.defaultRemedyPolicy.type === 'disabled' ? null : input.defaultRemedyPolicy.maxRemedyDays,
     },
     personalQuestEnabled: resolvePersonalQuestEnabled(input.challengeType),
     personalQuestAutoApprove: input.personalQuestAutoApprove,

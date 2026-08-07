@@ -118,11 +118,11 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
     return fail(c, 409, 'REMEDY_TARGET_ALREADY_DONE', '이미 보완한 day입니다');
   }
 
+  // 횟수 제한 — maxRemedyDays가 설정된 정책이면 유형 무관 적용 (anytime '기간 중 1회만' 포함)
   const alreadyRemediedCount = progress.filter((p) => p.remedied === true).length;
-  if (remedyPolicyType === 'last_day' && remedyPolicy.maxRemedyDays !== null && remedyPolicy.maxRemedyDays !== undefined) {
-    if (alreadyRemediedCount >= remedyPolicy.maxRemedyDays) {
-      return fail(c, 409, 'REMEDY_MAX_REACHED', `최대 보완 횟수(${remedyPolicy.maxRemedyDays}회)에 도달했습니다`);
-    }
+  const maxRemedyDays = remedyPolicy.maxRemedyDays ?? null;
+  if (maxRemedyDays !== null && alreadyRemediedCount >= maxRemedyDays) {
+    return fail(c, 409, 'REMEDY_MAX_REACHED', `최대 보완 횟수(${maxRemedyDays}회)에 도달했습니다`);
   }
 
   const allowedTypes = resolveAllowedTypes(challenge.allowedVerificationTypes);
@@ -230,8 +230,8 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
   });
 
   let remainingRemedyDays: number;
-  if (remedyPolicyType === 'last_day' && remedyPolicy.maxRemedyDays !== null && remedyPolicy.maxRemedyDays !== undefined) {
-    remainingRemedyDays = Math.max(remedyPolicy.maxRemedyDays - (alreadyRemediedCount + 1), 0);
+  if (maxRemedyDays !== null) {
+    remainingRemedyDays = Math.max(maxRemedyDays - (alreadyRemediedCount + 1), 0);
   } else {
     // failedDays는 미보완 실패일만 담고 있으므로(보완된 날은 status success) 이번 대상 1건만 뺀다
     remainingRemedyDays = Math.max(failedDays.length - 1, 0);

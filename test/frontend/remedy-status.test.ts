@@ -241,3 +241,28 @@ describe('기간별 매트릭스 (3·5·7일)', () => {
     expect(missedDaysOf(item)).toEqual([]);
   });
 });
+
+describe('anytime 횟수 제한 (기간 중 1회만 = anytime + maxRemedyDays:1)', () => {
+  test('아직 보완하지 않았으면 허브에 노출된다', () => {
+    const item = participation({
+      durationDays: 5,
+      todayDay: 4,
+      successDays: [1],
+      remedyPolicy: { type: 'anytime', maxRemedyDays: 1 },
+      policyOnChallengeOnly: true,
+    });
+    expect(collectMissedChallenges([item])).toHaveLength(1);
+  });
+
+  test('1회 소진하면 허브에서 빠진다', () => {
+    const item = participation({
+      durationDays: 5,
+      todayDay: 4,
+      successDays: [1],
+      remediedDays: [2],
+      remedyPolicy: { type: 'anytime', maxRemedyDays: 1 },
+      policyOnChallengeOnly: true,
+    });
+    expect(collectMissedChallenges([item])).toHaveLength(0);
+  });
+});
