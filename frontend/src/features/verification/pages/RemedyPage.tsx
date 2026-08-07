@@ -109,7 +109,13 @@ export const RemedyPage = () => {
         <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <FiArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-bold">Day 6 보완하기</h1>
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold leading-tight">Day 6 보완하기</h1>
+          {/* 여러 챌린지 동시 진행 시 어떤 챌린지의 보완인지 명시 */}
+          <p className="text-xs text-gray-500 truncate">
+            {currentChallenge.challenge?.badgeIcon || '🎯'} {currentChallenge.challenge?.title || '챌린지'}
+          </p>
+        </div>
       </div>
 
       <div className="p-6">
@@ -122,7 +128,10 @@ export const RemedyPage = () => {
             <div className="w-12 h-12 bg-purple-200 rounded-full flex items-center justify-center">
               <FiRefreshCw className="w-6 h-6 text-purple-600" />
             </div>
-            <div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-purple-500 truncate">
+                {currentChallenge.challenge?.badgeIcon || '🎯'} {currentChallenge.challenge?.title || '챌린지'}
+              </p>
               <h3 className="font-bold text-purple-900 mb-1">Day 6 보완 기회</h3>
               <p className="text-sm text-purple-700">실패한 Day 1~5를 정책 범위 내에서 복구할 수 있어요.</p>
             </div>
