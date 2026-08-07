@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { challengeApi, CreateChallengeParams, ChallengeCategory, ChallengeType } from '../api/challengeApi';
 import { CHALLENGE_CATEGORIES } from '../constants/categories';
+import { IDENTITY_MODE_OPTIONS, REMEDY_CHOICE_OPTIONS, toRemedyPolicy } from '../constants/remedyPolicy';
 import { CoverImagePicker } from '../components/CoverImagePicker';
 
 // ─── 폼 상태 타입 ────────────────────────────────────────────────────
@@ -68,27 +69,6 @@ const INITIAL_FORM: FormState = {
   participateAsCreator: true,
 };
 
-// 보완(놓친 날 복구) 정책 — 서버 defaultRemedyPolicy로 매핑
-const REMEDY_CHOICE_OPTIONS: { value: FormState['remedyChoice']; label: string; desc: string }[] = [
-  { value: 'free',     label: '자유 보완',        desc: '놓친 날을 언제든, 횟수 제한 없이 복구할 수 있어요' },
-  { value: 'once',     label: '기간 중 1회만',     desc: '챌린지 전체에서 딱 한 번만 보완할 수 있어요' },
-  { value: 'last_day', label: '마지막 날에 몰아서', desc: '마지막 날이 보완 전용일이 돼요 (실제 인증일은 기간-1일)' },
-  { value: 'disabled', label: '보완 불가',        desc: '놓치면 복구할 수 없어요. 빡세게 가는 챌린지' },
-];
-
-function toRemedyPolicy(choice: FormState['remedyChoice']): { type: 'anytime' | 'last_day' | 'disabled'; maxRemedyDays: number | null } {
-  if (choice === 'once') return { type: 'anytime', maxRemedyDays: 1 };
-  if (choice === 'last_day') return { type: 'last_day', maxRemedyDays: null };
-  if (choice === 'disabled') return { type: 'disabled', maxRemedyDays: null };
-  return { type: 'anytime', maxRemedyDays: null };
-}
-
-// 참여자 식별 방식 — 리더/매니저 운영탭에서만 표시 (피드·마당 활동은 계속 익명)
-const IDENTITY_MODE_OPTIONS: { value: FormState['leaderIdentityMode']; label: string; desc: string }[] = [
-  { value: 'realname', label: '실명(가입명)', desc: '가입할 때 등록한 이름이 보여요' },
-  { value: 'handle',   label: '@핸들',        desc: '참여자의 고유 핸들이 보여요 (없으면 가입명)' },
-  { value: 'custom',   label: '직접 입력',     desc: '참여할 때 이 챌린지에서 쓸 이름을 입력받아요' },
-];
 
 const VERIFICATION_TYPES = [
   { key: 'image' as const, label: '사진', emoji: '📸' },

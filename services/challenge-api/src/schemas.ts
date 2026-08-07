@@ -51,6 +51,14 @@ export const createChallengeSchema = z.object({
 
 export const updateChallengeSchema = z.object({
   title: z.string().min(2).max(60).optional(),
+  // 시작 전(draft·recruiting) 한정 정책 변경 — 라우트에서 부수효과(진행표 재구성) 처리
+  leaderIdentityMode: z.enum(['realname', 'handle', 'custom']).optional(),
+  defaultRemedyPolicy: z
+    .object({
+      type: z.enum(['anytime', 'last_day', 'disabled']),
+      maxRemedyDays: z.number().int().min(1).max(30).nullable().default(null),
+    })
+    .optional(),
   description: z.string().min(10).max(2000).optional(),
   category: z.enum(CHALLENGE_CATEGORIES).optional(),
   targetTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
