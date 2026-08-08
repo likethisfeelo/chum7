@@ -14,6 +14,7 @@ import { ImageCarousel } from "@/shared/components/ImageCarousel";
 import { InlineVerificationForm } from "@/features/verification/components/InlineVerificationForm";
 import { BottomSheet } from "@/shared/components/BottomSheet";
 import { GuideBoardSection } from "../components/GuideBoardSection";
+import { EndedChallengeSummary } from "../components/EndedChallengeSummary";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import { challengeApi } from "@/features/challenge/api/challengeApi";
 import { computeTodayChallengeDay } from "@/features/challenge/utils/remedyStatus";
@@ -1385,6 +1386,15 @@ export const ChallengeFeedPage = () => {
           {mainTab === "about" && (
           <>
 
+          {/* 종료 요약 — 내 결과·보상·다음 동선 (참여했던 사람에게만) */}
+          {challengeEnded && userChallenge && !isGaveUp && (
+            <EndedChallengeSummary
+              userChallenge={userChallenge}
+              challengeId={String(challengeId)}
+              leaderHandle={challengeData?.leaderHandle ?? null}
+            />
+          )}
+
           {/* 중도 포기 배너 */}
           {isGaveUp && (
             <section className="bg-red-50 rounded-2xl p-5 border border-red-100 shadow-sm">
@@ -1403,8 +1413,8 @@ export const ChallengeFeedPage = () => {
             />
           </div>
 
-          {/* 개인 퀘스트 제안 섹션 */}
-          {challengeData?.personalQuestEnabled && (() => {
+          {/* 개인 퀘스트 제안 섹션 — 종료 후에는 마감 안내 자체가 소음이라 숨긴다 */}
+          {challengeData?.personalQuestEnabled && !challengeEnded && (() => {
             const proposal = myProposalData?.latestProposal ?? null;
             const lifecycle = (challengeData?.effectiveLifecycle || challengeData?.lifecycle) as string;
             const canSubmit = ["recruiting", "preparing"].includes(lifecycle);

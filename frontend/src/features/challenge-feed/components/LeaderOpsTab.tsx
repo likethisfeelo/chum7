@@ -42,6 +42,8 @@ interface LeaderParticipant {
   durationDays: number;
   completedDays: number;
   progressPercentage: number;
+  cheerScore?: number;
+  thankScore?: number;
   consecutiveDays: number;
   personalGoal: string | null;
   usedRemedyCount: number;
@@ -2535,6 +2537,141 @@ function DisbandSection({
   );
 }
 
+// ── 종료 모드: 결과 요약 (오늘 브리핑 대체) ────────────────────────────────
+//  완주율·총 인증·평균 달성률·응원/감사 합계 + 일자별 인증률 미니 차트.
+//  리더 회고 자료이자 다음 시즌 모객 근거 — leader-participants 데이터만으로 계산.
+function ResultSummarySection({ challengeId }: { challengeId: string }) {
+  const { data, isLoading } = useQuery<LeaderParticipantsData>({
+    queryKey: ['leader-participants', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/c/${challengeId}/leader/participants`);
+      return res.data.data;
+    },
+  });
+
+  if (isLoading) return <section className="glass-card rounded-2xl p-5"><Loading /></section>;
+  const participants = (data?.participants ?? []).filter((p) => p.status !== 'pending');
+  const total = participants.length;
+  const completed = participants.filter((p) => p.status === 'completed').length;
+  const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const totalVerifications = participants.reduce((s, p) => s + (p.completedDays ?? 0), 0);
+  const avgProgress = total > 0
+    ? Math.round(participants.reduce((s, p) => s + (p.progressPercentage ?? 0), 0) / total)
+    : 0;
+  const cheerSum = participants.reduce((s, p) => s + (p.cheerScore ?? 0), 0);
+  const thankSum = participants.reduce((s, p) => s + (p.thankScore ?? 0), 0);
+  const durationDays = participants[0]?.durationDays ?? 0;
+
+  // 일자별 인증률 — 어느 날 이탈이 컸는지 (다음 시즌 설계용)
+  const dayRates = Array.from({ length: durationDays }, (_, i) => {
+    const day = i + 1;
+    const done = participants.filter((p) =>
+      (p.days ?? []).some((d) => d.day === day && d.status !== 'none' && d.status !== null),
+    ).length;
+    return { day, rate: total > 0 ? Math.round((done / total) * 100) : 0 };
+  });
+
+  return (
+    <section className="glass-card rounded-2xl p-5">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-gray-900">🏁 챌린지 결과</h3>
+        <span className="text-[11px] text-gray-400">종료됨</span>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-xl bg-emerald-50 py-3">
+          <p className="text-lg font-extrabold text-emerald-700">{completed}/{total}</p>
+          <p className="text-[10px] text-emerald-600 mt-0.5">완주 ({completionRate}%)</p>
+        </div>
+        <div className="rounded-xl bg-gray-50 py-3">
+          <p className="text-lg font-extrabold text-gray-800">{totalVerifications}</p>
+          <p className="text-[10px] text-gray-500 mt-0.5">총 인증</p>
+        </div>
+        <div className="rounded-xl bg-gray-50 py-3">
+          <p className="text-lg font-extrabold text-gray-800">{avgProgress}%</p>
+          <p className="text-[10px] text-gray-500 mt-0.5">평균 달성률</p>
+        </div>
+      </div>
+      <p className="mt-2 text-center text-[11px] text-gray-400">✦ 응원 {cheerSum} · ● 감사 {thankSum}</p>
+
+      {durationDays > 0 && (
+        <div className="mt-4">
+          <p className="text-[11px] font-semibold text-gray-500 mb-1.5">일자별 인증률</p>
+          <div className="flex items-end gap-1 h-16">
+            {dayRates.map(({ day, rate }) => (
+              <div key={day} className="flex-1 flex flex-col items-center justify-end h-full">
+                <div
+                  className="w-full rounded-t bg-emerald-400/80 min-h-[2px]"
+                  style={{ height: `${rate}%` }}
+                  title={`Day ${day}: ${rate}%`}
+                />
+                <span className="text-[9px] text-gray-400 mt-0.5">{day}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ── 종료 모드: 보상 체크리스트 헤더 — 남은 일이 한 줄로 보이게 ─────────────
+function RewardChecklistHeader({ challengeId }: { challengeId: string }) {
+  const { data: drawData } = useQuery({
+    queryKey: ['leader-draws', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/c/${challengeId}/leader/draws`);
+      return res.data.data as { draws: DrawRecordView[]; total: number };
+    },
+  });
+  const { data: giftData } = useQuery({
+    queryKey: ['leader-gifts', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/pay/gifts/leader/${challengeId}`);
+      return res.data.data;
+    },
+  });
+
+  const completers = (giftData?.completers ?? []) as any[];
+  const vouchers = (giftData?.vouchers ?? []) as any[];
+  const giftedUserIds = new Set(vouchers.map((v) => String(v.userId)));
+  const giftedCompleters = completers.filter((p) => giftedUserIds.has(String(p.userId))).length;
+  const pendingShip = vouchers.filter((v) => v.status === 'claimed' && v.type === 'physical').length;
+  const drawCount = drawData?.total ?? 0;
+
+  return (
+    <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 flex items-center gap-2 flex-wrap">
+      <span className="text-base">🎁</span>
+      <p className="text-xs font-semibold text-amber-800">
+        완주자 {completers.length}명 · 추첨 {drawCount}회 · 교환권 {giftedCompleters}/{completers.length}명 발송
+        {pendingShip > 0 ? ` · 📦 배송 대기 ${pendingShip}건` : ''}
+      </p>
+    </div>
+  );
+}
+
+// ── 종료 모드: 시즌 복제 — 같은 설정으로 새 시즌 생성 페이지 프리필 ────────
+function SeasonCloneButton({ challengeId }: { challengeId: string }) {
+  const navigate = useNavigate();
+  const { data: challenge } = useQuery({
+    queryKey: ['challenge', challengeId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/public/challenges/${challengeId}`);
+      return res.data.data;
+    },
+  });
+
+  if (!challenge) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => navigate('/challenges/new', { state: { clone: challenge } })}
+      className="w-full py-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold text-sm hover:bg-emerald-100 transition-colors"
+    >
+      🌱 같은 설정으로 새 시즌 열기
+    </button>
+  );
+}
+
 export function LeaderOpsTab({
   challengeId,
   challengeType = 'leader_personal',
@@ -2558,6 +2695,48 @@ export function LeaderOpsTab({
   onManagersChanged?: () => void;
 }) {
   const navigate = useNavigate();
+
+  // 종료 모드 — 운영탭의 성격이 "오늘을 굴리는 도구"에서 "결과 정리·보상 도구"로 바뀐다.
+  //  숨김: 오늘 브리핑(→결과 요약), 리더퀘스트 등록/관리, 제안 심사, 티켓, 보상 카탈로그 편집,
+  //        설정/해산. 유지: 인정 요청(분쟁 정리)·참여자(완료 인정)·댓글·매니저.
+  const ended = lifecycle === 'completed' || lifecycle === 'archived';
+
+  if (ended) {
+    return (
+      <div className="space-y-4">
+        {managerMode && (
+          <div className="rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-2.5 flex items-center gap-2">
+            <span className="text-base">🛡️</span>
+            <p className="text-xs font-semibold text-indigo-800">매니저 모드 — 보상 발송을 도울 수 있어요.</p>
+          </div>
+        )}
+
+        {/* 1) 결과 요약 (브리핑 대체) */}
+        <ResultSummarySection challengeId={challengeId} />
+
+        {/* 2) 보상 파이프라인 — 체크리스트 → 추첨 → 선물/배송 */}
+        <RewardChecklistHeader challengeId={challengeId} />
+        <DrawSection challengeId={challengeId} managerMode={managerMode} />
+        <GiftSection challengeId={challengeId} />
+
+        {/* 3) 마무리 정리 — 인정 요청 잔여 처리 + 참여자 완료 인정 그리드 */}
+        <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-2 text-[11px] text-gray-500">
+          종료된 챌린지예요. 완료 인정을 처리하면 완주 판정에 바로 반영돼요.
+        </div>
+        <CompletionRequestSection challengeId={challengeId} />
+        <ParticipantsSection challengeId={challengeId} managerIds={managerIds} />
+
+        {/* 4) 운영 잔여 도구 */}
+        {!managerMode && <OpsPostsSection challengeId={challengeId} />}
+        {!managerMode && (
+          <ManagerSection challengeId={challengeId} managerIds={managerIds} onChanged={onManagersChanged} />
+        )}
+
+        {/* 5) 다음 시즌 */}
+        {!managerMode && <SeasonCloneButton challengeId={challengeId} />}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
