@@ -127,6 +127,22 @@ export async function setPublicProfile(
   );
 }
 
+/** 온보딩 완료 기록 — 완료 시각 + 선택한 관심 카테고리(탐색 초기값·추천 시드) */
+export async function setOnboarded(
+  userId: string,
+  interests: string[],
+  nowIso: string,
+): Promise<void> {
+  await docClient.send(
+    new UpdateCommand({
+      TableName: tableName(TABLE),
+      Key: profileKey(userId),
+      UpdateExpression: 'SET onboardedAt = :now, onboardingInterests = :interests',
+      ExpressionAttributeValues: { ':now': nowIso, ':interests': interests },
+    }),
+  );
+}
+
 /** 피드 공개 설정 저장 (레거시 personal-feed/settings 병합 결과 전체 교체) */
 export async function setFeedSettings(
   userId: string,

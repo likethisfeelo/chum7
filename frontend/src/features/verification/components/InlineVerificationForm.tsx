@@ -550,6 +550,16 @@ export const InlineVerificationForm = ({
     onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["my-challenges"] });
 
+      // 첫 인증 축하 — 여정(월드) 정원으로 시선 유도 (기기당 1회)
+      try {
+        if (!localStorage.getItem('chum7:firstVerifCelebrated')) {
+          localStorage.setItem('chum7:firstVerifCelebrated', '1');
+          toast('🌱 첫 인증 완료! 여정 탭의 정원에 빛방울이 생겼어요', { duration: 6000 });
+        }
+      } catch {
+        // 스토리지 불가 — 무시
+      }
+
       // quest 연동 시 퀘스트 제출도 fire-and-forget
       if (quest?.questId) {
         const uploadedUrl = lastUploadedUrlRef.current;
