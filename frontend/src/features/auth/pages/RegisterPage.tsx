@@ -35,7 +35,7 @@ export const RegisterPage = () => {
       }
 
       toast.success('회원가입이 완료되었습니다! 로그인해주세요.');
-      navigate('/login');
+      navigate(`/login${window.location.search}`);
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || '회원가입에 실패했습니다');
@@ -52,7 +52,7 @@ export const RegisterPage = () => {
     },
     onSuccess: () => {
       toast.success('이메일 인증이 완료되었습니다. 로그인해주세요.');
-      navigate('/login');
+      navigate(`/login${window.location.search}`);
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || '이메일 인증에 실패했습니다');
