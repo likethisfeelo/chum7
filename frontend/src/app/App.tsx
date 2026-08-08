@@ -17,6 +17,7 @@ import { ChallengeDetailPage } from '@/features/challenge/pages/ChallengeDetailP
 import { ChallengePreviewPage } from '@/features/challenge/pages/ChallengePreviewPage';
 import { RewardProductPage } from '@/features/challenge/pages/RewardProductPage';
 import { PublicProfilePage } from '@/features/personal-feed/pages/PublicProfilePage';
+import { AboutChumPage } from '@/features/about/pages/AboutChumPage';
 import { ChallengeCreatePage } from '@/features/challenge/pages/ChallengeCreatePage';
 import { ChallengeEditPage } from '@/features/challenge/pages/ChallengeEditPage';
 import { ChallengeFeedPage } from '@/features/challenge-feed/pages/ChallengeFeedPage';
@@ -152,6 +153,8 @@ export default function App() {
         <Route path="/preview/:challengeId" element={<ChallengePreviewPage />} />
         {/* 공개 프로필(리더 모객 랜딩) — 비로그인 열람 허용, @핸들 주소만 사용 */}
         <Route path="/p/:handle" element={<PublicProfilePage />} />
+        {/* 서비스 소개 랜딩 — 비로그인 열람 허용, 공유용 주소 */}
+        <Route path="/aboutchum7" element={<AboutChumPage />} />
         {/* 온보딩 — 가입 직후 3스텝 (풀스크린, 탭바 없음) */}
         <Route
           path="/onboarding"
