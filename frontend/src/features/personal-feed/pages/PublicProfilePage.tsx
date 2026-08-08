@@ -1,6 +1,7 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { personalFeedApi, type LedChallengeCard } from '../api/personalFeedApi';
 import { Loading } from '@/shared/components/Loading';
 import { SLUG_TO_COLOR, SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
@@ -120,6 +121,25 @@ export const PublicProfilePage = () => {
           <p className="mt-3 text-sm text-gray-600 leading-relaxed whitespace-pre-wrap max-w-md mx-auto">
             {pub.bio}
           </p>
+        )}
+        {profile.feedHandle && (
+          <button
+            type="button"
+            onClick={() => {
+              const url = `${window.location.origin}/p/@${profile.feedHandle}`;
+              if (navigator.share) {
+                navigator.share({ title: `CHUM7 — ${profile.displayName}`, url }).catch(() => undefined);
+              } else {
+                navigator.clipboard
+                  .writeText(url)
+                  .then(() => toast.success('프로필 링크를 복사했어요'))
+                  .catch(() => toast.error('링크 복사에 실패했어요'));
+              }
+            }}
+            className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold hover:bg-gray-200 transition-colors"
+          >
+            🔗 프로필 링크 공유
+          </button>
         )}
       </div>
 

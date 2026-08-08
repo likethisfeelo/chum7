@@ -106,7 +106,7 @@ export const LoginPage = () => {
           </div>
 
           <div className="mt-8 text-center space-y-3">
-            <Link to="/register" className="block text-primary-600 font-medium hover:text-primary-700">
+            <Link to={`/register${window.location.search}`} className="block text-primary-600 font-medium hover:text-primary-700">
               계정이 없으신가요? 회원가입
             </Link>
             <Link to="/" className="block text-sm text-gray-500 hover:text-gray-700">

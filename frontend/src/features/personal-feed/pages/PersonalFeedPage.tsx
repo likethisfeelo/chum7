@@ -2,6 +2,7 @@ import { useRef, useCallback, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/authStore';
 import { apiClient } from '@/lib/api-client';
 import { Loading } from '@/shared/components/Loading';
@@ -406,8 +407,8 @@ function ChallengesTab({ userId }: { userId: string }) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <p className="text-4xl mb-3">🎯</p>
-        <p className="text-base font-semibold text-gray-700">참여한 챌린지가 없어요</p>
-        <p className="text-sm text-gray-400 mt-1">챌린지에 참여하면 여기에 기록이 쌓여요</p>
+        <p className="text-base font-semibold text-gray-700">완주한 챌린지가 없어요</p>
+        <p className="text-sm text-gray-400 mt-1">챌린지를 완주하면 여기에 기록이 쌓여요</p>
       </div>
     );
   }
@@ -972,6 +973,7 @@ export function PersonalFeedPage() {
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<FeedTab>('verifications');
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+  const [showFeedInfo, setShowFeedInfo] = useState(false);
 
   const resolvedUserId = userIdParam ?? 'me';
   // 퍼블릭 표면(/public/users/...)은 'me' 별칭이 없어 실제 userId 또는 @handle 로 호출한다
@@ -1061,9 +1063,19 @@ export function PersonalFeedPage() {
               )}
             </div>
             {isOwn && profile && (
-              <p className="text-white/60 text-xs mt-0.5">
-                {profile.feedHandle ? `@${profile.feedHandle} · ` : ''}
-                {profile.feedSettings.isPublic ? '🌍 공개 중' : '🔒 비공개'}
+              <p className="text-white/60 text-xs mt-0.5 flex items-center gap-1">
+                <span>
+                  {profile.feedHandle ? `@${profile.feedHandle} · ` : ''}
+                  {profile.feedSettings.isPublic ? '🌍 공개 중' : '🔒 비공개'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowFeedInfo(true)}
+                  aria-label="개인 프로필 피드 안내"
+                  className="w-4 h-4 rounded-full border border-white/40 text-[10px] font-bold text-white/70 flex items-center justify-center hover:border-white hover:text-white transition-colors"
+                >
+                  ?
+                </button>
               </p>
             )}
             {!isOwn && profile && (
@@ -1077,6 +1089,32 @@ export function PersonalFeedPage() {
           )}
         </div>
       </div>
+
+      {/* 공개 프로필 공유 — 개인 피드는 기본 비공개라 대외 공유는 공개 프로필 페이지로만 안내 */}
+      {isOwn && profile && (
+        <div className="px-4 -mt-3 relative z-[5]">
+          <button
+            type="button"
+            onClick={() => {
+              const enabled = (profile.publicProfile as any)?.enabled === true;
+              if (!profile.feedHandle || !enabled) {
+                toast('설정에서 @핸들과 공개 프로필을 먼저 켜주세요', { icon: '🔗' });
+                navigate('/personal-feed/settings');
+                return;
+              }
+              const url = `${window.location.origin}/p/@${profile.feedHandle}`;
+              if (navigator.share) {
+                navigator.share({ title: 'CHUM7 공개 프로필', url }).catch(() => undefined);
+              } else {
+                navigator.clipboard.writeText(url).then(() => toast.success('공개 프로필 링크를 복사했어요'));
+              }
+            }}
+            className="w-full py-3.5 rounded-2xl bg-white shadow-md border border-primary-100 text-primary-700 font-bold text-sm hover:bg-primary-50 transition-colors"
+          >
+            🔗 내 공개 프로필 공유하기
+          </button>
+        </div>
+      )}
 
       {/* 탭 */}
       <div className="glass-header sticky top-0 z-10">
@@ -1119,6 +1157,50 @@ export function PersonalFeedPage() {
               className="w-full py-3 rounded-xl bg-gray-100 text-gray-600 font-semibold text-sm hover:bg-gray-200 transition-colors"
             >
               취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 개인 프로필 피드 안내 바텀시트 — 기본 비공개 구조 + 친구/팔로우 열람 범위 안내.
+          개인 피드 링크의 대외 공유는 권장하지 않으므로 공유 동선은 공개 프로필로만 안내한다. */}
+      {showFeedInfo && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setShowFeedInfo(false)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="text-center">
+              <p className="text-2xl mb-1">🔒</p>
+              <p className="text-base font-bold text-gray-900">개인 프로필 피드는 기본 비공개예요</p>
+              <p className="text-xs text-gray-400 mt-1">나와 가까운 사람에게만 열리는 공간이에요</p>
+            </div>
+            <div className="space-y-2.5 text-sm text-gray-600">
+              <div className="flex gap-2.5 items-start">
+                <span className="flex-shrink-0">🤝</span>
+                <p>
+                  <b className="text-gray-800">팔로우 요청을 수락한 사람</b>만 인증·자유 글을 볼 수 있어요.
+                  서로 팔로우하면 <b className="text-gray-800">친구</b>가 되어 더 많은 소식을 나눠요.
+                </p>
+              </div>
+              <div className="flex gap-2.5 items-start">
+                <span className="flex-shrink-0">🎯</span>
+                <p>챌린지 탭 등 일부 영역은 친구이거나 내가 설정에서 열어둔 경우에만 보여요.</p>
+              </div>
+              <div className="flex gap-2.5 items-start">
+                <span className="flex-shrink-0">💌</span>
+                <p>지인은 프로필 설정의 <b className="text-gray-800">초대 링크</b>로 초대할 수 있어요.</p>
+              </div>
+              <div className="flex gap-2.5 items-start">
+                <span className="flex-shrink-0">🌍</span>
+                <p>
+                  모집·홍보 등 <b className="text-gray-800">외부 공유는 공개 프로필 페이지</b>(@핸들 주소)를 이용해 주세요.
+                  개인 피드 주소를 밖으로 공유하는 건 권장하지 않아요.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowFeedInfo(false)}
+              className="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold text-sm hover:bg-gray-700 transition-colors"
+            >
+              확인했어요
             </button>
           </div>
         </div>
