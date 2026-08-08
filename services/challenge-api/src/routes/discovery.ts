@@ -8,6 +8,7 @@ import { ok, fail } from '@chum7/api-kit';
 import { getChallenge, queryDiscovery } from '../repo/challenges';
 import { effectiveLifecycleOf } from '../domain/challenge-state';
 import { listChallengeParticipations } from '../repo/participations';
+import { getPublicProfileMeta } from '../repo/users-readonly';
 import { stripKeys } from '../repo/shared';
 import { buildChallengeShareHtml } from './share';
 
@@ -63,7 +64,19 @@ discoveryRoutes.get('/:challengeId', async (c) => {
   if (!challenge) {
     return fail(c, 404, 'CHALLENGE_NOT_FOUND', '챌린지를 찾을 수 없습니다');
   }
-  return ok(c, { ...stripKeys(challenge), effectiveLifecycle: effectiveLifecycleOf(challenge, new Date()) });
+  // 리더 공개 프로필(/p/@handle) 동선용 — 핸들이 있을 때만 노출 (userId 미노출 원칙 유지)
+  let leaderHandle: string | null = null;
+  try {
+    const meta = await getPublicProfileMeta(String(challenge.createdBy ?? ''));
+    leaderHandle = (meta?.feedHandle as string | null) ?? null;
+  } catch {
+    // users 조회 실패는 상세 응답을 막지 않는다
+  }
+  return ok(c, {
+    ...stripKeys(challenge),
+    effectiveLifecycle: effectiveLifecycleOf(challenge, new Date()),
+    leaderHandle,
+  });
 });
 
 // 공유 링크 OG 페이지 (api 도메인 직접 접근용 별칭) — 실제 공유 링크는 /share/:id (앱 도메인 라우팅).

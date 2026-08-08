@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { challengeApi, CreateChallengeParams, ChallengeCategory, ChallengeType } from '../api/challengeApi';
 import { CHALLENGE_CATEGORIES } from '../constants/categories';
@@ -7,6 +7,7 @@ import {
   IDENTITY_MODE_OPTIONS,
   IDENTITY_SECTION_GUIDE,
   REMEDY_CHOICE_OPTIONS,
+  fromRemedyPolicy,
   toRemedyPolicy,
 } from '../constants/remedyPolicy';
 import { CoverImagePicker } from '../components/CoverImagePicker';
@@ -602,13 +603,46 @@ function Step4({ form, onChange }: { form: FormState; onChange: (patch: Partial<
   );
 }
 
+/** 시즌 복제 — 종료된 챌린지 상세를 생성 폼 프리필로 변환 (일정은 새 기본값) */
+function cloneToForm(clone: any): Partial<FormState> {
+  if (!clone) return {};
+  return {
+    category: (clone.category as FormState['category']) || '',
+    title: String(clone.title || ''),
+    description: String(clone.description || ''),
+    coverImageUrl: (clone.coverImageUrl as string) || null,
+    identityKeyword: String(clone.identityKeyword || ''),
+    badgeIcon: String(clone.badgeIcon || '🏆'),
+    badgeName: String(clone.badgeName || ''),
+    hasPhysicalReward: Boolean(clone.rewardPhysical?.name),
+    physicalRewardName: String(clone.rewardPhysical?.name || ''),
+    hasOnlineReward: Boolean(clone.rewardOnline?.name),
+    onlineRewardName: String(clone.rewardOnline?.name || ''),
+    targetTime: String(clone.targetTime || '07:00'),
+    allowedVerificationTypes:
+      Array.isArray(clone.allowedVerificationTypes) && clone.allowedVerificationTypes.length > 0
+        ? clone.allowedVerificationTypes
+        : INITIAL_FORM.allowedVerificationTypes,
+    durationDays: Number(clone.durationDays || 7),
+    maxParticipants: clone.maxParticipants != null ? String(clone.maxParticipants) : '',
+    challengeType: (clone.challengeType as ChallengeType) || 'leader_personal',
+    joinApprovalRequired: clone.joinApprovalRequired === true,
+    personalQuestAutoApprove: clone.personalQuestAutoApprove !== false,
+    leaderIdentityMode: (clone.leaderIdentityMode as FormState['leaderIdentityMode']) || 'realname',
+    remedyChoice: fromRemedyPolicy(clone.defaultRemedyPolicy),
+  };
+}
+
 // ─── 메인 페이지 ──────────────────────────────────────────────────────
 export function ChallengeCreatePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>(() => ({
     ...INITIAL_FORM,
     ...getDefaultDates(),
+    // 시즌 복제 진입 (운영탭 '같은 설정으로 새 시즌 열기') — 일정만 새로 잡는다
+    ...cloneToForm((location.state as { clone?: any } | null)?.clone),
   }));
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 

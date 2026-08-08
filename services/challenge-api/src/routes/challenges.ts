@@ -18,16 +18,42 @@ import {
   updateChallengeFields,
 } from '../repo/challenges';
 import {
+  getParticipation,
   listChallengeParticipations,
   participationKeys,
   putParticipation,
   updateParticipationFields,
 } from '../repo/participations';
+import { listDraws } from '../repo/draws';
 import { stripKeys } from '../repo/shared';
 
 export const challengeRoutes = new Hono<AppEnv>();
 
 const MIN_PREPARING_GAP_MS = 60 * 1000;
+
+// 내 보상 조회 — 종료 후 참여자 보상 카드용 (추첨 당첨 내역 + 완주 여부).
+// 선물 교환권은 commerce(/pay/gifts/my)가 담당 — 여기서는 challenges 도메인 데이터만.
+challengeRoutes.get('/:challengeId/my-rewards', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const challengeId = c.req.param('challengeId');
+
+  const participation = await getParticipation(challengeId, userId);
+  if (!participation) return fail(c, 404, 'NOT_A_PARTICIPANT', '참여 정보를 찾을 수 없습니다');
+
+  const draws = await listDraws(challengeId);
+  const drawWins = draws
+    .filter((d) => Array.isArray(d.winners) && d.winners.some((w: any) => String(w.userId) === userId))
+    .map((d) => ({
+      drawId: String(d.drawId),
+      title: (d.title as string) ?? null,
+      createdAt: (d.createdAt as string) ?? null,
+    }));
+
+  return ok(c, {
+    isCompleted: participation.status === 'completed' || participation.phase === 'completed',
+    drawWins,
+  });
+});
 
 // 챌린지 생성 (레거시 POST /challenges/me/create — 사용자 생성, 항상 draft로 시작)
 challengeRoutes.post('/', async (c) => {
