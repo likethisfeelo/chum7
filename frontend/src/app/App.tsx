@@ -47,6 +47,8 @@ import { HashtagPage } from '@/features/hashtag/pages/HashtagPage';
 import { PushPermissionSheet } from '@/features/notifications/components/PushPermissionSheet';
 import { ChallengeRecapSheet } from '@/features/challenge/components/ChallengeRecapSheet';
 import { RemedyPromptSheet } from '@/features/challenge/components/RemedyPromptSheet';
+import { OnboardingPage } from '@/features/onboarding/OnboardingPage';
+import { OnboardingGate } from '@/features/onboarding/OnboardingGate';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -150,6 +152,15 @@ export default function App() {
         <Route path="/preview/:challengeId" element={<ChallengePreviewPage />} />
         {/* 공개 프로필(리더 모객 랜딩) — 비로그인 열람 허용, @핸들 주소만 사용 */}
         <Route path="/p/:handle" element={<PublicProfilePage />} />
+        {/* 온보딩 — 가입 직후 3스텝 (풀스크린, 탭바 없음) */}
+        <Route
+          path="/onboarding"
+          element={
+            <ProtectedRoute>
+              <OnboardingPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* 보호된 라우트 (로그인 필요) */}
         <Route
@@ -427,6 +438,8 @@ export default function App() {
       <ChallengeRecapSheet />
       {/* 보완인증 유도 — 어제 미인증 활성 챌린지 감지 시 최대 2회 노출 */}
       <RemedyPromptSheet />
+      {/* 온보딩 게이트 + iOS 설치 넛지 */}
+      <OnboardingGate />
     </BrowserRouter>
   );
 }

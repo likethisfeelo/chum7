@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { SearchableSelect } from '@/components/SearchableSelect';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -100,7 +101,10 @@ export const AdminQuestSubmissionsPage = () => {
 
   const [statusFilter, setStatusFilter] = useState<FilterTab>('all');
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
-  const [challengeFilter, setChallengeFilter] = useState(initialChallengeId);
+  // 다중 선택 — 여러 챌린지 제출물을 병합 심사 (딥링크 ?challengeId= 는 단일 초기값)
+  const [challengeFilters, setChallengeFilters] = useState<string[]>(
+    initialChallengeId ? [initialChallengeId] : [],
+  );
   const [reviewing, setReviewing] = useState<{ id: string; action: 'approve' | 'reject' } | null>(null);
   const [reviewNote, setReviewNote] = useState('');
   const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
@@ -131,24 +135,42 @@ export const AdminQuestSubmissionsPage = () => {
   }, [challengeData]);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['admin-quest-submissions', statusFilter, challengeFilter, scopeFilter],
-    enabled: Boolean(challengeFilter),
+    queryKey: ['admin-quest-submissions', statusFilter, challengeFilters.join(','), scopeFilter],
+    enabled: challengeFilters.length > 0,
     queryFn: async () => {
-      const params = new URLSearchParams({ status: statusFilter, challengeId: challengeFilter });
-      if (scopeFilter !== 'all') params.set('questScope', scopeFilter);
-      const res = await apiClient.get(`/adm/quests/submissions?${params}`);
-      return res.data.data;
+      // API는 챌린지 단위 조회만 지원 — 선택된 챌린지별로 조회해 병합
+      const pages = await Promise.all(
+        challengeFilters.map(async (challengeId) => {
+          const params = new URLSearchParams({ status: statusFilter, challengeId });
+          if (scopeFilter !== 'all') params.set('questScope', scopeFilter);
+          const res = await apiClient.get(`/adm/quests/submissions?${params}`);
+          return { challengeId, page: res.data.data };
+        }),
+      );
+      const submissions = pages.flatMap(({ challengeId, page }) =>
+        (page?.submissions ?? []).map((sub: any) => ({ ...sub, challengeId: sub.challengeId ?? challengeId })),
+      );
+      const byStatus: Record<string, number> = {};
+      const byScope: Record<string, number> = {};
+      for (const { page } of pages) {
+        for (const [k, v] of Object.entries(page?.summary?.byStatus ?? {})) byStatus[k] = (byStatus[k] ?? 0) + Number(v);
+        for (const [k, v] of Object.entries(page?.summary?.byScope ?? {})) byScope[k] = (byScope[k] ?? 0) + Number(v);
+      }
+      // 페이지네이션은 단일 챌린지 선택일 때만 이어받는다 (다중 병합은 첫 페이지 기준)
+      const nextToken = pages.length === 1 ? (pages[0].page?.nextToken ?? null) : null;
+      return { submissions, summary: { byStatus, byScope }, nextToken };
     },
     retry: false,
   });
 
   const { data: verificationMonitor } = useQuery({
-    queryKey: ['admin-verification-monitor', challengeFilter],
+    queryKey: ['admin-verification-monitor', challengeFilters.join(',')],
     queryFn: async () => {
       const res = await apiClient.get('/verifications?limit=40');
       let items = res.data?.data?.verifications ?? [];
-      if (challengeFilter) {
-        items = items.filter((item: any) => item.challengeId === challengeFilter);
+      if (challengeFilters.length > 0) {
+        const wanted = new Set(challengeFilters);
+        items = items.filter((item: any) => wanted.has(item.challengeId));
       }
       return items;
     },
@@ -166,8 +188,8 @@ export const AdminQuestSubmissionsPage = () => {
 
   const loadMoreMutation = useMutation({
     mutationFn: async () => {
-      if (!nextToken || !challengeFilter) return null;
-      const params = new URLSearchParams({ status: statusFilter, nextToken, challengeId: challengeFilter });
+      if (!nextToken || challengeFilters.length !== 1) return null;
+      const params = new URLSearchParams({ status: statusFilter, nextToken, challengeId: challengeFilters[0] });
       if (scopeFilter !== 'all') params.set('questScope', scopeFilter);
       const res = await apiClient.get(`/adm/quests/submissions?${params}`);
       return res.data.data;
@@ -183,10 +205,10 @@ export const AdminQuestSubmissionsPage = () => {
   });
 
   const reviewMutation = useMutation({
-    mutationFn: async ({ submissionId, action, note }: { submissionId: string; action: 'approve' | 'reject'; note: string }) => {
+    mutationFn: async ({ submissionId, challengeId, action, note }: { submissionId: string; challengeId: string; action: 'approve' | 'reject'; note: string }) => {
       // 신규 API는 바디에 challengeId 필수 (신규 키에서 submissionId 단독 조회 불가)
       const res = await apiClient.put(`/adm/quests/submissions/${submissionId}/review`, {
-        challengeId: challengeFilter,
+        challengeId,
         action,
         reviewNote: note.trim() || undefined,
       });
@@ -248,18 +270,13 @@ export const AdminQuestSubmissionsPage = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">챌린지 선택</label>
-            <select
-              value={challengeFilter}
-              onChange={(e) => setChallengeFilter(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm"
-            >
-              <option value="">챌린지를 선택하세요 (필수)</option>
-              {challengeOptions.map((challenge) => (
-                <option key={challenge.challengeId} value={challenge.challengeId}>
-                  {challenge.title}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              multiple
+              options={challengeOptions.map((c) => ({ value: c.challengeId, label: c.title, sub: c.challengeId }))}
+              value={challengeFilters}
+              onChange={setChallengeFilters}
+              placeholder="챌린지 검색 후 선택 (여러 개 가능)"
+            />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">퀘스트 구분</label>
@@ -277,7 +294,7 @@ export const AdminQuestSubmissionsPage = () => {
         </div>
       </div>
 
-      {!challengeFilter ? (
+      {challengeFilters.length === 0 ? (
         <div className="text-center py-12 text-gray-400">
           <p className="text-4xl mb-3">🔍</p>
           <p>챌린지를 먼저 선택해주세요. (신규 API는 챌린지 단위 조회만 지원합니다)</p>
@@ -391,6 +408,8 @@ export const AdminQuestSubmissionsPage = () => {
                           }
                           reviewMutation.mutate({
                             submissionId: reviewing!.id,
+                            challengeId:
+                              submissions.find((s) => s.submissionId === reviewing!.id)?.challengeId ?? '',
                             action: reviewing!.action,
                             note: reviewNote,
                           });
@@ -487,6 +506,8 @@ export const AdminQuestSubmissionsPage = () => {
                                 }
                                 reviewMutation.mutate({
                                   submissionId: activeReview.id,
+                                  challengeId:
+                                    submissions.find((s) => s.submissionId === activeReview.id)?.challengeId ?? '',
                                   action: activeReview.action,
                                   note: reviewNote,
                                 });

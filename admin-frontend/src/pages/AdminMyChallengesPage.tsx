@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { SearchableSelect } from '@/components/SearchableSelect';
 import { lifecycleLabel, transitionLabel } from '@/utils/lifecycle';
 
 type Lifecycle = 'draft' | 'recruiting' | 'preparing' | 'active' | 'completed' | 'archived';
@@ -281,18 +282,16 @@ export const AdminMyChallengesPage = () => {
 
       <div className="bg-white rounded-2xl border border-gray-200 p-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">챌린지 선택</label>
-        <select
-          value={selectedChallengeId}
-          onChange={(e) => setSelectedChallengeId(e.target.value)}
-          className="w-full px-3 py-2.5 border border-gray-300 rounded-xl"
-        >
-          <option value="">챌린지를 선택하세요</option>
-          {filteredChallenges.map((c: any) => (
-            <option key={c.challengeId} value={c.challengeId}>
-              {c.title} ({lifecycleLabel(c.lifecycle)})
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          options={filteredChallenges.map((c: any) => ({
+            value: c.challengeId,
+            label: `${c.title} (${lifecycleLabel(c.lifecycle)})`,
+            sub: c.challengeId,
+          }))}
+          value={selectedChallengeId ? [selectedChallengeId] : []}
+          onChange={(next) => setSelectedChallengeId(next[0] ?? '')}
+          placeholder="챌린지 제목·ID로 검색"
+        />
       </div>
 
       {selectedChallenge && (

@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { createApi, ok, requireAuth } from '@chum7/api-kit';
 import { authRoutes } from './auth-routes';
 import { getProfile, newUserProfile, putProfile } from './users-repo';
+import { setOnboarded } from './repo/profile-repo';
 import { profileRoutes } from './routes/profile';
 import { notificationsRoutes } from './routes/notifications';
 import { personalFeedRoutes, publicUsersRoutes } from './routes/personal-feed';
@@ -51,6 +52,18 @@ app.post('/u/bootstrap', async (c) => {
   const profile = newUserProfile(userId, email ?? '', name);
   await putProfile(profile);
   return ok(c, { user: profile }, '프로필이 생성되었습니다', 201);
+});
+
+// POST /u/onboarding/complete — 온보딩 완료 기록 (관심 카테고리 최대 3개)
+app.post('/u/onboarding/complete', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const body = (await c.req.json().catch(() => ({}))) as { interests?: string[] };
+  const interests = Array.isArray(body.interests)
+    ? [...new Set(body.interests.filter((s) => typeof s === 'string' && s).map(String))].slice(0, 3)
+    : [];
+  const nowIso = new Date().toISOString();
+  await setOnboarded(userId, interests, nowIso);
+  return ok(c, { onboardedAt: nowIso, interests });
 });
 
 app.route('/u', profileRoutes); // PATCH /u/me
