@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { SearchableSelect } from '@/components/SearchableSelect';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -62,6 +63,21 @@ const INITIAL_FORM = {
 export const AdminCommerceCouponsPage = () => {
   const qc = useQueryClient();
   const [form, setForm] = useState(INITIAL_FORM);
+  // 챌린지 검색 선택용 목록 (ID 직접 입력 대체)
+  const { data: couponChallengeList = [] } = useQuery({
+    queryKey: ['admin-coupon-challenge-options'],
+    queryFn: async () => {
+      const res = await apiClient.get('/public/challenges?sortBy=latest&limit=200&lifecycle=draft,recruiting,preparing,active');
+      return (res.data?.data?.challenges ?? []) as Array<{ challengeId: string; title?: string; lifecycle?: string }>;
+    },
+    retry: false,
+  });
+  const couponChallengeOptions = couponChallengeList.map((c) => ({
+    value: c.challengeId,
+    label: c.title ?? '제목 없음',
+    sub: `${c.lifecycle ?? ''} · ${c.challengeId}`,
+  }));
+
   const [formError, setFormError] = useState('');
   const [issued, setIssued] = useState<Coupon[]>([]);
 
@@ -107,7 +123,7 @@ export const AdminCommerceCouponsPage = () => {
   });
 
   const handleIssue = () => {
-    if (!form.anyChallenge && !form.challengeId.trim()) return setFormError('챌린지 ID를 입력하거나 전체 챌린지(ANY)를 선택해주세요');
+    if (!form.anyChallenge && !form.challengeId.trim()) return setFormError('챌린지를 선택하거나 전체 챌린지(ANY)를 선택해주세요');
     const count = Number(form.count);
     if (!Number.isInteger(count) || count < 1 || count > 50) return setFormError('발급 수량은 1~50 사이여야 합니다');
     setFormError('');
@@ -134,13 +150,13 @@ export const AdminCommerceCouponsPage = () => {
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">챌린지 ID</label>
-            <input
-              value={form.challengeId}
-              onChange={(e) => setForm((p) => ({ ...p, challengeId: e.target.value }))}
+            <label className="block text-xs text-gray-500 mb-1">챌린지</label>
+            <SearchableSelect
+              options={couponChallengeOptions}
+              value={form.challengeId ? [form.challengeId] : []}
+              onChange={(next) => setForm((p) => ({ ...p, challengeId: next[0] ?? '' }))}
               disabled={form.anyChallenge}
-              placeholder="특정 챌린지 한정 쿠폰"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm disabled:bg-gray-100"
+              placeholder="특정 챌린지 한정 쿠폰 — 제목·ID로 검색"
             />
             <label className="mt-2 flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
               <input

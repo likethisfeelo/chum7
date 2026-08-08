@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { SearchableSelect } from '@/components/SearchableSelect';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -33,7 +34,10 @@ export const AdminQuestProposalsPage = () => {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<FilterTab>('pending');
-  const [challengeFilter, setChallengeFilter] = useState(searchParams.get('challengeId') ?? '');
+  // 다중 선택 — 여러 챌린지의 제안을 한 화면에서 심사 (딥링크 ?challengeId= 는 단일 초기값)
+  const [challengeFilters, setChallengeFilters] = useState<string[]>(
+    searchParams.get('challengeId') ? [String(searchParams.get('challengeId'))] : [],
+  );
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
 
@@ -62,19 +66,26 @@ export const AdminQuestProposalsPage = () => {
   }, [challengeData]);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['admin-quest-proposals', statusFilter, challengeFilter],
-    enabled: Boolean(challengeFilter),
+    queryKey: ['admin-quest-proposals', statusFilter, challengeFilters.join(',')],
+    enabled: challengeFilters.length > 0,
     queryFn: async () => {
-      const params = new URLSearchParams({ challengeId: challengeFilter, status: statusFilter });
-      const res = await apiClient.get(`/adm/quest-proposals?${params}`);
-      return res.data?.data ?? { proposals: [], total: 0 };
+      // API는 챌린지 단위 조회만 지원 — 선택된 챌린지별로 조회해 병합
+      const pages = await Promise.all(
+        challengeFilters.map(async (challengeId) => {
+          const params = new URLSearchParams({ challengeId, status: statusFilter });
+          const res = await apiClient.get(`/adm/quest-proposals?${params}`);
+          return res.data?.data ?? { proposals: [], total: 0 };
+        }),
+      );
+      const proposals = pages.flatMap((page) => page.proposals ?? []);
+      return { proposals, total: proposals.length };
     },
   });
 
   const reviewMutation = useMutation({
-    mutationFn: async ({ proposalId, decision, reason }: { proposalId: string; decision: 'approve' | 'reject'; reason?: string }) => {
+    mutationFn: async ({ proposalId, challengeId, decision, reason }: { proposalId: string; challengeId: string; decision: 'approve' | 'reject'; reason?: string }) => {
       const res = await apiClient.put(`/adm/quest-proposals/${proposalId}/review`, {
-        challengeId: challengeFilter,
+        challengeId,
         decision,
         reason,
       });
@@ -102,16 +113,13 @@ export const AdminQuestProposalsPage = () => {
       {/* 챌린지 선택 */}
       <div className="mb-3">
         <label className="block text-xs font-medium text-slate-500 mb-1">챌린지</label>
-        <select
-          value={challengeFilter}
-          onChange={(e) => setChallengeFilter(e.target.value)}
-          className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white"
-        >
-          <option value="">챌린지를 선택하세요</option>
-          {challengeOptions.map((c) => (
-            <option key={c.challengeId} value={c.challengeId}>{c.title}</option>
-          ))}
-        </select>
+        <SearchableSelect
+          multiple
+          options={challengeOptions.map((c) => ({ value: c.challengeId, label: c.title, sub: c.challengeId }))}
+          value={challengeFilters}
+          onChange={setChallengeFilters}
+          placeholder="챌린지 검색 후 선택 (여러 개 가능)"
+        />
       </div>
 
       {/* 상태 필터 */}
@@ -130,7 +138,7 @@ export const AdminQuestProposalsPage = () => {
         ))}
       </div>
 
-      {!challengeFilter ? (
+      {challengeFilters.length === 0 ? (
         <p className="text-sm text-slate-500 py-10 text-center">먼저 챌린지를 선택하세요.</p>
       ) : isLoading ? (
         <p className="text-sm text-slate-500 py-10 text-center">불러오는 중...</p>
@@ -174,7 +182,7 @@ export const AdminQuestProposalsPage = () => {
                           <button
                             type="button"
                             disabled={reviewMutation.isPending}
-                            onClick={() => reviewMutation.mutate({ proposalId: p.proposalId, decision: 'reject', reason: reason.trim() || undefined })}
+                            onClick={() => reviewMutation.mutate({ proposalId: p.proposalId, challengeId: p.challengeId, decision: 'reject', reason: reason.trim() || undefined })}
                             className="px-4 py-2 text-sm font-semibold rounded-xl bg-red-600 text-white disabled:opacity-50"
                           >
                             반려 확정
@@ -193,7 +201,7 @@ export const AdminQuestProposalsPage = () => {
                         <button
                           type="button"
                           disabled={reviewMutation.isPending}
-                          onClick={() => reviewMutation.mutate({ proposalId: p.proposalId, decision: 'approve' })}
+                          onClick={() => reviewMutation.mutate({ proposalId: p.proposalId, challengeId: p.challengeId, decision: 'approve' })}
                           className="px-4 py-2 text-sm font-semibold rounded-xl bg-green-600 text-white disabled:opacity-50"
                         >
                           승인

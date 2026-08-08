@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 // 커머스 티켓 배부 콘솔 — /pay/admin/ticket-batches (슈퍼어드민 admins 전용)
 // 유료 챌린지 리더에게 참여 티켓 할당량을 배부한다. 리더는 운영탭에서 유저에게 발급.
@@ -21,6 +22,21 @@ export const AdminCommerceTicketsPage = () => {
   const [total, setTotal] = useState('10');
   const [queryChallengeId, setQueryChallengeId] = useState('');
   const [msg, setMsg] = useState('');
+
+  // 챌린지 검색 선택용 목록 (ID 직접 입력 대체)
+  const { data: challengeList = [] } = useQuery({
+    queryKey: ['admin-ticket-challenge-options'],
+    queryFn: async () => {
+      const res = await apiClient.get('/public/challenges?sortBy=latest&limit=200&lifecycle=draft,recruiting,preparing,active,completed');
+      return (res.data?.data?.challenges ?? []) as Array<{ challengeId: string; title?: string; lifecycle?: string }>;
+    },
+    retry: false,
+  });
+  const challengeOptions = challengeList.map((c) => ({
+    value: c.challengeId,
+    label: c.title ?? '제목 없음',
+    sub: `${c.lifecycle ?? ''} · ${c.challengeId}`,
+  }));
 
   const { data: batches = [], isLoading } = useQuery({
     queryKey: ['admin-ticket-batches', queryChallengeId],
@@ -64,12 +80,14 @@ export const AdminCommerceTicketsPage = () => {
       <div className="bg-white border border-gray-200 rounded-2xl p-5 space-y-3">
         <p className="text-sm font-semibold text-gray-800">새 배부</p>
         <div className="flex flex-wrap gap-2">
-          <input
-            value={challengeId}
-            onChange={(e) => setChallengeId(e.target.value)}
-            placeholder="챌린지 ID"
-            className="flex-1 min-w-[220px] px-3 py-2 rounded-lg border border-gray-300 text-sm font-mono"
-          />
+          <div className="flex-1 min-w-[220px]">
+            <SearchableSelect
+              options={challengeOptions}
+              value={challengeId ? [challengeId] : []}
+              onChange={(next) => setChallengeId(next[0] ?? '')}
+              placeholder="챌린지 제목·ID로 검색"
+            />
+          </div>
           <input
             value={total}
             onChange={(e) => setTotal(e.target.value.replace(/[^0-9]/g, ''))}
@@ -96,15 +114,17 @@ export const AdminCommerceTicketsPage = () => {
       <div className="bg-white border border-gray-200 rounded-2xl p-5 space-y-3">
         <p className="text-sm font-semibold text-gray-800">배부 내역 조회</p>
         <div className="flex gap-2">
-          <input
-            value={queryChallengeId}
-            onChange={(e) => setQueryChallengeId(e.target.value)}
-            placeholder="챌린지 ID로 조회"
-            className="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-sm font-mono"
-          />
+          <div className="flex-1">
+            <SearchableSelect
+              options={challengeOptions}
+              value={queryChallengeId ? [queryChallengeId] : []}
+              onChange={(next) => setQueryChallengeId(next[0] ?? '')}
+              placeholder="챌린지 제목·ID로 검색해 조회"
+            />
+          </div>
         </div>
         {!queryChallengeId ? (
-          <p className="text-xs text-gray-400">챌린지 ID를 입력하면 배부 내역이 표시됩니다.</p>
+          <p className="text-xs text-gray-400">챌린지를 선택하면 배부 내역이 표시됩니다.</p>
         ) : isLoading ? (
           <p className="text-sm text-gray-500">불러오는 중...</p>
         ) : batches.length === 0 ? (
