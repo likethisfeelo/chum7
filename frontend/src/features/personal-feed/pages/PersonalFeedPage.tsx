@@ -406,8 +406,8 @@ function ChallengesTab({ userId }: { userId: string }) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <p className="text-4xl mb-3">🎯</p>
-        <p className="text-base font-semibold text-gray-700">참여한 챌린지가 없어요</p>
-        <p className="text-sm text-gray-400 mt-1">챌린지에 참여하면 여기에 기록이 쌓여요</p>
+        <p className="text-base font-semibold text-gray-700">완주한 챌린지가 없어요</p>
+        <p className="text-sm text-gray-400 mt-1">챌린지를 완주하면 여기에 기록이 쌓여요</p>
       </div>
     );
   }

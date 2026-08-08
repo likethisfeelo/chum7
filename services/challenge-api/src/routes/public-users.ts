@@ -9,6 +9,13 @@ import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { AppEnv } from '@chum7/api-kit';
 import { ok, fail } from '@chum7/api-kit';
+import {
+  calculateEffectiveCurrentDay,
+  isCompletedProgressStatus,
+  resolveDurationDays,
+} from '../domain/day-sync';
+import { normalizeProgress } from '../domain/progress';
+import { resolveNormalizedChallengeState } from '../domain/challenge-state';
 import { extractImageS3Key, isLikelySignedAssetUrl } from '../domain/media-key';
 import { buildChallengeHistoryItem } from '../domain/public-history';
 import { getChallengesBatch, listByCreator } from '../repo/challenges';
@@ -113,8 +120,34 @@ publicUserRoutes.get('/:userId/challenge-history', async (c) => {
     (await getChallengesBatch(challengeIds)).map((ch) => [ch.challengeId as string, ch]),
   );
 
+  // 저장 status는 워커 지연으로 미확정일 수 있어 읽기 시점에 정규화한다
+  // (my-challenges와 동일 — 완주했는데 status가 안 바뀐 참여가 이력에서 빠지던 문제)
+  const nowIso = new Date().toISOString();
   const challenges = userChallenges
-    .map((uc) => buildChallengeHistoryItem(uc, challengeMap.get(uc.challengeId as string)))
+    .map((uc) => {
+      const challenge = challengeMap.get(uc.challengeId as string) as Record<string, any> | undefined;
+      const durationDays = resolveDurationDays(challenge?.durationDays, uc.progress);
+      const completedDays = normalizeProgress(uc.progress).filter((p) =>
+        isCompletedProgressStatus(p?.status),
+      ).length;
+      const effectiveCurrentDay = calculateEffectiveCurrentDay(
+        { ...uc, challengeStartAt: challenge?.challengeStartAt },
+        nowIso,
+        durationDays,
+      );
+      const normalized = resolveNormalizedChallengeState({
+        status: uc.status,
+        phase: uc.phase,
+        challengeLifecycle: challenge?.lifecycle,
+        effectiveCurrentDay,
+        durationDays,
+        completedDays,
+      });
+      return buildChallengeHistoryItem(
+        { ...uc, status: normalized.status, phase: normalized.phase },
+        challenge,
+      );
+    })
     .filter((item) => item.bucketState === 'completed')
     // 레거시 정렬 승계 (완주 우선은 필터로 충족 — 최신 시작순)
     .sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? ''));
