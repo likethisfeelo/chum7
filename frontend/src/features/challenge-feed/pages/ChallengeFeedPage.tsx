@@ -17,7 +17,7 @@ import { GuideBoardSection } from "../components/GuideBoardSection";
 import { EndedChallengeSummary } from "../components/EndedChallengeSummary";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import { challengeApi } from "@/features/challenge/api/challengeApi";
-import { computeTodayChallengeDay } from "@/features/challenge/utils/remedyStatus";
+import { computeTodayChallengeDay, isRemedyVerification } from "@/features/challenge/utils/remedyStatus";
 import { SLUG_TO_LABEL } from "@/features/challenge/constants/categories";
 import { ChallengeChatPanel } from "@/features/challenge-chat/components/ChallengeChatPanel";
 import { ReportButton, ReportModal } from "@/features/feed/components/ReportModal";
@@ -572,8 +572,14 @@ export const ChallengeFeedPage = () => {
     [challengeVerifications],
   );
 
+  // 보완 인증은 지난 Day를 채우는 제출이라 '오늘 인증'에서 제외 (제외하지 않으면
+  // 오늘 인증을 안 했는데도 완료로 보여 입력이 막힌다 — 운영탭은 미완으로 표시)
   const iDidTodayVerification = useMemo(
-    () => myChallengeVerifications.some((item: any) => !item.isExtra && isSameKstDate(item.performedAt || item.createdAt)),
+    () =>
+      myChallengeVerifications.some(
+        (item: any) =>
+          !item.isExtra && !isRemedyVerification(item) && isSameKstDate(item.performedAt || item.createdAt),
+      ),
     [myChallengeVerifications],
   );
 
@@ -603,7 +609,11 @@ export const ChallengeFeedPage = () => {
   const iDidTodayPersonalQuestVerification = useMemo(
     () =>
       myChallengeVerifications.some(
-        (item: any) => !item.isExtra && isSameKstDate(item.performedAt || item.createdAt) && item.questType === "personal",
+        (item: any) =>
+          !item.isExtra &&
+          !isRemedyVerification(item) &&
+          isSameKstDate(item.performedAt || item.createdAt) &&
+          item.questType === "personal",
       ),
     [myChallengeVerifications],
   );
