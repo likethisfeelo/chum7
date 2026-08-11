@@ -6,6 +6,7 @@ import {
   decideConvert,
   kstDateString,
   resolvePlazaFallbackContent,
+  verificationSkOf,
 } from './convert';
 
 const baseVerification = {
@@ -38,6 +39,16 @@ describe('conversionWindow (KST 파티션 + high-water mark)', () => {
     const now = new Date('2026-07-21T10:00:00.000Z');
     expect(conversionWindow(now).sinceIso).toBe('2026-07-20T08:00:00.000Z');
     expect(conversionWindow(now, 2).sinceIso).toBe('2026-07-21T08:00:00.000Z');
+  });
+});
+
+describe('verificationSkOf (challenge-api repo verificationSk 계약)', () => {
+  it('day 2자리 패딩 — 픽스처 sk와 일치', () => {
+    expect(verificationSkOf('u1', 3, 'v1')).toBe(baseVerification.sk);
+  });
+
+  it('두 자리 day는 그대로', () => {
+    expect(verificationSkOf('u1', 12, 'v9')).toBe('VF#u1#D12#v9');
   });
 });
 

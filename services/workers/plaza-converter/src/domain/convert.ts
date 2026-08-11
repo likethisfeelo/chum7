@@ -56,6 +56,13 @@ export function conversionWindow(now: Date, lookbackHours = DEFAULT_LOOKBACK_HOU
   };
 }
 
+// ── 인증 아이템 키 (challenge-api repo/verifications.verificationSk 계약) ──
+
+/** 인증 sk — `VF#<userId>#D<dd>#<verificationId>` (verification.submitted 즉시 변환 Get 키) */
+export function verificationSkOf(userId: string, day: number, verificationId: string): string {
+  return `VF#${userId}#D${String(Math.floor(day)).padStart(2, '0')}#${verificationId}`;
+}
+
 // ── 변환 판정 ───────────────────────────────────────────────────────────
 
 export type ConvertDecision =

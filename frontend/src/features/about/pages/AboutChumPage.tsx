@@ -42,11 +42,31 @@ export const AboutChumPage = () => {
 
   const goJoin = () => navigate(isAuthenticated ? '/challenges' : '/register');
   const goLead = () => navigate(isAuthenticated ? '/challenges/new' : '/register');
+  // 공유 링크로 직접 진입하면 히스토리가 없어 navigate(-1)이 무동작 — 홈으로 폴백
+  const goBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate('/');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
+      {/* 상단 바 — 앱 내 진입(마이페이지 등)에서 돌아갈 길 */}
+      <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between px-4 py-3">
+        <button
+          type="button"
+          onClick={goBack}
+          aria-label="뒤로가기"
+          className="w-9 h-9 rounded-full bg-white/15 text-white text-lg flex items-center justify-center hover:bg-white/25 transition-colors"
+        >
+          ←
+        </button>
+        <span className="text-white/90 font-bold text-sm tracking-wide">chum7</span>
+        <span className="w-9" />
+      </div>
+
       {/* 히어로 */}
-      <div className="bg-gradient-to-br from-primary-500 to-primary-700 px-6 pt-14 pb-12 text-center text-white">
+      <div className="relative bg-gradient-to-br from-primary-500 to-primary-700 px-6 pt-16 pb-12 text-center text-white">
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }}>
           <p className="text-4xl mb-3">🌱</p>
           <h1 className="text-2xl font-extrabold leading-snug">
