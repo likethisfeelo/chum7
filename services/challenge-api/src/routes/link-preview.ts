@@ -16,6 +16,8 @@ import {
   isHostAllowed,
   parseAllowlist,
   parseLinkPreview,
+  youtubeThumbnail,
+  youtubeVideoId,
   type LinkPreviewFields,
 } from '../domain/link-preview';
 
@@ -51,6 +53,42 @@ function putCache(url: string, data: LinkPreview): void {
     if (first) CACHE.delete(first);
   }
   CACHE.set(url, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
+/**
+ * YouTube 전용 경로 — HTML 스크래핑은 동의/봇 페이지가 섞여 실패율이 높다.
+ * 공개 oEmbed(제목·채널)로 확정 조회하고, 실패해도 videoId 기반 썸네일은 항상 채운다.
+ */
+async function fetchYoutubePreview(url: string, videoId: string): Promise<LinkPreview> {
+  const fallback: LinkPreview = {
+    title: null,
+    description: null,
+    image: youtubeThumbnail(videoId),
+    siteName: 'YouTube',
+    url,
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const endpoint = `https://www.youtube.com/oembed?url=${encodeURIComponent(
+      `https://www.youtube.com/watch?v=${videoId}`,
+    )}&format=json`;
+    const res = await fetch(endpoint, { signal: controller.signal, redirect: 'follow' });
+    if (!res.ok) return fallback;
+    const body = (await res.json()) as { title?: unknown; author_name?: unknown; thumbnail_url?: unknown };
+    return {
+      title: typeof body.title === 'string' ? body.title : null,
+      description: typeof body.author_name === 'string' ? body.author_name : null,
+      image: typeof body.thumbnail_url === 'string' ? body.thumbnail_url : youtubeThumbnail(videoId),
+      siteName: 'YouTube',
+      url,
+    };
+  } catch {
+    return fallback; // 타임아웃/파싱 실패 — 썸네일만이라도 노출
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /** https + 사설망/allowlist 검사 (레거시 assertSafeOutboundUrl 승계) */
@@ -100,6 +138,14 @@ linkPreviewRoutes.get('/', async (c) => {
   try {
     const safeUrl = await assertSafeOutboundUrl(url);
 
+    // YouTube는 oEmbed 경로로 우회 (스크래핑 실패율 회피)
+    const videoId = youtubeVideoId(url);
+    if (videoId) {
+      const preview = await fetchYoutubePreview(url, videoId);
+      putCache(url, preview);
+      return ok(c, preview);
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     let html = '';
@@ -107,8 +153,10 @@ linkPreviewRoutes.get('/', async (c) => {
       const res = await fetch(safeUrl.toString(), {
         method: 'GET',
         headers: {
-          'User-Agent': 'chum7-link-preview-bot/1.0',
+          // 정체를 밝히되 Mozilla 호환 형식 — 순수 봇 UA를 거절하는 사이트가 많다
+          'User-Agent': 'Mozilla/5.0 (compatible; chum7-link-preview-bot/1.0)',
           Accept: 'text/html,application/xhtml+xml',
+          'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
         },
         redirect: 'follow',
         signal: controller.signal,

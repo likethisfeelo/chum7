@@ -1,6 +1,7 @@
 import {
   collectMissedChallenges,
   computeTodayChallengeDay,
+  isRemedyVerification,
   missedDaysOf,
   remedyPolicyOf,
 } from '../../frontend/src/features/challenge/utils/remedyStatus';
@@ -63,6 +64,30 @@ function participation(opts: FixtureOptions) {
     },
   };
 }
+
+/**
+ * 회귀 방지: 보완 인증이 '오늘 인증'으로 집계돼 오늘 인증을 안 했는데도 완료로 보이고
+ * 입력이 막히던 버그 (운영탭은 미완으로 표시돼 화면 간 불일치).
+ * 보완 레코드는 day=오늘Day, performedAt=오늘이지만 실제로는 지난 Day를 채운 제출이다.
+ */
+describe('isRemedyVerification — 오늘 인증 집계 제외 대상', () => {
+  it('type=remedy 는 보완', () => {
+    expect(isRemedyVerification({ type: 'remedy', originalDay: 2 })).toBe(true);
+    expect(isRemedyVerification({ type: 'REMEDY' })).toBe(true);
+  });
+
+  it('type 이 없어도 originalDay 가 있으면 보완 (레거시 레코드)', () => {
+    expect(isRemedyVerification({ originalDay: 3 })).toBe(true);
+    expect(isRemedyVerification({ originalDay: 0 })).toBe(true);
+  });
+
+  it('일반/추가 인증은 보완이 아니다', () => {
+    expect(isRemedyVerification({ type: 'normal', originalDay: null })).toBe(false);
+    expect(isRemedyVerification({ type: 'normal', isExtra: true })).toBe(false);
+    expect(isRemedyVerification({})).toBe(false);
+    expect(isRemedyVerification(null)).toBe(false);
+  });
+});
 
 describe('computeTodayChallengeDay', () => {
   test('저장 currentDay가 밀려 있어도 시작일 기준 달력으로 오늘 Day를 계산한다', () => {

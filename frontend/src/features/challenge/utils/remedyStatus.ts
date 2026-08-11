@@ -6,6 +6,17 @@
  */
 import { getRemainingRemedyCount, getRemedyType } from './flowPolicy';
 
+/**
+ * 보완 인증 판별 — 보완은 '지난 Day'를 채우는 제출이라 오늘 인증으로 세면 안 된다.
+ * 서버 레코드는 type='remedy' + originalDay(대상 Day)를 갖지만, performedAt/practiceAt은
+ * '오늘 실천한 시각'이라 날짜만 보면 오늘 인증과 구분되지 않는다.
+ */
+export function isRemedyVerification(verification: any): boolean {
+  if (!verification) return false;
+  if (String(verification.type || '').toLowerCase() === 'remedy') return true;
+  return verification.originalDay !== null && verification.originalDay !== undefined;
+}
+
 export function getKstDateOnly(): Date {
   const now = new Date();
   const kstMs = now.getTime() + 9 * 60 * 60 * 1000;

@@ -31,6 +31,9 @@ export interface PlazaPost {
   content?: string;
   imageUrl?: string;
   imageUrls?: string[];
+  // 링크형 인증의 원문 링크 — 마당 카드에서 OG 프리뷰로 렌더 (plaza-converter가 승계)
+  linkUrl?: string;
+  verificationType?: string;
   createdAt: string;
   likeCount?: number;
   commentCount?: number;

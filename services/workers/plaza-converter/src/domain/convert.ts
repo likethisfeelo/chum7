@@ -111,6 +111,9 @@ export function buildPlazaPostItem(
       ? verification.imageUrls
       : [verification.imageUrl || verification.videoUrl].filter(Boolean),
     content: resolvePlazaFallbackContent(verification).content,
+    // 링크형 인증 — 원문 링크를 마당 사본에도 승계 (마당 카드가 OG 프리뷰 렌더)
+    linkUrl: typeof verification.linkUrl === 'string' && verification.linkUrl ? verification.linkUrl : null,
+    verificationType: verification.verificationType || null,
     leaderId: null,
     leaderName: null,
     leaderMessage: null,

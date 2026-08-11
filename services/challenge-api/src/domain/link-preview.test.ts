@@ -8,6 +8,8 @@ import {
   parseAllowlist,
   parseLinkPreview,
   toAbsoluteUrl,
+  youtubeThumbnail,
+  youtubeVideoId,
 } from './link-preview';
 
 const SAMPLE_HTML = `
@@ -71,6 +73,55 @@ describe('link-preview OG 파싱', () => {
   it('toAbsoluteUrl — 잘못된 입력은 null', () => {
     expect(toAbsoluteUrl(new URL('https://a.com'), null)).toBeNull();
     expect(toAbsoluteUrl(new URL('https://a.com'), 'http://[bad')).toBeNull();
+  });
+});
+
+describe('link-preview 폴백 메타 (OG 미제공 사이트)', () => {
+  const base = new URL('https://example.com/a');
+
+  it('og 없으면 twitter 카드로 폴백한다', () => {
+    const html = `<meta name="twitter:title" content="트위터 제목">
+      <meta name="twitter:image" content="https://cdn.example.com/t.png">
+      <meta name="twitter:description" content="트위터 설명">`;
+    const preview = parseLinkPreview(html, base);
+    expect(preview.title).toBe('트위터 제목');
+    expect(preview.image).toBe('https://cdn.example.com/t.png');
+    expect(preview.description).toBe('트위터 설명');
+  });
+
+  it('link rel=image_src 를 이미지 폴백으로 쓴다', () => {
+    const html = '<link rel="image_src" href="/legacy.png">';
+    expect(parseLinkPreview(html, base).image).toBe('https://example.com/legacy.png');
+  });
+
+  it('og:image 가 twitter:image 보다 우선한다', () => {
+    const html = `<meta property="og:image" content="/og.png">
+      <meta name="twitter:image" content="/tw.png">`;
+    expect(parseLinkPreview(html, base).image).toBe('https://example.com/og.png');
+  });
+});
+
+describe('youtubeVideoId (oEmbed 우회 경로 판정)', () => {
+  it('youtu.be 단축 링크', () => {
+    expect(youtubeVideoId('https://youtu.be/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(youtubeVideoId('https://youtu.be/dQw4w9WgXcQ?t=42')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('watch/shorts/embed 경로', () => {
+    expect(youtubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(youtubeVideoId('https://m.youtube.com/shorts/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(youtubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('유튜브가 아니거나 id 형식이 아니면 null', () => {
+    expect(youtubeVideoId('https://vimeo.com/12345')).toBeNull();
+    expect(youtubeVideoId('https://www.youtube.com/results?search_query=a')).toBeNull();
+    expect(youtubeVideoId('https://youtu.be/short')).toBeNull();
+    expect(youtubeVideoId('not-a-url')).toBeNull();
+  });
+
+  it('썸네일 URL 은 videoId 기반으로 항상 생성된다', () => {
+    expect(youtubeThumbnail('dQw4w9WgXcQ')).toBe('https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
   });
 });
 

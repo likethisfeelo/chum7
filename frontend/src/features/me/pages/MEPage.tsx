@@ -14,6 +14,7 @@ import { RemedyHubButton } from '@/features/challenge/components/RemedyHubButton
 import { InlineVerificationForm } from '@/features/verification/components/InlineVerificationForm';
 import { ProgressDayCircles } from '@/features/challenge/components/ProgressDayCircles';
 import { getChallengeTypeLabel as getChallengeTypeLabelByType } from '@/features/challenge/utils/flowPolicy';
+import { isRemedyVerification } from '@/features/challenge/utils/remedyStatus';
 import {
   getChallengeDisplayMeta,
   getLatestCompletedProgressEntry,
@@ -170,7 +171,8 @@ function getCalendarChallengeDay(challenge: any): number {
 
 function isTodayVerified(challenge: any): boolean {
   const progress = Array.isArray(challenge?.progress) ? challenge.progress : [];
-  const verifiedStatuses = new Set(['success', 'partial', 'completed', 'remedy', 'failed']);
+  // 'failed'는 인증이 아니라 미인증 확정 상태 — 오늘 인증으로 세면 입력이 막힌다
+  const verifiedStatuses = new Set(['success', 'partial', 'completed', 'remedy']);
 
   // Primary: check timestamp field on progress entries (always set by submit Lambda)
   // This avoids reliance on calendarDay calculation which fails when startDate is missing.
@@ -179,6 +181,9 @@ function isTodayVerified(challenge: any): boolean {
     const s = String(entry?.status || '').toLowerCase();
     if (!verifiedStatuses.has(s)) continue;
     if (!entry?.timestamp) continue;
+    // 보완으로 채운 지난 Day — timestamp는 '보완을 제출한 시각'(오늘)이라
+    // 오늘 인증으로 오인된다. 해당 Day의 인증 여부와 무관하므로 건너뛴다.
+    if (entry?.remedied === true) continue;
     const entryKst = new Date(entry.timestamp).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' });
     if (entryKst === todayKst) return true;
   }
@@ -391,6 +396,9 @@ export const MEPage = () => {
     const set = new Set<string>();
     const items: any[] = myVerificationsData?.verifications || [];
     for (const v of items) {
+      // 보완 인증은 '지난 Day'를 채우는 제출이라 오늘 인증이 아니다.
+      // performedAt은 오늘이므로 제외하지 않으면 오늘 인증한 것으로 잘못 집계된다.
+      if (isRemedyVerification(v)) continue;
       if (v.challengeId && !v.isExtra && isSameKstDate(v.performedAt || v.createdAt)) {
         set.add(v.challengeId);
       }
