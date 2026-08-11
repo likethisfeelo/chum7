@@ -184,9 +184,18 @@ export class WorkersStack extends cdk.Stack {
       targets: [new eventsTargets.LambdaFunction(plazaConverter)],
     });
     // 인증 반려 → 마당 변환분 비활성화 (같은 워커의 이벤트 구동 경로)
+    // 도메인 이벤트는 커스텀 버스로 발행되므로 eventBus 지정 필수 (누락 시 기본 버스에 붙어 발화 안 됨)
     new events.Rule(this, 'VerificationRejectedToPlaza', {
       ruleName: `${config.prefix}-verification-rejected-plaza`,
+      eventBus: this.eventBus,
       eventPattern: { detailType: ['verification.rejected', 'verification.hidden'] },
+      targets: [new eventsTargets.LambdaFunction(plazaConverter)],
+    });
+    // 공개 인증 제출 → 즉시 마당 변환 (시간별 스케줄은 누락 안전망)
+    new events.Rule(this, 'VerificationSubmittedToPlaza', {
+      ruleName: `${config.prefix}-verification-submitted-plaza`,
+      eventBus: this.eventBus,
+      eventPattern: { detailType: ['verification.submitted'] },
       targets: [new eventsTargets.LambdaFunction(plazaConverter)],
     });
 

@@ -13,7 +13,7 @@
  * 테이블: challenges(R + 마커 W) + social(W) — 문서화된 크로스 도메인 예외 (이전 가이드 §4).
  */
 import type { EventBridgeEvent } from 'aws-lambda';
-import { PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 import {
   buildHashtagRegistryItem,
@@ -21,6 +21,7 @@ import {
   conversionWindow,
   decideConvert,
   DEFAULT_LOOKBACK_HOURS,
+  verificationSkOf,
 } from './domain/convert';
 
 const CHALLENGES_TABLE = 'CHALLENGES_TABLE';
@@ -128,7 +129,54 @@ async function deactivatePlazaPost(verificationId: string): Promise<boolean> {
   }
 }
 
+/** 인증 1건 변환 — 조건부 Put + 해시태그 레지스트리 + 변환 마커 (스케줄/이벤트 공용) */
+async function convertVerification(
+  verification: Record<string, any>,
+  convertedAt: string,
+): Promise<'created' | 'duplicate'> {
+  const post = buildPlazaPostItem(verification, convertedAt);
+  const created = await putPlazaPost(post);
+  if (created && post.hashtag && verification.userId) {
+    await registerHashtag(String(post.hashtag), String(verification.userId), convertedAt);
+  }
+  await markVerificationConverted(verification, convertedAt);
+  return created ? 'created' : 'duplicate';
+}
+
 export const handler = async (event: EventBridgeEvent<string, unknown>) => {
+  // 이벤트 구동: 공개 인증 제출 → 즉시 마당 변환 (시간별 스케줄은 누락 안전망으로 유지)
+  if (event['detail-type'] === 'verification.submitted') {
+    const detail = (event.detail ?? {}) as {
+      verificationId?: string; userId?: string; challengeId?: string; day?: number; isPublic?: boolean;
+    };
+    const { verificationId, userId, challengeId, day } = detail;
+    if (detail.isPublic !== true) return { statusCode: 200, body: 'not public — skipped' };
+    if (!verificationId || !userId || !challengeId || typeof day !== 'number') {
+      return { statusCode: 400, body: 'missing verification keys' };
+    }
+
+    const res = await docClient.send(
+      new GetCommand({
+        TableName: tableName(CHALLENGES_TABLE),
+        Key: { pk: `CHAL#${challengeId}`, sk: verificationSkOf(userId, day, verificationId) },
+      }),
+    );
+    const verification = res.Item;
+    if (!verification) {
+      // 발행 시점엔 존재하던 아이템 — 없으면 로그만 남기고 시간별 스케줄에 맡긴다
+      console.warn(JSON.stringify({ level: 'warn', message: 'submitted verification not found', verificationId, challengeId }));
+      return { statusCode: 200, body: 'verification not found — deferred to schedule' };
+    }
+
+    const decision = decideConvert(verification);
+    if (!decision.convert) {
+      return { statusCode: 200, body: JSON.stringify({ verificationId, skipped: decision.reason }) };
+    }
+    const outcome = await convertVerification(verification, new Date().toISOString());
+    console.log(JSON.stringify({ level: 'info', message: 'plaza post convert (verification.submitted)', verificationId, outcome }));
+    return { statusCode: 200, body: JSON.stringify({ verificationId, outcome }) };
+  }
+
   // 이벤트 구동: 인증 반려/관리자숨김 → 마당 변환분 비활성화 (스케줄 변환과 별개 경로)
   if (event['detail-type'] === 'verification.rejected' || event['detail-type'] === 'verification.hidden') {
     const detail = (event.detail ?? {}) as { verificationId?: string };
@@ -173,16 +221,9 @@ export const handler = async (event: EventBridgeEvent<string, unknown>) => {
       }
 
       try {
-        const post = buildPlazaPostItem(verification, convertedAt);
-        const created = await putPlazaPost(post);
-        if (!created) summary.conditionalDuplicateCount += 1; // 이미 존재 — 마커만 재기록
-
-        if (created && post.hashtag && verification.userId) {
-          await registerHashtag(String(post.hashtag), String(verification.userId), convertedAt);
-        }
-
-        await markVerificationConverted(verification, convertedAt);
-        if (created) summary.convertedCount += 1;
+        const outcome = await convertVerification(verification, convertedAt);
+        if (outcome === 'created') summary.convertedCount += 1;
+        else summary.conditionalDuplicateCount += 1; // 이미 존재 — 마커만 재기록
       } catch (err: any) {
         summary.failedCount += 1;
         console.error(JSON.stringify({
