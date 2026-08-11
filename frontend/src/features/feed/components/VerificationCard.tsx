@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import { ImageCarousel } from '@/shared/components/ImageCarousel';
+import { LinkPreviewCard } from '@/shared/components/LinkPreviewCard';
 import { CommentSection } from './CommentSection';
 import { RecommendationInline } from './RecommendationInline';
 import { ReportButton } from './ReportModal';
@@ -159,6 +160,9 @@ export function VerificationCard({
             {post.content}
           </p>
         )}
+
+        {/* 링크형 인증 — 원문 링크 OG 프리뷰 */}
+        {post.linkUrl && <LinkPreviewCard url={post.linkUrl} />}
 
         {post.hashtag && (
           <div className="mt-2">

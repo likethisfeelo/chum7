@@ -39,24 +39,37 @@ export const LinkPreviewCard = ({ url, className }: LinkPreviewCardProps) => {
 
   const title = data?.title || host;
   const image = data?.image ?? undefined;
+  const description = data?.description ?? undefined;
 
   return (
     <a
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className={`mt-2 flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2 hover:bg-gray-50 ${className || ''}`}
+      className={`mt-2 flex items-stretch gap-3 rounded-xl border border-gray-200 bg-white p-2 hover:bg-gray-50 transition-colors ${className || ''}`}
     >
-      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-gray-100 flex items-center justify-center">
+      <div className="h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
         {image ? (
-          <img src={image} alt={title} className="h-full w-full object-cover" />
+          <img
+            src={image}
+            alt=""
+            loading="lazy"
+            className="h-full w-full object-cover"
+            onError={(e) => {
+              // 썸네일 접근 실패(핫링크 차단 등) — 아이콘 자리로 되돌린다
+              e.currentTarget.style.display = 'none';
+            }}
+          />
         ) : (
           <FiLink className="h-5 w-5 text-gray-400" />
         )}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-gray-900">{title}</p>
-        <p className="truncate text-xs text-gray-500">{data?.siteName || host}</p>
+      <div className="min-w-0 flex-1 self-center">
+        <p className="line-clamp-2 text-sm font-semibold text-gray-900 leading-snug">{title}</p>
+        {description && (
+          <p className="mt-0.5 line-clamp-1 text-xs text-gray-500">{description}</p>
+        )}
+        <p className="mt-0.5 truncate text-[11px] text-gray-400">{data?.siteName || host}</p>
       </div>
     </a>
   );

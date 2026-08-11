@@ -84,6 +84,8 @@ describe('buildPlazaPostItem (social-api PORTING.md §4 아이템 계약)', () =
       imageUrl: 'https://img/1.jpg',
       imageUrls: ['https://img/1.jpg'],
       content: '오늘도 뛰었다',
+      linkUrl: null,
+      verificationType: null,
       leaderId: null,
       leaderName: null,
       leaderMessage: null,
@@ -104,6 +106,15 @@ describe('buildPlazaPostItem (social-api PORTING.md §4 아이템 계약)', () =
     // hashtag 없음 → gsi2/hashtag 필드 자체가 없어야 한다 (sparse GSI)
     expect('gsi2pk' in item).toBe(false);
     expect('hashtag' in item).toBe(false);
+  });
+
+  test('링크형 인증 — linkUrl/verificationType 승계 (마당 카드 OG 프리뷰용)', () => {
+    const item = buildPlazaPostItem(
+      { ...baseVerification, verificationType: 'link', linkUrl: 'https://youtu.be/abc123' },
+      CONVERTED_AT,
+    );
+    expect(item.linkUrl).toBe('https://youtu.be/abc123');
+    expect(item.verificationType).toBe('link');
   });
 
   test('hashtag adds gsi2 TAG# keys + hashtag attr', () => {

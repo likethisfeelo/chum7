@@ -55,15 +55,69 @@ export function toAbsoluteUrl(base: URL, maybeRelative: string | null): string |
   }
 }
 
-/** OG 태그 → 프리뷰 필드 (레거시 우선순위: og:* → description/name → title 태그) */
+/**
+ * OG 태그 → 프리뷰 필드 (레거시 우선순위: og:* → description/name → title 태그).
+ * OG 미제공 사이트를 위해 twitter:* 카드와 `<link rel="image_src">`를 보조 폴백으로 사용한다.
+ */
 export function parseLinkPreview(html: string, baseUrl: URL): LinkPreviewFields {
+  const imageCandidate =
+    getMetaContent(html, 'og:image', 'property') ||
+    getMetaContent(html, 'og:image:url', 'property') ||
+    getMetaContent(html, 'twitter:image', 'name') ||
+    getMetaContent(html, 'twitter:image', 'property') ||
+    getLinkHref(html, 'image_src');
+
   return {
-    title: getTitle(html),
+    title: getTitle(html) || getMetaContent(html, 'twitter:title', 'name'),
     description:
-      getMetaContent(html, 'og:description', 'property') || getMetaContent(html, 'description', 'name'),
+      getMetaContent(html, 'og:description', 'property') ||
+      getMetaContent(html, 'description', 'name') ||
+      getMetaContent(html, 'twitter:description', 'name'),
+    // siteName은 레거시대로 null 유지 — 호스트명 폴백은 카드(UI)가 담당
     siteName: getMetaContent(html, 'og:site_name', 'property'),
-    image: toAbsoluteUrl(baseUrl, getMetaContent(html, 'og:image', 'property')),
+    image: toAbsoluteUrl(baseUrl, imageCandidate),
   };
+}
+
+/** `<link rel="image_src" href="...">` — OG 이전 세대 사이트의 대표 이미지 폴백 */
+export function getLinkHref(html: string, rel: string): string | null {
+  const regex = new RegExp(`<link[^>]*rel=["']${rel}["'][^>]*href=["']([^"']+)["'][^>]*>`, 'i');
+  const altRegex = new RegExp(`<link[^>]*href=["']([^"']+)["'][^>]*rel=["']${rel}["'][^>]*>`, 'i');
+  const match = html.match(regex) || html.match(altRegex);
+  return match?.[1] ? decodeHtml(match[1]) : null;
+}
+
+// ── YouTube 전용 경로 (스크래핑 없이 확정적으로 제목/썸네일 확보) ──────────
+
+/** youtu.be/<id>, youtube.com/watch?v=<id>, /shorts/<id>, /embed/<id> → videoId */
+export function youtubeVideoId(rawUrl: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  const isValid = (id: string | undefined): id is string => Boolean(id && /^[\w-]{11}$/.test(id));
+
+  if (host === 'youtu.be') {
+    const id = parsed.pathname.split('/').filter(Boolean)[0];
+    return isValid(id) ? id : null;
+  }
+  if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
+    const vParam = parsed.searchParams.get('v');
+    if (isValid(vParam ?? undefined)) return vParam;
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    if (segments[0] === 'shorts' || segments[0] === 'embed' || segments[0] === 'live') {
+      return isValid(segments[1]) ? segments[1] : null;
+    }
+  }
+  return null;
+}
+
+/** videoId → 썸네일 URL (항상 존재하는 hqdefault 사용) */
+export function youtubeThumbnail(videoId: string): string {
+  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 }
 
 // ── SSRF 가드 (레거시 동작 그대로) ─────────────────────────────────────────
