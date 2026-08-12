@@ -23,6 +23,16 @@ const LAYER_THEME: Record<string, {
 };
 
 // ── 창조물 개체 (정령 / 젤리) ───────────────────────────────────────
+/**
+ * 정원 개체 정책 (점수 → 개체 수/크기):
+ *  - 개체 수: 3점당 1개, 최대 40개 (파티션 과밀 방지)
+ *  - 크기 등급: 10점마다 1개가 '큰 개체(elder)'로 승격 (최대 8개) —
+ *    점수가 높을수록 큰 개체가 늘어나 총점이 시각적으로 읽히게 한다
+ *  - 모양: 퀘스트=빛방울(작은 흰 점) · 응원(✦)=별 모양 정령 · 감사(●)=젤리 원
+ *    → 세 지표가 같은 '점'으로 보여 식별 안 되던 문제를 모양으로 구분
+ *  - 크기 체계: 빛방울(2~6px) < 별(5~12px) < 젤리(8~20px) — 종류별 크기대가 겹치지
+ *    않게 분리. 젤리는 표면에 반짝이 글린트가 주기적으로 스치며 감사(●)임을 강조
+ */
 export interface Creature {
   id: string;
   x: number;   // % 0-100
@@ -30,11 +40,15 @@ export interface Creature {
   size: number;
   delay: number;
   isNew: boolean;
+  /** 크기 등급 — 10점당 1개 승격되는 큰 개체 (없으면 small 취급) */
+  tier?: 'small' | 'large';
 }
 
 export function buildCreatures(score: number, todayDelta: number, prefix: string): Creature[] {
   if (score <= 0) return [];
   const count = Math.min(40, Math.ceil(score / 3));
+  // 10점마다 큰 개체 1개 (최대 8) — 나머지는 작은 개체
+  const largeCount = Math.min(8, Math.floor(score / 10));
   // seeded pseudo-random so positions are stable across renders
   const creatures: Creature[] = [];
   let seed = score * 137 + prefix.charCodeAt(0);
@@ -48,31 +62,40 @@ export function buildCreatures(score: number, todayDelta: number, prefix: string
       size: 0.5 + rand() * 1,
       delay: rand() * 3,
       isNew: i < newCount,
+      tier: i < largeCount ? 'large' : 'small',
     });
   }
   return creatures;
 }
 
-// ── 정령형 (cheer) ───────────────────────────────────────────────────
+// ── 정령형 (cheer ✦) — 4각 별 모양, 큰 개체는 더 크고 밝게 ─────────────
+const STAR_CLIP = 'polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%)';
+
 export function SpiritCreature({ c, color }: { c: Creature; color: string }) {
+  const large = c.tier === 'large';
+  // 크기대: 별 5~12px (큰 개체 9~21px) — 빛방울(2~6px)보다 크고 젤리보다 작게
+  const px = c.size * (large ? 14 : 8) + 1;
   return (
     <motion.div
       key={c.id}
-      className="absolute rounded-full pointer-events-none"
+      className="absolute pointer-events-none"
       style={{
         left: `${c.x}%`,
         top:  `${c.y}%`,
-        width:  `${c.size * 6}px`,
-        height: `${c.size * 6}px`,
-        backgroundColor: color,
-        boxShadow: `0 0 ${c.size * 4}px ${color}`,
-        opacity: 0.85,
+        width:  `${px}px`,
+        height: `${px}px`,
+        // 별 본체 — clip-path라 boxShadow가 잘리므로 글로우는 drop-shadow로
+        backgroundColor: large ? '#ffffff' : color,
+        clipPath: STAR_CLIP,
+        filter: `drop-shadow(0 0 ${c.size * (large ? 6 : 3)}px ${color})`,
+        opacity: 0.9,
       }}
       animate={{
         y: [0, -8, 0, 4, 0],
         x: [0, 3, -3, 2, 0],
-        opacity: c.isNew ? [0, 1, 0.85] : [0.6, 0.9, 0.6],
-        scale: c.isNew ? [0.5, 1.3, 1] : [1, 1.1, 1],
+        rotate: large ? [0, 12, -8, 0] : 0,
+        opacity: c.isNew ? [0, 1, 0.9] : [0.65, 0.95, 0.65],
+        scale: c.isNew ? [0.5, 1.3, 1] : [1, 1.12, 1],
       }}
       transition={{
         duration: 3 + c.delay,
@@ -84,24 +107,29 @@ export function SpiritCreature({ c, color }: { c: Creature; color: string }) {
   );
 }
 
-// ── 젤리형 (thanks) ──────────────────────────────────────────────────
+// ── 젤리형 (thanks ●) — 하이라이트 있는 말랑한 원, 큰 개체는 더 크게 ────
 export function JellyCreature({ c, color }: { c: Creature; color: string }) {
+  const large = c.tier === 'large';
+  // 크기대: 젤리 8~20px (큰 개체 13~32px) — 세 종류 중 가장 크게
+  const px = c.size * (large ? 24 : 12) + 2;
   return (
     <motion.div
       key={c.id}
-      className="absolute rounded-full pointer-events-none"
+      className="absolute pointer-events-none"
       style={{
         left: `${c.x}%`,
         top:  `${c.y}%`,
-        width:  `${c.size * 10}px`,
-        height: `${c.size * 10}px`,
-        backgroundColor: color,
-        boxShadow: `0 0 ${c.size * 6}px ${color}80`,
-        opacity: 0.7,
+        width:  `${px}px`,
+        height: `${px}px`,
+        borderRadius: '48% 52% 50% 50% / 52% 48% 52% 48%', // 살짝 찌그러진 젤리 실루엣
+        background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,0.9), ${color} 68%)`,
+        boxShadow: `0 0 ${c.size * (large ? 9 : 6)}px ${color}80`,
+        opacity: 0.75,
       }}
       animate={{
         scale: c.isNew ? [0.3, 1.2, 1] : [1, 1.08, 1],
-        opacity: c.isNew ? [0, 0.8, 0.7] : [0.5, 0.75, 0.5],
+        scaleX: [1, 1.06, 0.97, 1], // 말랑임 — 별/빛방울과 구분되는 젤리 특유의 움직임
+        opacity: c.isNew ? [0, 0.85, 0.75] : [0.55, 0.8, 0.55],
         y: [0, -3, 0],
       }}
       transition={{
@@ -110,7 +138,31 @@ export function JellyCreature({ c, color }: { c: Creature; color: string }) {
         delay: c.delay * 0.8,
         ease: 'easeInOut',
       }}
-    />
+    >
+      {/* 반짝이 글린트 — 표면을 주기적으로 스치는 흰 별빛 (감사 ● 전용 이펙트) */}
+      <motion.span
+        className="absolute block"
+        style={{
+          left: '16%',
+          top: '8%',
+          width: '42%',
+          height: '42%',
+          clipPath: STAR_CLIP,
+          backgroundColor: '#ffffff',
+        }}
+        animate={{
+          opacity: [0, 0, 0.95, 0, 0],
+          scale: [0.5, 0.5, 1.15, 0.5, 0.5],
+          rotate: [0, 0, 24, 0, 0],
+        }}
+        transition={{
+          duration: 3.6 + c.delay * 0.6,
+          repeat: Infinity,
+          delay: c.delay * 1.2,
+          ease: 'easeInOut',
+        }}
+      />
+    </motion.div>
   );
 }
 

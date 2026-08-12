@@ -325,6 +325,38 @@ function LightDroplet({ c, color }: { c: Creature; color: string }) {
   );
 }
 
+// ── 초반 가이드 문구 (퀘스트 0~10점 — 점수 구간별 맞춤 안내) ───────────
+const GARDEN_GUIDE_TIERS: { min: number; emoji: string; title: string; body: string }[] = [
+  {
+    min: 7,
+    emoji: '🌿',
+    title: '정원이 깨어나기 시작했어요',
+    body: '빛방울이 제법 모였어요\n10점을 넘으면 정원이 스스로 자라나요',
+  },
+  {
+    min: 4,
+    emoji: '✨',
+    title: '빛방울이 하나둘 모이고 있어요',
+    body: '응원(✦)은 별이 되고 감사(●)는 젤리가 돼요\n정원이 조금씩 밝아지고 있어요',
+  },
+  {
+    min: 1,
+    emoji: '💧',
+    title: '첫 빛방울이 맺혔어요',
+    body: '퀘스트를 완료할 때마다\n빛방울이 하나씩 늘어나요',
+  },
+  {
+    min: 0,
+    emoji: '🌱',
+    title: '아직 고요한 정원이에요',
+    body: '인증하고 응원을 주고받으면\n이곳에 작은 생명들이 하나씩 나타나요',
+  },
+];
+
+function gardenGuideOf(questScore: number) {
+  return GARDEN_GUIDE_TIERS.find((t) => questScore >= t.min) ?? GARDEN_GUIDE_TIERS[GARDEN_GUIDE_TIERS.length - 1]!;
+}
+
 // ── 젤리 정원 (선택 영역 인라인 펼침) ─────────────────────────────────
 function JellyGarden({ area, layer }: { area: WorldArea; layer?: WorldLayer }) {
   const spirits = buildCreatures(layer?.cheerScore ?? 0, 0, `sp-${area.slug}`);
@@ -373,17 +405,24 @@ function JellyGarden({ area, layer }: { area: WorldArea; layer?: WorldLayer }) {
         {jellies.map((c) => (
           <JellyCreature key={c.id} c={c} color={area.jelly} />
         ))}
-        {showGuide && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center pointer-events-none">
-            <span className="mb-1.5 text-2xl">🌱</span>
-            <p className="font-me-title text-base text-gray-600">아직 고요한 정원이에요</p>
-            <p className="font-me-title mt-1 text-xs leading-relaxed text-gray-500">
-              인증하고 응원을 주고받으면
-              <br />
-              이곳에 작은 생명들이 하나씩 나타나요
-            </p>
-          </div>
-        )}
+        {showGuide && (() => {
+          const guide = gardenGuideOf(questScore);
+          return (
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center pointer-events-none">
+              {/* 개체가 많아도 문구가 읽히도록 은은한 배경 */}
+              <div
+                className="rounded-2xl px-5 py-3"
+                style={{ background: 'rgba(255,255,255,0.42)', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)' }}
+              >
+                <span className="mb-1.5 block text-2xl">{guide.emoji}</span>
+                <p className="font-me-title text-base text-gray-600">{guide.title}</p>
+                <p className="font-me-title mt-1 text-xs leading-relaxed text-gray-500 whitespace-pre-line">
+                  {guide.body}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
