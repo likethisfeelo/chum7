@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FiArrowLeft } from "react-icons/fi";
@@ -584,26 +584,47 @@ export const ChallengeFeedPage = () => {
   );
 
 
-  // 리더 퀘스트 N개 모두 완료 여부 (mySubmission 기반 + 낙관적 상태)
+  // 오늘 인증을 올린 퀘스트 id — 오늘 날짜의 내 인증(보완/추가 제외)에서 추출.
+  // mySubmission(ACTIVE 마커)은 챌린지당 1건이라 날짜 개념이 없어, 1일차 승인 이후
+  // 매일 '완료'로 읽히는 문제가 있었다. 일자별 판정은 인증 레코드가 유일한 소스다.
+  const todayVerifiedQuestIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const v of myChallengeVerifications as any[]) {
+      if (v?.isExtra || isRemedyVerification(v)) continue;
+      if (!isSameKstDate(v?.performedAt || v?.createdAt)) continue;
+      if (v?.questId) set.add(String(v.questId));
+    }
+    return set;
+  }, [myChallengeVerifications]);
+
+  /**
+   * 퀘스트가 '오늘' 완료됐는지 — 세션 내 낙관적 제출 + 오늘자 인증 레코드,
+   * 그리고 오늘 제출된 mySubmission(심사 승인 반영)만 인정한다.
+   * mySubmission의 날짜는 제출 시각(createdAt)으로 판단한다 — updatedAt은 리더가
+   * 나중에 승인한 시각이라 다른 날 승인 시 오늘로 오인된다.
+   */
+  const isQuestDoneToday = useCallback(
+    (quest: any): boolean => {
+      if (!quest?.questId) return false;
+      if (todaySubmittedQuestIds.has(quest.questId)) return true;
+      if (todayVerifiedQuestIds.has(String(quest.questId))) return true;
+      const sub = quest.mySubmission;
+      if (!sub) return false;
+      const approved = sub.status === "approved" || sub.status === "auto_approved";
+      return approved && isSameKstDate(sub.createdAt || null);
+    },
+    [todaySubmittedQuestIds, todayVerifiedQuestIds],
+  );
+
+  // 리더 퀘스트 N개 모두 오늘 완료 여부
   const allLeaderQuestsDoneToday = useMemo(
-    () =>
-      leaderQuests.length > 0 &&
-      leaderQuests.every((q: any) =>
-        todaySubmittedQuestIds.has(q.questId) ||
-        q.mySubmission?.status === "approved" ||
-        q.mySubmission?.status === "auto_approved",
-      ),
-    [leaderQuests, todaySubmittedQuestIds],
+    () => leaderQuests.length > 0 && leaderQuests.every((q: any) => isQuestDoneToday(q)),
+    [leaderQuests, isQuestDoneToday],
   );
 
   const someLeaderQuestsDoneToday = useMemo(
-    () =>
-      leaderQuests.some((q: any) =>
-        todaySubmittedQuestIds.has(q.questId) ||
-        q.mySubmission?.status === "approved" ||
-        q.mySubmission?.status === "auto_approved",
-      ),
-    [leaderQuests, todaySubmittedQuestIds],
+    () => leaderQuests.some((q: any) => isQuestDoneToday(q)),
+    [leaderQuests, isQuestDoneToday],
   );
 
   const iDidTodayPersonalQuestVerification = useMemo(
@@ -1567,10 +1588,7 @@ export const ChallengeFeedPage = () => {
                 <div className="space-y-3">
                   {leaderQuests.map((q: any) => {
                     const sub = q.mySubmission;
-                    const isDone =
-                      todaySubmittedQuestIds.has(q.questId) ||
-                      sub?.status === "approved" ||
-                      sub?.status === "auto_approved";
+                    const isDone = isQuestDoneToday(q);
                     const isPending = !isDone && sub?.status === "pending";
                     const isExpanded = expandedLeaderQuestId === q.questId;
                     return (
@@ -1621,9 +1639,7 @@ export const ChallengeFeedPage = () => {
                   {personalQuest ? (() => {
                     const sub = personalQuest.mySubmission;
                     const isDone =
-                      todaySubmittedQuestIds.has(personalQuest.questId) ||
-                      sub?.status === "approved" ||
-                      sub?.status === "auto_approved" ||
+                      isQuestDoneToday(personalQuest) ||
                       (isMixedChallengeType ? iDidTodayPersonalQuestVerification : iDidTodayVerification);
                     const isPending = !isDone && sub?.status === "pending";
                     return (

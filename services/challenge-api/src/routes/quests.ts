@@ -62,6 +62,9 @@ questRoutes.get('/', async (c) => {
             submissionId: activeSubmission.submissionId,
             status: activeSubmission.status,
             updatedAt: activeSubmission.updatedAt,
+            // 제출 시각 — ACTIVE 마커는 챌린지당 1건이라 날짜 개념이 없어 프론트가
+            // '오늘 완료' 판정에 쓴다. updatedAt은 승인 시각이라 다른 날 승인 시 오인됨.
+            createdAt: activeSubmission.createdAt ?? null,
           }
         : null,
     };
