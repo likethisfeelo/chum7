@@ -30,6 +30,8 @@ const LAYER_THEME: Record<string, {
  *    점수가 높을수록 큰 개체가 늘어나 총점이 시각적으로 읽히게 한다
  *  - 모양: 퀘스트=빛방울(작은 흰 점) · 응원(✦)=별 모양 정령 · 감사(●)=젤리 원
  *    → 세 지표가 같은 '점'으로 보여 식별 안 되던 문제를 모양으로 구분
+ *  - 크기 체계: 빛방울(2~6px) < 별(5~12px) < 젤리(8~20px) — 종류별 크기대가 겹치지
+ *    않게 분리. 젤리는 표면에 반짝이 글린트가 주기적으로 스치며 감사(●)임을 강조
  */
 export interface Creature {
   id: string;
@@ -71,7 +73,8 @@ const STAR_CLIP = 'polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%
 
 export function SpiritCreature({ c, color }: { c: Creature; color: string }) {
   const large = c.tier === 'large';
-  const px = c.size * (large ? 13 : 7);
+  // 크기대: 별 5~12px (큰 개체 9~21px) — 빛방울(2~6px)보다 크고 젤리보다 작게
+  const px = c.size * (large ? 14 : 8) + 1;
   return (
     <motion.div
       key={c.id}
@@ -107,7 +110,8 @@ export function SpiritCreature({ c, color }: { c: Creature; color: string }) {
 // ── 젤리형 (thanks ●) — 하이라이트 있는 말랑한 원, 큰 개체는 더 크게 ────
 export function JellyCreature({ c, color }: { c: Creature; color: string }) {
   const large = c.tier === 'large';
-  const px = c.size * (large ? 16 : 10);
+  // 크기대: 젤리 8~20px (큰 개체 13~32px) — 세 종류 중 가장 크게
+  const px = c.size * (large ? 24 : 12) + 2;
   return (
     <motion.div
       key={c.id}
@@ -134,7 +138,31 @@ export function JellyCreature({ c, color }: { c: Creature; color: string }) {
         delay: c.delay * 0.8,
         ease: 'easeInOut',
       }}
-    />
+    >
+      {/* 반짝이 글린트 — 표면을 주기적으로 스치는 흰 별빛 (감사 ● 전용 이펙트) */}
+      <motion.span
+        className="absolute block"
+        style={{
+          left: '16%',
+          top: '8%',
+          width: '42%',
+          height: '42%',
+          clipPath: STAR_CLIP,
+          backgroundColor: '#ffffff',
+        }}
+        animate={{
+          opacity: [0, 0, 0.95, 0, 0],
+          scale: [0.5, 0.5, 1.15, 0.5, 0.5],
+          rotate: [0, 0, 24, 0, 0],
+        }}
+        transition={{
+          duration: 3.6 + c.delay * 0.6,
+          repeat: Infinity,
+          delay: c.delay * 1.2,
+          ease: 'easeInOut',
+        }}
+      />
+    </motion.div>
   );
 }
 
