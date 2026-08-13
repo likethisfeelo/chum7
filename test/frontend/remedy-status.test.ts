@@ -121,6 +121,48 @@ describe('missedDaysOf', () => {
     const item = participation({ durationDays: 5, todayDay: 5, successDays: [1], remediedDays: [2] });
     expect(missedDaysOf(item)).toEqual([3, 4]);
   });
+
+  /**
+   * 회귀 방지: 서버는 제출이 있었던 날만 progress 항목을 만든다. 아무것도 올리지 않은
+   * 날은 항목 자체가 없어, 항목만 훑던 구현에서는 보완 대상이 0건이 되어 버튼이
+   * 비활성화됐다. (픽스처가 전체 Day를 채워 만들어 테스트로 잡히지 않던 케이스)
+   */
+  test('progress 항목이 없는 Day도 미인증으로 잡는다 (희소 배열)', () => {
+    const sparse = {
+      userChallengeId: 'uc-sparse',
+      challengeId: 'ch-1',
+      status: 'active',
+      currentDay: 1,
+      durationDays: 5,
+      startDate: kstDateStringDaysAgo(3), // 오늘 = Day 4
+      remedyPolicy: { type: 'anytime', maxRemedyDays: null },
+      // Day 2·3은 미제출이라 항목 자체가 없다
+      progress: [
+        { day: 1, status: 'success' },
+        { day: 4, status: 'success' },
+      ],
+      challenge: { title: '희소 진행표', badgeIcon: '🎯', durationDays: 5, remedyPolicy: null },
+    };
+    expect(computeTodayChallengeDay(sparse)).toBe(4);
+    expect(missedDaysOf(sparse)).toEqual([2, 3]);
+
+    const [collected] = collectMissedChallenges([sparse]);
+    expect(collected?.missedDays).toEqual([2, 3]);
+  });
+
+  test('progress 가 아예 비어 있어도 지난 Day를 모두 잡는다', () => {
+    const empty = {
+      userChallengeId: 'uc-empty',
+      challengeId: 'ch-1',
+      status: 'active',
+      durationDays: 7,
+      startDate: kstDateStringDaysAgo(2), // 오늘 = Day 3
+      remedyPolicy: { type: 'anytime', maxRemedyDays: null },
+      progress: [],
+      challenge: { title: '빈 진행표', badgeIcon: '🎯', durationDays: 7, remedyPolicy: null },
+    };
+    expect(missedDaysOf(empty)).toEqual([1, 2]);
+  });
 });
 
 describe('collectMissedChallenges', () => {
