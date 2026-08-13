@@ -132,11 +132,13 @@ export class ApiStack extends cdk.Stack {
       integration: new HttpLambdaIntegration('HealthIntegration', this.userApi),
     });
 
-    // --- challenge-api: /c + /public/challenges ---
+    // --- challenge-api: /c + /public/challenges + /public/link-preview ---
     this.challengeApi = this.addDomainApi({
       name: 'challenge-api',
       protectedPrefix: '/c',
-      publicPrefixes: ['/public/challenges', '/share'],
+      // link-preview: 링크 카드 OG 프록시(routes/link-preview.ts). 게이트웨이에 경로가
+      // 없어 프론트 호출이 404로 떨어지고 카드가 호스트명만 표시하던 문제 — 등록 필요.
+      publicPrefixes: ['/public/challenges', '/share', '/public/link-preview'],
       environment: {
         CHALLENGES_TABLE: stateful.tables.challenges.tableName,
         UPLOADS_BUCKET: stateful.uploadsBucket.bucketName,
