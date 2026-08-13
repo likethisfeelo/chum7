@@ -17,7 +17,13 @@ import { GuideBoardSection } from "../components/GuideBoardSection";
 import { EndedChallengeSummary } from "../components/EndedChallengeSummary";
 import { LinkPreviewCard } from "@/shared/components/LinkPreviewCard";
 import { challengeApi } from "@/features/challenge/api/challengeApi";
-import { computeTodayChallengeDay, isRemedyVerification } from "@/features/challenge/utils/remedyStatus";
+import {
+  computeTodayChallengeDay,
+  durationDaysOf,
+  isRemedyVerification,
+  missedDaysOf,
+  remedyPolicyOf,
+} from "@/features/challenge/utils/remedyStatus";
 import { SLUG_TO_LABEL } from "@/features/challenge/constants/categories";
 import { ChallengeChatPanel } from "@/features/challenge-chat/components/ChallengeChatPanel";
 import { ReportButton, ReportModal } from "@/features/feed/components/ReportModal";
@@ -2064,19 +2070,40 @@ export const ChallengeFeedPage = () => {
           {mainTab === "about" && (() => {
             if (!userChallenge) return null;
             if (isGaveUp) return null;
-            const remedyType = getRemedyType(userChallenge.remedyPolicy);
+            // 정책은 참여 레코드가 아닌 챌린지 META 폴백으로 읽는다 (참여 레벨은 대부분 null)
+            const policy = remedyPolicyOf(userChallenge);
+            const remedyType = getRemedyType(policy);
             if (remedyType === "disabled") return null;
-            const remaining = getRemainingRemedyCount(userChallenge.remedyPolicy, userChallenge.progress || []);
-            const failedDays = (userChallenge.progress || []).filter(
-              (p: any) => p.day <= 5 && p.status !== "success" && !p.remedied,
-            );
-            const canRemedy = (remaining === null || remaining > 0) && failedDays.length > 0;
+            const remaining = getRemainingRemedyCount(policy, userChallenge.progress || []);
+            // 놓친 Day는 Day 번호 기준으로 센다 — 미제출 Day는 progress 항목이 없어
+            // 항목만 훑으면 0건이 되어 버튼이 계속 비활성화된다 (기간도 하드코딩 금지)
+            const missedDays = missedDaysOf(userChallenge);
+            const remedyTodayDay = computeTodayChallengeDay(userChallenge);
+            const remedyDurationDays = durationDaysOf(userChallenge);
+            const ended = remedyTodayDay > remedyDurationDays;
+            const lastDayLocked = remedyType === "last_day" && remedyTodayDay !== remedyDurationDays;
+            const noRemainingLeft = remaining !== null && remaining <= 0;
+            const canRemedy = !ended && !lastDayLocked && !noRemainingLeft && missedDays.length > 0;
+
+            const blockedReason = ended
+              ? "챌린지가 끝나 보완 창이 닫혔어요."
+              : lastDayLocked
+                ? `이 챌린지는 마지막 날(Day ${remedyDurationDays})에만 보완할 수 있어요.`
+                : noRemainingLeft
+                  ? "보완 가능 횟수를 모두 사용했어요."
+                  : missedDays.length === 0
+                    ? "지금은 보완할 날이 없어요."
+                    : null;
+
             return (
               <section className="glass-card rounded-2xl p-5">
                 <h3 className="font-bold text-gray-900 mb-2">보완 인증</h3>
                 <p className="text-xs text-gray-500 mb-3">
                   실패한 Day는 보완 인증(70% 점수)으로 연결할 수 있어요. · 남은 보완{" "}
                   {remaining === null ? "제한 없음" : `${remaining}회`}
+                  {missedDays.length > 0 && (
+                    <> · 보완할 Day {missedDays.map((d) => `Day ${d}`).join(", ")}</>
+                  )}
                 </p>
                 <button
                   type="button"
@@ -2086,6 +2113,7 @@ export const ChallengeFeedPage = () => {
                 >
                   보완하기 {remaining === null ? "(제한 없음)" : `(${remaining}회 남음)`}
                 </button>
+                {blockedReason && <p className="mt-2 text-[11px] text-gray-400">{blockedReason}</p>}
               </section>
             );
           })()}
