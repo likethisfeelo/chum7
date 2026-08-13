@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { BottomSheet } from '@/shared/components/BottomSheet';
+import { SidePanel } from '@/shared/components/SidePanel';
 import { collectMissedChallenges } from '../utils/remedyStatus';
 
 /**
@@ -44,8 +44,9 @@ export function RemedyHubButton() {
         </span>
       </button>
 
-      <BottomSheet isOpen={open} onClose={() => setOpen(false)} title="보완할 인증 ⛅">
-        <div className="px-6 pb-8">
+      {/* 목록형이라 우측 패널로 — 바텀시트는 창 높이가 낮으면 위로 말려 잘린다 */}
+      <SidePanel isOpen={open} onClose={() => setOpen(false)} title="보완할 인증 ⛅">
+        <div className="px-5 py-4 pb-8">
           <p className="text-xs text-gray-500 mb-3">
             놓친 날을 보완 인증으로 복구할 수 있어요. 하나씩 이어가면 돼요.
           </p>
@@ -85,7 +86,7 @@ export function RemedyHubButton() {
             ))}
           </div>
         </div>
-      </BottomSheet>
+      </SidePanel>
     </>
   );
 }
