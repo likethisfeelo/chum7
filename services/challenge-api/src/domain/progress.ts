@@ -63,3 +63,22 @@ export function normalizeProgress(progress: unknown): ProgressRecord[] {
 
   return [...dedupedByDay.values()].sort((a, b) => a.day - b.day);
 }
+
+/**
+ * 보완 대상이 될 수 있는 Day 번호 목록 (1..maxDay).
+ * 진행표 '항목'이 아니라 Day 번호를 순회한다 — 인증을 한 번도 제출하지 않은 날은
+ * 항목 자체가 만들어지지 않아, 항목만 훑으면 통째로 누락된다.
+ * 성공(success) 또는 이미 보완한 날만 제외한다.
+ */
+export function missedDaysFromProgress(progress: ProgressRecord[], maxDay: number): number[] {
+  const byDay = new Map<number, ProgressRecord>();
+  for (const p of progress) byDay.set(p.day, p);
+
+  const missed: number[] = [];
+  for (let day = 1; day <= maxDay; day += 1) {
+    const record = byDay.get(day);
+    if (record && (record.status === 'success' || record.remedied)) continue;
+    missed.push(day);
+  }
+  return missed;
+}

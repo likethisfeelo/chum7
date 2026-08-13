@@ -17,7 +17,7 @@ import {
   remedyScore,
   safeTimezone,
 } from '../domain/day-sync';
-import { normalizeProgress } from '../domain/progress';
+import { missedDaysFromProgress, normalizeProgress } from '../domain/progress';
 import { resolveAllowedTypes, resolvePerformedAt, resolveVerificationType } from '../domain/verification-rules';
 import { getChallenge } from '../repo/challenges';
 import { findMyParticipationByUcId, updateParticipationFields } from '../repo/participations';
@@ -113,17 +113,22 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
   }
 
   const progress = normalizeProgress(userChallenge.progress);
-  const failedDays = progress.filter((p) => p.status !== 'success' && p.day <= regularDays);
+  // 미제출 Day는 진행표에 항목이 없다 — 항목이 아니라 Day 번호 기준으로 실패일을 센다
+  const failedDays = missedDaysFromProgress(progress, regularDays);
   // 취소로 특별 개방된 경우엔 대상 일자 자체가 유효한 실패일이므로 이 가드를 우회한다.
   if (failedDays.length === 0 && !remedyUnlocked) {
     return fail(c, 400, 'REMEDY_NO_FAILED_DAYS', '보완할 실패일이 없습니다');
   }
 
-  const originalDayProgress = progress.find((p) => Number(p.day) === input.originalDay);
-  if (!originalDayProgress || originalDayProgress.status === 'success') {
+  // 항목이 없는(한 번도 제출하지 않은) 날도 유효한 보완 대상이다
+  const originalDayProgress = progress.find((p) => Number(p.day) === input.originalDay) ?? null;
+  if (originalDayProgress?.status === 'success') {
     return fail(c, 400, 'REMEDY_TARGET_INVALID', '보완 대상 day가 실제 실패일이 아닙니다');
   }
-  if (originalDayProgress.remedied) {
+  if (!originalDayProgress && !failedDays.includes(input.originalDay) && !remedyUnlocked) {
+    return fail(c, 400, 'REMEDY_TARGET_INVALID', '보완 대상 day가 실제 실패일이 아닙니다');
+  }
+  if (originalDayProgress?.remedied) {
     return fail(c, 409, 'REMEDY_TARGET_ALREADY_DONE', '이미 보완한 day입니다');
   }
 
@@ -170,7 +175,7 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
   const certDate = certDateFromIso(nowIso, timezone);
 
   const verificationId = randomUUID();
-  const basePoints = Number(originalDayProgress.score || 1);
+  const basePoints = Number(originalDayProgress?.score || 1);
   const scoreEarned = Math.max(1, remedyScore(basePoints));
 
   await putVerification({
@@ -213,19 +218,24 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
     createdAt: nowIso,
   });
 
-  // progress: originalDay를 성공(remedied:true)으로 마킹
+  // progress: originalDay를 성공(remedied:true)으로 마킹.
+  // 미제출 Day는 항목이 없으므로 새로 추가한다 (없으면 보완해도 계속 미인증으로 남는다)
   const updatedProgress: any[] = [...progress];
+  const remediedEntry = {
+    day: input.originalDay,
+    status: 'success',
+    verificationId,
+    timestamp: nowIso,
+    delta: 0,
+    score: scoreEarned,
+    remedied: true,
+  };
   const originalIndex = updatedProgress.findIndex((p) => Number(p.day) === input.originalDay);
   if (originalIndex >= 0) {
-    updatedProgress[originalIndex] = {
-      day: input.originalDay,
-      status: 'success',
-      verificationId,
-      timestamp: nowIso,
-      delta: 0,
-      score: scoreEarned,
-      remedied: true,
-    };
+    updatedProgress[originalIndex] = remediedEntry;
+  } else {
+    updatedProgress.push(remediedEntry);
+    updatedProgress.sort((a, b) => Number(a.day) - Number(b.day));
   }
 
   const totalScore = updatedProgress

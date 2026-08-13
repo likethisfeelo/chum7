@@ -107,10 +107,9 @@ export const RemedyPage = () => {
 
   // 지나간 날짜 중 미완료·미보완분 — 서버 저장 currentDay는 갱신 지연이 있어
   // 시작일 기준 KST 달력 계산(missedDaysOf)을 쓴다 (진행현황 그리드와 동일 기준)
-  const failedDays = useMemo(() => {
-    const days = new Set(missedDaysOf(currentChallenge));
-    return (currentChallenge?.progress || []).filter((p: any) => days.has(Number(p.day)));
-  }, [currentChallenge]);
+  // Day 번호를 그대로 쓴다 — progress 항목으로 되돌리면 '한 번도 제출하지 않은 날'은
+  // 항목이 없어 통째로 사라져 선택지가 0개가 된다(서버는 제출이 있었던 날만 항목 생성).
+  const failedDays = useMemo(() => missedDaysOf(currentChallenge), [currentChallenge]);
 
   // 챌린지가 허용한 인증 방식 — 보완도 일반 인증과 같은 형식 제약을 따른다
   const allowedTypes = useMemo<RemedyMediaType[]>(() => {
@@ -309,14 +308,14 @@ export const RemedyPage = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">보완할 Day 선택</label>
             <div className="flex flex-wrap gap-2">
-              {failedDays.map((day: any) => (
+              {failedDays.map((day: number) => (
                 <button
-                  key={day.day}
+                  key={day}
                   type="button"
-                  onClick={() => setSelectedDay(day.day)}
-                  className={`px-3 py-2 rounded-lg text-sm border ${selectedDay === day.day ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-200'}`}
+                  onClick={() => setSelectedDay(day)}
+                  className={`px-3 py-2 rounded-lg text-sm border ${selectedDay === day ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-200'}`}
                 >
-                  Day {day.day}
+                  Day {day}
                 </button>
               ))}
             </div>
