@@ -72,16 +72,29 @@ export function durationDaysOf(item: any): number {
  * 지나간 날짜 중 미완료·미보완 Day 목록.
  * 오늘은 제외 — 아직 일반 인증으로 채울 수 있는 날이라 보완 대상이 아니다.
  * 기간이 끝나면 점수·완주 판정이 확정되므로 그 뒤로는 대상이 없다(서버 규칙과 동일).
+ *
+ * progress 항목이 아니라 Day 번호(1..오늘-1)를 순회한다 — 서버는 제출이 있었던 날만
+ * progress 항목을 만들기 때문에, 아무것도 올리지 않은 날은 '항목 없음'으로 나타난다.
+ * (항목만 훑으면 한 번도 손대지 않은 날이 통째로 누락돼 보완 대상이 0건이 된다)
  */
 export function missedDaysOf(item: any): number[] {
   const todayDay = computeTodayChallengeDay(item);
   const durationDays = durationDaysOf(item);
   if (todayDay > durationDays) return []; // 종료 — 보완 창이 닫혀 대상 없음
   const bound = Math.min(todayDay, durationDays);
-  return (Array.isArray(item?.progress) ? item.progress : [])
-    .filter((p: any) => Number(p?.day) < bound && p?.status !== 'success' && !p?.remedied)
-    .map((p: any) => Number(p.day))
-    .sort((a: number, b: number) => a - b);
+
+  const byDay = new Map<number, any>();
+  for (const p of Array.isArray(item?.progress) ? item.progress : []) {
+    byDay.set(Number(p?.day), p);
+  }
+
+  const missed: number[] = [];
+  for (let day = 1; day < bound; day += 1) {
+    const p = byDay.get(day);
+    if (p && (p.status === 'success' || p.remedied)) continue; // 완료 또는 보완 완료
+    missed.push(day);
+  }
+  return missed;
 }
 
 export interface MissedChallenge {

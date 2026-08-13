@@ -389,6 +389,8 @@ export const ChallengeFeedPage = () => {
   const [openPersonalFeed, setOpenPersonalFeed] = useState(true);
   const [expandedLeaderQuestId, setExpandedLeaderQuestId] = useState<string | null>(null);
   const [todaySubmittedQuestIds, setTodaySubmittedQuestIds] = useState<Set<string>>(new Set());
+  // 오늘 인증 완료 후 '추가 인증' 폼 펼침 (기본 접힘 — 작은 텍스트 링크로만 노출)
+  const [showExtraForm, setShowExtraForm] = useState(false);
   const [isProposalFormOpen, setIsProposalFormOpen] = useState(false);
   // allowedVerificationTypes 제안 필드는 신규 API v1 미이식 (challenge-api PORTING.md §7-e) — 폼에서 제외
   const [proposalForm, setProposalForm] = useState({
@@ -1712,6 +1714,42 @@ export const ChallengeFeedPage = () => {
             <section className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
               <h3 className="font-bold text-emerald-800">✅ 오늘 인증 완료!</h3>
               <p className="text-sm text-emerald-700 mt-1">이제 피드에서 리액션과 댓글로 서로 힘을 나눠줄 수 있어요.</p>
+
+              {/* 추가 인증 — 접힌 상태에선 작은 텍스트 링크만. 추가 기록을 남겨야
+                  리더에게 '특정 날짜 인증으로 인정' 요청을 보낼 수 있다. */}
+              {userChallenge && !isGaveUp && (
+                <div className="mt-3 pt-3 border-t border-emerald-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowExtraForm((v) => !v)}
+                    className="text-xs font-medium text-emerald-700 hover:text-emerald-900 underline underline-offset-2"
+                  >
+                    {showExtraForm ? "추가 인증 접기 ▲" : "➕ 추가 인증하기"}
+                  </button>
+                  {!showExtraForm && (
+                    <p className="mt-1 text-[11px] text-emerald-600/80">
+                      오늘 더 실천했거나, 놓친 날의 기록을 남겨 인정 요청을 하려면 눌러주세요
+                    </p>
+                  )}
+                  {showExtraForm && (
+                    <div className="mt-3">
+                      <p className="mb-2 text-[11px] text-emerald-700/90">
+                        추가 기록은 점수에 반영되지 않아요. 올린 뒤 기록 탭에서 리더에게
+                        특정 날짜 인증으로 인정해달라고 요청할 수 있어요.
+                      </p>
+                      <InlineVerificationForm
+                        userChallenge={userChallenge}
+                        allowedVerificationTypes={challengeData?.allowedVerificationTypes}
+                        defaultExpanded
+                        onSuccess={(data) => {
+                          setShowExtraForm(false);
+                          handleVerificationSuccess(data);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
           )}
 
