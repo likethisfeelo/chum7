@@ -277,6 +277,20 @@ function isSameKstDate(iso?: string | null): boolean {
   return toKstKey(d) === toKstKey(now);
 }
 
+/** 게시물 시각 표기 — KST 기준 'M/D 오전 h:mm' (진행 현황 Day 펼침 목록용) */
+function formatKstTime(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 // getKstDateOnly / computeTodayChallengeDay 는 remedyStatus 유틸로 이관 (보완 표면과 공용)
 
 export const ChallengeFeedPage = () => {
@@ -397,6 +411,8 @@ export const ChallengeFeedPage = () => {
   const [todaySubmittedQuestIds, setTodaySubmittedQuestIds] = useState<Set<string>>(new Set());
   // 오늘 인증 완료 후 '추가 인증' 폼 펼침 (기본 접힘 — 작은 텍스트 링크로만 노출)
   const [showExtraForm, setShowExtraForm] = useState(false);
+  // 진행 현황에서 선택한 Day — 그 날의 내 게시물을 아래로 펼친다
+  const [selectedProgressDay, setSelectedProgressDay] = useState<number | null>(null);
   const [isProposalFormOpen, setIsProposalFormOpen] = useState(false);
   // allowedVerificationTypes 제안 필드는 신규 API v1 미이식 (challenge-api PORTING.md §7-e) — 폼에서 제외
   const [proposalForm, setProposalForm] = useState({
@@ -1779,9 +1795,14 @@ export const ChallengeFeedPage = () => {
                       (isToday && !isDone && leaderQuests.length > 0 && someLeaderQuestsDoneToday);
                   const isPastMissed = day < todayDay && !isDone;
 
+                  const isSelected = selectedProgressDay === day;
+
                   return (
-                    <div
+                    <button
                       key={day}
+                      type="button"
+                      onClick={() => setSelectedProgressDay(isSelected ? null : day)}
+                      aria-pressed={isSelected}
                       title={
                         isDone && isToday ? `Day ${day} 완료 (오늘)` :
                         isDone ? `Day ${day} 완료` :
@@ -1790,7 +1811,8 @@ export const ChallengeFeedPage = () => {
                         `Day ${day}`
                       }
                       className={[
-                        "w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-colors",
+                        "w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-colors cursor-pointer hover:opacity-80",
+                        isSelected ? "ring-2 ring-offset-2 ring-gray-900" : "",
                         isDone && isToday
                           ? "bg-emerald-500 text-white ring-2 ring-offset-1 ring-blue-400"
                           : isDone
@@ -1805,10 +1827,97 @@ export const ChallengeFeedPage = () => {
                       ].join(" ")}
                     >
                       {isDone ? "✓" : day}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
+
+              {/* 선택한 Day의 내 게시물 — 동그라미를 누르면 아래로 펼쳐진다 */}
+              {selectedProgressDay !== null && (() => {
+                const dayPosts = (myChallengeVerifications as any[]).filter(
+                  (v) => Number(v?.day) === selectedProgressDay,
+                );
+                return (
+                  <div className="mt-3 rounded-xl border border-gray-100 bg-white/70 overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
+                      <p className="text-xs font-bold text-gray-700">Day {selectedProgressDay} 내 게시물</p>
+                      <span className="ml-auto text-[10px] text-gray-400">{dayPosts.length}건</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProgressDay(null)}
+                        className="text-[11px] text-gray-400 hover:text-gray-600"
+                      >
+                        닫기
+                      </button>
+                    </div>
+
+                    {dayPosts.length === 0 ? (
+                      <p className="px-3 py-4 text-xs text-gray-400">
+                        이 날에 올린 게시물이 없어요.
+                        {selectedProgressDay < todayDay && " 보완 인증으로 채울 수 있어요."}
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-gray-50">
+                        {dayPosts.map((v: any) => (
+                          <li key={v.verificationId} className="flex gap-2.5 p-3">
+                            {v.imageUrl && (
+                              <img
+                                src={resolveMediaUrl(v.imageUrl)}
+                                alt=""
+                                loading="lazy"
+                                className="h-12 w-12 flex-shrink-0 rounded-lg object-cover bg-gray-100"
+                              />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {v.isExtra && (
+                                  <span className="text-[9px] px-1 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                    ➕ 추가 기록
+                                  </span>
+                                )}
+                                {isRemedyVerification(v) && (
+                                  <span className="text-[9px] px-1 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                                    🔄 보완
+                                  </span>
+                                )}
+                                {v.rejectedByLeader && (
+                                  <span className="text-[9px] px-1 rounded bg-rose-50 text-rose-600 border border-rose-200">
+                                    반려됨
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-gray-400">
+                                  {formatKstTime(v.performedAt || v.createdAt)}
+                                </span>
+                              </div>
+                              <p className="mt-0.5 text-xs text-gray-600 line-clamp-2">
+                                {v.todayNote || v.linkUrl || "(내용 없음)"}
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {/* 인증 수정 요청 — 관리 탭(내 게시물 관리)에서 리더에게 신청 */}
+                    <div className="border-t border-gray-100 p-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMainTab("manage");
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        className="w-full py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold hover:bg-indigo-100 transition-colors"
+                      >
+                        ✏️ 인증 수정 요청 (관리 탭에서 리더에게 신청) →
+                      </button>
+                      <p className="mt-1.5 text-[11px] text-gray-400">
+                        인정되지 않은 날은 게시물을 지정해 인정 요청을, 잘못 카운트된 건은 인증 취소를 할 수 있어요.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" /> 인증완료</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-100 ring-1 ring-blue-400 inline-block" /> 오늘</span>
