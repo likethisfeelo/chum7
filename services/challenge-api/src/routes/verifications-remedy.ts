@@ -8,7 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import type { AppEnv, ApiContext } from '@chum7/api-kit';
-import { ok, fail } from '@chum7/api-kit';
+import { ok, fail, publishEvent } from '@chum7/api-kit';
 import { remedyVerificationSchema } from '../schemas';
 import {
   calculateChallengeDay,
@@ -185,7 +185,9 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
       day: effectiveCurrentDay,
       verificationId,
       createdAt: nowIso,
-      isPublicFeed: false, // 보완 인증은 비공개 (레거시 isPublic:'false' 승계)
+      // 보완도 일반 인증과 동일하게 공개 피드에 올린다 (기본 공개).
+      // 과거엔 무조건 비공개라 챌린지 피드·마당에서 보이지 않고 운영탭에만 남았다.
+      isPublicFeed: input.isPublic,
     }),
     verificationId,
     userId,
@@ -212,7 +214,7 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
     score: scoreEarned,
     scoreEarned,
     cheerCount: 0,
-    isPublic: 'false',
+    isPublic: input.isPublic ? 'true' : 'false',
     isAnonymous: true,
     originalDay: input.originalDay,
     createdAt: nowIso,
@@ -246,6 +248,16 @@ verificationRemedyRoutes.post('/remedy', async (c) => {
     progress: updatedProgress,
     score: totalScore,
     updatedAt: nowIso,
+  });
+
+  // 마당 즉시 변환 트리거 — 일반 인증과 동일 경로 (day는 인증 sk와 같은 값이어야 조회된다)
+  await publishEvent('verification.submitted', {
+    verificationId,
+    userId,
+    challengeId: userChallenge.challengeId,
+    day: effectiveCurrentDay,
+    isDayComplete: true,
+    isPublic: input.isPublic === true,
   });
 
   let remainingRemedyDays: number;

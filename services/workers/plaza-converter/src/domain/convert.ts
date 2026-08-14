@@ -70,11 +70,16 @@ export type ConvertDecision =
   | { convert: false; reason: 'not_normal_type' | 'already_converted' };
 
 /**
- * 변환 대상 판정 — 레거시 승계: type=normal만, 변환 마커 있으면 스킵.
+ * 변환 대상 판정 — 일반(normal)·보완(remedy) 인증만, 변환 마커 있으면 스킵.
+ * 보완도 실제 실천 기록이라 마당에 노출한다(과거엔 normal만 허용해 제외됐다).
  * (공개 여부는 gsi2 VFPUB# 파티션 자체가 보장 — 공개 인증만 키가 기록된다.)
  */
+const CONVERTIBLE_TYPES = new Set(['normal', 'remedy']);
+
 export function decideConvert(verification: Record<string, any>): ConvertDecision {
-  if (verification.type !== 'normal') return { convert: false, reason: 'not_normal_type' };
+  if (!CONVERTIBLE_TYPES.has(String(verification.type))) {
+    return { convert: false, reason: 'not_normal_type' };
+  }
   if (verification.plazaConvertedAt) return { convert: false, reason: 'already_converted' };
   return { convert: true };
 }
