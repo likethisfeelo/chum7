@@ -150,6 +150,8 @@ export const remedyVerificationSchema = z.object({
   tomorrowPromise: z.string().max(500).optional(),
   completedAt: z.string().datetime().optional(),
   practiceAt: z.string().datetime().optional(),
+  // 보완도 일반 인증과 같은 공개 정책을 따른다 (기본 공개 — 챌린지 피드·마당 노출)
+  isPublic: z.boolean().default(true),
 });
 export type RemedyVerificationInput = z.infer<typeof remedyVerificationSchema>;
 

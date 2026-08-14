@@ -56,7 +56,7 @@ describe('decideConvert (레거시 스킵 규칙)', () => {
   test('normal + unconverted converts', () => {
     expect(decideConvert(baseVerification)).toEqual({ convert: true });
   });
-  test('non-normal types are skipped (extra/remedy 등)', () => {
+  test('변환 대상 외 타입은 스킵 (extra 등 — remedy는 아래 describe에서 허용 확인)', () => {
     expect(decideConvert({ ...baseVerification, type: 'extra' }))
       .toEqual({ convert: false, reason: 'not_normal_type' });
   });
@@ -173,5 +173,28 @@ describe('hashtag registry item (social repo/hashtags 계약)', () => {
     expect(animalIconFor('u1')).toBe(animalIconFor('u1'));
     const animals = ['🐰', '🐻', '🦊', '🐼', '🦁', '🐯', '🐨', '🦦'];
     expect(animals).toContain(animalIconFor('someone-else'));
+  });
+});
+
+/**
+ * 회귀 방지: 보완(remedy) 인증은 type이 'normal'이 아니라는 이유로 마당 변환에서
+ * 제외돼, 챌린지 피드·마당에 보이지 않고 리더 운영탭에만 남았다.
+ */
+describe('decideConvert — 보완 인증 포함', () => {
+  test('remedy 타입도 변환 대상', () => {
+    expect(decideConvert({ ...baseVerification, type: 'remedy' })).toEqual({ convert: true });
+  });
+
+  test('remedy 도 이미 변환됐으면 스킵', () => {
+    expect(
+      decideConvert({ ...baseVerification, type: 'remedy', plazaConvertedAt: '2026-07-21T00:00:00.000Z' }),
+    ).toEqual({ convert: false, reason: 'already_converted' });
+  });
+
+  test('그 외 타입(extra 등)은 여전히 제외', () => {
+    expect(decideConvert({ ...baseVerification, type: 'extra' })).toEqual({
+      convert: false,
+      reason: 'not_normal_type',
+    });
   });
 });
