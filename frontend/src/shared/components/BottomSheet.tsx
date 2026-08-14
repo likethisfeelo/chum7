@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiX } from 'react-icons/fi';
 
@@ -17,7 +18,10 @@ export const BottomSheet = ({
   children,
   maxHeight = '90vh',
 }: BottomSheetProps) => {
-  return (
+  // document.body 포털 필수 — backdrop-filter/transform 을 가진 조상(glass-header·
+  // glass-card 등)은 position:fixed 의 기준 박스가 되어, 그 안에서 렌더하면 시트가
+  // 조상 크기의 작은 박스에 갇힌다.
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <>
@@ -61,6 +65,7 @@ export const BottomSheet = ({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 };
