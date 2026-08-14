@@ -1,4 +1,5 @@
 import { ReactNode, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiX } from 'react-icons/fi';
 
@@ -16,6 +17,10 @@ interface SidePanelProps {
  * 바텀시트는 창 높이가 낮으면(데스크톱 좁은 창·PWA 창) 본문이 위로 말려 올라가
  * 아래쪽만 겨우 보이는 문제가 있어, 목록형 콘텐츠는 이 패널을 쓴다.
  * 높이는 항상 화면 전체를 쓰고 본문만 스크롤한다.
+ *
+ * 반드시 document.body 로 포털한다 — backdrop-filter/transform 을 가진 조상
+ * (glass-header·glass-card 등)은 position:fixed 의 기준 박스가 되어, 그 안에서
+ * 렌더하면 패널이 헤더 크기의 작은 박스로 갇힌다.
  */
 export const SidePanel = ({ isOpen, onClose, title, children, maxWidth = 380 }: SidePanelProps) => {
   // ESC 로 닫기 + 열려 있는 동안 배경 스크롤 잠금
@@ -33,7 +38,7 @@ export const SidePanel = ({ isOpen, onClose, title, children, maxWidth = 380 }: 
     };
   }, [isOpen, onClose]);
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <>
@@ -76,6 +81,7 @@ export const SidePanel = ({ isOpen, onClose, title, children, maxWidth = 380 }: 
           </motion.aside>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 };
