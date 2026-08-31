@@ -22,6 +22,7 @@ import { interestRoutes } from './routes/interest';
 import { questProposalRoutes } from './routes/quest-proposals';
 import { moderationRoutes } from './routes/moderation';
 import { completionRequestRoutes } from './routes/completion-requests';
+import { liveRoutes } from './routes/live';
 
 const app = createApi({ service: 'challenge-api' });
 
@@ -53,6 +54,7 @@ app.route('/c', participationRoutes);
 app.route('/c/:challengeId/quests', questRoutes);
 app.route('/c/:challengeId/leader', leaderRoutes);
 app.route('/c/:challengeId/completion-requests', completionRequestRoutes);
+app.route('/c/:challengeId/live', liveRoutes);
 
 // 관리자 모더레이션 (그룹 게이트는 라우터 내부)
 app.route('/c/mod', moderationRoutes);

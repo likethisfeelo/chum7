@@ -18,6 +18,7 @@ import { ChallengePreviewPage } from '@/features/challenge/pages/ChallengePrevie
 import { RewardProductPage } from '@/features/challenge/pages/RewardProductPage';
 import { PublicProfilePage } from '@/features/personal-feed/pages/PublicProfilePage';
 import { AboutChumPage } from '@/features/about/pages/AboutChumPage';
+import { LiveRoomPage } from '@/features/live/pages/LiveRoomPage';
 import { ChallengeCreatePage } from '@/features/challenge/pages/ChallengeCreatePage';
 import { ChallengeEditPage } from '@/features/challenge/pages/ChallengeEditPage';
 import { ChallengeFeedPage } from '@/features/challenge-feed/pages/ChallengeFeedPage';
@@ -161,6 +162,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <OnboardingPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* 라이브 음성방 — 풀스크린 (탭바 없음), 참여자 검증은 서버(REST+WS)가 수행 */}
+        <Route
+          path="/live/:challengeId/:roomId"
+          element={
+            <ProtectedRoute>
+              <LiveRoomPage />
             </ProtectedRoute>
           }
         />

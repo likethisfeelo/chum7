@@ -7,7 +7,7 @@
  *  읽음(DM)   pk=`READ#<roomKey>`  sk=`USER#<userId>`          (lastReadAt)
  * 연결 TTL 2h. 메시지 TTL: 그룹 24h(임시)·DM 90d(보존).
  */
-import { DeleteCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DeleteCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from '@chum7/api-kit';
 
 const TABLE = 'CHAT_TABLE';
@@ -32,6 +32,10 @@ export interface Connection {
   userId: string;
   displayName: string;
   isLeader: boolean;
+  /** 라이브 방 전용 — 발언 역할 (speaker/listener) */
+  role?: string;
+  /** 라이브 방 전용 — 방 개설자 여부 */
+  isHost?: boolean;
 }
 
 export interface ChatMessage {
@@ -49,6 +53,10 @@ export async function saveConnection(
   nowMs: number,
 ): Promise<void> {
   const ttl = epochSeconds(nowMs) + CONNECTION_TTL_SECONDS;
+  const liveAttrs = {
+    ...(conn.role !== undefined ? { role: conn.role } : {}),
+    ...(conn.isHost !== undefined ? { isHost: conn.isHost } : {}),
+  };
   await Promise.all([
     docClient.send(
       new PutCommand({
@@ -60,6 +68,7 @@ export async function saveConnection(
           userId: conn.userId,
           displayName: conn.displayName,
           isLeader: conn.isLeader,
+          ...liveAttrs,
           ttl,
         },
       }),
@@ -74,6 +83,7 @@ export async function saveConnection(
           userId: conn.userId,
           displayName: conn.displayName,
           isLeader: conn.isLeader,
+          ...liveAttrs,
           ttl,
         },
       }),
@@ -81,11 +91,31 @@ export async function saveConnection(
   ]);
 }
 
+/** 라이브 방 — 발언 역할 변경 (ROOM# 아이템만, 로스터 재조회 기준) */
+export async function updateConnectionRole(
+  roomKey: string,
+  connectionId: string,
+  role: 'speaker' | 'listener',
+): Promise<void> {
+  await docClient.send(
+    new UpdateCommand({
+      TableName: tableName(TABLE),
+      Key: { pk: roomPk(roomKey), sk: connSk(connectionId) },
+      UpdateExpression: 'SET #r = :role',
+      ConditionExpression: 'attribute_exists(sk)',
+      ExpressionAttributeNames: { '#r': 'role' },
+      ExpressionAttributeValues: { ':role': role },
+    }),
+  );
+}
+
 export interface ConnectionMeta {
   roomKey: string;
   userId: string;
   displayName: string;
   isLeader: boolean;
+  role?: string;
+  isHost?: boolean;
 }
 
 /** 연결 역참조 조회. */
@@ -106,6 +136,8 @@ export async function getConnectionMeta(
     userId: meta.userId,
     displayName: meta.displayName,
     isLeader: Boolean(meta.isLeader),
+    ...(typeof meta.role === 'string' ? { role: meta.role } : {}),
+    ...(meta.isHost !== undefined ? { isHost: Boolean(meta.isHost) } : {}),
   };
 }
 
@@ -160,6 +192,8 @@ export async function listRoomConnections(roomKey: string): Promise<Connection[]
         userId: item.userId,
         displayName: item.displayName,
         isLeader: Boolean(item.isLeader),
+        ...(typeof item.role === 'string' ? { role: item.role } : {}),
+        ...(item.isHost !== undefined ? { isHost: Boolean(item.isHost) } : {}),
       });
     }
     lastKey = res.LastEvaluatedKey;

@@ -1,7 +1,7 @@
 import { apiClient } from '@/lib/api-client';
 
 export interface ReportTarget {
-  targetType: 'verification' | 'plaza' | 'comment';
+  targetType: 'verification' | 'plaza' | 'comment' | 'live_room';
   targetId: string;
   challengeId?: string | null;
   plazaPostId?: string | null;

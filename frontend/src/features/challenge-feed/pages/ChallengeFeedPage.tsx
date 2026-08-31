@@ -5,6 +5,7 @@ import { FiArrowLeft } from "react-icons/fi";
 import { useAuthStore } from "@/stores/authStore";
 import { LeaderOpsTab } from "../components/LeaderOpsTab";
 import { ParticipantRequestsTab } from "../components/ParticipantRequestsTab";
+import { LiveRoomBanner } from "@/features/live/components/LiveRoomBanner";
 import { VerificationComments } from "../components/VerificationComments";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api-client";
@@ -1707,6 +1708,11 @@ export const ChallengeFeedPage = () => {
 
           {/* 채팅방 — 준비중 챌린지 참여자 전용 (오늘의 인증 바로 위) */}
           {challengeId && canChat && <ChallengeChatPanel challengeId={challengeId} />}
+
+          {/* 라이브 음성방 — 진행 중이면 입장 배너, 리더·매니저는 개설 버튼 */}
+          {challengeId && (userChallenge || isCreator || isManager) && !isGaveUp && (
+            <LiveRoomBanner challengeId={challengeId} canHost={isCreator || isManager} />
+          )}
 
           {/* 퀘스트 없을 때 일반 인증 폼 — 챌린지 시작 후에만 노출 */}
           {isActive &&

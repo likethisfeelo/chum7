@@ -159,6 +159,7 @@ export class ApiStack extends cdk.Stack {
     stateful.tables.users.grantReadData(this.challengeApi); // @handle 해석·featured 목록 read-only
     stateful.uploadsBucket.grantPut(this.challengeApi); // presigned PUT 서명용
     stateful.uploadsBucket.grantRead(this.challengeApi);
+    stateful.uploadsBucket.grantDelete(this.challengeApi); // 라이브 녹음 원본 삭제 (개설자 요청)
     stateful.anonSaltSecret.grantRead(this.challengeApi); // 인증글 일일 활동명 생성
     // 유료 참여 시 paid 주문 검증 — 읽기 전용 (COMMERCE_V0.md)
     stateful.tables.commerce.grantReadData(this.challengeApi);

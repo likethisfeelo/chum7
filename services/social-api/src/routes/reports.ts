@@ -67,7 +67,7 @@ reportRoutes.post('/', async (c) => {
       contentPreview = preview(comment?.content);
       targetOwnerId = comment?.userId ?? null;
       autoHidden = await setCommentHidden(input.plazaPostId!, sk, true, { autoHiddenByReport: true });
-    } else {
+    } else if (input.targetType === 'verification') {
       // verification — 마당의 courtyard 사본만 숨김(챌린지 피드 원본은 관리자 확정 시).
       const courtyardId = `courtyard-${input.targetId}`;
       const copy = await getPost(courtyardId);

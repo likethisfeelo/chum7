@@ -10,6 +10,7 @@ const REASONS: Array<{ key: string; label: string }> = [
   { key: 'violence', label: '폭력/위협' },
   { key: 'hate', label: '혐오 발언' },
   { key: 'misinfo', label: '허위정보' },
+  { key: 'illegal_recording', label: '무단 녹음·녹화·유포 의심' },
   { key: 'other', label: '기타' },
 ];
 
@@ -17,6 +18,7 @@ const TARGET_LABEL: Record<ReportTarget['targetType'], string> = {
   verification: '인증',
   plaza: '마당 게시물',
   comment: '댓글',
+  live_room: '음성방',
 };
 
 export function ReportModal({

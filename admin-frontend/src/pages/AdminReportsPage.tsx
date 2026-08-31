@@ -17,6 +17,7 @@ const REASON_LABEL: Record<string, string> = {
   hate: '혐오 발언',
   misinfo: '허위정보',
   deletion_request: '마당 삭제 요청',
+  illegal_recording: '무단 녹음·녹화·유포 의심',
   other: '기타',
 };
 
@@ -24,6 +25,7 @@ const TARGET_LABEL: Record<string, string> = {
   verification: '퀘스트 인증',
   plaza: '마당 게시물',
   comment: '댓글',
+  live_room: '음성방',
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -35,7 +37,7 @@ const STATUS_BADGE: Record<string, string> = {
 type Report = {
   reportId: string;
   status: string;
-  targetType: 'verification' | 'plaza' | 'comment';
+  targetType: 'verification' | 'plaza' | 'comment' | 'live_room';
   targetId: string;
   challengeId?: string | null;
   plazaPostId?: string | null;

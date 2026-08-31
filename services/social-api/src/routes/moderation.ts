@@ -40,7 +40,7 @@ moderationRoutes.put('/reports/resolve-by-target', async (c) => {
   const targetType = String(b.targetType || '');
   const targetId = String(b.targetId || '');
   const status = b.status === 'dismissed' ? 'dismissed' : b.status === 'actioned' ? 'actioned' : null;
-  if (!['verification', 'plaza', 'comment'].includes(targetType) || !targetId || !status) {
+  if (!['verification', 'plaza', 'comment', 'live_room'].includes(targetType) || !targetId || !status) {
     return fail(c, 400, 'VALIDATION_ERROR', 'targetType·targetId·status가 필요합니다');
   }
   const pending = await listPendingReportsByTarget(targetType, targetId);
@@ -64,8 +64,8 @@ moderationRoutes.put('/reports/resolve-by-target', async (c) => {
           await setCommentHidden(String(first.plazaPostId), sk, status === 'actioned');
         }
       }
-    } else {
-      // plaza 원글 또는 verification의 courtyard 사본
+    } else if (targetType === 'plaza' || targetType === 'verification') {
+      // plaza 원글 또는 verification의 courtyard 사본 (live_room은 자동숨김 대상이 아님 — 정리 불필요)
       const postId = targetType === 'plaza' ? targetId : `courtyard-${targetId}`;
       const post = await getPost(postId);
       if (post?.autoHiddenByReport === true) {
