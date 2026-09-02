@@ -67,9 +67,14 @@ export function LiveRoomBanner({ challengeId, canHost }: { challengeId: string; 
         <button
           type="button"
           onClick={() => setShowCreate(true)}
-          className="w-full py-3 rounded-2xl border border-dashed border-gray-300 text-sm text-gray-500 hover:border-primary-400 hover:text-primary-600 transition-colors"
+          className="w-full flex items-center gap-3 rounded-2xl bg-gradient-to-r from-gray-900 to-gray-700 p-4 text-left shadow-md hover:from-gray-800 hover:to-gray-600 transition-colors"
         >
-          🎙 음성방 열기
+          <span className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center text-xl flex-shrink-0">🎙</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-white">음성방 열기</p>
+            <p className="text-[11px] text-white/60 mt-0.5">참여자들과 실시간으로 이야기해요 · 최대 10명</p>
+          </div>
+          <span className="text-white/60 text-sm">→</span>
         </button>
       ) : null}
 

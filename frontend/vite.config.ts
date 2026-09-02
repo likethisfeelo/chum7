@@ -5,6 +5,17 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  // 배포 반영 확인용 빌드 버전 — KST 빌드 시각으로 자동 생성 (예: v.0814-1532).
+  // 하드코딩 문자열은 배포해도 바뀌지 않아 "새 번들이 떴는지"를 화면에서 판별할 수 없었다.
+  define: {
+    __BUILD_VERSION__: JSON.stringify(
+      (() => {
+        const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+        const p = (n: number) => String(n).padStart(2, "0");
+        return `v.${p(kst.getUTCMonth() + 1)}${p(kst.getUTCDate())}-${p(kst.getUTCHours())}${p(kst.getUTCMinutes())}`;
+      })(),
+    ),
+  },
   plugins: [
     react(),
     VitePWA({

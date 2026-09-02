@@ -1141,6 +1141,13 @@ export const ChallengeFeedPage = () => {
           })()}
         </div>
 
+        {/* 라이브 음성방 — 탭과 무관하게 항상 보이는 위치(탭바 바로 아래). 진행 중이면 입장 배너, 리더·매니저는 개설 버튼 */}
+        {challengeId && (userChallenge || isCreator || isManager) && !isGaveUp && (
+          <div className="px-4 pt-3">
+            <LiveRoomBanner challengeId={challengeId} canHost={isCreator || isManager} />
+          </div>
+        )}
+
         {/* 중도 포기 확인 모달 — 3단계 확인 (리더/참여자 분기) */}
         {showGiveUpConfirm && (() => {
           const steps = isLeader
@@ -1708,11 +1715,6 @@ export const ChallengeFeedPage = () => {
 
           {/* 채팅방 — 준비중 챌린지 참여자 전용 (오늘의 인증 바로 위) */}
           {challengeId && canChat && <ChallengeChatPanel challengeId={challengeId} />}
-
-          {/* 라이브 음성방 — 진행 중이면 입장 배너, 리더·매니저는 개설 버튼 */}
-          {challengeId && (userChallenge || isCreator || isManager) && !isGaveUp && (
-            <LiveRoomBanner challengeId={challengeId} canHost={isCreator || isManager} />
-          )}
 
           {/* 퀘스트 없을 때 일반 인증 폼 — 챌린지 시작 후에만 노출 */}
           {isActive &&

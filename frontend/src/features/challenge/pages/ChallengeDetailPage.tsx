@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { JoinWizardBottomSheet } from '@/features/challenge/components/JoinWizardBottomSheet';
 import { WizardFormState } from '@/features/challenge/components/join-wizard/types';
 import { useAuthStore } from '@/stores/authStore';
+import { LiveRoomBanner } from '@/features/live/components/LiveRoomBanner';
 import { challengeApi } from '@/features/challenge/api/challengeApi';
 import { SLUG_TO_LABEL } from '@/features/challenge/constants/categories';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
@@ -671,7 +672,19 @@ export const ChallengeDetailPage = () => {
         </Button>
 
         {(alreadyJoined || isCreator) && (
-          <div className="mt-3">
+          <div className="mt-3 space-y-3">
+            {/* 라이브 음성방 — 리더가 착지하는 이 페이지에도 진입점을 둔다 (피드 페이지에만 있으면 못 찾음) */}
+            {challengeId && (
+              <LiveRoomBanner
+                challengeId={challengeId}
+                canHost={
+                  isCreator ||
+                  (Array.isArray(challenge.managerIds) &&
+                    Boolean(user?.userId) &&
+                    challenge.managerIds.map(String).includes(String(user?.userId)))
+                }
+              />
+            )}
             <Button
               fullWidth
               size="lg"

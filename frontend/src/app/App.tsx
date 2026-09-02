@@ -86,8 +86,9 @@ function ThemeApplier() {
   return null;
 }
 
-// 배포 반영 확인용 빌드 버전 마커 — 화면 좌하단 고정, 터치 방해 없음
-const BUILD_VERSION = 'v.0806';
+// 배포 반영 확인용 빌드 버전 마커 — 화면 좌하단 고정, 터치 방해 없음.
+// 값은 vite.config.ts define으로 빌드 시각(KST)에서 자동 생성 — 배포마다 달라진다.
+const BUILD_VERSION = __BUILD_VERSION__;
 
 function BuildVersionBadge() {
   return (

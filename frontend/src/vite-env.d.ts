@@ -15,3 +15,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** vite.config.ts define — 빌드 시각 기반 버전 문자열 (배포 반영 확인용) */
+declare const __BUILD_VERSION__: string;
