@@ -47,12 +47,39 @@ if (!apiToken) {
 const secretId = `chme2-${stage}/turn`;
 const region = opt('region', 'ap-northeast-2');
 const tmp = join(root, `.turn-${stage}.tmp.json`);
+// Windows 경로의 역슬래시는 AWS CLI file:// 파싱에서 문제가 될 수 있어 정규화
+const tmpUrl = `file://${tmp.replace(/\\/g, '/')}`;
+
+/** AWS CLI 실행 — 실패 시 stderr를 그대로 돌려준다(원인 파악용). */
+function awsTry(command) {
+  try {
+    execSync(command, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, message: String(err?.stderr || err?.message || err).trim() };
+  }
+}
+
 writeFileSync(tmp, JSON.stringify({ tokenId, apiToken }));
 try {
-  execSync(
-    `aws secretsmanager put-secret-value --secret-id "${secretId}" --secret-string file://${tmp} --region ${region}`,
-    { stdio: 'inherit' },
+  let result = awsTry(
+    `aws secretsmanager put-secret-value --secret-id "${secretId}" --secret-string ${tmpUrl} --region ${region}`,
   );
+
+  if (!result.ok) {
+    console.error(`\n❌ 주입 실패\n${result.message}\n`);
+    // 시크릿 셸은 CDK(infra2 stateful)가 만든다 — 여기서 create-secret 하면 이후 CDK 배포가
+    // 이름 충돌로 실패하므로, 생성하지 않고 배포 순서를 안내한다.
+    if (/ResourceNotFoundException|can't find the specified secret/i.test(result.message)) {
+      console.error(
+        `   → ${secretId} 가 아직 없습니다. infra2를 먼저 배포한 뒤 다시 실행하세요.\n` +
+          `      npm run deploy -- --stage ${stage}`,
+      );
+    } else if (/ExpiredToken|InvalidClientTokenId|Unable to locate credentials|AccessDenied/i.test(result.message)) {
+      console.error('   → AWS 자격증명 문제입니다. aws sts get-caller-identity 로 로그인 상태를 확인하세요.');
+    }
+    process.exit(1);
+  }
 } finally {
   rmSync(tmp, { force: true });
 }
