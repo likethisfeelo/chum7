@@ -15,6 +15,7 @@
     "ops:set-vapid": "node scripts/ops/set-vapid.mjs",
     "ops:set-anon-salt": "node scripts/ops/set-anon-salt.mjs",
     "ops:set-oauth": "node scripts/ops/set-oauth.mjs",
+    "ops:set-turn": "node scripts/ops/set-turn.mjs",
     "backfill:challenge-layer-policy": "node scripts/backfill-challenge-layer-policy.mjs"
   },
   "devDependencies": {

@@ -38,9 +38,9 @@ describe('infra2 stacks', () => {
     }
   });
 
-  it('StatefulStack — 시크릿 셸 6종 (PG/본인확인/VAPID/익명솔트/OAuth Google·Kakao)', () => {
-    dev.stateful.resourceCountIs('AWS::SecretsManager::Secret', 6);
-    for (const suffix of ['oauth-google', 'oauth-kakao']) {
+  it('StatefulStack — 시크릿 셸 7종 (PG/본인확인/VAPID/익명솔트/OAuth Google·Kakao/TURN)', () => {
+    dev.stateful.resourceCountIs('AWS::SecretsManager::Secret', 7);
+    for (const suffix of ['oauth-google', 'oauth-kakao', 'turn']) {
       dev.stateful.hasResourceProperties('AWS::SecretsManager::Secret', {
         Name: `chme2-dev/${suffix}`,
       });

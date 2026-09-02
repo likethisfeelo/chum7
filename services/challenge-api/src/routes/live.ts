@@ -43,6 +43,7 @@ import {
   putLiveRoom,
 } from '../repo/live';
 import { stripKeys } from '../repo/shared';
+import { getTurnIceServers } from '../repo/turn';
 
 export const liveRoutes = new Hono<AppEnv>();
 
@@ -182,10 +183,13 @@ liveRoutes.get('/:roomId', async (c) => {
   const room = await getLiveRoom(challengeId, roomId);
   if (!room) return fail(c, 404, 'LIVE_ROOM_NOT_FOUND', '방을 찾을 수 없습니다');
   const { userId } = c.get('authUser')!;
+  // TURN 자격증명은 단기라 방 입장 시점에 발급해 내려준다 (미설정이면 null → 클라이언트는 STUN만)
+  const iceServers = await getTurnIceServers();
   return ok(c, {
     room: roomView(room, new Date()),
     isHost: String(room.hostUserId) === userId,
     canManage: access!.isHostRole,
+    iceServers,
   });
 });
 

@@ -11,14 +11,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const WS_URL = import.meta.env.VITE_WS_URL as string | undefined;
 
-function iceServers(): RTCIceServer[] {
+/**
+ * ICE 서버 구성 — STUN은 항상, TURN은 서버가 방 입장 시 발급해 내려준 것만 사용한다.
+ * (Cloudflare TURN은 단기 자격증명이라 번들에 박을 수 없고, 박으면 쿼터 도용 위험)
+ */
+function buildIceServers(serverProvided?: RTCIceServer[] | null): RTCIceServer[] {
   const servers: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
-  const turnUrl = import.meta.env.VITE_TURN_URL as string | undefined;
-  const turnUser = import.meta.env.VITE_TURN_USERNAME as string | undefined;
-  const turnCred = import.meta.env.VITE_TURN_CREDENTIAL as string | undefined;
-  if (turnUrl && turnUser && turnCred) {
-    servers.push({ urls: turnUrl, username: turnUser, credential: turnCred });
-  }
+  if (Array.isArray(serverProvided)) servers.push(...serverProvided);
   return servers;
 }
 
@@ -59,7 +58,13 @@ interface Me {
   role: LiveRole;
 }
 
-export function useLiveRoom(challengeId: string | undefined, roomId: string | undefined, enabled: boolean) {
+export function useLiveRoom(
+  challengeId: string | undefined,
+  roomId: string | undefined,
+  enabled: boolean,
+  /** 서버가 발급한 TURN 자격증명 (없으면 STUN만) */
+  turnServers?: RTCIceServer[] | null,
+) {
   const [status, setStatus] = useState<LiveStatus>('idle');
   const [me, setMe] = useState<Me | null>(null);
   const [peers, setPeers] = useState<LivePeer[]>([]);
@@ -76,6 +81,9 @@ export function useLiveRoom(challengeId: string | undefined, roomId: string | un
   const pendingIceRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const meRef = useRef<Me | null>(null);
   const micMutedRef = useRef(false);
+  // 연결 생성 시점마다 최신값을 읽되, 값 변경으로 훅이 재구독되지 않도록 ref로 보관
+  const turnRef = useRef<RTCIceServer[] | null | undefined>(turnServers);
+  turnRef.current = turnServers;
 
   // ── 로컬 마이크 on/off 반영 (역할×뮤트) ────────────────────────────────
   const applyTrackEnabled = useCallback(() => {
@@ -131,7 +139,7 @@ export function useLiveRoom(challengeId: string | undefined, roomId: string | un
       const existing = pcsRef.current.get(peerId);
       if (existing) existing.close();
 
-      const pc = new RTCPeerConnection({ iceServers: iceServers() });
+      const pc = new RTCPeerConnection({ iceServers: buildIceServers(turnRef.current) });
       pcsRef.current.set(peerId, pc);
 
       const local = localStreamRef.current;
