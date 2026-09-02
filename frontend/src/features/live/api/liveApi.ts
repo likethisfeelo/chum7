@@ -47,7 +47,13 @@ export const liveApi = {
   async getRoom(
     challengeId: string,
     roomId: string,
-  ): Promise<{ room: LiveRoom; isHost: boolean; canManage: boolean }> {
+  ): Promise<{
+    room: LiveRoom;
+    isHost: boolean;
+    canManage: boolean;
+    /** 서버가 발급한 단기 TURN 자격증명 (미설정이면 null → STUN만 사용) */
+    iceServers: RTCIceServer[] | null;
+  }> {
     const res = await apiClient.get(`/c/${challengeId}/live/${roomId}`);
     return res.data.data;
   },

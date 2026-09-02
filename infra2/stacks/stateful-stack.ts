@@ -58,6 +58,7 @@ export class StatefulStack extends cdk.Stack {
   readonly identitySecret: secretsmanager.Secret;
   readonly vapidSecret: secretsmanager.Secret;
   readonly anonSaltSecret: secretsmanager.Secret;
+  readonly turnSecret: secretsmanager.Secret;
   /** 소셜 로그인 시 Hosted UI 베이스 URL (예: https://chme2-dev-auth.auth.ap-northeast-2.amazoncognito.com). 미설정 시 undefined */
   readonly hostedUiBaseUrl?: string;
   /** 활성 소셜 IdP 목록 (프론트 노출용). 예: ['google','kakao'] */
@@ -261,6 +262,12 @@ export class StatefulStack extends cdk.Stack {
     this.anonSaltSecret = new secretsmanager.Secret(this, 'AnonSaltSecret', {
       secretName: `${config.prefix}/anon-id-salt`,
       description: '익명 활동명 생성 솔트 (social-api) — 고정, 회전 금지',
+      ...secretDefaults,
+    });
+    // 라이브 음성방 TURN — 값은 `npm run ops:set-turn`으로 주입. 미주입이면 STUN만 사용(정상 동작).
+    this.turnSecret = new secretsmanager.Secret(this, 'TurnSecret', {
+      secretName: `${config.prefix}/turn`,
+      description: 'Cloudflare Realtime TURN {"apiToken"} — 단기 자격증명 발급용',
       ...secretDefaults,
     });
 

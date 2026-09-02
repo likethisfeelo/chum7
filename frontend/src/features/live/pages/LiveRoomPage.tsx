@@ -123,7 +123,12 @@ export const LiveRoomPage = () => {
   const room = roomData?.room;
   const isHost = roomData?.isHost === true;
 
-  const live = useLiveRoom(challengeId, roomId, consented && room?.status === 'live');
+  const live = useLiveRoom(
+    challengeId,
+    roomId,
+    consented && room?.status === 'live',
+    roomData?.iceServers ?? null,
+  );
   const {
     status, me, peers, micMuted, micUnavailable, handRaised, chatMessages, forcedMuteNotice,
     toggleMute, raiseHand, sendChat, setPeerRole, mutePeer, kickPeer, announceEnd, getLocalStream,

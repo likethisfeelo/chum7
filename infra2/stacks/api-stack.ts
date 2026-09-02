@@ -153,6 +153,9 @@ export class ApiStack extends cdk.Stack {
         GAMIFICATION_TABLE: stateful.tables.gamification.tableName,
         // @handle → userId 해석 + 공개 프로필(featured) 조회 — users 읽기 (문서화된 크로스 도메인 예외)
         USERS_TABLE: stateful.tables.users.tableName,
+        // 라이브 음성방 TURN — 토큰 ID·API 토큰 모두 시크릿에서 로드(`npm run ops:set-turn`).
+        // 미주입이면 클라이언트가 STUN만 사용(대부분 연결됨).
+        CF_TURN_SECRET_NAME: stateful.turnSecret.secretName,
       },
     });
     stateful.tables.challenges.grantReadWriteData(this.challengeApi);
@@ -161,6 +164,7 @@ export class ApiStack extends cdk.Stack {
     stateful.uploadsBucket.grantRead(this.challengeApi);
     stateful.uploadsBucket.grantDelete(this.challengeApi); // 라이브 녹음 원본 삭제 (개설자 요청)
     stateful.anonSaltSecret.grantRead(this.challengeApi); // 인증글 일일 활동명 생성
+    stateful.turnSecret.grantRead(this.challengeApi); // 라이브 TURN 단기 자격증명 발급
     // 유료 참여 시 paid 주문 검증 — 읽기 전용 (COMMERCE_V0.md)
     stateful.tables.commerce.grantReadData(this.challengeApi);
     // 조기완료 시 미완료 팀원에게 자동응원 레코드 생성 (cheer-scheduler가 발송·감사점수 처리)
