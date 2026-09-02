@@ -1,5 +1,6 @@
 import {
   ApiGatewayManagementApiClient,
+  DeleteConnectionCommand,
   PostToConnectionCommand,
 } from '@aws-sdk/client-apigatewaymanagementapi';
 import { deleteConnectionItems, type Connection } from './repo/chat';
@@ -44,6 +45,15 @@ export async function sendTo(
       return;
     }
     throw err;
+  }
+}
+
+/** 연결 강제 종료 — 라이브 방 강퇴(kick)용. 실패는 흡수(이미 끊긴 연결 등). */
+export async function disconnectConnection(endpoint: string, connectionId: string): Promise<void> {
+  try {
+    await client(endpoint).send(new DeleteConnectionCommand({ ConnectionId: connectionId }));
+  } catch {
+    // 이미 끊겼거나 만료 — 무시
   }
 }
 

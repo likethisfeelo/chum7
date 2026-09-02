@@ -16,7 +16,7 @@ const dedupSk = (targetType: string, targetId: string) => `${targetType}#${targe
 export interface ReportItem {
   reportId: string;
   status: 'pending' | 'actioned' | 'dismissed';
-  targetType: 'verification' | 'plaza' | 'comment';
+  targetType: 'verification' | 'plaza' | 'comment' | 'live_room';
   targetId: string;
   challengeId?: string | null;
   plazaPostId?: string | null;

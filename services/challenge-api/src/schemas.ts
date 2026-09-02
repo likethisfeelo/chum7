@@ -155,6 +155,30 @@ export const remedyVerificationSchema = z.object({
 });
 export type RemedyVerificationInput = z.infer<typeof remedyVerificationSchema>;
 
+// ── 라이브 방 (음성/방송) ────────────────────────────────────────────────
+export const liveRoomCreateSchema = z.object({
+  // Phase 1은 음성만 — video는 모델만 예약 (리더 1인 방송, Phase 2)
+  mode: z.enum(['audio', 'video']).default('audio'),
+  // 저장 여부 — 개설 시 확정, 이후 변경 불가. 기본값 저장함(제품 결정)
+  recording: z.boolean().default(true),
+  title: z.string().trim().max(80).optional(),
+});
+export type LiveRoomCreateInput = z.infer<typeof liveRoomCreateSchema>;
+
+export const liveConsentSchema = z.object({
+  kind: z.enum(['record_consent', 'offrecord_ack']),
+});
+
+export const liveRecordingUrlSchema = z.object({
+  // 개설자 로컬 녹음 산출물 — MediaRecorder 기본 webm(opus), Safari mp4 폴백
+  contentType: z.enum(['audio/webm', 'audio/mp4', 'video/webm', 'video/mp4']),
+  fileSize: z.number().int().positive().max(2 * 1024 * 1024 * 1024),
+});
+
+export const liveRecordingCompleteSchema = z.object({
+  key: z.string().min(1).max(512),
+});
+
 export const uploadUrlSchema = z.object({
   fileName: z.string().min(1),
   fileType: z

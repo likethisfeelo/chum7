@@ -7,6 +7,7 @@ import { Loading } from '@/shared/components/Loading';
 import { resolveMediaUrl } from '@/shared/utils/mediaUrl';
 import { challengeApi, type QuestProposal } from '@/features/challenge/api/challengeApi';
 import { ChallengeControlCard } from './ChallengeControlCard';
+import { LiveHistorySection } from '@/features/live/components/LiveRoomBanner';
 import { VerificationComments } from './VerificationComments';
 
 /**
@@ -2784,6 +2785,8 @@ export function LeaderOpsTab({
       <RewardProductsSection challengeId={challengeId} />
       <DrawSection challengeId={challengeId} managerMode={managerMode} />
       <GiftSection challengeId={challengeId} />
+      {/* 음성방 이력 — 저장 방 녹음 원본 다운로드/삭제 (개설자 본인 방만) */}
+      <LiveHistorySection challengeId={challengeId} />
 
       {/* 6) 챌린지 설정 및 종료 — 맨 아래 (리더 전용) */}
       {!managerMode && <ChallengeControlCard challengeId={challengeId} />}

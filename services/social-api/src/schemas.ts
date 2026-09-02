@@ -92,12 +92,13 @@ export const REPORT_REASONS = [
   'hate',
   'misinfo',
   'deletion_request',
+  'illegal_recording', // 라이브 방 무단 녹음·녹화·유포 의심 (오프더레코드 특칙)
   'other',
 ] as const;
 
 export const createReportSchema = z
   .object({
-    targetType: z.enum(['verification', 'plaza', 'comment']),
+    targetType: z.enum(['verification', 'plaza', 'comment', 'live_room']),
     targetId: z.string().min(1),
     challengeId: z.string().optional().nullable(), // 인증 숨김에 필요
     plazaPostId: z.string().optional().nullable(), // 댓글의 부모 게시물
