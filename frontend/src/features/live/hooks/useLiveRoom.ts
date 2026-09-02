@@ -64,6 +64,8 @@ export function useLiveRoom(
   enabled: boolean,
   /** 서버가 발급한 TURN 자격증명 (없으면 STUN만) */
   turnServers?: RTCIceServer[] | null,
+  /** 값이 바뀌면 세션을 처음부터 다시 연다 — 오류 화면의 '다시 연결' 용 */
+  sessionKey = 0,
 ) {
   const [status, setStatus] = useState<LiveStatus>('idle');
   const [me, setMe] = useState<Me | null>(null);
@@ -418,7 +420,7 @@ export function useLiveRoom(
       micMutedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, challengeId, roomId]);
+  }, [enabled, challengeId, roomId, sessionKey]);
 
   // ── 컨트롤 ────────────────────────────────────────────────────────────
   const toggleMute = useCallback(() => {

@@ -19,10 +19,12 @@ export interface LiveRoomItem {
   challengeId: string;
   mode: 'audio' | 'video';
   recording: boolean;
-  status: 'live' | 'ended';
+  status: 'scheduled' | 'live' | 'ended';
   hostUserId: string;
   title: string | null;
-  startedAt: string;
+  /** 예약 방은 시작 전까지 null — 개설자가 시작 버튼을 누르면 채워진다 */
+  startedAt: string | null;
+  scheduledAt: string | null;
   endedAt: string | null;
   recordingKeys: string[];
   createdAt: string;
@@ -63,18 +65,37 @@ export async function listAllLiveRooms(challengeId: string): Promise<Record<stri
   return res.Items ?? [];
 }
 
-/** 챌린지의 status='live' 방 전체 (판정은 호출부에서 isRoomActive로 — 좀비 방 제외) */
+/** 챌린지의 열린 방(live·scheduled) 전체 — 유효 판정은 호출부(effectiveRoomStatus)에서 (좀비·만료 제외) */
 export async function listLiveStatusRooms(challengeId: string): Promise<Record<string, any>[]> {
   const res = await docClient.send(
     new QueryCommand({
       TableName: tableName(TABLE),
       KeyConditionExpression: 'pk = :pk AND begins_with(sk, :live)',
-      FilterExpression: '#st = :live_status',
+      FilterExpression: '#st IN (:live_status, :scheduled_status)',
       ExpressionAttributeNames: { '#st': 'status' },
-      ExpressionAttributeValues: { ':pk': challengePk(challengeId), ':live': 'LIVE#', ':live_status': 'live' },
+      ExpressionAttributeValues: {
+        ':pk': challengePk(challengeId),
+        ':live': 'LIVE#',
+        ':live_status': 'live',
+        ':scheduled_status': 'scheduled',
+      },
     }),
   );
   return res.Items ?? [];
+}
+
+/** 예약 방 시작 — 개설자 수동. scheduled 상태에서만 전이한다(중복 시작 방지). */
+export async function startLiveRoom(challengeId: string, roomId: string, startedAt: string): Promise<void> {
+  await docClient.send(
+    new UpdateCommand({
+      TableName: tableName(TABLE),
+      Key: { pk: challengePk(challengeId), sk: liveSk(roomId) },
+      UpdateExpression: 'SET #st = :live, startedAt = :at',
+      ConditionExpression: 'attribute_exists(sk) AND #st = :scheduled',
+      ExpressionAttributeNames: { '#st': 'status' },
+      ExpressionAttributeValues: { ':live': 'live', ':at': startedAt, ':scheduled': 'scheduled' },
+    }),
+  );
 }
 
 export async function endLiveRoom(challengeId: string, roomId: string, endedAt: string): Promise<void> {

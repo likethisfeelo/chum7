@@ -112,22 +112,29 @@ export const LiveRoomPage = () => {
   const [chatInput, setChatInput] = useState('');
   const [controlPeerId, setControlPeerId] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
+  const [sessionKey, setSessionKey] = useState(0); // '다시 연결' — 세션 재시작
+  const [starting, setStarting] = useState(false);
+  const roleHintShownRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  const { data: roomData, isLoading, isError } = useQuery({
+  const { data: roomData, isLoading, isError, refetch: refetchRoom } = useQuery({
     queryKey: ['live-room', challengeId, roomId],
     enabled: Boolean(challengeId && roomId),
     retry: false,
+    // 예정 방은 개설자가 시작하면 바로 바뀌어야 하므로 짧게 폴링
+    refetchInterval: (q) => (q.state.data?.room?.status === 'scheduled' ? 15_000 : false),
     queryFn: () => liveApi.getRoom(challengeId!, roomId!),
   });
   const room = roomData?.room;
   const isHost = roomData?.isHost === true;
+  const canManage = roomData?.canManage === true;
 
   const live = useLiveRoom(
     challengeId,
     roomId,
     consented && room?.status === 'live',
     roomData?.iceServers ?? null,
+    sessionKey,
   );
   const {
     status, me, peers, micMuted, micUnavailable, handRaised, chatMessages, forcedMuteNotice,
@@ -155,6 +162,17 @@ export const LiveRoomPage = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages.length, showChat]);
 
+  // 첫 입장 역할 안내 — 리스너에게 '손들기'로 발언 신청하는 법을 1회 알려준다
+  useEffect(() => {
+    if (status !== 'joined' || !me || roleHintShownRef.current) return;
+    roleHintShownRef.current = true;
+    if (me.role === 'listener') {
+      toast('🎧 듣기로 입장했어요. 말하고 싶으면 ✋ 발언 신청을 눌러주세요', { duration: 5000 });
+    } else if (!me.isHost) {
+      toast('🎙 스피커로 입장했어요. 마이크 버튼으로 켜고 끌 수 있어요', { duration: 4000 });
+    }
+  }, [status, me]);
+
   if (!challengeId || !roomId) return null;
   if (isLoading) return <Loading />;
   if (isError || !room) {
@@ -165,6 +183,62 @@ export const LiveRoomPage = () => {
   if (room.status === 'ended' && !ending) {
     return (
       <EndScreen emoji="🌙" title="종료된 방이에요" desc="다음 방이 열리면 챌린지에서 알려드릴게요." onBack={() => navigate(`/challenges/${challengeId}`)} />
+    );
+  }
+  // 예정 방 — 개설자(·리더·매니저)는 여기서 시작, 참여자는 예정 안내
+  if (room.status === 'scheduled') {
+    const when = room.scheduledAt
+      ? new Date(room.scheduledAt).toLocaleString('ko-KR', {
+          timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', weekday: 'short', hour: 'numeric', minute: '2-digit',
+        })
+      : '';
+    const startNow = async () => {
+      setStarting(true);
+      try {
+        await liveApi.startRoom(challengeId, roomId);
+        toast.success('방을 시작했어요. 참여자에게 알림을 보냈어요');
+        await refetchRoom();
+      } catch (err: any) {
+        toast.error(err?.response?.data?.message || '시작하지 못했어요');
+      } finally {
+        setStarting(false);
+      }
+    };
+    return (
+      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center px-6 text-center">
+        <p className="text-5xl mb-4">🗓</p>
+        <p className="text-lg font-bold text-white">{room.title || '음성방'}</p>
+        <p className="mt-2 text-sm text-amber-300 font-semibold">{when} 예정</p>
+        <p className="mt-2 text-xs text-white/50">
+          {room.recording ? '🔴 녹음되는 방' : '🔒 저장 안 함 방'} · 최대 {room.maxParticipants}명
+        </p>
+        {isHost || canManage ? (
+          <>
+            <button
+              type="button"
+              onClick={startNow}
+              disabled={starting}
+              className="mt-6 px-8 py-3.5 rounded-2xl bg-amber-500 text-white text-sm font-bold disabled:opacity-60"
+            >
+              {starting ? '시작 중...' : '▶ 지금 시작하기'}
+            </button>
+            <p className="mt-2 text-[11px] text-white/40">시작하면 참여자 전원에게 알림이 나가요</p>
+          </>
+        ) : (
+          <p className="mt-6 text-sm text-white/70 leading-relaxed">
+            아직 시작 전이에요.
+            <br />
+            개설자가 시작하면 알림으로 알려드릴게요 — 이 화면을 열어두면 자동으로 이어집니다.
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => navigate(`/challenges/${challengeId}`)}
+          className="mt-6 px-6 py-3 rounded-2xl bg-white/10 text-white/80 text-sm font-bold"
+        >
+          돌아가기
+        </button>
+      </div>
     );
   }
   if (!consented) {
@@ -191,12 +265,29 @@ export const LiveRoomPage = () => {
   }
   if (status === 'error') {
     return (
-      <EndScreen
-        emoji="⚠️"
-        title="입장할 수 없어요"
-        desc="정원이 가득 찼거나 연결이 끊겼어요. 잠시 후 다시 시도해주세요."
-        onBack={() => navigate(`/challenges/${challengeId}`)}
-      />
+      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center px-6 text-center">
+        <p className="text-5xl mb-4">⚠️</p>
+        <p className="text-lg font-bold text-white">연결이 끊겼어요</p>
+        <p className="mt-2 text-sm text-white/60">
+          정원이 가득 찼거나 네트워크가 잠시 불안정했어요.
+          <br />
+          다시 연결하면 처음부터 새로 입장합니다.
+        </p>
+        <button
+          type="button"
+          onClick={() => setSessionKey((k) => k + 1)}
+          className="mt-6 px-8 py-3.5 rounded-2xl bg-white text-gray-900 text-sm font-bold"
+        >
+          🔄 다시 연결
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate(`/challenges/${challengeId}`)}
+          className="mt-3 px-6 py-3 rounded-2xl bg-white/10 text-white/80 text-sm font-bold"
+        >
+          돌아가기
+        </button>
+      </div>
     );
   }
 

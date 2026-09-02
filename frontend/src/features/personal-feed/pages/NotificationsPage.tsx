@@ -31,6 +31,10 @@ const NOTIFICATION_TYPE_META: Record<string, { icon: string; label: string }> = 
   completion_requested:     { icon: '🙋', label: '인증 인정 요청' },
   completion_resolved:      { icon: '✅', label: '인정 요청 처리' },
   verification_self_cancelled: { icon: '🚫', label: '참여자 인증 취소' },
+  challenge_disbanded:      { icon: '🏳️', label: '챌린지 해산' },
+  manager_assigned:         { icon: '🤝', label: '매니저 지정' },
+  live_scheduled:           { icon: '🗓', label: '음성방 예약' },
+  live_started:             { icon: '🔴', label: '음성방 시작' },
 };
 
 function formatRelativeTime(iso: string): string {

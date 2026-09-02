@@ -162,6 +162,8 @@ export const liveRoomCreateSchema = z.object({
   // 저장 여부 — 개설 시 확정, 이후 변경 불가. 기본값 저장함(제품 결정)
   recording: z.boolean().default(true),
   title: z.string().trim().max(80).optional(),
+  // 예약 시각(ISO) — 지정 시 status='scheduled'로 만들고 참여자에게 예정 알림. 시작은 개설자가 수동.
+  scheduledAt: z.string().datetime().optional(),
 });
 export type LiveRoomCreateInput = z.infer<typeof liveRoomCreateSchema>;
 

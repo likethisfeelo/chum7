@@ -1068,6 +1068,13 @@ export const ChallengeFeedPage = () => {
 
         {/* 헤더 — 챌린지 이름 + 리더 DM + 가이드(확성기), 그 아래 3단 탭바 */}
         <div className="sticky top-0 glass-header px-4 lg:px-6 pt-4 z-10">
+          {/* 라이브 음성방 스트립 — 페이지 최상단(고정 헤더 안)에서 어느 탭에서든 보인다.
+              진행 중: 🔴 입장 / 예정: 🗓 (개설자는 지금 시작) / 없음: 리더·매니저 개설 진입 */}
+          {challengeId && (userChallenge || isCreator || isManager) && !isGaveUp && (
+            <div className="mb-3">
+              <LiveRoomBanner challengeId={challengeId} canHost={isCreator || isManager} variant="top" />
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0">
               <FiArrowLeft className="w-5 h-5" />
@@ -1140,13 +1147,6 @@ export const ChallengeFeedPage = () => {
             );
           })()}
         </div>
-
-        {/* 라이브 음성방 — 탭과 무관하게 항상 보이는 위치(탭바 바로 아래). 진행 중이면 입장 배너, 리더·매니저는 개설 버튼 */}
-        {challengeId && (userChallenge || isCreator || isManager) && !isGaveUp && (
-          <div className="px-4 pt-3">
-            <LiveRoomBanner challengeId={challengeId} canHost={isCreator || isManager} />
-          </div>
-        )}
 
         {/* 중도 포기 확인 모달 — 3단계 확인 (리더/참여자 분기) */}
         {showGiveUpConfirm && (() => {

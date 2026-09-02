@@ -16,7 +16,7 @@ import { Hono } from 'hono';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { AppEnv, ApiContext } from '@chum7/api-kit';
-import { ok, fail } from '@chum7/api-kit';
+import { ok, fail, publishEvent } from '@chum7/api-kit';
 import {
   liveConsentSchema,
   liveRecordingCompleteSchema,
@@ -27,11 +27,11 @@ import {
   LIVE_ROOM_MAX_PARTICIPANTS,
   LIVE_ROOM_MAX_SPEAKERS,
   consentKindFor,
-  isRoomActive,
+  effectiveRoomStatus,
   isValidRecordingKey,
 } from '../domain/live-rules';
 import { getChallenge } from '../repo/challenges';
-import { getParticipation } from '../repo/participations';
+import { getParticipation, listChallengeParticipations } from '../repo/participations';
 import {
   addRecordingKey,
   clearRecordingKeys,
@@ -41,6 +41,7 @@ import {
   listLiveStatusRooms,
   putLiveConsent,
   putLiveRoom,
+  startLiveRoom,
 } from '../repo/live';
 import { stripKeys } from '../repo/shared';
 import { getTurnIceServers } from '../repo/turn';
@@ -83,15 +84,58 @@ async function resolveAccess(
   return { access: { challenge, isHostRole: false } };
 }
 
-/** 응답용 방 뷰 — 좀비 판정 반영 + 내부 키 제거 */
+/** 응답용 방 뷰 — 좀비·만료 판정 반영(live/scheduled/ended) + 내부 키 제거 */
 function roomView(room: Record<string, any>, now: Date): Record<string, any> {
-  const active = isRoomActive(room as any, now);
   return {
     ...stripKeys(room),
-    status: active ? 'live' : 'ended',
+    status: effectiveRoomStatus(room as any, now),
     maxParticipants: LIVE_ROOM_MAX_PARTICIPANTS,
     maxSpeakers: LIVE_ROOM_MAX_SPEAKERS,
   };
+}
+
+/** 챌린지에서 '열린 방'(진행 중 우선, 없으면 예정) 1개 */
+async function findOpenRoom(challengeId: string, now: Date): Promise<Record<string, any> | undefined> {
+  const rooms = await listLiveStatusRooms(challengeId);
+  return (
+    rooms.find((r) => effectiveRoomStatus(r as any, now) === 'live') ??
+    rooms
+      .filter((r) => effectiveRoomStatus(r as any, now) === 'scheduled')
+      .sort((a, b) => String(a.scheduledAt ?? '').localeCompare(String(b.scheduledAt ?? '')))[0]
+  );
+}
+
+const EXCLUDED_MEMBER_STATUSES = new Set(['gave_up', 'failed', 'rejected']);
+
+/** 알림 팬아웃 수신자 — 개설자 제외 유효 참여 멤버 */
+async function collectMemberIds(challengeId: string, excludeUserId: string): Promise<string[]> {
+  const parts = await listChallengeParticipations(challengeId);
+  const ids = new Set<string>();
+  for (const p of parts) {
+    const uid = String(p.userId ?? '');
+    if (!uid || uid === excludeUserId) continue;
+    if (EXCLUDED_MEMBER_STATUSES.has(String(p.status ?? '')) || String(p.phase ?? '') === 'gave_up') continue;
+    ids.add(uid);
+  }
+  return [...ids];
+}
+
+/** 시작 알림 발행 — 실패는 방 진행을 막지 않는다(비치명) */
+async function publishLiveStarted(challenge: Record<string, any>, room: Record<string, any>): Promise<void> {
+  try {
+    const challengeId = String(room.challengeId);
+    await publishEvent('live.started', {
+      challengeId,
+      roomId: String(room.roomId),
+      hostUserId: String(room.hostUserId),
+      title: typeof room.title === 'string' && room.title ? room.title : undefined,
+      recording: room.recording === true,
+      challengeTitle: typeof challenge.title === 'string' ? challenge.title : undefined,
+      memberIds: await collectMemberIds(challengeId, String(room.hostUserId)),
+    });
+  } catch (err: any) {
+    console.error('live.started publish error (non-fatal):', err?.message);
+  }
 }
 
 // ── 방 개설 ─────────────────────────────────────────────────────────────
@@ -107,16 +151,32 @@ liveRoutes.post('/', async (c) => {
     return fail(c, 400, 'MODE_NOT_AVAILABLE', '영상 라이브는 준비 중이에요. 음성방을 이용해주세요');
   }
 
-  const { error } = await resolveAccess(c, challengeId, { hostOnly: true });
+  const { access, error } = await resolveAccess(c, challengeId, { hostOnly: true });
   if (error) return error;
 
-  // 챌린지당 진행 중인 방 1개 — 좀비(status live지만 만료)는 무시
   const now = new Date();
-  const existing = (await listLiveStatusRooms(challengeId)).find((r) => isRoomActive(r as any, now));
+  // 예약 시각 검증 — 과거이면 즉시 방으로 취급하지 않고 거부 (실수 방지), 최대 30일 이내
+  let scheduledAt: string | null = null;
+  if (input.scheduledAt) {
+    const at = Date.parse(input.scheduledAt);
+    if (at < now.getTime() - 60 * 1000) {
+      return fail(c, 400, 'SCHEDULE_IN_PAST', '예약 시각은 현재 이후여야 해요');
+    }
+    if (at > now.getTime() + 30 * 24 * 60 * 60 * 1000) {
+      return fail(c, 400, 'SCHEDULE_TOO_FAR', '예약은 30일 이내로만 가능해요');
+    }
+    scheduledAt = new Date(at).toISOString();
+  }
+
+  // 챌린지당 열린 방(진행 중·예정) 1개 — 좀비·만료는 무시
+  const existing = await findOpenRoom(challengeId, now);
   if (existing) {
-    return fail(c, 409, 'LIVE_ROOM_EXISTS', '이미 진행 중인 방이 있어요', {
-      data: { roomId: existing.roomId },
-    });
+    const status = effectiveRoomStatus(existing as any, now);
+    return fail(
+      c, 409, 'LIVE_ROOM_EXISTS',
+      status === 'scheduled' ? '이미 예약된 방이 있어요' : '이미 진행 중인 방이 있어요',
+      { data: { roomId: existing.roomId, status } },
+    );
   }
 
   const roomId = randomUUID();
@@ -128,10 +188,11 @@ liveRoutes.post('/', async (c) => {
     challengeId,
     mode: input.mode,
     recording: input.recording,
-    status: 'live',
+    status: scheduledAt ? 'scheduled' : 'live',
     hostUserId: userId,
     title: input.title || null,
-    startedAt: nowIso,
+    startedAt: scheduledAt ? null : nowIso,
+    scheduledAt,
     endedAt: null,
     recordingKeys: [],
     createdAt: nowIso,
@@ -140,18 +201,67 @@ liveRoutes.post('/', async (c) => {
   // 개설자 본인의 동의도 기록 (저장 방: 녹음 동의 / 오프더레코드: 경고 확인)
   await putLiveConsent({ challengeId, roomId, userId, kind: consentKindFor(input.recording) });
 
-  return ok(c, { room: roomView(await getLiveRoom(challengeId, roomId) ?? {}, now) }, '방을 열었어요');
+  const room = (await getLiveRoom(challengeId, roomId)) ?? {};
+  // 참여자 알림 — 예약이면 '예정', 즉시면 '지금 입장'
+  if (scheduledAt) {
+    try {
+      await publishEvent('live.scheduled', {
+        challengeId,
+        roomId,
+        hostUserId: userId,
+        title: input.title || undefined,
+        recording: input.recording,
+        scheduledAt,
+        challengeTitle: typeof access!.challenge.title === 'string' ? access!.challenge.title : undefined,
+        memberIds: await collectMemberIds(challengeId, userId),
+      });
+    } catch (err: any) {
+      console.error('live.scheduled publish error (non-fatal):', err?.message);
+    }
+  } else {
+    await publishLiveStarted(access!.challenge, room);
+  }
+
+  return ok(c, { room: roomView(room, now) }, scheduledAt ? '방을 예약했어요' : '방을 열었어요');
 });
 
-// ── 진행 중인 방 조회 (배너) ─────────────────────────────────────────────
+// ── 열린 방 조회 (배너) — 진행 중 우선, 없으면 예정 ────────────────────────
 liveRoutes.get('/active', async (c) => {
   const challengeId = c.req.param('challengeId')!;
   const { error } = await resolveAccess(c, challengeId);
   if (error) return error;
 
   const now = new Date();
-  const active = (await listLiveStatusRooms(challengeId)).find((r) => isRoomActive(r as any, now));
-  return ok(c, { room: active ? roomView(active, now) : null });
+  const open = await findOpenRoom(challengeId, now);
+  return ok(c, { room: open ? roomView(open, now) : null });
+});
+
+// ── 예약 방 시작 (개설자·리더·매니저, 수동) ──────────────────────────────
+liveRoutes.post('/:roomId/start', async (c) => {
+  const { userId } = c.get('authUser')!;
+  const challengeId = c.req.param('challengeId')!;
+  const roomId = c.req.param('roomId')!;
+  const { access, error } = await resolveAccess(c, challengeId);
+  if (error) return error;
+
+  const room = await getLiveRoom(challengeId, roomId);
+  if (!room) return fail(c, 404, 'LIVE_ROOM_NOT_FOUND', '방을 찾을 수 없습니다');
+  const isHost = String(room.hostUserId) === userId;
+  if (!isHost && !access!.isHostRole) {
+    return fail(c, 403, 'FORBIDDEN', '방 개설자 또는 리더·매니저만 시작할 수 있어요');
+  }
+
+  const now = new Date();
+  const status = effectiveRoomStatus(room as any, now);
+  if (status === 'live') return ok(c, { room: roomView(room, now) }, '이미 진행 중이에요');
+  if (status !== 'scheduled') {
+    return fail(c, 409, 'LIVE_ROOM_NOT_SCHEDULED', '예약이 만료됐거나 종료된 방이에요. 새로 열어주세요');
+  }
+
+  await startLiveRoom(challengeId, roomId, now.toISOString());
+  const started = (await getLiveRoom(challengeId, roomId)) ?? room;
+  await publishLiveStarted(access!.challenge, started);
+  return ok(c, { room: roomView(started, now) }, '방을 시작했어요');
 });
 
 // ── 방 이력 (운영탭 — 리더·매니저) ───────────────────────────────────────

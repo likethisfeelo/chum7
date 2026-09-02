@@ -540,6 +540,74 @@ async function fanOutChallengeDisbanded(
   }
 }
 
+/** KST 시각 표기 — '9월 3일 (수) 오후 8:00' */
+function formatKstDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * 라이브 음성방 알림 팬아웃 — 개설자 제외 참여 멤버 전원.
+ *  live.scheduled: '예정' (챌린지 상세로) / live.started: '지금 입장' (방으로 직행)
+ */
+async function fanOutLiveRoom(
+  event: EventBridgeEvent<string, Record<string, unknown>>,
+  now: string,
+  kind: 'scheduled' | 'started',
+): Promise<void> {
+  const detail = event.detail;
+  const challengeId = String(detail.challengeId ?? '');
+  const roomId = String(detail.roomId ?? '');
+  const hostUserId = String(detail.hostUserId ?? '');
+  const roomTitle = typeof detail.title === 'string' && detail.title.trim() ? detail.title.trim() : '음성방';
+  const challengeTitle = typeof detail.challengeTitle === 'string' ? detail.challengeTitle.trim() : '';
+  const recording = detail.recording === true;
+  const memberIds = Array.isArray(detail.memberIds) ? detail.memberIds.map((id) => String(id)) : [];
+  const recipients = [...new Set(memberIds)].filter((id) => id && id !== hostUserId);
+  console.log(JSON.stringify({ level: 'info', message: `live ${kind} fan-out`, challengeId, roomId, recipients: recipients.length }));
+
+  const prefix = challengeTitle ? `[${challengeTitle}] ` : '';
+  const recNote = recording ? ' (녹음되는 방)' : ' (저장 안 함)';
+  let title: string;
+  let message: string;
+  let deepLink: string | undefined;
+  if (kind === 'scheduled') {
+    const when = formatKstDateTime(String(detail.scheduledAt ?? ''));
+    title = '🗓 음성방이 예약됐어요';
+    message = `${prefix}'${roomTitle}' ${when ? `${when}에 열려요` : '곧 열려요'}${recNote}. 시작하면 다시 알려드릴게요.`;
+    deepLink = challengeId ? `/challenges/${challengeId}` : undefined;
+  } else {
+    title = '🔴 음성방이 시작됐어요';
+    message = `${prefix}'${roomTitle}' 지금 진행 중이에요${recNote}. 탭해서 바로 입장하세요.`;
+    deepLink = challengeId && roomId ? `/live/${challengeId}/${roomId}` : undefined;
+  }
+
+  for (const recipientId of recipients) {
+    await deliverToRecipient({
+      routed: {
+        recipientId,
+        category: 'challenge',
+        type: kind === 'scheduled' ? 'live_scheduled' : 'live_started',
+        title,
+        message,
+      },
+      eventType: kind === 'scheduled' ? 'live.scheduled' : 'live.started',
+      detail,
+      deepLink,
+      now,
+      notificationId: `${now}#${event.id}#${recipientId}`,
+    });
+  }
+}
+
 export const handler = async (
   event: EventBridgeEvent<string, Record<string, unknown>>,
 ): Promise<void> => {
@@ -549,6 +617,12 @@ export const handler = async (
   // 다중 수신자 팬아웃 — 관심영역 구독자 알림
   if (type === 'challenge.recruiting') {
     await fanOutChallengeRecruiting(event, now);
+    return;
+  }
+
+  // 다중 수신자 팬아웃 — 라이브 음성방 예약/시작 (참여 멤버 전원)
+  if (type === 'live.scheduled' || type === 'live.started') {
+    await fanOutLiveRoom(event, now, type === 'live.scheduled' ? 'scheduled' : 'started');
     return;
   }
 

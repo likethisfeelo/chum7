@@ -2,21 +2,63 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { liveApi, type LiveRecordingFile } from '../api/liveApi';
+import { liveApi, type LiveRecordingFile, type LiveRoom } from '../api/liveApi';
 
 /**
- * 챌린지 라이브 배너 — 진행 중인 방이 있으면 입장 배너, 없으면(리더·매니저) 개설 버튼.
- * 개설 시 저장 여부를 확정한다(기본 저장함 · 이후 변경 불가).
- * 종료된 저장 방의 원본 다운로드/삭제(개설자)도 여기서 제공한다.
+ * 챌린지 라이브 배너 — 열린 방 상태에 따라 3가지로 렌더된다.
+ *  live      : 🔴 진행 중 → 탭해서 입장
+ *  scheduled : 🗓 예정 (개설자·리더·매니저는 '지금 시작' 버튼, 참여자는 알림 안내)
+ *  none      : (리더·매니저) 🎙 열기 → 개설 시트(즉시/예약 + 저장 여부)
+ * variant='top' 은 피드 상단 고정 헤더용 얇은 스트립. 'card'(기본)는 상세 페이지용 카드.
  */
-export function LiveRoomBanner({ challengeId, canHost }: { challengeId: string; canHost: boolean }) {
+
+function formatKst(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+/** datetime-local 입력값(로컬 시각) → ISO. 브라우저 로컬 타임존 기준 */
+function localInputToIso(value: string): string | undefined {
+  if (!value) return undefined;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
+/** datetime-local 기본값 — 지금 + 1시간, 분은 0으로 */
+function defaultScheduleInput(): string {
+  const d = new Date(Date.now() + 60 * 60 * 1000);
+  d.setMinutes(0, 0, 0);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+export function LiveRoomBanner({
+  challengeId,
+  canHost,
+  variant = 'card',
+}: {
+  challengeId: string;
+  canHost: boolean;
+  variant?: 'card' | 'top';
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [recording, setRecording] = useState(true); // 제품 결정: 기본 저장함
   const [title, setTitle] = useState('');
+  const [when, setWhen] = useState<'now' | 'later'>('now');
+  const [scheduleInput, setScheduleInput] = useState(defaultScheduleInput);
 
-  const { data: activeRoom } = useQuery({
+  const { data: openRoom } = useQuery({
     queryKey: ['live-active', challengeId],
     enabled: Boolean(challengeId),
     staleTime: 30 * 1000,
@@ -24,64 +66,160 @@ export function LiveRoomBanner({ challengeId, canHost }: { challengeId: string; 
     queryFn: () => liveApi.getActiveRoom(challengeId),
   });
 
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['live-active', challengeId] });
+
   const createMutation = useMutation({
-    mutationFn: () => liveApi.createRoom(challengeId, { recording, title: title.trim() || undefined }),
+    mutationFn: () =>
+      liveApi.createRoom(challengeId, {
+        recording,
+        title: title.trim() || undefined,
+        ...(when === 'later' ? { scheduledAt: localInputToIso(scheduleInput) } : {}),
+      }),
     onSuccess: (room) => {
       setShowCreate(false);
-      queryClient.invalidateQueries({ queryKey: ['live-active', challengeId] });
-      navigate(`/live/${challengeId}/${room.roomId}`);
+      invalidate();
+      if (room.status === 'scheduled') {
+        toast.success('방을 예약했어요. 참여자에게 예정 알림을 보냈어요');
+      } else {
+        navigate(`/live/${challengeId}/${room.roomId}`);
+      }
     },
     onError: (err: any) => {
       const data = err?.response?.data;
       if (data?.error === 'LIVE_ROOM_EXISTS' && data?.data?.roomId) {
-        navigate(`/live/${challengeId}/${data.data.roomId}`);
+        invalidate();
+        setShowCreate(false);
+        if (data.data.status === 'live') navigate(`/live/${challengeId}/${data.data.roomId}`);
+        else toast('이미 예약된 방이 있어요');
         return;
       }
       toast.error(data?.message || '방을 열지 못했어요');
     },
   });
 
-  return (
-    <>
-      {activeRoom ? (
+  const startMutation = useMutation({
+    mutationFn: (roomId: string) => liveApi.startRoom(challengeId, roomId),
+    onSuccess: (room) => {
+      invalidate();
+      toast.success('방을 시작했어요. 참여자에게 알림을 보냈어요');
+      navigate(`/live/${challengeId}/${room.roomId}`);
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || '시작하지 못했어요'),
+  });
+
+  const top = variant === 'top';
+
+  // ── 진행 중 ──────────────────────────────────────────────────────────
+  const liveView = (room: LiveRoom) => (
+    <button
+      type="button"
+      onClick={() => navigate(`/live/${challengeId}/${room.roomId}`)}
+      className={
+        top
+          ? 'w-full flex items-center gap-2.5 rounded-xl bg-gray-900 px-3 py-2 text-left hover:bg-gray-800 transition-colors'
+          : 'w-full flex items-center gap-3 rounded-2xl bg-gray-900 p-4 text-left hover:bg-gray-800 transition-colors'
+      }
+    >
+      <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className={`font-bold text-white truncate ${top ? 'text-xs' : 'text-sm'}`}>
+          🎙 {room.title || '음성방'} 진행 중 — 지금 입장
+        </p>
+        {!top && (
+          <p className="text-[11px] text-white/50 mt-0.5">
+            {room.recording ? '🔴 녹음되는 방' : '🔒 저장 안 함 방'} · 최대 {room.maxParticipants}명
+          </p>
+        )}
+      </div>
+      <span className="text-white/60 text-sm">→</span>
+    </button>
+  );
+
+  // ── 예정 ─────────────────────────────────────────────────────────────
+  const scheduledView = (room: LiveRoom) => (
+    <div
+      className={
+        top
+          ? 'w-full flex items-center gap-2.5 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2'
+          : 'w-full rounded-2xl bg-amber-50 border border-amber-200 p-4'
+      }
+    >
+      <div className={top ? 'flex-1 min-w-0 flex items-center gap-2' : 'flex items-start gap-3'}>
+        <span className={top ? 'text-sm' : 'text-2xl'}>🗓</span>
+        <div className="flex-1 min-w-0">
+          <p className={`font-bold text-amber-900 truncate ${top ? 'text-xs' : 'text-sm'}`}>
+            {room.title || '음성방'} · {formatKst(room.scheduledAt)} 예정
+          </p>
+          {!top && (
+            <p className="text-[11px] text-amber-700/80 mt-0.5">
+              {room.recording ? '🔴 녹음되는 방' : '🔒 저장 안 함 방'} · 시작되면 알림으로 알려드릴게요
+            </p>
+          )}
+        </div>
+      </div>
+      {canHost && (
         <button
           type="button"
-          onClick={() => navigate(`/live/${challengeId}/${activeRoom.roomId}`)}
-          className="w-full flex items-center gap-3 rounded-2xl bg-gray-900 p-4 text-left hover:bg-gray-800 transition-colors"
+          onClick={() => startMutation.mutate(room.roomId)}
+          disabled={startMutation.isPending}
+          className={`flex-shrink-0 rounded-xl bg-amber-500 text-white font-bold hover:bg-amber-600 transition-colors disabled:opacity-60 ${
+            top ? 'px-3 py-1.5 text-[11px]' : 'mt-3 w-full py-2.5 text-sm'
+          }`}
         >
-          <span className="relative flex h-3 w-3 flex-shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-          </span>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-white truncate">
-              🎙 {activeRoom.title || '음성방'} 진행 중
-            </p>
-            <p className="text-[11px] text-white/50 mt-0.5">
-              {activeRoom.recording ? '🔴 녹음되는 방' : '🔒 저장 안 함 방'} · 탭해서 입장
-            </p>
-          </div>
-          <span className="text-white/60 text-sm">→</span>
+          {startMutation.isPending ? '시작 중...' : '▶ 지금 시작'}
         </button>
-      ) : canHost ? (
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className="w-full flex items-center gap-3 rounded-2xl bg-gradient-to-r from-gray-900 to-gray-700 p-4 text-left shadow-md hover:from-gray-800 hover:to-gray-600 transition-colors"
-        >
+      )}
+    </div>
+  );
+
+  // ── 없음 (개설) ───────────────────────────────────────────────────────
+  const emptyView = canHost ? (
+    <button
+      type="button"
+      onClick={() => setShowCreate(true)}
+      className={
+        top
+          ? 'w-full flex items-center gap-2 rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-left hover:border-gray-400 transition-colors'
+          : 'w-full flex items-center gap-3 rounded-2xl bg-gradient-to-r from-gray-900 to-gray-700 p-4 text-left shadow-md hover:from-gray-800 hover:to-gray-600 transition-colors'
+      }
+    >
+      {top ? (
+        <>
+          <span className="text-sm">🎙</span>
+          <span className="text-xs font-semibold text-gray-700 flex-1">음성방 열기 · 지금 또는 예약</span>
+          <span className="text-gray-400 text-xs">→</span>
+        </>
+      ) : (
+        <>
           <span className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center text-xl flex-shrink-0">🎙</span>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-white">음성방 열기</p>
-            <p className="text-[11px] text-white/60 mt-0.5">참여자들과 실시간으로 이야기해요 · 최대 10명</p>
+            <p className="text-[11px] text-white/60 mt-0.5">지금 바로 또는 예약 · 참여자에게 알림 · 최대 10명</p>
           </div>
           <span className="text-white/60 text-sm">→</span>
-        </button>
-      ) : null}
+        </>
+      )}
+    </button>
+  ) : null;
+
+  return (
+    <>
+      {openRoom?.status === 'live'
+        ? liveView(openRoom)
+        : openRoom?.status === 'scheduled'
+          ? scheduledView(openRoom)
+          : emptyView}
 
       {/* 개설 시트 */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setShowCreate(false)}>
-          <div className="bg-white rounded-t-3xl w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="bg-white rounded-t-3xl w-full max-w-md p-6 space-y-4 max-h-[92vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-base font-bold text-gray-900 text-center">🎙 음성방 열기</h3>
 
             <input
@@ -92,6 +230,48 @@ export function LiveRoomBanner({ challengeId, canHost }: { challengeId: string; 
               className="w-full rounded-xl border border-gray-200 px-3.5 py-3 text-sm outline-none focus:border-primary-400"
             />
 
+            {/* 언제 */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-700">언제 열까요?</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setWhen('now')}
+                  className={`rounded-xl border p-3 text-left ${when === 'now' ? 'border-primary-400 bg-primary-50' : 'border-gray-200'}`}
+                >
+                  <p className="text-sm font-bold text-gray-900">▶ 지금 바로</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">바로 방이 열리고 참여자에게 시작 알림</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWhen('later')}
+                  className={`rounded-xl border p-3 text-left ${when === 'later' ? 'border-primary-400 bg-primary-50' : 'border-gray-200'}`}
+                >
+                  <p className="text-sm font-bold text-gray-900">🗓 예약</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">예정 알림 발송 · 시작은 직접 눌러요</p>
+                </button>
+              </div>
+              {when === 'later' && (
+                <div className="rounded-xl border border-gray-200 p-3 space-y-1.5">
+                  <label className="text-[11px] font-semibold text-gray-600" htmlFor="live-schedule-at">
+                    예정 시각 (내 로컬 시간)
+                  </label>
+                  <input
+                    id="live-schedule-at"
+                    type="datetime-local"
+                    value={scheduleInput}
+                    min={defaultScheduleInput().slice(0, 16)}
+                    onChange={(e) => setScheduleInput(e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary-400"
+                  />
+                  <p className="text-[10px] text-gray-400">
+                    예정 시각이 되어도 자동으로 열리지 않아요 — 이 배너의 '지금 시작'을 눌러 시작합니다.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* 저장 여부 */}
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-700">저장 여부 — 개설 후 바꿀 수 없어요</p>
               <button
@@ -119,10 +299,10 @@ export function LiveRoomBanner({ challengeId, canHost }: { challengeId: string; 
             <button
               type="button"
               onClick={() => createMutation.mutate()}
-              disabled={createMutation.isPending}
+              disabled={createMutation.isPending || (when === 'later' && !localInputToIso(scheduleInput))}
               className="w-full py-3.5 rounded-2xl bg-primary-600 text-white text-sm font-bold disabled:opacity-60"
             >
-              {createMutation.isPending ? '여는 중...' : '방 열기'}
+              {createMutation.isPending ? '처리 중...' : when === 'later' ? '예약하기' : '방 열기'}
             </button>
             <button
               type="button"
@@ -151,20 +331,20 @@ export function LiveHistorySection({ challengeId }: { challengeId: string }) {
   });
 
   if (rooms.length === 0) return null;
+  const statusLabel = (s: LiveRoom['status']) => (s === 'live' ? '진행 중' : s === 'scheduled' ? '예정' : '종료');
+  const statusClass = (s: LiveRoom['status']) =>
+    s === 'live' ? 'bg-red-50 text-red-600' : s === 'scheduled' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500';
+
   return (
     <section className="bg-white rounded-2xl p-4 border border-gray-100 space-y-2">
       <h3 className="text-sm font-bold text-gray-900">🎙 음성방 이력</h3>
       {rooms.map((r) => (
         <div key={r.roomId} className="rounded-xl border border-gray-100 p-3 space-y-1.5">
           <div className="flex items-center gap-2">
-            <p className="text-xs font-semibold text-gray-800 truncate flex-1">
-              {r.title || '음성방'}
-            </p>
-            <span className="text-[10px] text-gray-400">
-              {new Date(r.startedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-            </span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${r.status === 'live' ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'}`}>
-              {r.status === 'live' ? '진행 중' : '종료'}
+            <p className="text-xs font-semibold text-gray-800 truncate flex-1">{r.title || '음성방'}</p>
+            <span className="text-[10px] text-gray-400">{formatKst(r.startedAt ?? r.scheduledAt)}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${statusClass(r.status)}`}>
+              {statusLabel(r.status)}
             </span>
           </div>
           <p className="text-[10px] text-gray-400">

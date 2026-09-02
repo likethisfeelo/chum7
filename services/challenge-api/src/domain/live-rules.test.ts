@@ -1,9 +1,45 @@
 import {
   LIVE_ROOM_MAX_AGE_HOURS,
+  LIVE_SCHEDULED_GRACE_HOURS,
   consentKindFor,
+  effectiveRoomStatus,
   isRoomActive,
+  isRoomScheduled,
   isValidRecordingKey,
 } from './live-rules';
+
+describe('isRoomScheduled / effectiveRoomStatus — 예약 방 판정', () => {
+  const now = new Date('2026-09-03T10:00:00.000Z');
+
+  it('예정 시각이 미래면 scheduled', () => {
+    const room = { status: 'scheduled', scheduledAt: '2026-09-03T11:00:00.000Z', startedAt: null };
+    expect(isRoomScheduled(room, now)).toBe(true);
+    expect(effectiveRoomStatus(room, now)).toBe('scheduled');
+  });
+
+  it('예정 시각이 지났어도 유예 안이면 아직 scheduled (개설자가 늦게 시작할 수 있음)', () => {
+    const room = { status: 'scheduled', scheduledAt: '2026-09-03T08:00:00.000Z', startedAt: null };
+    expect(effectiveRoomStatus(room, now)).toBe('scheduled');
+  });
+
+  it('예정 시각 + 유예를 넘기면 만료(ended) — 시작 안 한 예약이 배너에 영원히 남지 않게', () => {
+    const stale = new Date(now.getTime() - (LIVE_SCHEDULED_GRACE_HOURS + 1) * 60 * 60 * 1000).toISOString();
+    const room = { status: 'scheduled', scheduledAt: stale, startedAt: null };
+    expect(isRoomScheduled(room, now)).toBe(false);
+    expect(effectiveRoomStatus(room, now)).toBe('ended');
+  });
+
+  it('시작된 방은 scheduledAt이 있어도 live', () => {
+    const room = { status: 'live', scheduledAt: '2026-09-03T09:00:00.000Z', startedAt: '2026-09-03T09:05:00.000Z' };
+    expect(effectiveRoomStatus(room, now)).toBe('live');
+  });
+
+  it('scheduledAt이 깨졌거나 status가 다르면 scheduled 아님', () => {
+    expect(isRoomScheduled({ status: 'scheduled', scheduledAt: 'bad' }, now)).toBe(false);
+    expect(isRoomScheduled({ status: 'live', scheduledAt: '2026-09-03T11:00:00.000Z' }, now)).toBe(false);
+    expect(effectiveRoomStatus(null, now)).toBe('ended');
+  });
+});
 
 describe('consentKindFor — 저장 여부에 따른 동의 유형', () => {
   it('저장 방은 녹음 동의, 오프더레코드 방은 경고 확인', () => {

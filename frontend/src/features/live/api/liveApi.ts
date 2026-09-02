@@ -10,10 +10,12 @@ export interface LiveRoom {
   challengeId: string;
   mode: 'audio' | 'video';
   recording: boolean;
-  status: 'live' | 'ended';
+  /** scheduled=예약(시작 전) · live=진행 중 · ended=종료/만료 — 서버가 시각 기준으로 판정한 유효 상태 */
+  status: 'scheduled' | 'live' | 'ended';
   hostUserId: string;
   title: string | null;
-  startedAt: string;
+  startedAt: string | null;
+  scheduledAt: string | null;
   endedAt: string | null;
   recordingKeys?: string[];
   maxParticipants: number;
@@ -27,8 +29,17 @@ export interface LiveRecordingFile {
 }
 
 export const liveApi = {
-  async createRoom(challengeId: string, params: { recording: boolean; title?: string }): Promise<LiveRoom> {
+  async createRoom(
+    challengeId: string,
+    params: { recording: boolean; title?: string; scheduledAt?: string },
+  ): Promise<LiveRoom> {
     const res = await apiClient.post(`/c/${challengeId}/live`, { mode: 'audio', ...params });
+    return res.data.data.room as LiveRoom;
+  },
+
+  /** 예약 방 수동 시작 (개설자·리더·매니저) — 참여자에게 '시작' 알림이 나간다 */
+  async startRoom(challengeId: string, roomId: string): Promise<LiveRoom> {
+    const res = await apiClient.post(`/c/${challengeId}/live/${roomId}/start`, {});
     return res.data.data.room as LiveRoom;
   },
 

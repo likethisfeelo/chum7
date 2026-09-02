@@ -35,6 +35,28 @@ export const domainEventSchemas = {
     // 알림 팬아웃 수신자 — 리더 제외한 참여 멤버 userId 목록
     memberIds: z.array(z.string()),
   }),
+  // 라이브 음성방 예약 — 참여 멤버 전원에게 '예정' 팬아웃 (시작은 개설자가 수동).
+  'live.scheduled': z.object({
+    challengeId: z.string(),
+    roomId: z.string(),
+    hostUserId: z.string(),
+    title: z.string().optional(),
+    recording: z.boolean(),
+    scheduledAt: z.string(),
+    challengeTitle: z.string().optional(),
+    // 알림 팬아웃 수신자 — 개설자 제외 참여 멤버 userId 목록
+    memberIds: z.array(z.string()),
+  }),
+  // 라이브 음성방 시작(즉시 개설 또는 예약분 수동 시작) — 참여 멤버 전원에게 '지금 입장' 팬아웃.
+  'live.started': z.object({
+    challengeId: z.string(),
+    roomId: z.string(),
+    hostUserId: z.string(),
+    title: z.string().optional(),
+    recording: z.boolean(),
+    challengeTitle: z.string().optional(),
+    memberIds: z.array(z.string()),
+  }),
   // 유료 챌린지 해산 신청(리더→운영자) — 접수 확인을 리더에게 통지.
   'challenge.disband_requested': z.object({
     challengeId: z.string(),

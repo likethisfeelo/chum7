@@ -8,6 +8,35 @@
 /** 좀비 방 방지 — 개설 후 이 시간이 지나면 status가 live여도 종료로 취급 */
 export const LIVE_ROOM_MAX_AGE_HOURS = 12;
 
+/** 예약 방 유예 — 예정 시각에서 이 시간이 지나도 시작되지 않으면 만료로 취급 */
+export const LIVE_SCHEDULED_GRACE_HOURS = 24;
+
+export type LiveRoomStatus = 'scheduled' | 'live' | 'ended';
+
+/**
+ * 예약 상태인지 — 예정 시각 + 유예를 넘긴 방은 시작되지 않은 것으로 보고 만료 처리한다
+ * (개설자가 시작 버튼을 누르지 않으면 '예정' 배너가 영원히 남기 때문).
+ */
+export function isRoomScheduled(
+  room: { status?: string; scheduledAt?: string | null } | null | undefined,
+  now: Date,
+): boolean {
+  if (!room || room.status !== 'scheduled') return false;
+  const at = Date.parse(String(room.scheduledAt ?? ''));
+  if (!Number.isFinite(at)) return false;
+  return now.getTime() <= at + LIVE_SCHEDULED_GRACE_HOURS * 60 * 60 * 1000;
+}
+
+/** 응답용 유효 상태 — 저장값이 아니라 시각 기준으로 판정 (배너·입장 차단의 단일 기준) */
+export function effectiveRoomStatus(
+  room: { status?: string; startedAt?: string | null; scheduledAt?: string | null } | null | undefined,
+  now: Date,
+): LiveRoomStatus {
+  if (isRoomActive(room, now)) return 'live';
+  if (isRoomScheduled(room, now)) return 'scheduled';
+  return 'ended';
+}
+
 /** 방 전체 동시 인원 상한 (제품 요구: 10명 이내) */
 export const LIVE_ROOM_MAX_PARTICIPANTS = 10;
 
@@ -27,7 +56,7 @@ export function consentKindFor(recording: boolean): LiveConsentKind {
  * 개설 후 MAX_AGE를 넘긴 방은 종료로 취급한다 (배너/입장 차단의 단일 기준).
  */
 export function isRoomActive(
-  room: { status?: string; startedAt?: string } | null | undefined,
+  room: { status?: string; startedAt?: string | null } | null | undefined,
   now: Date,
 ): boolean {
   if (!room || room.status !== 'live') return false;
